@@ -21,11 +21,14 @@ export function fixtureFetch(bundle: FixtureBundle): typeof fetch {
   // Keys are '/api/…' (GET, optionally with its query) or 'POST /api/…'; values are steps.
   const responses = bundle.responses as Record<string, unknown>;
   const calls = new Map<string, number>();
+  // Writes made so far ('POST /api/mode/paper'), for { $afterWrite } steps.
+  const writes = new Set<string>();
 
   return (input, init) => {
     const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(raw, 'http://fixture.invalid');
     const method = (init?.method ?? 'GET').toUpperCase();
+    if (method !== 'GET') writes.add(`${method} ${url.pathname}`);
     const candidates =
       method === 'GET'
         ? [`${url.pathname}${url.search}`, url.pathname]
@@ -43,7 +46,34 @@ export function fixtureFetch(bundle: FixtureBundle): typeof fetch {
     const n = calls.get(key) ?? 0;
     calls.set(key, n + 1);
     // A sequence plays in call order; its last step repeats.
-    const step: unknown = Array.isArray(script) ? script[Math.min(n, script.length - 1)] : script;
+    let step: unknown = Array.isArray(script) ? script[Math.min(n, script.length - 1)] : script;
+    // { $afterWrite, $before, $after } switches once that write has been made.
+    while (isObject(step) && typeof step.$afterWrite === 'string') {
+      step = writes.has(step.$afterWrite) ? step.$after : step.$before;
+    }
+
+    // { $pending: true } never answers (loading states); an abort still ends it.
+    if (isObject(step) && step.$pending === true) {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    }
+    // { $delayMs, $then } answers $then after the delay (skeleton first, then the data).
+    if (isObject(step) && typeof step.$delayMs === 'number') {
+      const delay = step.$delayMs;
+      const then = step.$then;
+      return new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          resolve(json(200, then));
+        }, delay);
+        init?.signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    }
 
     if (isObject(step) && step.$network === 'down') {
       return Promise.reject(new TypeError(`fixture ${bundle.id}: network down for ${key}`));

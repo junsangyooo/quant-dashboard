@@ -27,6 +27,10 @@ export interface LineChartProps {
   events?: readonly ChartEvent[] | undefined;
   hrefFor?: ((date: string) => string) | undefined;
   onLegend?: (() => void) | undefined;
+  /** A grouped '[n]' marker in the event band: opens the list of its events. */
+  onGroup?: ((events: ChartEvent[]) => void) | undefined;
+  /** Grouping distance of the event band (EventBand `groupBelow`). */
+  groupBelow?: number | undefined;
   /** Accessible summary of the plot; the 표로 보기 table carries the values. */
   label: string;
   formatTick?: ((v: number) => string) | undefined;
@@ -46,6 +50,8 @@ export function LineChart({
   events = [],
   hrefFor,
   onLegend,
+  onGroup,
+  groupBelow,
   label,
   formatTick = formatManAxis,
   emptyText,
@@ -129,6 +135,8 @@ export function LineChart({
         events={events}
         hrefFor={hrefFor}
         onLegend={onLegend}
+        onGroup={onGroup}
+        groupBelow={groupBelow}
       />
       <div className={clsx(styles.dates, 't-caption')} style={{ width }} aria-hidden>
         {dates.map((d) => (

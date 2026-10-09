@@ -1,0 +1,45 @@
+/* Sheet: bottom-anchored on 390, centred panel from 600px. */
+
+.sheet {
+  width: 100%;
+  max-width: 100%;
+  max-height: 85dvh;
+  margin: auto 0 0;
+  padding: var(--space-section);
+  padding-bottom: calc(var(--space-section) + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: var(--bg-default);
+  color: var(--text-primary);
+  overflow-y: auto;
+}
+
+.sheet::backdrop {
+  background: var(--bg-scrim);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  margin-top: calc(-1 * var(--space-inline));
+  margin-right: calc(-1 * var(--space-inline));
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  padding-top: var(--space-inline);
+}
+
+@media (min-width: 600px) {
+  .sheet {
+    width: calc(var(--layout-content-max) / 2.5);
+    max-width: calc(100% - 2 * var(--space-grid));
+    margin: auto;
+    padding-bottom: var(--space-section);
+    border-radius: var(--radius-card);
+  }
+}

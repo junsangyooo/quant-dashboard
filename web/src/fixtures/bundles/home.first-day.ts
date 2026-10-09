@@ -1,9 +1,11 @@
 // SCR-HOME · 출시 첫날(규칙 1개) (Figma 1:54401) — 예시-값표 §4 (7/1 16:10 KST).
 // One rule (지수 반반, 100% of assets), KOSPI200 ETF bought at 09:05, dollars waiting for the
-// 22:30 S&P 500 ETF buy; the graph is one point ('그래프는 둘째 날부터').
+// 22:30 S&P 500 ETF buy; the graph is one point ('그래프는 둘째 날부터'). Also answers 계획
+// (plan.first-day) so moving between the two tabs stays in the same moment.
 import type { Order } from '../../api/types';
 import type { FixtureBundle } from '../types';
 import { INDEX_HALF, KOSPI200, SP500, kst } from '../world';
+import { planFirstDay } from '../parts/plan';
 
 const NOW = kst('2026-07-01', '16:10');
 
@@ -167,6 +169,7 @@ const bundle = {
         outsideRules: null,
       },
     },
+    '/api/plan': planFirstDay(),
   },
 } satisfies FixtureBundle;
 

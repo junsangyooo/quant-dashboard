@@ -17,6 +17,10 @@ export interface EventBandProps {
   hrefFor?: ((date: string) => string) | undefined;
   /** ⓘ: opens the marker legend sheet. Hidden when absent. */
   onLegend?: (() => void) | undefined;
+  /** A grouped '[n]' marker: opens the list of its events (기획 §5 사건 띠). */
+  onGroup?: ((events: ChartEvent[]) => void) | undefined;
+  /** Markers closer than this (px) merge into '[n]'. 24 = never overlap (WCAG 2.5.8). Default 20. */
+  groupBelow?: number | undefined;
   /** Band height: 28 (자산 변동, 1440 흐름) or 26 (390 흐름). */
   height?: number | undefined;
 }
@@ -28,9 +32,11 @@ export function EventBand({
   events,
   hrefFor,
   onLegend,
+  onGroup,
+  groupBelow,
   height = 28,
 }: EventBandProps) {
-  const markers = bandMarkers(events, x);
+  const markers = bandMarkers(events, x, groupBelow);
   const refs = useRef<(HTMLElement | null)[]>([]);
   const mid = height / 2;
 
@@ -74,6 +80,13 @@ export function EventBand({
             count={grouped ? m.events.length : undefined}
             label={m.events.map((e) => e.label).join(' · ')}
             to={grouped ? undefined : hrefFor?.(first.date)}
+            onClick={
+              grouped && onGroup
+                ? () => {
+                    onGroup(m.events);
+                  }
+                : undefined
+            }
           />
         );
       })}

@@ -39,13 +39,23 @@ export interface NodeCardProps {
   children?: ReactNode;
   /** Text after '지금', e.g. '· 마지막 판단 10/7 08:30'. */
   nowSuffix?: ReactNode;
+  /** Label of the grey box; '지금' unless a past record uses the card (그날 'AI 판단' 사건). */
+  nowLabel?: ReactNode;
   /** Value rows inside the '지금' box. */
   now: ReactNode;
   /** Heading level for the kind label inside a flow. */
   className?: string | undefined;
 }
 
-export function NodeCard({ kind, title, children, nowSuffix, now, className }: NodeCardProps) {
+export function NodeCard({
+  kind,
+  title,
+  children,
+  nowSuffix,
+  nowLabel,
+  now,
+  className,
+}: NodeCardProps) {
   const Icon = NODE_ICON[kind];
   return (
     <article
@@ -73,7 +83,7 @@ export function NodeCard({ kind, title, children, nowSuffix, now, className }: N
         </div>
         <div className={styles.now}>
           <p className={styles.nowHead}>
-            <span className="t-label">{copy.now}</span>
+            <span className="t-label">{nowLabel ?? copy.now}</span>
             {nowSuffix !== undefined ? <span className="t-caption">{nowSuffix}</span> : null}
           </p>
           {now}

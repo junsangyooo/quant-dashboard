@@ -59,9 +59,19 @@ describe('fixture runtime', () => {
 
 /** The first answer of a script, or null when it is a failure step or missing. */
 function firstStep(script: unknown): object | null {
-  const step: unknown = Array.isArray(script) ? script[0] : script;
+  let step: unknown = Array.isArray(script) ? script[0] : script;
+  // Before any write, an { $afterWrite } step answers its $before.
+  while (typeof step === 'object' && step !== null && '$afterWrite' in step && '$before' in step) {
+    step = step.$before;
+  }
+  // A delayed answer counts as its payload; a pending one has none.
+  if (typeof step === 'object' && step !== null && '$delayMs' in step && '$then' in step) {
+    step = step.$then;
+  }
   if (typeof step !== 'object' || step === null) return null;
-  if ('$status' in step || '$network' in step || '$noContent' in step) return null;
+  if ('$status' in step || '$network' in step || '$noContent' in step || '$pending' in step) {
+    return null;
+  }
   return step;
 }
 

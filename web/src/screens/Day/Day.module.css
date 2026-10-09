@@ -1,0 +1,349 @@
+/* SCR-DAY 그날 — Figma 1:59915 (390 sheet), 1:60076 (no trades), 1:60239 (1440 panel, 480 wide). */
+
+/* 390: full-height modal sheet over the header (top layer). */
+.sheet {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--bg-default);
+  color: var(--text-primary);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sheet::backdrop {
+  background: var(--bg-default);
+}
+
+/* 1440: right panel under the header, over the 기록 page's right column. */
+.panel {
+  position: fixed;
+  top: 64px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  width: 480px;
+  max-width: 100%;
+  border-left: 1px solid var(--border-strong);
+  background: var(--bg-default);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.warningText {
+  color: var(--status-warning);
+}
+
+.errorText {
+  color: var(--status-error);
+}
+
+/* ── 날짜 줄 ── */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  padding: var(--space-row) var(--space-block);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-default);
+}
+
+.dateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* The heading only receives focus programmatically (sheet / panel opening); it is not a control. */
+.dateHeading:focus,
+.dateHeading:focus-visible {
+  outline: none;
+}
+
+.navButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  flex: none;
+}
+
+.navButton:hover {
+  background: var(--bg-subtle);
+}
+
+.navButton:disabled {
+  color: var(--border-strong);
+  cursor: default;
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  flex: none;
+}
+
+.closeButton:hover {
+  background: var(--bg-subtle);
+}
+
+/* ── 본문 ── */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  padding: var(--space-block) var(--space-block) var(--space-section);
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.changeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* ── 사건 카드 ── */
+.eventCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  padding: var(--space-block);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+.eventHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.eventTitle {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.marker {
+  display: flex;
+  flex: none;
+}
+
+.powerMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  box-shadow: inset 0 0 0 1.5px var(--text-primary);
+  color: var(--text-primary);
+  flex: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* 전후 비중: label column 34 + 8, bars 24 in a 32 frame, target tick label under the target. */
+.weights {
+  --when-w: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.weightsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.weightRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.weightWhen {
+  width: var(--when-w);
+  flex: none;
+}
+
+.weightBar {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.weightScale {
+  position: relative;
+  min-height: 14px;
+  margin-left: calc(var(--when-w) + var(--space-inline));
+}
+
+.scaleMark {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-tight) var(--space-block);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+/* 단계 카드 */
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.order {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-row);
+  padding: var(--space-row);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+}
+
+.orderFailed {
+  border-color: var(--status-error);
+  background: var(--status-error-subtle);
+}
+
+.orderIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--node-action-tint);
+  color: var(--node-action-fg);
+  flex: none;
+}
+
+.orderBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.orderHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.orderFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.orderFail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.status-filled {
+  color: var(--status-success);
+}
+
+.status-pending {
+  color: var(--text-muted);
+}
+
+.status-failed {
+  color: var(--status-error);
+}
+
+.feesTotal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.aiCard {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 그날 확인 ── */
+.checkCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  padding: var(--space-block);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-default);
+}
+
+.checkHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.checkLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}

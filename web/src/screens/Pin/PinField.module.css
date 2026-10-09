@@ -1,0 +1,42 @@
+/* 6 × 입력/PIN 칸 (44 × 52, 8 apart) with the real input laid over them, transparent. */
+
+.field {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.cells {
+  display: flex;
+  gap: var(--space-inline);
+}
+
+/* The input covers the cells so a tap on any cell focuses it. Its own text, caret and box stay
+   invisible; 24px text keeps iOS from zooming in on focus. */
+.input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: var(--type-title-size);
+  opacity: 0;
+  cursor: text;
+}
+
+.input:disabled {
+  cursor: default;
+}
+
+/* The outlined next cell shows focus while entering; a full field outlines the row instead. */
+.complete .input:focus-visible + .cells {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}

@@ -290,6 +290,9 @@ export function useRule(
         signal,
       ),
     enabled: id !== undefined,
+    // Switching the '흐름' lane of the same rule keeps the last lane on screen until the new one
+    // arrives (no skeleton flash); another rule starts from its skeleton.
+    placeholderData: (previous) => (previous?.rule.id === id ? previous : undefined),
   });
 }
 

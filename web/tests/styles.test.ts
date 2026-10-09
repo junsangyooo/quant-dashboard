@@ -84,8 +84,9 @@ describe('components', () => {
   });
 
   it('keep user-visible Korean copy in copy.ts (screens and components)', () => {
-    // Korean string literals are allowed only in copy.ts, fixtures and lib/labels.
-    const allowed = /(^copy\.ts$|^fixtures\/|^kit\/)/;
+    // Korean string literals are allowed only in copy.ts (and per-screen copy/*.ts), fixtures
+    // and lib/labels.
+    const allowed = /(^copy\.ts$|^copy\/|^fixtures\/|^kit\/)/;
     const hangulLiteral = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/;
     const bad = tsxFiles
       .map((f) => relative(srcDir, f))

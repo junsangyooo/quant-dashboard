@@ -1,0 +1,449 @@
+/* SCR-PLAN (Figma 1:55865 · 1:57620) and the plan pieces the 자산 card reuses. Tokens only. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.offline:empty {
+  display: none;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.success {
+  color: var(--status-success);
+}
+
+.error {
+  color: var(--status-error);
+}
+
+/* 390: one column (cards, then 예정 and 벗어남 흐름). 1440: 8 + 4 of a 12-column grid. */
+.columns,
+.left,
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .page {
+    gap: var(--space-grid);
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+    gap: var(--space-grid);
+  }
+
+  .left {
+    grid-column: span 8;
+    gap: var(--space-grid);
+  }
+
+  .right {
+    grid-column: span 4;
+    gap: var(--space-grid);
+  }
+}
+
+.card {
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+/* ── 규칙별 자산 비중 ── */
+.ruleShares {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.shareBar {
+  display: flex;
+  gap: var(--space-tight);
+}
+
+/* 8px bar; the button reaches 24px for touch without moving the layout. */
+.shareSeg {
+  display: flex;
+  align-items: center;
+  flex-basis: 0;
+  min-width: 2px;
+  padding-block: var(--space-inline);
+  margin-block: calc(-1 * var(--space-inline));
+}
+
+.shareFill {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--seg-color);
+}
+
+.strategy-1 {
+  --seg-color: var(--chart-strategy-1);
+}
+
+.strategy-2 {
+  --seg-color: var(--chart-strategy-2);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-block);
+  row-gap: var(--space-tight);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot-1 {
+  background: var(--chart-strategy-1);
+}
+
+.dot-2 {
+  background: var(--chart-strategy-2);
+}
+
+.swatch {
+  width: 16px;
+  height: 8px;
+  flex: none;
+}
+
+.swatch1 {
+  stroke: var(--chart-strategy-1);
+}
+
+.swatch2 {
+  stroke: var(--chart-strategy-2);
+}
+
+/* ── 규칙 카드 ── */
+.ruleCard,
+.ruleMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  min-width: 0;
+}
+
+.ruleCardWide {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-grid);
+}
+
+.ruleCardWide > .ruleMain {
+  flex: 340 1 0;
+}
+
+.ruleCardWide > .cardChart {
+  flex: 384 1 0;
+}
+
+.cardChart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.share {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-inline);
+  row-gap: var(--space-tight);
+}
+
+.nextButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-height: 24px;
+  color: var(--text-primary);
+  text-align: start;
+}
+
+.nextButton:hover span {
+  text-decoration: underline;
+}
+
+/* Gauge (156×80) and its text column; the row is 98 tall in Figma. */
+.gaugeBlock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-block);
+}
+
+.gaugeArt {
+  flex: none;
+}
+
+.gaugeText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.gaugeName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.ruleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  min-height: 36px;
+}
+
+.ruleRowName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.ruleRowValue {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: end;
+  white-space: nowrap;
+}
+
+/* ── 단계 ── */
+.stageRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-inline);
+  row-gap: var(--space-tight);
+}
+
+.stageRow > li {
+  display: flex;
+}
+
+.stageArrow {
+  color: var(--text-muted);
+}
+
+.stageCards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.stageCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: var(--space-inline);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+}
+
+.stageFailed {
+  background: var(--status-error-subtle);
+}
+
+.stageHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+/* The card's day link covers the whole card; 직접 할 일 sits above it. */
+.stageLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  color: var(--text-primary);
+}
+
+.stageLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.stageLink:focus-visible {
+  outline: none;
+}
+
+.stageLink:focus-visible::after {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.todoLink {
+  position: relative;
+  z-index: 1;
+}
+
+.todoLink:hover {
+  text-decoration: underline;
+}
+
+.stageWhen {
+  display: inline-flex;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.stageOrder {
+  white-space: normal;
+}
+
+/* ── 예정 ── */
+.schedule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.scheduleHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  min-height: 28px;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: flex;
+  gap: var(--space-block);
+}
+
+.entry:focus {
+  outline: none;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 12px;
+  flex: none;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+
+.dotNow {
+  background: var(--accent-default);
+}
+
+.railLine {
+  flex: 1 1 auto;
+  width: 2px;
+  background: var(--border-strong);
+}
+
+.entryBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+  padding-bottom: var(--space-block);
+}
+
+.entryTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.entryBody > .stageCards {
+  padding-top: var(--space-tight);
+}
+
+.rulesLink {
+  align-self: flex-start;
+}
+
+/* ── 벗어남 흐름 (390) ── */
+.drift {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.driftHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  min-height: 28px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-tight);
+}

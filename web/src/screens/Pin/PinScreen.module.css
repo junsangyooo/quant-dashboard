@@ -1,0 +1,104 @@
+/* SCR-PIN (Figma 1:51276 · 1:51328 · 1:51378): one centred column, 24 between items,
+   24/20 padding, a 40 spacer above the wordmark, '잊었을 때' pinned to the bottom. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-grid);
+  min-height: 100dvh;
+  /* 24 frame padding + the 40 spacer above the wordmark (위 여백) + the 24 gap after it. */
+  padding: calc(3 * var(--space-grid) + var(--space-block)) var(--space-section) var(--space-grid);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.wordmark {
+  color: var(--text-primary);
+}
+
+.prompt {
+  color: var(--text-muted);
+}
+
+/* The live region lays its children out as items of the column (24 apart) and takes no room
+   while empty. */
+.messages {
+  display: contents;
+}
+
+.error {
+  color: var(--status-error);
+}
+
+.note {
+  max-width: 300px;
+  color: var(--text-muted);
+}
+
+.code {
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.checking {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 키/숫자 3 × 4, 12 apart. */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--space-row);
+}
+
+/* 잠김: the keypad fades (Figma opacity 0.35) and does not respond; the digits keep their
+   colour under the fade instead of turning muted too. */
+.keypadOff {
+  opacity: 0.35;
+}
+
+.keypad.keypadOff > button:disabled {
+  color: var(--text-primary);
+}
+
+.forgot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-tight);
+  margin-top: auto;
+}
+
+.forgotToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-height: 24px;
+  color: var(--text-muted);
+}
+
+/* 1440 (no drawing): the same order in a 360 column, typed on the keyboard. */
+@media (min-width: 900px) {
+  .page {
+    width: 100%;
+    max-width: 360px;
+    margin-inline: auto;
+  }
+}

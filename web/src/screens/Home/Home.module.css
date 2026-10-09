@@ -1,0 +1,517 @@
+/* SCR-HOME (Figma 1:51434 · 1:54828). Tokens only; widths of drawn parts follow Figma. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.primary {
+  color: var(--text-primary);
+}
+
+.gain {
+  color: var(--pnl-gain);
+}
+
+.loss {
+  color: var(--pnl-loss);
+}
+
+.flat {
+  color: var(--pnl-flat);
+}
+
+/* 390: one column, sections 20 apart. 1440: 8 + 4 columns of a 12-column grid, 24 apart. */
+.columns,
+.left,
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .columns {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+    gap: var(--space-grid);
+  }
+
+  .left {
+    grid-column: span 8;
+    gap: var(--space-grid);
+  }
+
+  .right {
+    grid-column: span 4;
+    gap: var(--space-grid);
+  }
+}
+
+.card {
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+/* ── 지금 자산 ── */
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  min-height: 28px;
+}
+
+.label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.hero > .chips {
+  gap: var(--space-inline);
+}
+
+.planLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: flex-start;
+  column-gap: var(--space-inline);
+  row-gap: var(--space-tight);
+  color: var(--text-primary);
+}
+
+.planLine:hover > span:nth-last-child(2) {
+  text-decoration: underline;
+}
+
+/* ── 자산 변동 ── */
+.trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.trendTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.trendTopStart {
+  justify-content: flex-start;
+}
+
+.periodPnl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-height: 28px;
+  text-align: start;
+}
+
+.periodPnl:hover > span:nth-child(2) {
+  text-decoration: underline;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-block);
+  row-gap: var(--space-tight);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.swatch {
+  width: 16px;
+  height: 8px;
+  flex: none;
+}
+
+.swatchMine {
+  stroke: var(--chart-series-1);
+}
+
+.swatchBase {
+  stroke: var(--chart-series-2);
+}
+
+/* '표로 보기 ›' — the 버튼/링크 look, with aria-expanded. */
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) 0;
+  color: var(--accent-default);
+  white-space: nowrap;
+}
+
+.textButton:hover > span {
+  text-decoration: underline;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+/* ── 계획 ── */
+.planCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.planBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.planBodyWide {
+  display: grid;
+  grid-template-columns: minmax(0, 360fr) minmax(0, 368fr);
+  align-items: start;
+  gap: var(--space-grid);
+}
+
+.planRule,
+.planHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  min-width: 0;
+}
+
+.planHead {
+  gap: var(--space-inline);
+}
+
+.planProgress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.planProgress > p {
+  padding-top: var(--space-inline);
+}
+
+.planBodyWide .planProgress {
+  gap: var(--space-block);
+}
+
+.planBodyWide .planProgress > p {
+  padding-top: 0;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.share {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-inline);
+  row-gap: var(--space-tight);
+}
+
+/* ── 구성 ── */
+.composition {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.barBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.barNote {
+  align-self: flex-end;
+  text-align: end;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupDivided {
+  border-top: 1px solid var(--border-default);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  padding: var(--space-row) 0 var(--space-tight);
+}
+
+.groupShare {
+  margin-left: auto;
+  text-align: end;
+}
+
+.groupDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot-strategy-1 {
+  background: var(--chart-strategy-1);
+}
+
+.dot-strategy-2 {
+  background: var(--chart-strategy-2);
+}
+
+.dot-cash {
+  background: var(--chart-cash);
+}
+
+.dot-cat-1 {
+  background: var(--chart-cat-1);
+}
+
+.dot-cat-2 {
+  background: var(--chart-cat-2);
+}
+
+.dot-cat-3 {
+  background: var(--chart-cat-3);
+}
+
+.dot-cat-4 {
+  background: var(--chart-cat-4);
+}
+
+.dot-cat-5 {
+  background: var(--chart-cat-5);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Row: logo | name / attrs (/ detail) | value block centred on the whole row (Figma rows). */
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'logo name value'
+    'logo attrs value';
+  align-items: center;
+  column-gap: var(--space-row);
+  row-gap: var(--space-tight);
+  width: 100%;
+  padding: var(--space-inline) 0;
+  color: var(--text-primary);
+  text-align: start;
+}
+
+.rowDetailOpen {
+  grid-template-areas:
+    'logo name value'
+    'logo attrs value'
+    'logo detail value';
+}
+
+/* A cash row with dollars: the $ amount ends the chip line, wrapping under it when long. */
+.rowCashUsd {
+  grid-template-areas:
+    'logo name value'
+    'logo attrs attrs';
+}
+
+.rowButton {
+  cursor: pointer;
+}
+
+.rowButton:hover .rowName {
+  text-decoration: underline;
+}
+
+.rowLogo {
+  grid-area: logo;
+}
+
+.rowName {
+  grid-area: name;
+  min-width: 0;
+}
+
+.rowAttrs {
+  grid-area: attrs;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.rowUsd {
+  margin-left: auto;
+}
+
+.rowValues {
+  grid-area: value;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.rowCashUsd .rowValues {
+  align-self: start;
+}
+
+.rowDetail {
+  grid-area: detail;
+}
+
+/* ── sheets ── */
+.sheetLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.sheetList {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheetLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-row);
+  padding: var(--space-inline) 0;
+  color: var(--text-primary);
+}
+
+.sheetLink:hover > span:last-child {
+  text-decoration: underline;
+}
+
+.legendGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-row) var(--space-block);
+}
+
+.legendEntry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* ── skeleton ── */
+.skeletonGauge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-block);
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.skeletonLinesEnd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-tight);
+  margin-left: auto;
+}
+
+.skeletonRows {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-row);
+  padding: var(--space-inline) 0;
+}
+
+.skeletonLogo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--border-default);
+  flex: none;
+}

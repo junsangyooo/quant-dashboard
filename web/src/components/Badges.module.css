@@ -111,3 +111,7 @@
 .tone-5 {
   --logo-tone: var(--chart-cat-5);
 }
+
+.tone-cash {
+  --logo-tone: var(--chart-cash);
+}

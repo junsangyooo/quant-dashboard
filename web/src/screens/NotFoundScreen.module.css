@@ -1,0 +1,10 @@
+/* Unknown path: the wordmark alone, centred like 입장 (24/20 padding, 24 gap). */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-grid);
+  min-height: 100dvh;
+  padding: var(--space-grid) var(--space-section);
+  color: var(--text-primary);
+}

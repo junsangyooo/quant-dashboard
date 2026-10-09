@@ -1,0 +1,488 @@
+/* SCR-MODE (Figma 1:64094 390 · 1:65140 1440). 390: one column, 20 apart. 1440: 12 columns —
+   left 7 (690), right 5 (486), 24 apart. */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  min-width: 0;
+}
+
+.twoColumns {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-grid);
+  align-items: start;
+}
+
+.left {
+  grid-column: 1 / 8;
+  gap: var(--space-grid);
+}
+
+.right {
+  grid-column: 8 / 13;
+  gap: var(--space-grid);
+}
+
+.right:empty {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .screen {
+    gap: var(--space-grid);
+  }
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.error {
+  color: var(--status-error);
+}
+
+.accent {
+  color: var(--accent-default);
+}
+
+.alignStart {
+  align-self: flex-start;
+}
+
+.wide {
+  width: 100%;
+}
+
+.pnl-gain {
+  color: var(--pnl-gain);
+}
+
+.pnl-loss {
+  color: var(--pnl-loss);
+}
+
+.pnl-flat {
+  color: var(--pnl-flat);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* ── 지금 모드 ── */
+.modeSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.modeLine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-tight);
+}
+
+/* ── cards ── */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  color: var(--text-primary);
+  scroll-margin-top: calc(var(--space-section) * 4);
+}
+
+.subtle {
+  background: var(--bg-subtle);
+}
+
+.outlined {
+  background: var(--bg-default);
+  border: 1px solid var(--border-default);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+/* ── 두 장부 ── */
+.legendChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-inline);
+}
+
+/* 칩/범례 geometry (28 tall, 4/8 padding, line swatch 16 × 8). On = the paper tint. */
+.ledgerChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) var(--space-inline);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ledgerChip[aria-pressed='true'] {
+  border-color: var(--chart-paper);
+  background: var(--mode-paper-bg);
+  color: var(--mode-paper-text);
+}
+
+.ledgerChip[aria-pressed='false'] .swatch {
+  opacity: 0.4;
+}
+
+.swatch {
+  width: 16px;
+  height: 8px;
+  overflow: visible;
+  flex: none;
+}
+
+.unitRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.unitChips {
+  display: flex;
+  gap: var(--space-tight);
+}
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+.grid {
+  stroke: var(--chart-grid);
+}
+
+.tick {
+  fill: var(--text-muted);
+  font-size: var(--type-caption-size);
+  font-weight: var(--type-caption-weight);
+}
+
+.lineLive {
+  stroke: var(--chart-live);
+  fill: none;
+}
+
+.linePaper {
+  stroke: var(--chart-paper);
+  fill: none;
+}
+
+.lineBaseline {
+  stroke: var(--chart-series-2);
+  fill: none;
+}
+
+.halo {
+  fill: var(--bg-default);
+}
+
+.dotLive {
+  fill: var(--chart-live);
+}
+
+.dotPaper {
+  fill: var(--chart-paper);
+}
+
+.dates {
+  position: relative;
+  height: 18px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dateText {
+  position: absolute;
+  top: 0;
+}
+
+.anchor-middle {
+  transform: translateX(-50%);
+}
+
+.anchor-end {
+  transform: translateX(-100%);
+}
+
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  margin: 0;
+}
+
+.breakdownRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.breakdownRow dd {
+  margin: 0;
+}
+
+.breakdownLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.fill-cat-1 {
+  background: var(--chart-cat-1);
+}
+
+.fill-cat-2 {
+  background: var(--chart-cat-2);
+}
+
+.fill-cat-3 {
+  background: var(--chart-cat-3);
+}
+
+.fill-cat-4 {
+  background: var(--chart-cat-4);
+}
+
+.fill-cat-5 {
+  background: var(--chart-cat-5);
+}
+
+.fill-cash {
+  background: var(--chart-cash);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-block);
+}
+
+/* ── 모의투자 성적 ── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-inline);
+}
+
+@media (min-width: 900px) {
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: var(--space-row);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+}
+
+.retBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-tight);
+}
+
+.triangle {
+  margin-right: var(--space-inline);
+}
+
+/* ── 켜기 전 점검 ── */
+.preflight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.checkList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+/* ── 첫 주문 미리보기 ── */
+.arrow {
+  display: flex;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.targetLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-row);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.legs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.leg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: var(--space-row);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+}
+
+.legHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.legLabel {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.legAmount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-inline);
+}
+
+.legArrow {
+  display: flex;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+/* ── 실전으로 켜기 ── */
+.turnOn {
+  scroll-margin-top: calc(var(--space-section) * 4);
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+}
+
+.confirm {
+  align-items: center;
+}
+
+.confirmOff {
+  color: var(--text-muted);
+}
+
+.pinForm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-block);
+}
+
+/* ── 실전 끄기 ── */
+.turnOff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  scroll-margin-top: calc(var(--space-section) * 4);
+}
+
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.modalOrders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.modalOrder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: var(--space-row);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.modalOrderHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* ── 취소 안 된 주문 ── */
+.cancelFailed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  background: var(--status-error-subtle);
+  color: var(--text-primary);
+}
+
+.cancelList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}

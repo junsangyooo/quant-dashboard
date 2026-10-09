@@ -1,0 +1,870 @@
+/* SCR-RULES 규칙 — Figma 1:60971 · 1:61226 (390), 1:61916 · 1:62197 (1440). Flow line colours are the
+   Figma 컴포넌트 variables flow/* (not in design/tokens.json; same values as these semantic tokens). */
+
+.page {
+  --flow-canvas: var(--bg-subtle);
+  --flow-dot: var(--chart-grid);
+  --flow-line: var(--border-strong);
+  --flow-line-taken: var(--chart-target);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  /* 390 frames keep 16 at the sides and top (the shell pads 20). */
+  margin: calc(var(--space-tight) * -1) calc(var(--space-tight) * -1) 0;
+}
+
+@media (min-width: 900px) {
+  .page {
+    margin: 0;
+  }
+}
+
+@media (min-width: 1100px) {
+  .pageWithList {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    column-gap: var(--space-grid);
+    align-items: start;
+  }
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ── 규칙 선택 ── */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+}
+
+.listHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  min-height: 28px;
+}
+
+.ruleList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+}
+
+.ruleCard {
+  display: flex;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.ruleCard:hover {
+  background: var(--bg-subtle);
+}
+
+/* 선택 = 보라 테두리 1.5 + 왼쪽 띠 + 회색 바탕 (1:62197). */
+.ruleCardOn {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent-default);
+  background: var(--bg-subtle);
+}
+
+.ruleCardStripe {
+  width: 4px;
+  flex: none;
+}
+
+.ruleCardOn .ruleCardStripe {
+  background: var(--accent-default);
+}
+
+.ruleCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-row);
+}
+
+.ruleCardName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.aiIcon {
+  color: var(--node-ai-fg);
+}
+
+.shareBar {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-mark);
+  background: var(--chart-track);
+  overflow: hidden;
+}
+
+.shareFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--radius-mark);
+}
+
+.strategy1 {
+  background: var(--chart-strategy-1);
+}
+
+.strategy2 {
+  background: var(--chart-strategy-2);
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.ruleChips {
+  display: flex;
+  gap: var(--space-inline);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* ── 규칙 머리 ── */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  min-width: 0;
+}
+
+.ruleHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.title,
+.titleLong {
+  font-family: var(--type-heading-family), system-ui, sans-serif;
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line-height);
+  font-weight: var(--type-title-weight);
+}
+
+/* 390: long names drop to heading-1 so 자산의 % stays on the line (1:61226). */
+.titleLong {
+  font-size: var(--type-heading-1-size);
+  line-height: var(--type-heading-1-line-height);
+  font-weight: var(--type-heading-1-weight);
+}
+
+@media (min-width: 600px) {
+  .titleLong {
+    font-size: var(--type-title-size);
+    line-height: var(--type-title-line-height);
+    font-weight: var(--type-title-weight);
+  }
+}
+
+.share {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.lanes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* ── 요약 타일 ── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-row);
+}
+
+@media (min-width: 1100px) {
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-block);
+  }
+}
+
+.tile {
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  overflow: hidden;
+}
+
+.k-weight {
+  --tile-fg: var(--node-weight-fg);
+}
+
+.k-start {
+  --tile-fg: var(--node-start-fg);
+}
+
+.k-condition {
+  --tile-fg: var(--node-condition-fg);
+}
+
+.k-action {
+  --tile-fg: var(--node-action-fg);
+}
+
+.k-data {
+  --tile-fg: var(--node-data-fg);
+}
+
+.k-result {
+  --tile-fg: var(--node-result-fg);
+}
+
+.tileStripe {
+  width: 4px;
+  flex: none;
+  background: var(--tile-fg);
+}
+
+.tileBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-row);
+}
+
+.tileHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  color: var(--tile-fg);
+  white-space: nowrap;
+}
+
+/* 16px in the layout (Figma chevron), 24px to touch. */
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: calc(var(--space-tight) * -1);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  flex: none;
+}
+
+.disclosure:hover {
+  background: var(--bg-subtle);
+}
+
+.tilePicture {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 64px;
+}
+
+@media (min-width: 1100px) {
+  .tilePicture {
+    height: 80px;
+  }
+}
+
+.tileValue {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+.measuredRows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-tight) var(--space-inline);
+  margin: 0;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line-height);
+}
+
+.measuredRows dd {
+  margin: 0;
+}
+
+/* ① donut */
+.whatPicture {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.donut {
+  width: 50px;
+  height: 50px;
+  flex: none;
+}
+
+@media (min-width: 1100px) {
+  .donut {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+.fill-cat-1 {
+  fill: var(--chart-cat-1);
+}
+
+.fill-cat-2 {
+  fill: var(--chart-cat-2);
+}
+
+.fill-cat-3 {
+  fill: var(--chart-cat-3);
+}
+
+.fill-cat-4 {
+  fill: var(--chart-cat-4);
+}
+
+.fill-cat-5 {
+  fill: var(--chart-cat-5);
+}
+
+.donutLegend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.donutItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+/* ② weekdays + day axis */
+.whenPicture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.weekdays {
+  display: flex;
+  gap: var(--space-tight);
+}
+
+.weekdays > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  height: 22px;
+  border-radius: var(--radius-mark);
+}
+
+@media (min-width: 1100px) {
+  .weekdays > span {
+    height: 28px;
+  }
+}
+
+.dayOn {
+  background: var(--node-start-fg);
+  color: var(--text-inverse);
+}
+
+.dayOff {
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-muted);
+}
+
+.dayAxis {
+  position: relative;
+  height: 2px;
+  margin-top: var(--space-tight);
+  border-radius: var(--radius-mark);
+  background: var(--chart-track);
+}
+
+.dayDot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--node-start-fg);
+  box-shadow: 0 0 0 1.5px var(--bg-default);
+  transform: translate(-50%, -50%);
+}
+
+.axisLabels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+}
+
+/* ③ ⑤ svg pictures */
+.svgFrame {
+  width: 100%;
+}
+
+.track {
+  fill: var(--chart-track);
+}
+
+.band {
+  fill: var(--chart-band);
+}
+
+.bandEdge {
+  fill: none;
+  stroke: var(--border-strong);
+}
+
+.target {
+  fill: var(--chart-target);
+}
+
+.dotNow {
+  fill: var(--bg-default);
+  stroke: var(--border-strong);
+}
+
+.dotCheck {
+  fill: var(--chart-drift);
+  stroke: var(--bg-default);
+}
+
+.dotMeasured {
+  fill: var(--text-muted);
+  stroke: var(--bg-default);
+}
+
+.dotMedian {
+  fill: var(--text-primary);
+  stroke: var(--bg-default);
+}
+
+.svgMicro {
+  fill: var(--text-muted);
+  font-size: var(--type-micro-size);
+  font-weight: var(--type-micro-weight);
+}
+
+/* ④ stages */
+.actionPicture {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.actionStep {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+  flex: 1 1 0;
+}
+
+.actionStep:first-child {
+  flex: none;
+}
+
+.actionChevron {
+  flex: 1 1 0;
+  margin-top: var(--space-inline);
+  color: var(--text-muted);
+}
+
+.actionStage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.actionCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--node-action-tint);
+  color: var(--node-action-fg);
+}
+
+/* ⑥ 지금 · 결과 */
+.nowPicture {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+}
+
+.nowTrack {
+  position: absolute;
+  top: 11px;
+  right: 12px;
+  left: 12px;
+  height: 2px;
+  background: var(--chart-track);
+}
+
+.nowTrackDone {
+  display: block;
+  height: 100%;
+  background: var(--node-result-fg);
+}
+
+.nowStage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.nowStage:first-child {
+  align-items: flex-start;
+}
+
+.nowStage:last-child {
+  align-items: flex-end;
+}
+
+.nowCircle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: var(--space-tight);
+  border-radius: var(--radius-pill);
+}
+
+.now-done {
+  background: var(--node-result-tint);
+  color: var(--node-result-fg);
+}
+
+.now-pending {
+  background: var(--bg-default);
+  color: var(--text-muted);
+}
+
+.nowRing {
+  position: absolute;
+  inset: 0;
+  fill: none;
+  stroke: var(--border-strong);
+}
+
+.now-failed {
+  background: var(--status-error-subtle);
+  color: var(--status-error);
+}
+
+/* ── 흐름 ── */
+.flowBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.canvas {
+  position: relative;
+  border-radius: var(--radius-card);
+  background-color: var(--flow-canvas);
+}
+
+/* 1440: 3 columns of 236 in 896 (padding 40, gaps 54 × 72) on a dot grid ('점 격자'; the 390
+   stack has none). */
+.canvasGrid {
+  background-image: radial-gradient(circle at 1px 1px, var(--flow-dot) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  column-gap: calc(var(--space-grid) * 2.25);
+  row-gap: calc(var(--space-grid) * 3);
+  padding: calc(var(--space-section) * 2);
+}
+
+/* 390: one column 16 in from the edge, 36 kept on the right for detour lines. */
+.canvasStack {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-block);
+}
+
+/* Cards 290 wide in the 358 canvas (Figma 1:61226): the lanes on the right sit at +24 and +38. */
+.canvasStack .cardSlot {
+  margin-right: calc(var(--space-grid) + var(--space-row));
+}
+
+.cardSlot {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.gap-first {
+  margin-top: 0;
+}
+
+.gap-default {
+  margin-top: calc(var(--space-grid) + var(--space-tight));
+}
+
+.gap-label {
+  margin-top: calc(var(--space-grid) * 2 - var(--space-tight));
+}
+
+.gap-exception {
+  margin-top: var(--space-block);
+}
+
+.gap-afterException {
+  margin-top: var(--space-grid);
+}
+
+.indent {
+  margin-left: calc(var(--space-grid) * 2 + var(--space-inline));
+}
+
+/* 1440: a row of only 예외 cards sits 56 under the row above (Figma 1:62197 예외 at 909 =
+   649 + 204 + 56), the other rows 72. */
+.canvasGrid .exceptionRow {
+  margin-top: calc(var(--space-block) * -1);
+}
+
+.flowCard {
+  height: 100%;
+}
+
+.edges {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.edge path,
+.edge polyline,
+.edge line {
+  fill: none;
+}
+
+.lineTaken path,
+.lineTaken polyline,
+.lineTaken line,
+.lineTaken circle {
+  stroke: var(--flow-line-taken);
+}
+
+.lineNotTaken path,
+.lineNotTaken polyline,
+.lineNotTaken line,
+.lineNotTaken circle {
+  stroke: var(--flow-line);
+}
+
+.lineNotTaken path,
+.lineNotTaken line {
+  stroke-dasharray: 4 4;
+}
+
+.lineException path,
+.lineException polyline,
+.lineException line,
+.lineException circle {
+  stroke: var(--flow-line);
+}
+
+.lineException path,
+.lineException line {
+  stroke-dasharray: 2 3;
+}
+
+.port {
+  fill: var(--bg-default);
+}
+
+.labelBox {
+  fill: var(--flow-canvas);
+}
+
+.edgeLabel {
+  fill: var(--text-muted);
+  font-size: var(--type-caption-size);
+  font-weight: var(--type-caption-weight);
+}
+
+.flowLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-inline) var(--space-block);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+/* 지금 rows */
+.nowStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.progress {
+  position: relative;
+  display: block;
+  height: 8px;
+  margin: var(--space-tight) 0;
+  border-radius: var(--radius-mark);
+  background: var(--chart-track);
+}
+
+.progressZone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20%;
+  border-radius: var(--radius-mark);
+  background: var(--chart-band);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.progressDot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  transform: translate(-50%, -50%);
+}
+
+.exceptionChips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.chipWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-tight);
+}
+
+.exceptionButton {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* 조건 card 벗어남 띠 (12 tall). */
+.miniBand {
+  position: relative;
+  display: block;
+  height: 12px;
+}
+
+.miniBand::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  border-radius: var(--radius-mark);
+  background: var(--chart-track);
+}
+
+.miniBandZone {
+  position: absolute;
+  top: 2px;
+  height: 8px;
+  border-radius: var(--radius-mark);
+  background: var(--chart-band);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.miniBandTarget {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 12px;
+  background: var(--chart-target);
+  transform: translateX(-50%);
+}
+
+.miniBandDot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 1.5px var(--bg-default);
+  transform: translate(-50%, -50%);
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kvKey {
+  flex: none;
+  min-width: 22px;
+}

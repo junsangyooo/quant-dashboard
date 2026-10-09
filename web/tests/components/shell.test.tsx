@@ -78,7 +78,11 @@ describe('app shell', () => {
     renderAt('/day/2026-08-21');
     expect(screen.getByRole('heading', { level: 1, name: '8/21(금)' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: copy.close })).toHaveAttribute('href', '/history');
-    expect(screen.getAllByRole('navigation')).toHaveLength(1);
+    // 그날 opens over 기록 (1440 panel; below 1100px a modal sheet over the frame), so the frame
+    // stays that of the 기록 tab.
+    const current = screen.getAllByRole('link', { current: 'page' });
+    expect(current.length).toBeGreaterThan(0);
+    for (const link of current) expect(link).toHaveTextContent(copy.nav.history);
   });
 
   it('renders the PIN page without the shell', () => {

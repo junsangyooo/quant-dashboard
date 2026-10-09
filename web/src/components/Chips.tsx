@@ -213,7 +213,8 @@ export function AiChip({ included, className }: AiChipProps) {
 export interface RuleSelectChipProps extends Base {
   selected: boolean;
   name: ReactNode;
-  weight: ReactNode;
+  /** Share or count after the name; omit it for name-only chips (규칙 '흐름' 칩). */
+  weight?: ReactNode;
   ai?: boolean | undefined;
   onClick?: MouseEventHandler<HTMLButtonElement> | undefined;
 }
@@ -236,11 +237,17 @@ export function RuleSelectChip({
       {ai ? (
         <>
           <Sparkles size={14} className={styles.ruleAi} aria-hidden />
-          <span className="sr-only">{copy.ai.included}</span>
+          <span className="sr-only">{copy.ai.included}</span>{' '}
         </>
       ) : null}
       <span className="t-label">{name}</span>
-      <span className={clsx('t-caption', styles.ruleWeight)}>{weight}</span>
+      {/* The spaces keep the accessible name '지수 반반 81.1%' (flex drops them visually). */}
+      {weight !== undefined && weight !== null ? (
+        <>
+          {' '}
+          <span className={clsx('t-caption', styles.ruleWeight)}>{weight}</span>
+        </>
+      ) : null}
     </button>
   );
 }

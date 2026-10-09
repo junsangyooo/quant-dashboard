@@ -1,0 +1,418 @@
+// ModeResponse → the words SCR-MODE shows. Pure functions (unit-tested); strings come from
+// copy/mode.ts, numbers from lib/format. `now` is the shell's server time.
+import { modeCopy as t } from '../../copy/mode';
+import { healthCopy } from '../../copy/health';
+import { marketName, sideName } from '../../api/adapters';
+import type { Instrument, Market, ModeResponse, Order, Stage } from '../../api/types';
+import {
+  formatDateTime,
+  formatFxRate,
+  formatKrw,
+  formatMonthDay,
+  formatMonthDayWeekday,
+  formatNumber,
+  formatPercentSigned,
+  formatTime,
+  formatUsd,
+  kstDateKey,
+} from '../../lib/format';
+
+export type Mode = ModeResponse;
+export type Preflight = NonNullable<ModeResponse['preflight']>[number];
+export type Preview = NonNullable<ModeResponse['preview']>;
+export type OkPreview = Extract<Preview, { kind: 'ok' }>;
+
+/** '08:30' on the same KST day as `now`, '10/8 09:10' otherwise. */
+export function atTime(at: string, now: string | null): string {
+  return now !== null && kstDateKey(at) === kstDateKey(now) ? formatTime(at) : formatDateTime(at);
+}
+
+const str = (v: string | number | undefined): string | undefined =>
+  v === undefined ? undefined : String(v);
+const num = (v: string | number | undefined): number | undefined => {
+  if (v === undefined) return undefined;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+/** Whole dollars for approximate sums: 3399.6 → '$3,400'. */
+export function usdWhole(value: number): string {
+  return `$${formatNumber(Math.round(value))}`;
+}
+
+/** Whether the last sound of a figure or word closes on a consonant (받침): '7' 칠, '원', '율'. */
+function hasFinalConsonant(text: string): boolean {
+  const last = text.trim().at(-1) ?? '';
+  if (/[0-9]/.test(last)) return '0136781'.includes(last);
+  const code = last.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 !== 0;
+  return true;
+}
+
+/** Topic particle after a figure or word: '$125.67은', '85,964원은', '시세는'. */
+export function topicParticle(text: string): string {
+  return hasFinalConsonant(text) ? t.particles.topicAfterConsonant : t.particles.topicAfterVowel;
+}
+
+/** Subject particle: '미국 시세가', '환율이'. */
+export function withSubject(word: string): string {
+  return `${word}${hasFinalConsonant(word) ? t.particles.subjectAfterConsonant : t.particles.subjectAfterVowel}`;
+}
+
+/** Display name of a data source id or market code from facts ('us-quotes', 'US', 'FX'). */
+export function sourceName(source: string | number | undefined): string | null {
+  switch (str(source)) {
+    case 'kr-quotes':
+    case 'KR':
+      return healthCopy.sources.names['kr-quotes'];
+    case 'us-quotes':
+    case 'US':
+      return healthCopy.sources.names['us-quotes'];
+    case 'fx':
+    case 'FX':
+      return healthCopy.sources.names.fx;
+    case 'toss-link':
+      return healthCopy.sources.names['toss-link'];
+    case 'toss-balance':
+      return healthCopy.sources.names['toss-balance'];
+    case 'push-devices':
+      return healthCopy.sources.names['push-devices'];
+    default:
+      return null;
+  }
+}
+
+/** Short legend name: ETFs drop the trailing ' ETF' ('KOSPI200 ETF' → 'KOSPI200'). */
+export function shortName(instrument: Instrument): string {
+  return instrument.kind === 'etf' ? instrument.name.replace(/\s*ETF$/i, '') : instrument.name;
+}
+
+export function signedPct(value: number, digits = 2): string {
+  return formatPercentSigned(value, digits);
+}
+
+// ── 지금 모드 ────────────────────────────────────────────────────────────────
+
+export function modeLine(m: Mode): string {
+  if (m.mode === 'live') return t.line.live;
+  return m.liveOff ? t.line.paperAfterLive : t.line.paper;
+}
+
+export function periodChip(m: Mode): string | null {
+  if (m.mode === 'live' && m.live) return t.liveSince(formatMonthDay(m.live.since), m.live.days);
+  if (m.liveOff)
+    return t.liveOff(
+      formatMonthDay(m.liveOff.from),
+      formatMonthDay(m.liveOff.to),
+      formatTime(m.liveOff.offAt),
+    );
+  return null;
+}
+
+// ── 켜기 전 점검 ─────────────────────────────────────────────────────────────
+
+export type CheckState = 'pass' | 'blocked' | 'warn';
+
+export interface PreflightRowView {
+  id: Preflight['id'];
+  state: CheckState;
+  name: string;
+  description: string;
+}
+
+export function preflightState(item: Preflight): CheckState {
+  if (item.warn) return 'warn';
+  return item.ok ? 'pass' : 'blocked';
+}
+
+export function preflightRow(item: Preflight, now: string | null): PreflightRowView {
+  const f = item.facts;
+  const state = preflightState(item);
+  const same = item.sameCauseAs ? ` · ${t.preflight.sameCause}` : '';
+  switch (item.id) {
+    case 'health': {
+      if (item.ok) {
+        const at = str(f.lastCheckAt);
+        return {
+          id: item.id,
+          state,
+          name: t.preflight.healthOk,
+          description: at ? t.preflight.lastCheck(formatDateTime(at)) : '',
+        };
+      }
+      const cause = sourceName(f.source);
+      return {
+        id: item.id,
+        state,
+        name: t.preflight.health,
+        description: cause
+          ? t.preflight.healthCause(num(f.count) ?? 1, t.preflight.staleCause(cause)) + same
+          : t.preflight.blocked + same,
+      };
+    }
+    case 'toss-link': {
+      const date = str(f.expiresAt);
+      const days = num(f.daysLeft);
+      return {
+        id: item.id,
+        state,
+        name: t.preflight.tossLink,
+        description:
+          date && days !== undefined
+            ? t.preflight.tossLinkLine(formatMonthDay(date), days) + same
+            : t.preflight.blocked + same,
+      };
+    }
+    case 'freshness': {
+      if (item.ok) {
+        const b = str(f.balanceAt);
+        const p = str(f.priceAt);
+        const x = str(f.fxAt);
+        return {
+          id: item.id,
+          state,
+          name: t.preflight.freshness,
+          description:
+            b && p && x
+              ? t.preflight.freshLine(atTime(b, now), atTime(p, now), atTime(x, now))
+              : '',
+        };
+      }
+      const source = sourceName(f.source);
+      const date = str(f.basisDate);
+      return {
+        id: item.id,
+        state,
+        name: t.preflight.freshness,
+        description:
+          source && date
+            ? t.preflight.staleLine(source, formatMonthDay(date)) + same
+            : t.preflight.blocked + same,
+      };
+    }
+    case 'push': {
+      const n = num(f.devices) ?? 0;
+      const at = str(f.lastDelivery);
+      return {
+        id: item.id,
+        state,
+        name: t.preflight.push,
+        description:
+          n > 0 && at ? t.preflight.pushLine(n, formatDateTime(at)) : t.preflight.pushNone,
+      };
+    }
+  }
+}
+
+/** Distinct causes of ✕ rows (rows naming another row's cause count once) and their names. */
+export function blockingCauses(preflight: Mode['preflight']): { count: number; names: string[] } {
+  const rows = (preflight ?? []).filter((r) => preflightState(r) === 'blocked');
+  const ids = new Set(rows.map((r) => r.id));
+  const causes = rows.filter((r) => !(r.sameCauseAs && ids.has(r.sameCauseAs as Preflight['id'])));
+  const names = causes
+    .map((r) =>
+      r.id === 'toss-link'
+        ? t.preflight.tossLink
+        : r.id === 'push'
+          ? t.preflight.push
+          : sourceName(r.facts.source),
+    )
+    .filter((n): n is string => n !== null);
+  return { count: causes.length, names: [...new Set(names)] };
+}
+
+/** Red line under a closed 켜기 card, or null when it may be turned on. */
+export function blockedLine(m: Mode): string | null {
+  if (m.canTurnOn.ok) return null;
+  switch (m.canTurnOn.cause) {
+    case 'checks': {
+      const { count, names } = blockingCauses(m.preflight);
+      return names.length > 0
+        ? t.turnOn.blockedChecks(Math.max(1, count), names.join(', '))
+        : t.turnOn.blockedChecksCount(Math.max(1, count));
+    }
+    case 'preview':
+      return t.turnOn.blockedPreview;
+    case 'live-not-available':
+      return t.turnOn.blockedNotAvailable;
+  }
+}
+
+/** The source the preview waits for, from the ✕ checks ('미국 시세'). */
+export function waitingSource(preflight: Mode['preflight']): string | null {
+  for (const row of preflight ?? []) {
+    if (preflightState(row) !== 'blocked') continue;
+    const name = sourceName(row.facts.source);
+    if (name) return name;
+  }
+  return null;
+}
+
+// ── 첫 주문 미리보기 ─────────────────────────────────────────────────────────
+
+const MARKET_ORDER: readonly Market[] = ['KR', 'US', 'COIN'];
+
+function byMarket(orders: readonly Order[]): { market: Market; orders: Order[] }[] {
+  return MARKET_ORDER.map((market) => ({
+    market,
+    orders: orders.filter((o) => o.market === market),
+  })).filter((g) => g.orders.length > 0);
+}
+
+export interface StageView {
+  kind: Stage['kind'];
+  label: string;
+  time: string;
+  body: string[];
+  amount: string;
+  /** fx: the rate beside the amount. */
+  note: string | null;
+}
+
+function qty(value: number | undefined): string {
+  if (value === undefined) return '';
+  return Number.isInteger(value) ? formatNumber(value) : String(value);
+}
+
+function sumKrw(orders: readonly Order[]): number {
+  return orders.reduce((s, o) => s + (o.amountKrw ?? 0), 0);
+}
+
+function sumUsd(orders: readonly Order[]): number {
+  return orders.reduce((s, o) => s + (o.amountUsd ?? 0), 0);
+}
+
+export function stageView(stage: Stage, now: string | null): StageView {
+  if (stage.kind === 'fx') {
+    const krw = stage.orders.reduce((s, o) => s + (o.fx?.krw ?? 0), 0);
+    const usd = stage.orders.reduce((s, o) => s + (o.fx?.usd ?? 0), 0);
+    const rate = stage.orders.find((o) => o.fx)?.fx?.rate;
+    const toUsd = krw > 0;
+    return {
+      kind: 'fx',
+      label: toUsd ? t.preview.stage.fx : t.preview.stage.fxBack,
+      time: t.preview.expected(atTime(stage.at, now)),
+      body: [t.preview.approx(toUsd ? formatKrw(krw) : usdWhole(usd))],
+      amount: t.preview.arrow(t.preview.approx(toUsd ? usdWhole(usd) : formatKrw(krw))),
+      note: rate === undefined ? null : t.preview.rate(formatFxRate(rate)),
+    };
+  }
+  const groups = byMarket(stage.orders);
+  const count = stage.orders.length;
+  const time =
+    groups.length > 1
+      ? groups
+          .map((g) =>
+            t.preview.marketTime(
+              marketName(g.market),
+              formatTime(
+                g.orders.reduce((a, o) => (o.at < a ? o.at : a), g.orders[0]?.at ?? stage.at),
+              ),
+            ),
+          )
+          .join(' · ')
+      : t.preview.expected(atTime(stage.at, now));
+  const body = groups.map((g) => {
+    const names = g.orders
+      .map((o) => t.preview.shares(o.instrument?.name ?? '', qty(o.qty)))
+      .join(' · ');
+    return groups.length > 1 ? t.preview.marketLine(marketName(g.market), names) : names;
+  });
+  const krw = sumKrw(stage.orders);
+  const usd = sumUsd(stage.orders);
+  const amounts = [
+    ...(krw > 0 ? [t.preview.approx(formatKrw(krw))] : []),
+    ...(usd > 0 ? [t.preview.approx(usdWhole(usd))] : []),
+  ];
+  return {
+    kind: stage.kind,
+    label: stage.kind === 'buy' ? t.preview.stage.buy(count) : t.preview.stage.sell(count),
+    time,
+    body,
+    amount: amounts.join(' · '),
+    note: null,
+  };
+}
+
+/** Stages in 매도 → 환전 → 매수 order; a stage with no orders is hidden. */
+export function visibleStages(stages: readonly Stage[]): Stage[] {
+  const rank = { sell: 0, fx: 1, buy: 2 } as const;
+  return stages.filter((s) => s.orders.length > 0).sort((a, b) => rank[a.kind] - rank[b.kind]);
+}
+
+export function currentItems(p: OkPreview): string[] {
+  return p.current.map((c) =>
+    c.label === 'krw-cash'
+      ? t.preview.krwCash(formatKrw(c.krw))
+      : c.label === 'usd-cash'
+        ? t.preview.usdCash(formatKrw(c.krw))
+        : `${c.instrument?.name ?? ''} ${formatKrw(c.krw)}`,
+  );
+}
+
+export function basisChips(p: OkPreview, now: string | null): string[] {
+  return [
+    t.preview.basisBalance(atTime(p.basis.balanceAt, now)),
+    t.preview.basisPrice(atTime(p.basis.priceAt, now)),
+    t.preview.basisFx(formatFxRate(p.basis.fxRate), atTime(p.basis.fxAt, now)),
+  ];
+}
+
+export function outsideLine(o: OkPreview['outside'][number]): string {
+  return t.preview.outside(o.instrument.name, String(o.qty), formatKrw(o.approxKrw));
+}
+
+export function notComputableLines(
+  p: Extract<Preview, { kind: 'not-computable' }>,
+  preflight: Mode['preflight'],
+): { chip: string; note: string } {
+  const source = p.cause === 'stale' ? waitingSource(preflight) : null;
+  return {
+    chip: t.preview.notComputable(formatDateTime(p.at)),
+    note:
+      p.cause === 'stale'
+        ? t.preview.recomputeWhen(withSubject(source ?? t.preview.quotes))
+        : t.preview.recomputeLater,
+  };
+}
+
+// ── 실전 끄기 · 취소 안 된 주문 ─────────────────────────────────────────────
+
+export function orderAmount(o: Order): string {
+  if (o.amountUsd !== undefined) return formatUsd(o.amountUsd);
+  if (o.amountKrw !== undefined) return formatKrw(o.amountKrw);
+  return '';
+}
+
+export function cancelHead(o: Order, now: string | null): string {
+  return t.turnOff.orderHead(sideName(o.side), marketName(o.market), atTime(o.at, now));
+}
+
+export function cancelBody(o: Order): string {
+  return t.turnOff.orderBody(o.instrument?.name ?? '', qty(o.qty), orderAmount(o));
+}
+
+export function cancelFailedRow(o: Order): string {
+  return t.cancelFailed.order(
+    sideName(o.side),
+    marketName(o.market),
+    o.instrument?.name ?? '',
+    qty(o.qty),
+    orderAmount(o),
+  );
+}
+
+/** '달러 현금 $125.67은 계좌에 남아요'. */
+export function cashStaysLine(currency: 'USD' | 'KRW', amount: number): string {
+  const figure = currency === 'USD' ? formatUsd(amount) : formatKrw(amount);
+  return t.turnOff.cashStays(
+    currency === 'USD' ? t.turnOff.usd : t.turnOff.krw,
+    `${figure}${topicParticle(figure)}`,
+  );
+}
+
+// ── 성적 ─────────────────────────────────────────────────────────────────────
+
+export function firstCheckText(at: string): string {
+  return `${formatMonthDayWeekday(at)} ${formatTime(at)}`;
+}

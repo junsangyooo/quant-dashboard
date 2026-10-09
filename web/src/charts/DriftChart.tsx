@@ -28,6 +28,10 @@ export interface DriftChartProps {
   threshold?: number | undefined;
   events?: readonly ChartEvent[] | undefined;
   hrefFor?: ((date: string) => string) | undefined;
+  /** A grouped '[n]' marker in the event band: opens the list of its events. */
+  onGroup?: ((events: ChartEvent[]) => void) | undefined;
+  /** Grouping distance of the event band (EventBand `groupBelow`). */
+  groupBelow?: number | undefined;
   label: string;
   /** Event band height: 26 on 390, 28 on 1440. */
   bandHeight?: number | undefined;
@@ -43,6 +47,8 @@ export function DriftChart({
   threshold = 2,
   events = [],
   hrefFor,
+  onGroup,
+  groupBelow,
   label,
   bandHeight,
   width: fixed,
@@ -122,18 +128,24 @@ export function DriftChart({
             </g>
           );
         })}
-        {g.gaps.slice(0, 1).map((gap) => (
-          <text
-            key={`${gap.key}-${gap.date}`}
-            className={clsx(styles.staleLabel, styles.caption)}
-            x={Math.min(gap.x, g.plotW)}
-            y={layout.yTop}
-            textAnchor={gap.x > g.plotW / 2 ? 'end' : 'start'}
-            dominantBaseline="hanging"
-          >
-            {copy.chart.awaitingQuoteFrom(formatMonthDay(gap.date))}
-          </text>
-        ))}
+        {g.gaps.slice(0, 1).map((gap) => {
+          // Figma 1:56437: micro text on the frame's top edge, ending where the line stops.
+          const points = series.find((s) => s.key === gap.key)?.points ?? [];
+          const before = points[points.findIndex((p) => p.date === gap.date) - 1];
+          const x = before ? g.x(before.date) : gap.x;
+          return (
+            <text
+              key={`${gap.key}-${gap.date}`}
+              className={clsx(styles.staleLabel, styles.micro)}
+              x={Math.min(x, g.plotW)}
+              y={0}
+              textAnchor={x > g.plotW / 2 ? 'end' : 'start'}
+              dominantBaseline="hanging"
+            >
+              {copy.chart.awaitingQuoteFrom(formatMonthDay(gap.date))}
+            </text>
+          );
+        })}
       </svg>
       <EventBand
         width={width}
@@ -141,6 +153,8 @@ export function DriftChart({
         x={g.x}
         events={events}
         hrefFor={hrefFor}
+        onGroup={onGroup}
+        groupBelow={groupBelow}
         height={bandHeight}
       />
       <div className={clsx(styles.dates, 't-caption')} style={{ width }} aria-hidden>

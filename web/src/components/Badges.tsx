@@ -75,7 +75,8 @@ export function Flag({ country, decorative, className }: FlagProps) {
   );
 }
 
-export type LogoTone = 1 | 2 | 3 | 4 | 5;
+/** chart/cat-n, or chart/cash for the ₩ · $ circles of cash rows. */
+export type LogoTone = 1 | 2 | 3 | 4 | 5 | 'cash';
 
 export interface InitialLogoProps {
   initials: string;

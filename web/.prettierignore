@@ -10,3 +10,4 @@ package-lock.json
 scripts/figma/dump.js
 src/styles/pretendard.css
 dist-e2e
+dist-e2e-*

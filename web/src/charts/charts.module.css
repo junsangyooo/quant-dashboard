@@ -173,7 +173,9 @@
   inset: 0;
 }
 
-.marker {
+/* Doubled class: beats the marker's own `position: relative` (Markers.module.css) whatever
+   order the two stylesheets load in. */
+.marker.marker {
   position: absolute;
 }
 

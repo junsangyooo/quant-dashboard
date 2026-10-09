@@ -1,0 +1,545 @@
+/* SCR-HISTORY 기록 — Figma 1:58215 (390), 1:59344 (1440), 1:60239 (1440 with the 그날 panel). */
+
+.page {
+  --side-w: 416px;
+  --panel-w: 480px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-section);
+  /* 390 frames keep 16 at the sides and top (the shell pads 20). */
+  margin: calc(var(--space-tight) * -1) calc(var(--space-tight) * -1) 0;
+}
+
+@media (min-width: 900px) {
+  .page {
+    margin: 0;
+  }
+}
+
+/* 1440: left 760 (title · 자산 변동 · 거르기 · 목록) / right 416 (타일 · 달력). */
+@media (min-width: 1100px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr) var(--side-w);
+    grid-template-rows: auto auto auto 1fr;
+    grid-template-areas:
+      'head side'
+      'asset side'
+      'filters side'
+      'list side';
+    column-gap: var(--space-grid);
+    align-items: start;
+  }
+
+  .headArea {
+    grid-area: head;
+  }
+
+  .asset {
+    grid-area: asset;
+  }
+
+  .sideArea {
+    grid-area: side;
+  }
+
+  .filtersArea {
+    grid-area: filters;
+  }
+
+  .listArea {
+    grid-area: list;
+  }
+
+  /* 그날 panel open: the panel covers the right column; the left column widens up to 48px short of
+     the panel (1440: 792 wide, 1:60239). */
+  .withPanel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'asset'
+      'filters'
+      'list';
+    width: min(
+      100%,
+      calc(
+        100vw - var(--panel-w) - 2 * var(--space-grid) -
+          max(var(--space-grid), (100vw - var(--layout-content-max)) / 2)
+      )
+    );
+  }
+
+  .withPanel .sideArea {
+    display: none;
+  }
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ── 제목과 장부 칩 ── */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  min-height: 28px;
+}
+
+.years {
+  display: flex;
+  gap: var(--space-tight);
+}
+
+.closeChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  flex: none;
+}
+
+.closeChip:hover {
+  background: var(--bg-subtle);
+}
+
+/* ── 자산 변동 ── */
+.assetCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  min-width: 0;
+  padding: var(--space-block);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+.assetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.headChips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-inline);
+}
+
+.pnlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.pnl-gain {
+  color: var(--pnl-gain);
+}
+
+.pnl-loss {
+  color: var(--pnl-loss);
+}
+
+.pnl-flat {
+  color: var(--pnl-flat);
+}
+
+.chartEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  text-align: center;
+}
+
+.tableToggle {
+  display: flex;
+}
+
+/* ── 오른쪽: 타일 · 달력 ── */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  min-width: 0;
+}
+
+.tilesHead {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .tilesHead {
+    display: block;
+  }
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-inline);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+  white-space: nowrap;
+  padding: var(--space-row);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+}
+
+.tileHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  color: var(--text-muted);
+}
+
+.tilePicture {
+  display: flex;
+  align-items: center;
+  height: 16px;
+}
+
+.miniCells {
+  display: flex;
+  gap: var(--space-tight);
+}
+
+.feeBar {
+  fill: var(--chart-series-2);
+}
+
+.checkBar {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-mark);
+  background: var(--calendar-ok);
+  overflow: hidden;
+}
+
+.checkBarEmpty {
+  background: var(--chart-track);
+}
+
+.checkFail {
+  height: 100%;
+  background: var(--calendar-fail);
+}
+
+.calendarCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  min-width: 0;
+  padding: var(--space-block);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-default);
+}
+
+.calendarHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.calendarWrap {
+  /* = CALENDAR.firstColumnX: the weekday label column of the grid. */
+  --calendar-pin: 18px;
+
+  position: relative;
+  min-width: 0;
+}
+
+/* The scroller clips at its edges: 4 of padding keep the focus ring of the edge cells whole,
+   and the negative margin keeps the cells where they were. */
+.calendarScroller {
+  margin: calc(var(--space-tight) * -1);
+  padding: var(--space-tight);
+}
+
+/* Covers the scroller's 4 of padding on the left too, so no sliver of a week shows there. */
+.calendarPin {
+  position: absolute;
+  top: 0;
+  left: calc(var(--space-tight) * -1);
+  width: calc(var(--calendar-pin) + var(--space-tight));
+  background: var(--bg-default);
+  pointer-events: none;
+}
+
+.calendarPinText {
+  position: absolute;
+  top: 0;
+  margin-left: var(--space-tight);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.calendarEmpty {
+  height: 126px;
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-inline) var(--space-row);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+/* ── 거르기 ── */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.kindChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-inline);
+  padding: var(--space-tight) var(--space-row) var(--space-tight) var(--space-tight);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.kindChip[aria-pressed='true'] {
+  border-color: var(--accent-default);
+  background: var(--mode-paper-bg);
+  color: var(--mode-paper-text);
+}
+
+.kindMarker {
+  display: flex;
+}
+
+.aiMarker,
+.liveMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-control);
+  box-shadow: inset 0 0 0 1.5px var(--marker-edge);
+  background: var(--bg-default);
+  flex: none;
+}
+
+.aiMarker {
+  --marker-edge: var(--node-ai-fg);
+  color: var(--node-ai-fg);
+}
+
+.liveMarker {
+  --marker-edge: var(--text-primary);
+  color: var(--text-primary);
+}
+
+/* ── 사건 목록 ── */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.monthHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  padding: var(--space-inline) var(--space-inline) var(--space-tight);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-row);
+  padding: var(--space-row) var(--space-inline);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+}
+
+.row:hover {
+  background: var(--bg-subtle);
+}
+
+.row[aria-current='page'] {
+  background: var(--bg-subtle);
+}
+
+@media (min-width: 1100px) {
+  .row {
+    align-items: center;
+  }
+}
+
+.dateCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  flex: none;
+}
+
+.rowMarker {
+  display: flex;
+  flex: none;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-tight) var(--space-inline);
+}
+
+.detail {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dayCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-tight);
+  flex: none;
+  text-align: end;
+}
+
+.miniStages {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.stage-done {
+  color: var(--status-success);
+}
+
+.stage-pending {
+  color: var(--text-muted);
+}
+
+.stage-failed {
+  color: var(--status-error);
+}
+
+.miniWeights {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.cat-1 {
+  fill: var(--chart-cat-1);
+}
+
+.cat-2 {
+  fill: var(--chart-cat-2);
+}
+
+.cat-3 {
+  fill: var(--chart-cat-3);
+}
+
+.cat-4 {
+  fill: var(--chart-cat-4);
+}
+
+.cat-5 {
+  fill: var(--chart-cat-5);
+}
+
+.miniTarget {
+  fill: var(--chart-target);
+}
+
+.ruleDot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot1 {
+  background: var(--chart-strategy-1);
+}
+
+.dot2 {
+  background: var(--chart-strategy-2);
+}

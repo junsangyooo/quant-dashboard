@@ -1,0 +1,222 @@
+// SCR-HEALTH 작동. Sources: 기획.md §5 SCR-HEALTH (lines 681–727), Figma 1:62685 · 1:62952 ·
+// 1:63248 · 1:63518 · 1:63806 (and its hidden '알림 기기' list), 예시-값표 §0 · §1.5 · §3,
+// 화면-맞춤.md §3 (new sources: 공시 · AI 호출 · 지표 표). Strings marked NEW are not in the spec
+// or Figma; they follow the drawn pattern. Dates come in unpadded (10/7), as everywhere.
+
+export const healthCopy = {
+  summary: {
+    ok: '정상',
+    check: (n: number) => `점검 ${String(n)}`,
+    checkFailed: '확인 실패',
+    unknown: '확인 불가',
+    beforeFirst: '첫 확인 전',
+    /** '자료 6개 중 할 일 1' · '자료 6개 중 낡음 1 · 할 일 1'. */
+    sourcesWith: (total: number, parts: string) => `자료 ${String(total)}개 중 ${parts}`,
+    stalePart: (n: number) => `낡음 ${String(n)}`,
+    todoPart: (n: number) => `할 일 ${String(n)}`,
+    /** NEW — no stale source and nothing to do. */
+    sourcesFine: (total: number) => `자료 ${String(total)}개 모두 제때`,
+    /** '10/7 08:30 · 시세 응답 없음'. */
+    failedLine: (at: string, reason: string) => `${at} · ${reason}`,
+    /** Spec: '첫 확인 [7/1 08:30] 예정'. */
+    firstCheckLine: (at: string) => `첫 확인 ${at} 예정`,
+    /** NEW — the server itself answered 'unknown'. */
+    unknownLine: '자료 상태를 알 수 없어요',
+    lastAndNext: (last: string, next: string) => `마지막 확인 ${last} · 다음 ${next}`,
+    /** NEW — before the first check there is no 'last'. */
+    nextOnly: (next: string) => `다음 확인 ${next}`,
+    lastSuccessRetry: (last: string, retry: string) => `마지막 성공 ${last} · 다시 ${retry}`,
+    /** NEW — failed and no retry left. */
+    lastSuccess: (last: string) => `마지막 성공 ${last}`,
+    lastReceived: (at: string) => `마지막으로 받은 상태 ${at}`,
+    unknownChip: '상태 모름',
+    todoChip: (n: number) => `할 일 ${String(n)}`,
+    /** '점검 1 · 할 일 1' (1:46904). */
+    checkChip: (n: number, todo: number) =>
+      todo > 0 ? `점검 ${String(n)} · 할 일 ${String(todo)}` : `점검 ${String(n)}`,
+    failChip: (n: number) => `실패 ${String(n)}`,
+  },
+
+  /** 할 일 카드. Two 해요체 lines + a small result line. */
+  todo: {
+    /** NEW — screen-reader heading of the cards. */
+    title: '할 일',
+    autoRetry: (at: string) => `${at} 자동 재시도`,
+    manual: '직접 할 일',
+    // 토스 연결 만료 예정 (1:38782)
+    tossExpiringTitle: (date: string) => `토스 연결 만료 예정 · ${date}`,
+    tossExpiringLines: (days: number) => [
+      `${String(days)}일 뒤 토스 연결이 끝나요`,
+      '그 전에 Claude에게 재연결 요청',
+    ],
+    // 자료 낡음 (1:46904)
+    staleTitle: (source: string, date: string, days: number) =>
+      `${source} ${date} 기준 · ${String(days)}거래일째`,
+    /** '10/5·10/6 미국 종가를 못 받았어요' — the missing dates are joined with '·'. */
+    staleMissing: (dates: string, market: string) => `${dates} ${market} 종가를 못 받았어요`,
+    /** NEW — when the response does not list the missing dates. */
+    staleMissingCount: (market: string, days: number) =>
+      `${market} 종가 ${String(days)}거래일치를 못 받았어요`,
+    /** NEW — stale exchange rate. */
+    staleFxMissing: (days: number) => `환율을 ${String(days)}거래일째 못 받았어요`,
+    nextAttempt: (at: string) => `다음 시도 ${at}`,
+    // 확인 실패 (1:47501). The drawing says '토스 시세'; the source is not always Toss (phase 1
+    // reads public quotes), so the reason word alone is used.
+    checkFailedTitle: (at: string) => `${at} 확인 실패`,
+    checkFailedLines: (reason: string, retry: string) => [
+      `${reason} · 주문은 나가지 않았어요`,
+      `${retry}에도 실패하면 알림이 가요`,
+    ],
+    checkFailedResult: '두 번 실패하면 직접 할 일 · 작동에서 확인',
+    /** NEW — the retry failed too (manual). */
+    checkFailedManualLines: (reason: string) => [
+      `${reason} · 다시 시도도 실패했어요`,
+      '오늘은 주문이 나가지 않아요 · Claude에게 원인 확인 요청',
+    ],
+    // 주문 실패 (다시 시도까지 실패, CONTRACT order-failed) — NEW, from the banner wording.
+    orderFailedTitle: (date: string, market: string, side: string) =>
+      `${date} ${market} ${side} 실패`,
+    orderFailedLines: ['다시 시도도 실패했어요', 'Claude에게 원인 확인 요청'],
+    // 토스 주문 거부 (실전, 3단계) — '직접 할 일 · 토스 앱에서 주문 확인' (예시-값표 §3); first line NEW.
+    orderRejectedTitle: (date: string, market: string, side: string) =>
+      `${date} ${market} ${side} · 토스 주문 거부`,
+    orderRejectedLines: ['토스가 주문을 받지 않았어요', '토스 앱에서 주문 확인'],
+    // 취소 안 된 주문 (SCR-MODE off-failed wording); second line NEW.
+    cancelFailedTitle: '취소 안 된 주문 · 토스 앱에서 확인',
+    cancelFailedLines: (time: string) => [
+      `그대로 두면 ${time}에 체결될 수 있어요`,
+      '모의투자·실전에서 취소 다시 시도',
+    ],
+    // 알림 안 닿음 (banner wording) — lines NEW.
+    pushUndeliveredTitle: (days: number) => `알림이 ${String(days)}일째 기기에 안 닿아요`,
+    pushUndeliveredLines: ['설정에서 시험 알림을 보내 봐요', '안 오면 이 기기 알림을 다시 켜요'],
+    // AI 호출 · 공시 (2단계, 화면-맞춤 §3) — NEW.
+    aiCliTitle: (at: string) => `AI 호출 실패 · ${at}부터`,
+    aiCliLines: ['AI 판단이 멈췄어요', 'Claude 구독 로그인 확인 요청'],
+    filingsTitle: (market: string) => `${market} 공시 수집 점검 중`,
+    filingsLines: (market: string) => [
+      `${market} 공시 감시가 멈췄어요`,
+      '점검이 끝나면 자동으로 다시 받아요',
+    ],
+    /** Small result line, by effect. */
+    effect: {
+      'orders-zero-live-blocked': '그동안 주문 0건 · 실전 켜기 막힘',
+      'orders-and-reconcile-stop': '끝나면 실전 주문과 잔고 대조가 멈춰요',
+      /** NEW — used when no kind-specific line exists. */
+      'no-order-sent': '주문은 나가지 않았어요',
+    },
+  },
+
+  sources: {
+    title: '자료별',
+    barNote: '막대 = 갱신 주기 대비 나이',
+    names: {
+      'kr-quotes': '한국 시세',
+      'us-quotes': '미국 시세',
+      fx: '환율',
+      'toss-link': '토스 연결',
+      'toss-balance': '토스 잔고 대조',
+      'push-devices': '알림 기기',
+      // 2단계 (화면-맞춤 §3: 공시 · AI 호출 · 지표 표)
+      filings: '공시',
+      'ai-cli': 'AI 호출',
+      'metric-table': '지표 표',
+    },
+    state: {
+      fresh: '제때',
+      late: '늦음',
+      stale: '낡음',
+      /** 화면-맞춤 §3 ('DART가 점검 중이면 점검 중'). */
+      maintenance: '점검 중',
+      unknown: '확인 불가',
+    },
+    cadence: {
+      daily: '매일',
+      'per-check': '확인마다',
+      '90d': '90일마다 갱신',
+      /** NEW */
+      event: '생길 때마다',
+    },
+    close: (date: string) => `${date} 종가`,
+    closeEt: (date: string) => `${date} 종가(ET)`,
+    received: (time: string) => `${time} 받음`,
+    expires: (date: string) => `만료 ${date}`,
+    daysLeft: (days: number) => `${String(days)}일 남음`,
+    /** Chip of a 토스 연결 that expires soon: '만료 12일 전'. */
+    expiresIn: (days: number) => `만료 ${String(days)}일 전`,
+    balanceMatch: (time: string) => `${time} 일치`,
+    /** NEW */
+    balanceMismatch: (time: string) => `${time} 불일치`,
+    devices: (n: number) => `${String(n)}대`,
+    lastDelivery: (at: string) => `마지막 전달 ${at}`,
+    // 2단계 rows (화면-맞춤 §3). NEW: filingsBasis · maintenanceStop.
+    lastSuccess: (at: string) => `마지막 성공 ${at}`,
+    filingsBasis: (date: string) => `${date} 공시까지`,
+    metricBasis: (date: string) => `마지막 실적 뽑기 ${date}`,
+    maintenanceStop: (market: string) => `${market} 공시 감시 멈춤`,
+    noValue: '—',
+    /** NEW — accessible name of the push row button. */
+    devicesToggle: '알림 기기 목록',
+  },
+
+  /** 알림 기기 list (hidden layer of 1:62685: icon · name · '마지막 전달' · dot). */
+  devices: {
+    title: '알림 기기',
+    /** The drawn header link. */
+    settings: '알림 설정',
+    /** Spec: shown when there is no device or a delivery broke. */
+    enable: '설정에서 켜기',
+    /** NEW */
+    none: '알림 받는 기기가 없어요',
+    /** NEW — screen-reader words of the status dot. */
+    ok: '전달 정상',
+    warn: '전달 끊김',
+    never: '아직 전달 없음',
+    /** NEW */
+    error: '기기 목록을 못 불러왔어요',
+  },
+
+  recent: {
+    title: '최근 14일 확인',
+    /** '14일 중 실패 0' · '14일 중 실패 0 · 시세 대기 2'. */
+    summary: (fails: number, quoteWait: number) =>
+      quoteWait > 0
+        ? `14일 중 실패 ${String(fails)} · 시세 대기 ${String(quoteWait)}`
+        : `14일 중 실패 ${String(fails)}`,
+    /** '9/24~10/7 · 주말은 빈칸'. */
+    range: (from: string, to: string) => `${from}~${to} · 주말은 빈칸`,
+    /** '10/7 08:30 확인 · 리밸런싱 시작 · 42초'. */
+    run: (at: string, result: string, tail: string) => `${at} 확인 · ${result} · ${tail}`,
+    /** '10/7 08:30 확인 실패 · 시세 응답 없음 · 12초'. */
+    runFailed: (at: string, reason: string, tail: string) =>
+      `${at} 확인 실패 · ${reason} · ${tail}`,
+    /** A failed day of the grid whose reason the response does not carry. */
+    runFailedShort: (at: string, tail: string) => `${at} 확인 실패 · ${tail}`,
+    seconds: (s: number) => `${String(s)}초`,
+    /** Spec: a quote wait ends with '주문 0건' instead of the time taken. */
+    noOrders: '주문 0건',
+    /** A weekday without a run: '9/26(금) · 두 시장 휴장'. */
+    day: (date: string, state: string) => `${date} · ${state}`,
+    results: {
+      rebalance: '리밸런싱 시작',
+      'already-planned': '리밸런싱 시작',
+      'in-range': '목표 범위 안',
+      holiday: '휴장',
+      'quote-wait': '시세 대기',
+      'withdraw-wait': '출금 대기',
+      'in-progress': '리밸런싱 중',
+      'partial-failed': '일부 실패',
+      /** NEW */
+      running: '확인 중',
+    },
+    reasons: {
+      'no-quote': '시세 응답 없음',
+      /** NEW */
+      other: '원인 확인 필요',
+    },
+    /** NEW — accessible names. */
+    grid: '최근 14일 확인 달력',
+    lastRun: '마지막 확인',
+    selected: '고른 날',
+  },
+} as const;
