@@ -7,7 +7,7 @@ import {
   LAST_CHECK,
   NEXT_CHECK,
   NOW,
-  account,
+  PUSH_DEVICES,
   recent14,
   sources,
   staleShell,
@@ -30,8 +30,8 @@ const health: HealthResponse = {
       id: 'stale:us-quotes',
       severity: 'red',
       kind: 'stale',
-      // missingDates is not in the contract's facts (CONTRACT gap); the screen falls back to
-      // '미국 종가 2거래일치를 못 받았어요' without it.
+      // missingDates (CONTRACT todos[].facts, stale): without it the screen falls back to
+      // '미국 종가 2거래일치를 못 받았어요'.
       facts: {
         market: 'US',
         basisDate: '2026-10-02',
@@ -70,6 +70,7 @@ const health: HealthResponse = {
     },
   }),
   lastRun: { at: LAST_CHECK, result: 'quote-wait', seconds: 6 },
+  devices: PUSH_DEVICES,
 };
 
 const bundle = {
@@ -78,7 +79,6 @@ const bundle = {
   responses: {
     '/api/shell': staleShell(),
     '/api/health': health,
-    '/api/account': account(),
   },
 } satisfies FixtureBundle;
 

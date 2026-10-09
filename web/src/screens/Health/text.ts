@@ -11,6 +11,7 @@ import {
   formatFxRate,
   formatMonthDay,
   formatMonthDayWeekday,
+  formatNumber,
   formatTime,
   kstDateKey,
 } from '../../lib/format';
@@ -37,6 +38,19 @@ const num = (v: string | number | undefined): number | undefined => {
 function market(v: string | number | undefined): string {
   const m = str(v);
   return m === 'KR' || m === 'US' || m === 'COIN' || m === 'FX' ? marketName(m) : (m ?? '');
+}
+
+/** '324만 토큰', '8,400 토큰'. */
+function tokenAmount(n: number): string {
+  return t.todo.tokens(
+    n >= 10_000 ? `${formatNumber(Math.round(n / 10_000))}${copy.units.man}` : formatNumber(n),
+  );
+}
+
+function aiTaskName(kind: string | undefined): string {
+  return kind !== undefined && kind in t.todo.aiTasks
+    ? t.todo.aiTasks[kind as keyof typeof t.todo.aiTasks]
+    : t.todo.aiTaskOther;
 }
 
 function side(v: string | number | undefined): string {
@@ -306,24 +320,46 @@ export function todoView(todo: Todo, now: string | null): TodoView {
         result: effectLine(todo.effect),
       };
     case 'ai-cli': {
+      // Yellow: the month's tokens passed the budget (no time; nothing stops).
+      if (str(f.reason) === 'over-budget') {
+        return {
+          tone,
+          icon: 'ai',
+          title: t.todo.aiBudgetTitle,
+          chip,
+          lines: t.todo.aiBudgetLines(
+            tokenAmount(num(f.tokens) ?? 0),
+            tokenAmount(num(f.budget) ?? 0),
+          ),
+          result: effectLine(todo.effect),
+        };
+      }
+      // Red: tasks failed three times and wait for a person (since = the oldest one).
       const since = str(f.since);
+      const count = num(f.count);
       return {
         tone,
         icon: 'ai',
-        title: t.todo.aiCliTitle(since ? atTime(since, now) : ''),
+        title: since ? t.todo.aiCliTitle(atTime(since, now)) : t.sources.names['ai-cli'],
         chip,
-        lines: t.todo.aiCliLines,
+        lines:
+          count === undefined
+            ? [t.todo.aiLogin]
+            : [t.todo.aiTaskFailed(aiTaskName(str(f.taskKind)), count), t.todo.aiLogin],
         result: effectLine(todo.effect),
       };
     }
     case 'filings': {
       const m = market(f.market);
+      const since = str(f.since);
+      const maintenance = str(f.state) === 'maintenance';
+      const lines = maintenance ? t.todo.filingsLines(m) : t.todo.filingsStoppedLines(m);
       return {
         tone,
         icon: 'filings',
-        title: t.todo.filingsTitle(m),
+        title: maintenance ? t.todo.filingsTitle(m) : t.todo.filingsStoppedTitle(m),
         chip,
-        lines: t.todo.filingsLines(m),
+        lines: since ? [...lines, t.todo.filingsSince(atTime(since, now))] : lines,
         result: effectLine(todo.effect),
       };
     }
@@ -372,6 +408,23 @@ export function ageFill(age: number): number {
   return Math.min(1, age / 2);
 }
 
+/**
+ * 토스 연결: age is days since connecting ÷ 90 (CONTRACT), so 1 is the expiry day. The bar puts
+ * the expiry at the late/stale edge (75%): the late zone is the last 30 days, past it is stale.
+ */
+export function tossFill(age: number): number {
+  if (!Number.isFinite(age) || age <= 0) return 0;
+  return Math.min(1, age * 0.75);
+}
+
+/** Markets whose filing feed is not 'ok' (filings extra { dart, edgar }): '한국', '미국'. */
+function stoppedFilingMarkets(extra: Record<string, string | number>): string {
+  const out: string[] = [];
+  if (extra.dart !== undefined && extra.dart !== 'ok') out.push(marketName('KR'));
+  if (extra.edgar !== undefined && extra.edgar !== 'ok') out.push(marketName('US'));
+  return out.join('·');
+}
+
 export function sourceView(src: Source, now: string | null): SourceView {
   const name = t.sources.names[src.id];
   const tone = STATE_TONE[src.state];
@@ -381,7 +434,8 @@ export function sourceView(src: Source, now: string | null): SourceView {
     src.id === 'toss-link' && src.state === 'late' && daysLeft !== undefined
       ? t.sources.expiresIn(daysLeft)
       : t.sources.state[src.state];
-  const fill = src.state === 'unknown' ? 0 : ageFill(src.age);
+  const fill =
+    src.state === 'unknown' ? 0 : src.id === 'toss-link' ? tossFill(src.age) : ageFill(src.age);
   const received = src.receivedAt ? t.sources.received(atTime(src.receivedAt, now)) : null;
   const cadence = t.sources.cadence[src.cadence];
   const join = (...parts: (string | null)[]) =>
@@ -430,7 +484,7 @@ export function sourceView(src: Source, now: string | null): SourceView {
     case 'filings':
       line =
         src.state === 'maintenance'
-          ? join(t.sources.maintenanceStop(market(extra.market)), received)
+          ? join(t.sources.maintenanceStop(stoppedFilingMarkets(extra)), received)
           : join(
               src.basis ? t.sources.filingsBasis(formatMonthDay(src.basis)) : null,
               received,

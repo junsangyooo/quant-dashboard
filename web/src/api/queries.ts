@@ -465,6 +465,17 @@ export function usePushSubscribe() {
   });
 }
 
+/** DELETE /api/account/push — ends this device's subscription (501 until web push, phase 3). */
+export function usePushUnsubscribe() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete('/api/account/push'),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.account });
+    },
+  });
+}
+
 export function usePushTest() {
   const client = useQueryClient();
   return useMutation({

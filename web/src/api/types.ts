@@ -2,7 +2,7 @@
 // Generated from the contract's ```ts blocks with `export` added; comments are the contract's.
 // Re-transcribe when the contract changes (its '바뀐 것' section records each change).
 // The types at the bottom transcribe the contract's '쓰기' and '오류 코드' tables.
-// Contract snapshot: sha256 597a6a5a3e3f (2026-10-09, after the API session's change).
+// Contract snapshot: sha256 de1f5ef1efe4 (2026-10-09, final, after the screens' gaps were folded in).
 /* eslint-disable @typescript-eslint/array-type -- kept exactly as the contract writes it */
 
 // ── 공통 타입 ──
@@ -12,12 +12,12 @@ export type Currency = 'KRW' | 'USD';
 export type Side = 'buy' | 'sell' | 'fx';
 
 export interface Instrument {
-  id: string; // 'KR:069500', 'US:SPLG'
+  id: string; // 'KR:069500', 'US:SPYM'
   name: string; // 'KOSPI200 ETF', 'S&P 500 ETF'
   kind: 'etf' | 'stock' | 'coin';
   market: Market;
   currency: Currency;
-  initials: string; // 로고 자리 이니셜(로고 없음). 이름의 글자·숫자 앞 두 개, 대문자('KO', 'SP', '삼성')
+  initials: string; // 로고 자리 이니셜(Figma 기준): 지수 ETF는 지정값(069500 'K2', SPYM 'SP'), 한글 이름은 첫 글자('삼'), 로마자로 시작하는 한국 종목 이름은 앞 로마자 두 글자까지('HD'·'SK'), 코인은 티커 첫 글자('B'), 그 밖은 티커 앞 두 글자('NV'). 현금 행은 화면이 ₩·$를 그린다
   outsideToss?: boolean; // 토스 밖 계좌(코인)
 }
 
@@ -64,7 +64,8 @@ export interface Order {
   amountUsd?: number;
   fee?: { krw?: number; usd?: number };
   fx?: { krw: number; usd: number; rate: number }; // 환전
-  at: string; // 체결 시각 또는 예정 시각
+  direction?: 'krw-usd' | 'usd-krw'; // 환전의 방향('원 → 달러')
+  at: string; // 체결 시각 또는 예정 시각. 실패한 주문은 실패한 시각
   status: 'filled' | 'pending' | 'failed';
   fill?: 'paper' | 'live'; // '모의 체결' / '실제 체결'
   failure?: {
@@ -72,6 +73,9 @@ export interface Order {
     retryAt?: string;
     manual?: boolean;
   };
+  retried?: { at: string; status: 'filled' | 'failed' };
+  // 다시 낸 결과('9/15 다시 · 체결'). 실패한 주문은 실패한 날의 기록으로 status 'failed'·failure를 그대로 두고,
+  // 다시 낸 주문의 결과가 나오면 retried를 붙인다. retried.status가 'filled'면 더 기다릴 것이 없다(다시 시도 예정 항목도 없다)
 }
 
 export interface Stage {
@@ -90,7 +94,7 @@ export type NextAction =
   | { kind: 'withdraw-wait'; until: string } // '10/12까지 · 리밸런싱 쉼'
   | { kind: 'holiday'; markets: Market[]; nextCheckAt: string }
   | { kind: 'quote-wait'; market: Market | 'FX'; basisDate: string } // 'FX' = 환율이 낡음
-  | { kind: 'next-check'; at: string };
+  | { kind: 'next-check'; at: string; reviewAt?: string }; // AI 규칙: '다음 확인 10/8 08:30 · 점검 11/1'(다음 월 점검, 1일 08:30)
 
 export type EventKind =
   | 'start'
@@ -132,6 +136,9 @@ export interface ShellResponse {
     | { kind: 'ok'; lastCheckAt: string }
     | { kind: 'before-first'; firstCheckAt: string }
     | { kind: 'check'; count: number } // 원인 단위로 센다
+    // AI 규칙의 자료(공시 DART·EDGAR 하나씩, AI 호출)는 마지막 성공 뒤로 그 시장의 거래일이 하루를 넘게 지나야
+    // 원인으로 센다(밤사이 DART 점검으로 헤더가 바뀌지 않게). 작동 화면은 첫 실패부터 보인다. 한 번도 성공하지 못한
+    // 자료는 첫 시도(감시 작업·첫 AI 호출)부터 센다
     | { kind: 'check-failed'; at: string }
     | { kind: 'todo'; count: number }
     | { kind: 'cancel-failed'; count: number };
@@ -172,7 +179,7 @@ export interface HomeResponse {
   baseline: { pct: number } | null; // '손대지 않았을 때'
   planChip: { ruleId: string; status: RuleStatus; next: NextAction };
   trend: Trend;
-  planCard: PlanCard | null; // null이면 첫 확인 전 칩 줄만
+  planCard: PlanCard; // 첫 확인 전에도 준다(바늘·단계 없음)
   composition: Composition;
 }
 
@@ -187,7 +194,8 @@ export interface Trend {
     baseline: number | null;
     baselineRet: number | null;
   }>;
-  events: Array<{ date: string; kind: EventKind; count?: number }>; // 겹치면 count로 묶음 표식(kind는 그날 첫 사건)
+  events: Array<{ date: string; kind: EventKind; kinds: EventKind[]; count?: number }>;
+  // 하루에 표식 하나. kind는 그날 첫 사건, kinds는 그날 사건 전부(순서대로), 둘 이상이면 count(묶음 표식)
   empty: null | 'before-first-check' | 'before-first-fill' | 'first-day';
 }
 
@@ -197,10 +205,12 @@ export interface PlanCard {
   status: RuleStatus;
   next: NextAction;
   gauge: Gauge;
-  stages: Stage[] | null; // 진행 중일 때만
+  stages: Stage[] | null; // 진행 중일 때만(첫 확인 전에는 null)
   nextCheckAt: string;
-  others: { count: number; status: RuleStatus } | null; // '외 n개 규칙 · [상태]'
+  others: { count: number; status: RuleStatus | 'before-first' } | null;
+  // '외 n개 규칙 · [상태]'. 2단계: 3년 발굴의 몫이 0보다 크면 { count: 1, status: AI 규칙 상태 }, 첫 확인 전이면 'before-first'('첫 확인 전')
 }
+// HomeResponse.planCard는 첫 확인 전에도 있다: 규칙 이름·목표를 보이고, 게이지 바늘(needle)과 단계는 비운다.
 
 export type Gauge =
   | {
@@ -219,10 +229,38 @@ export type Gauge =
         // AI 규칙(D34)
         instrument: Instrument;
         progress: number;
-        metric: string;
-        marginText: string;
+        metric: MetricRef;
+        margin: Margin;
       };
     };
+
+export interface MetricRef {
+  // 지표 사전(autotrade/domain/metrics.py)의 키와 회사가 쓰는 말. 이름은 화면이 짓는다
+  key:
+    | 'revenue'
+    | 'operating_income'
+    | 'net_income'
+    | 'op_margin'
+    | 'eps'
+    | 'fcf'
+    | 'ebitda_margin'
+    | 'net_debt_to_ebitda'
+    | 'backlog'
+    | 'new_orders'
+    | 'book_to_bill'
+    | 'monthly_revenue_yoy'
+    | 'segment_revenue'
+    | 'segment_operating_income'
+    | 'segment_op_margin'
+    | 'segment_backlog'
+    | 'guidance';
+  param?: string; // segment_*·guidance만: 회사의 부문·항목 이름('지상방산' → '지상방산 수주잔고')
+}
+export interface Margin {
+  // 선까지 남은 것. 화면이 단위에 맞춰 쓴다('2.3%p', '3.1조', '$350M', '0.12x', '2분기', '2.1%')
+  unit: 'pp' | 'pct' | 'KRW' | 'USD' | 'x' | 'count' | 'quarter' | 'month' | 'year';
+  value: number; // pp는 pp1, pct는 소수 1자리, KRW는 원, USD는 달러, 기간은 남은 수
+}
 
 export interface Composition {
   groupBy: Array<'instrument' | 'kind' | 'country' | 'currency' | 'rule'>; // 묶음이 2개 이상 생기는 기준만
@@ -240,7 +278,7 @@ export interface Composition {
 export interface CompRow {
   kind: 'holding' | 'cash';
   instrument?: Instrument;
-  cash?: { currency: Currency };
+  cash?: { currency: Currency; country: 'KR' | 'US' }; // 묶어 보기 '나라': 원화 현금은 한국, 달러 현금은 미국
   pct: number; // pct1, 전체 자산 대비
   krw: number;
   usd?: number;
@@ -286,7 +324,8 @@ export interface PlanResponse {
     since: string;
     lines: Array<{ ruleId: string; points: Array<{ date: string; value: number | null }> }>; // pp1, null = 시세 대기 구간
     staleFrom: string | null; // '10/05부터 시세 대기'
-    events: Array<{ date: string; kind: EventKind; ruleId: string }>;
+    events: Array<{ date: string; kind: EventKind; ruleId: string | null }>;
+    // 규칙의 리밸런싱은 그 규칙 선 위에(ruleId), 시작·실전 켬·끔은 장부 전체의 사건이라 ruleId null. AI 규칙은 선이 없어 여기 없다
     empty: null | 'second-day';
   };
 }
@@ -303,8 +342,8 @@ export interface RuleCard {
     toThreshold: number | null; // pp1
     // AI 규칙(sell-condition 게이지): 팔 조건까지
     progress?: number;
-    metric?: string;
-    marginText?: string;
+    metric?: MetricRef;
+    margin?: Margin;
   }>;
   basisLine: {
     pendingBuyIncluded: boolean; // '매수 대기 달러 포함'
@@ -313,19 +352,23 @@ export interface RuleCard {
     withdrawExcluded: boolean; // '출금 대기 현금 제외'
     staleMarket: Market | null;
     staleBasisDate: string | null; // '미국 시세 10/02 기준이라 계산 안 함'
+    metricTableAt?: string | null; // AI 규칙: '지표 표 10/8'(지표 표가 마지막으로 바뀐 날, YYYY-MM-DD)
   };
+  vsIndex?: { since: string; points: Array<{ date: string; value: number | null }> } | null;
+  // AI 규칙: '지수 대비 · [since]부터'(pp1). 종목마다 고른 날부터 같은 시장 지수 대비 초과 수익의 평균(채점과 같은 계산, 판 종목은 판 날에 고정)
 }
 export type ScheduleItem =
+  // ruleId는 한 규칙의 항목에만 있다. 확인·휴장·현금 항목은 장부 전체의 것이다
   | { kind: 'next-check'; at: string }
   | { kind: 'holiday'; date: string; markets: Market[] }
-  | { kind: 'retry'; at: string; market: Market; side: Side }
+  | { kind: 'retry'; at: string; market: Market; side: Side; ruleId: string } // 다시 낼 주문의 규칙
   | { kind: 'sub-share-cash'; krw: number }
   | { kind: 'withdraw-wait'; krw: number; until: string }
   | { kind: 'new-cash'; krw: number }
   | { kind: 'first-check'; at: string }
-  | { kind: 'monthly-review'; at: string } // AI 규칙
-  | { kind: 'discovery'; at: string } // AI 규칙
-  | { kind: 'earnings'; date: string; instrument: Instrument }; // AI 규칙
+  | { kind: 'monthly-review'; at: string; ruleId: string } // AI 규칙: 매달 1일 08:30(점검은 전날 22:00부터 돌아 그 확인 전에 끝난다)
+  | { kind: 'discovery'; at: string; ruleId: string } // AI 규칙: 4·6·9·12월 1일 08:30
+  | { kind: 'earnings'; date: string; instrument: Instrument; ruleId: string }; // AI 규칙. 실적 발표일 자료원이 없어 아직 보내지 않는다
 
 // ── `GET /api/history?ledger=&year=` — SCR-HISTORY ──
 export interface HistoryResponse {
@@ -349,11 +392,11 @@ export interface HistoryResponse {
   calendar: Array<{ date: string; state: CalendarState }>; // 평일만
   filters: {
     total: number;
-    rules: Array<{ rule: RuleRef; count: number }>;
+    rules: Array<{ rule: RuleRef; count: number }>; // 규칙의 리밸런싱 + 그 규칙 종목의 배당. AI 규칙은 그 규칙의 계획 + AI 판단 사건
     kinds: Array<{
       kind: 'rebalance' | 'deposit' | 'withdrawal' | 'dividend' | 'failed' | 'ai';
       count: number;
-    }>;
+    }>; // 'ai'는 AI 규칙이 있을 때만
   };
   months: Array<{ month: string; change: number; events: HistoryEvent[] }>; // 최신순, 월 변동의 합 = 손익
   offPeriods: Array<{ from: string; to: string }>;
@@ -361,17 +404,19 @@ export interface HistoryResponse {
 export interface HistoryEvent {
   date: string;
   kind: EventKind;
-  rule?: RuleRef;
+  rule?: RuleRef; // 리밸런싱, 그리고 규칙 종목의 배당('지수 반반 (KOSPI200 ETF)'). AI 판단 사건은 AI 규칙
   stagesMini?: Array<'done' | 'pending' | 'failed'>; // 리밸런싱, 그리고 시작(첫 매수). fill·fees도 같다
-  weightsMini?: { before: number[]; after: number[] };
+  weightsMini?: { before: number[]; after: number[]; target: number[] }; // target = 목표 눈금(pct1). AI 규칙은 빈 배열
+  pending?: { side: Side; at: string }; // 리밸런싱 중: 기다리는 단계와 그 시각('매수 22:30')
   fill?: 'paper' | 'live';
   deviation?: number; // '2.3%p 벗어남'
   fees?: number;
-  amount?: number; // 시작·입출금·배당
+  amount?: number; // 시작·입출금·배당(krw. 달러 배당은 받은 날 환율로 원화)
   instrument?: Instrument; // 배당
   retry?: { date: string; filled: boolean }; // '9/15 다시 · 체결'
   failureReason?: 'no-quote' | 'broker-rejected' | 'other';
   recoveredOn?: string; // 확인 실패 → '9/10 정상'
+  resolvedOn?: string; // 직접 할 일을 처리했다고 닫은 날(일부 실패·확인 실패) → '10/9 직접 처리'
   treatment?: 'pnl-excluded' | 'income' | 'invest-next-check' | 'withdraw-wait';
   dayChange: number | null;
   dayTotal: number;
@@ -403,10 +448,12 @@ export interface DayResponse {
     holidayMarkets?: Market[];
     band: { threshold: number; before: number | null; after: number | null } | null; // pp1
     ruleId?: string;
+    rule?: RuleRef; // 확인한 규칙(이름은 rule)
     instrument?: Instrument;
     weight?: number;
     toThreshold?: number;
     over?: number;
+    failure?: { reason: 'no-quote' | 'other'; recoveredOn?: string }; // result 'failed': 코드와 날짜('시세 응답 없음 · 9/10 정상')
   };
   basis: Basis;
 }
@@ -443,15 +490,49 @@ export type DayEvent =
 export interface AiJudgment {
   at: string;
   trigger: 'shock' | 'filing' | 'condition' | 'monthly' | 'discovery' | 'buy-price';
-  instrument?: Instrument;
+  instrument?: Instrument; // 판단한 종목(바꾸기는 살 종목)
   model: 'haiku' | 'sonnet' | 'opus';
   tokens: number;
   verdict: 'hold' | 'weaken' | 'invalidated' | 'buy' | 'skip';
-  votes?: Array<'hold' | 'weaken' | 'invalidated'>; // 두 번 확인
-  inputSummary: string[];
-  outputSummary: string[]; // 데이터 그대로(종목명·지표), 문장 아님
+  votes?: Array<'hold' | 'weaken' | 'invalidated' | 'switch' | 'keep'>; // 두 번 묻는 판단의 두 답(팔기 확인, 바꾸기)
   action: 'none' | 'sell' | 'buy' | 'switch';
+  input: JudgmentItem[]; // '입력' 줄: 화면이 항목마다 말을 짓고 순서대로 ' · '로 잇는다
+  output: JudgmentItem[]; // '출력' 줄. verdict·votes·action은 위 칸에 있어 되풀이하지 않는다(비면 줄을 숨긴다)
 }
+export type JudgmentItem =
+  | { key: 'instrument' | 'sold' | 'bought'; instrument: Instrument } // 판단한 종목 · 바꾸기의 팔 종목 · 살 종목
+  | { key: 'shock'; date: string; value: number } // 급락한 날, 그날 지수 대비 수익률(%, 소수 1자리)
+  | { key: 'condition'; value: number } // 걸린 반증 조건 번호(1부터)
+  | { key: 'filing'; date: string } // 걸린 공시의 접수일
+  | { key: 'review'; value: 'weaken' | 'invalidated'; months?: number } // 월 점검이 넘긴 판정(약화면 몇 달째)
+  | { key: 'month'; value: string } // 'YYYY-MM'
+  | { key: 'cost'; value: number } // 바꾸기 비용(바꾸는 금액 대비 %, 소수 2자리)
+  | {
+      key:
+        | 'filings'
+        | 'news'
+        | 'picks'
+        | 'held'
+        | 'candidates'
+        | 'checks'
+        | 'hold'
+        | 'weaken'
+        | 'invalidated'
+        | 'rewritten'
+        | 'new-picks'
+        | 'expired';
+      value: number;
+    } // 수
+  | { key: 'slot-full' }; // 사기 확인: 자리가 없어 바꾸기 확인으로 넘김
+// 2단계 구현: 사건 하나에 판단 하나. 문장은 보내지 않는다(모델이 쓴 근거와 찾은 뉴스는 기록에만 남는다).
+// - 팔기 확인(ai-sell: 두 번 다 '반증', action 'sell' / ai-check: 그대로): input = instrument, 계기(shock·condition·filing·review),
+//   filings(꾸러미에 넣은 최근 공시 수). output = news(급락이라 웹을 켰을 때 찾은 뉴스 수), 웹이 꺼져 있으면 빈 줄
+// - 사기 확인(ai-buy 'buy' / ai-check 'skip'): input = instrument, checks(충족한 살 조건 수). output = slot-full(자리 없음)이거나 빈 줄
+// - 바꾸기(ai-buy 'switch' / ai-check): input = sold, bought, cost. votes = 'switch' | 'keep' 두 번
+// - monthly-review(그달 점검 전체, verdict는 가장 나쁜 판정): input = month, picks. output = hold·weaken·invalidated 수,
+//   rewritten(새로 쓰거나 바꾼 팔 조건 수)
+// - discovery(분기 발굴): input = month, held(발굴 전 보유 수), candidates(발굴 전 후보 수). output = new-picks, candidates(새 후보 수), expired
+// trigger는 일감에서 온다(지난 실적 공시를 처음 읽는 'backfill'은 'filing'). tokens는 그 판단의 호출들을 더한 값이다
 
 // ── `GET /api/rules` · `GET /api/rules/{id}?lane=` — SCR-RULES ──
 export interface RulesListResponse {
@@ -459,13 +540,15 @@ export interface RulesListResponse {
     rule: RuleRef;
     share: { pct: number; target: number | null };
     status: RuleStatus;
-  }>;
+    example: boolean;
+  }>; // example = 목록 머리의 '예시' 칩
 }
 export interface RuleDetailResponse {
   rule: RuleRef;
   share: { pct: number; target: number | null };
   status: RuleStatus;
   example: boolean;
+  stale: Array<'kr-quotes' | 'us-quotes' | 'fx'>; // 마지막 확인 때 낡았던 자료(작동 화면의 출처 id). 비어 있으면 '낡음' 없음
   display: TilesDisplay | FlowDisplay;
 }
 export interface TilesDisplay {
@@ -473,7 +556,12 @@ export interface TilesDisplay {
   kind: 'tiles';
   what: { instruments: Instrument[]; weights: number[]; basis: 'krw' };
   when: { time: string; days: 'weekdays'; tz: 'KST' };
-  condition: { threshold: number; targetEach: number[] };
+  condition: {
+    threshold: number;
+    targetEach: number[];
+    deviation: { now: number | null; atCheck: number | null };
+    // pp1. now = 지금 가장 큰 벗어남(빈 점, 시세 대기면 null), atCheck = 오늘 08:30 확인 때 값(주황 점, 오늘 확인이 없거나 보유가 없으면 null)
+  };
   action: { stages: Array<'sell' | 'fx' | 'buy'> };
   measured: {
     median: number;
@@ -510,18 +598,23 @@ export interface FlowDisplay {
     title: string;
     subtitle?: string; // 규칙 정의의 이름(데이터)
     fields?: Array<{ key: 'input' | 'ai' | 'output'; value: string }>;
+    more?: number; // '외 N': 지금 칸이 보인 종목(최대 3) 밖의 수
+    targets?: Array<{ instrument: Instrument; weight: number }>;
+    // 비중 카드의 종목별 목표(pct1). 목표가 모두 같은 비중이면 보내지 않고 지금 칸의 kv targetEach로 준다(3년 발굴)
     now: NowBlock;
   }>;
   edges: Array<{
     from: string;
     to: string;
-    label?: 'yes' | 'no-keep' | 'no';
+    label?: 'yes' | 'no-keep' | 'no' | 'no-wait';
     style: 'taken' | 'not-taken' | 'exception';
-  }>;
+  }>; // no-wait = '아니오 · 후보로 대기'(분기 발굴)
 }
 export interface NowBlock {
   headKey: 'now' | 'now-check' | 'now-last-judgment' | 'now-month' | 'now-last'; // '지금', '지금 · 확인 08:30' …
-  at?: string;
+  at?: string; // 머리의 시각·날짜. 시작 카드는 다음 실행 시각('다음 10/12 08:30'), 실적 흐름의 시작 카드는 마지막 실적 공시 날
+  until?: string; // 'now-last'가 여러 날에 걸치면 끝 날('마지막 9/14~9/15', at = 첫날)
+  // 머리 메모(자유 문장)는 없다. '8종목 중 상위 3', '15종목' 같은 말은 kv 행의 수로 주고 화면이 문장을 만든다
   rows: Array<
     | {
         kind: 'instrument';
@@ -529,8 +622,11 @@ export interface NowBlock {
         weight?: number;
         ret?: number;
         progress?: number;
-        marginText?: string;
+        margin?: Margin;
+        period?: string;
       }
+    // progress 0~100: 보유는 팔 조건까지(margin = 팔 조건까지 남은 것), 후보는 살 값까지(고른 날 가격 0 → 살 값 100,
+    // margin { unit: 'pct' } = 살 값보다 몇 % 위). period = 실적 기간('2026Q3')
     | { kind: 'rank'; rank: number; instrument: Instrument; ret: number }
     | { kind: 'band'; value: number; threshold: number; instrument?: Instrument }
     | {
@@ -539,9 +635,12 @@ export interface NowBlock {
         text: string;
         status?: 'filled' | 'pending' | 'failed';
         at?: string;
+        retried?: boolean;
       }
+    // text = 종목 이름, 환전이면 방향 코드('krw-usd' | 'usd-krw'). 한 번 실패하고 다시 낸 주문은 retried true이고
+    // status·at이 다시 낸 결과다('9/15 다시 · 체결'). 주문(Order) 자체는 실패한 날의 기록으로 남는다
     | { kind: 'status'; status: RuleStatus; at?: string }
-    | { kind: 'kv'; key: string; value: string }
+    | { kind: 'kv'; key: string; value: string; note?: string } // 셋째 칸 note도 데이터(코드·수)다. 문장은 보내지 않는다
     | {
         kind: 'exceptions';
         items: Array<'holiday' | 'quote-wait' | 'withdraw-wait'>;
@@ -549,15 +648,22 @@ export interface NowBlock {
       }
   >;
 }
+// AI 규칙(3년 발굴)의 kv 키. value와 note는 날짜(YYYY-MM-DD)·수·이름·코드이고, 값이 없으면 '-'다:
+//   krClose·usClose(value 종가일, note 출처 상태 'fresh'…), filings(value 마지막 공시 회사, note 새 공시 수),
+//   metricTable(value 지표 표 날짜, note 지표가 있는 회사 수), hits(조건에 걸린 수), verdict(value 판정, note 계기),
+//   judgments·sells·buys(이번 달 판단·팔기·사기 수), votes(마지막 두 번 확인, 'hold,invalidated'), metrics(뽑은 지표 수),
+//   tokens, companies(지표 표의 회사 수), picks(보유 수), newFilings(30일 새 공시 수), hold·weaken·invalidated(그달 판정 수),
+//   daysToNext(다음 발굴까지 날 수), lastDiscovery(마지막 발굴 날), candidates(후보 대기 수, '후보 대기 · 6'), targetEach(종목당 목표 pct1)
 
 // ── `GET /api/health` — SCR-HEALTH ──
 export interface HealthResponse {
   summary: {
     kind: 'ok' | 'check' | 'check-failed' | 'unknown' | 'before-first';
+    // 'check' = 낡은 자료나 빨간 카드가 있음. 노란 카드만 있으면 'ok'('정상 · 할 일 1')
     sourcesTotal: number;
     staleCount: number;
-    todoCount: number;
     failCount: number;
+    todoCount: number; // 직접 할 일 카드(action 'manual') 수: 노란 카드 전부와, 다시 시도가 끝나 사람을 기다리는 빨간 카드. 자동으로 다시 하는 카드는 세지 않는다
     lastCheckAt: string | null;
     nextCheckAt: string | null;
     lastSuccessAt?: string;
@@ -577,13 +683,20 @@ export interface HealthResponse {
       | 'push-undelivered'
       | 'ai-cli'
       | 'filings';
-    // order-failed = 다시 시도까지 실패한 주문(facts: date, market, side, reason). order-rejected는 실전 브로커 거절(3단계)
-    facts: Record<string, string | number>; // 화면 문구에 끼울 값(시장, 날짜, 남은 날 …)
+    // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
+    facts: Record<string, string | number>; // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' };
     effect: 'orders-zero-live-blocked' | 'orders-and-reconcile-stop' | 'no-order-sent' | 'other';
   }>;
   sources: Array<{
     // 1단계는 kr-quotes·us-quotes·fx 셋만(없는 연결은 줄을 만들지 않는다)
+    // 2단계: 3년 발굴의 몫이 0보다 크면 filings·ai-cli·metric-table을 더한다.
+    //  filings: state는 DART·EDGAR 중 나쁜 쪽(점검 중이면 'maintenance', 응답 없음·키 없음·실패면 'stale'),
+    //           basis는 마지막으로 둘이 받은 날, extra { dart, edgar }: 'ok' | 'maintenance' | 'stale' | 'failed' | 'no-key' | 'unknown'
+    //  ai-cli: state는 마지막 호출의 성공 여부, basis는 마지막 성공 호출의 모델, cadence 'event',
+    //          extra { monthTokens, budget, enabled(0·1, AUTOTRADE_AI_CALLS), due(기다리는 일감 수) }
+    //  metric-table: basis는 마지막으로 뽑은 날, cadence 'event'
+    //  summary.staleCount는 'maintenance'도 센다
     id:
       | 'kr-quotes'
       | 'us-quotes'
@@ -604,10 +717,20 @@ export interface HealthResponse {
   recent14: Array<{
     date: string;
     state: CalendarState;
-    run?: { at: string; result: string; seconds: number };
-  }>; // 최근 14일 중 평일만(10칸)
-  lastRun: { at: string; result: string; seconds: number; reason?: string } | null;
+    run?: { at: string; result: string; seconds: number; reason?: 'no-quote' | 'other' };
+  }>; // 최근 14일 중 평일만(10칸). reason은 result 'failed'·'todo'일 때
+  lastRun: { at: string; result: string; seconds: number; reason?: 'no-quote' | 'other' } | null; // reason은 코드다(문장 아님)
+  devices: Array<{ name: string; lastDelivery: string | null; ok: boolean }>; // '알림 기기'를 펼친 목록(AccountResponse와 같은 모양). 3단계 전에는 빈 배열
 }
+// todos[].facts 키(값은 날짜·시각·수·코드):
+//   stale: market('KR' | 'US' | 'FX'), basisDate, tradingDays, missingDates?(못 받은 거래일 'YYYY-MM-DD,YYYY-MM-DD', 환율은 없음)
+//   check-failed: at, reason('no-quote' | 'other')
+//   order-failed: date, market, side, reason
+//   toss-expiring(3단계): expiresAt, daysLeft
+//   ai-cli: 노랑 { reason: 'over-budget', tokens, budget }(한 달 토큰이 예산을 넘음, 멈추지는 않음)
+//           빨강 { reason: 'task-failed', count, taskKind, since }(세 번 실패한 일감이 사람을 기다림, since = 그중 가장 오래된 일감이 생긴 시각)
+//   filings: 빨강 { source: 'dart' | 'edgar', market: 'KR' | 'US', state, since? }(공시 감시가 멈춤, 다음 확인 때 다시. since = 마지막으로 받은 시각)
+// sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 
 // ── `GET /api/mode` — SCR-MODE ──
 export interface ModeResponse {
@@ -626,7 +749,7 @@ export interface ModeResponse {
       baselineRet: number;
     }>;
     endRet: { live: number; paper: number; baseline: number };
-    breakdown: { fills: number; fees: number; other: number; total: number }; // pp, 합 = live - paper
+    breakdown: { fills: number; fees: number; other: number; total: number; valuedAt: string }; // pp, 합 = live - paper. valuedAt = 평가 시각('· 16:00')
   };
   performance: {
     since: string;
@@ -644,6 +767,8 @@ export interface ModeResponse {
     facts: Record<string, string | number>;
     sameCauseAs?: string;
   }>;
+  // facts 키: health ok면 { lastCheckAt }, 아니면 { count, source }(원인 수와 첫 원인의 출처 id) · toss-link { expiresAt, daysLeft }
+  //          freshness ok면 { balanceAt, priceAt, fxAt }, 아니면 { source, basisDate } · push { devices, lastDelivery }
   preview:
     | null
     | {
@@ -663,7 +788,13 @@ export interface ModeResponse {
     | { kind: 'not-computable'; at: string; cause: 'stale' | 'other' };
   cancelFailed: Order[] | null;
   canTurnOn: { ok: true } | { ok: false; cause: 'checks' | 'preview' | 'live-not-available' }; // 1단계는 항상 live-not-available
+  offPreview: null | {
+    // 실전이 켜져 있을 때만: 끄면 취소될 주문과 계좌에 남는 현금(실전 끄기 모달)
+    cancel: Order[]; // 실전 장부의 열린 계획에서 아직 대기 중인 주문
+    cash: Array<{ currency: 'KRW'; krw: number } | { currency: 'USD'; usd: number; krw: number }>; // 0보다 큰 현금만. 달러의 krw는 지금 환율로
+  };
 }
+// twoLedgers·preflight·preview는 실전이 생기는 3단계부터 채운다. 1·2단계는 null이다
 
 // ── `GET /api/account` — SCR-ACCOUNT ──
 export interface AccountResponse {
@@ -672,8 +803,11 @@ export interface AccountResponse {
     kind: 'iphone-app' | 'iphone-safari' | 'mac' | 'other';
     enteredAt: string;
   };
-  // name·kind는 로그인 때의 User-Agent로 정한다(name 예: 'Mac · Chrome'). UA에 'Safari/'가 없는 iPhone을 홈 화면 앱으로 본다
+  // name·kind는 로그인 때의 User-Agent로 정한다. name은 '[시스템] · [브라우저]'('Mac · Chrome', 'iPhone · Safari').
+  // UA에 'Safari/'가 없는 iPhone을 홈 화면 앱으로 보고 name은 'iPhone'만 준다(화면이 '· 홈 화면 앱'을 붙인다)
   notifications: {
+    available: boolean; // 웹 푸시가 있나. 1·2단계는 false('알림은 준비 중')
+    vapidPublicKey?: string; // 3단계: 이 기기를 구독할 때 쓰는 공개키(available일 때만)
     thisDevice: {
       supported: boolean;
       reason?: 'safari-tab' | 'denied' | 'unsupported';
@@ -726,7 +860,7 @@ export type ApiErrorCode =
   | 'preview-changed' // 409 — turning live on
   | 'in-progress' // 409 — turning live on
   | 'internal' // 500
-  | 'not-implemented' // 501 {feature} — not in stage 1 (push)
+  | 'not-implemented' // 501 {feature} — not built yet (push, stage 3)
   | 'db'; // 503 — /api/healthz only
 
 // POST /api/auth/pin {pin} → 204 and the session cookie
@@ -784,11 +918,12 @@ export interface NotificationsRequest {
 export interface NotificationsResponse {
   savedAt: string;
 }
-// POST /api/account/push {subscription} → 204. Stage 1: 501 {error:'not-implemented', detail:{feature:'push'}}
+// POST /api/account/push {subscription} → 204. Stages 1·2: 501 {error:'not-implemented', detail:{feature:'push'}}
 export interface PushSubscribeRequest {
   subscription: PushSubscriptionJSON;
 }
-// POST /api/account/push/test → 200 {results}; stage 1: 501 as above.
+// DELETE /api/account/push → 204, ends this device's subscription. Stages 1·2: 501 as above.
+// POST /api/account/push/test → 200 {results}; stages 1·2: 501 as above.
 // The item shape is not in the contract; assumed to match notifications.testResults.
 export interface PushTestResponse {
   results: Array<{ device: string; ok: boolean; at: string }>;

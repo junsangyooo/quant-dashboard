@@ -362,6 +362,10 @@ describe('group-by of the 실전 world', () => {
     expect(within(card).getByRole('heading', { level: 3, name: '한국' })).toBeVisible();
     expect(within(card).getByRole('heading', { level: 3, name: '미국' })).toBeVisible();
     expect(within(card).getByRole('heading', { level: 3, name: '코인' })).toBeVisible();
-    expect(within(card).getByRole('heading', { level: 3, name: '현금' })).toBeVisible();
+    // Cash now joins its country (CONTRACT CompRow.cash.country: 원화 현금 한국, 달러 현금 미국),
+    // so 나라 has no separate '현금' group.
+    expect(within(card).queryByRole('heading', { level: 3, name: '현금' })).toBeNull();
+    expect(within(card).getByText('원화 현금')).toBeVisible();
+    expect(within(card).getByText('달러 현금')).toBeVisible();
   });
 });

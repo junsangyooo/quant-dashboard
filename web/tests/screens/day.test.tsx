@@ -190,9 +190,14 @@ describe('SCR-DAY states', () => {
     const card = within(sheet).getByRole('region', { name: 'AI 확인' });
     expect(within(card).getByText('AI 확인 · 셀트리온')).toBeInTheDocument();
     expect(within(card).getByText('급락')).toBeInTheDocument();
-    expect(within(card).getByText('셀트리온 · 하루 −8.1% · 최근 공시 2건')).toBeInTheDocument();
+    // The contract now sends the 입력 · 출력 lines as JudgmentItem data (2026-10-09 '서버 문구
+    // 걷어냄'), not the drawn sentences: the screen words the instrument, the day's drop against
+    // the index and the filings count; 출력 is the news the web search found.
+    expect(
+      within(card).getByText('셀트리온 · 10/2 지수 대비 −8.1% · 최근 공시 2건'),
+    ).toBeInTheDocument();
     expect(within(card).getByText('Sonnet · 약 2만 토큰')).toBeInTheDocument();
-    expect(within(card).getByText('근거 유지 · 팔 조건 그대로')).toBeInTheDocument();
+    expect(within(card).getByText('뉴스 3건')).toBeInTheDocument();
     expect(within(card).getByText('판단')).toBeInTheDocument();
     expect(within(card).getByText('유지')).toBeInTheDocument();
     expect(within(card).getByText("두 번 다 '유지'")).toBeInTheDocument();

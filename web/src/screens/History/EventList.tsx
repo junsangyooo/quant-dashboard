@@ -30,7 +30,6 @@ import {
   treatmentLabel,
   type MonthGroup,
 } from './historyModel';
-import { miniTargetsOf } from './proposed';
 import { logoTone } from './tones';
 import styles from './History.module.css';
 
@@ -102,7 +101,7 @@ function MiniBar({
 function MiniWeights({ event }: { event: HistoryEvent }) {
   const w = event.weightsMini;
   if (!w) return null;
-  const target = miniTargetsOf(event)?.[0];
+  const target = w.target[0];
   const colorIndex = event.rule?.colorIndex ?? 0;
   return (
     <span className={styles.miniWeights}>
@@ -201,6 +200,11 @@ function details(event: HistoryEvent) {
   if (event.recoveredOn) {
     const text = hc.list.recovered(formatMonthDay(event.recoveredOn));
     parts.push({ key: 'recovered', node: <InfoChip>{text}</InfoChip>, text });
+  }
+  if (event.resolvedOn) {
+    // A 직접 할 일 closed by hand (CONTRACT HistoryEvent.resolvedOn): '10/9 직접 처리'.
+    const text = hc.list.resolved(formatMonthDay(event.resolvedOn));
+    parts.push({ key: 'resolved', node: <InfoChip>{text}</InfoChip>, text });
   }
   if (event.treatment) {
     const text = treatmentLabel(event.treatment);

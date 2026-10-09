@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Link } from 'react-router';
-import { useDay, useRules } from '../../api/queries';
+import { useDay } from '../../api/queries';
 import type { DayEvent, DayResponse, Ledger } from '../../api/types';
 import { ErrorBlock, ExampleChip, Skeleton, SkeletonBlock } from '../../components/State';
 import { copy } from '../../copy';
@@ -26,7 +26,6 @@ import { ruleName } from '../History/historyModel';
 import { CheckCard } from './CheckCard';
 import { basisParts, prevNextLine } from './dayModel';
 import { EventCard } from './EventCards';
-import { retriedOf } from './proposed';
 import styles from './Day.module.css';
 
 export interface DayPanelProps {
@@ -88,7 +87,7 @@ function showsPlanLink(event: DayEvent): boolean {
   if (event.kind === 'in-progress') return true;
   if (event.kind !== 'partial-failed') return false;
   return event.stages.some((s) =>
-    s.orders.some((o) => o.status === 'failed' && o.failure?.retryAt && !retriedOf(o)),
+    s.orders.some((o) => o.status === 'failed' && o.failure?.retryAt && !o.retried),
   );
 }
 
@@ -99,7 +98,12 @@ function DayBody({
   data: DayResponse;
   ruleNameOf: (id: string) => string | null;
 }) {
-  const checkRule = data.check.ruleId !== undefined ? ruleNameOf(data.check.ruleId) : null;
+  // The check names its rule (CONTRACT check.rule); an older answer falls back to the events.
+  const checkRule = data.check.rule
+    ? ruleName(data.check.rule)
+    : data.check.ruleId !== undefined
+      ? ruleNameOf(data.check.ruleId)
+      : null;
   return (
     <>
       <section className={styles.total} aria-label={dc.total(copy.mode[data.ledger])}>
@@ -140,7 +144,6 @@ function DaySkeleton() {
 
 export function DayPanel({ date, ledger, search, onClose, closeHref, variant }: DayPanelProps) {
   const q = useDay(date, ledger ? { ledger } : {});
-  const rules = useRules();
   const headingId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -178,9 +181,7 @@ export function DayPanel({ date, ledger, search, onClose, closeHref, variant }: 
     const fromEvents = data?.events.find(
       (e): e is Extract<DayEvent, { rule: unknown }> => 'rule' in e && e.rule.id === id,
     );
-    if (fromEvents) return ruleName(fromEvents.rule);
-    const listed = rules.data?.rules.find((r) => r.rule.id === id);
-    return listed ? ruleName(listed.rule) : null;
+    return fromEvents ? ruleName(fromEvents.rule) : null;
   };
   const Heading = variant === 'sheet' ? 'h1' : 'h2';
 

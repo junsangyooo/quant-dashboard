@@ -1,7 +1,8 @@
 // 계획 미리보기 (Figma '계획 미리보기', D-home-plan-gauge): '계획' + '계획 보기 ›' → the rule with the
 // highest-priority status: 이름 · 자산의 n% · 목표, status chip + next action → the same gauge as
 // the 계획 tab → stage row while it runs → '다음 확인' chip → '외 n개 규칙 · [상태]'.
-// Before the first check or fill: no gauge, a chip line only. 1440: rule | stages side by side.
+// Before the first check or fill: no gauge, a chip line only (the API sends the card then too,
+// with no needle and no stages). 1440: rule | stages side by side.
 import clsx from 'clsx';
 import { ruleStatusChip } from '../../api/adapters';
 import type { HomeResponse } from '../../api/types';
@@ -38,14 +39,6 @@ export function PlanPreview({
       <LinkButton to="/plan">{homeCopy.plan.link}</LinkButton>
     </div>
   );
-  if (!card) {
-    return (
-      <section className={clsx(styles.card, styles.planCard)} aria-label={homeCopy.plan.title}>
-        {head}
-      </section>
-    );
-  }
-
   const firstCheck = card.next.kind === 'first-check';
   const chip = ruleStatusChip(card.status, card.rule.ai);
   const share = shareParts(card.share);
@@ -104,7 +97,9 @@ export function PlanPreview({
         <p className={clsx('t-caption', styles.muted)}>
           {homeCopy.plan.others(
             card.others.count,
-            firstCheck ? homeCopy.plan.beforeFirstCheck : statusLabel(card.others.status),
+            firstCheck || card.others.status === 'before-first'
+              ? homeCopy.plan.beforeFirstCheck
+              : statusLabel(card.others.status),
           )}
         </p>
       ) : null}

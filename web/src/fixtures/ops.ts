@@ -6,11 +6,9 @@ import type {
   AccountResponse,
   CalendarState,
   HealthResponse,
-  HomeResponse,
   ModeResponse,
   NotifyEvent,
   Order,
-  PlanResponse,
   ShellResponse,
 } from '../api/types';
 import { paperDailySinceStart } from './charts';
@@ -66,7 +64,9 @@ type Day = HealthResponse['recent14'][number];
 
 // Age is 'age relative to the cadence'; the screen draws the bar over 0–2 cadences (fresh zone
 // up to 1, late up to 1.5). The values below put each fill where the Figma bars end
-// (1:62685: 8% · 20% · 8% · 62% · 12% · 5% of the bar; the stale US bar 93.5%).
+// (1:62685: 8% · 20% · 8% · 62% · 12% · 5% of the bar; the stale US bar 93.5%), except the Toss
+// link: its age is the contract's days since connecting ÷ 90 (10/19 expiry, 12 days left on 10/7:
+// 78 ÷ 90 = 0.87), which the screen draws with expiry at the late/stale edge (65%).
 export const sources = {
   kr: {
     id: 'kr-quotes',
@@ -100,7 +100,7 @@ export const sources = {
     basis: '2026-10-19',
     receivedAt: kst('2026-07-21', '10:00'),
     cadence: '90d',
-    age: 1.24,
+    age: 0.87,
     extra: { daysLeft: 12 },
   },
   tossBalance: {
@@ -185,6 +185,7 @@ export function healthTodo(): HealthResponse {
     sources: SIX_SOURCES,
     recent14: recent14(),
     lastRun: LAST_RUN,
+    devices: PUSH_DEVICES,
   };
 }
 
@@ -217,6 +218,8 @@ export function account(): AccountResponse {
     // The server names the device from the User-Agent; a home-screen app has no browser token.
     thisDevice: { name: 'iPhone', kind: 'iphone-app', enteredAt: kst('2026-10-01', '08:12') },
     notifications: {
+      available: true,
+      vapidPublicKey: 'BFixtureVapidPublicKey',
       thisDevice: { supported: true, subscribed: true },
       events: events(),
       hideAmounts: false,
@@ -335,6 +338,7 @@ export const PREVIEW_OK: Extract<NonNullable<ModeResponse['preview']>, { kind: '
           id: 'preview-fx-1',
           market: 'KR',
           side: 'fx',
+          direction: 'krw-usd',
           fx: { krw: 4_705_000, usd: 3403, rate: 1382.4 },
           approx: true,
           at: tomorrow('09:10'),
@@ -369,6 +373,7 @@ export function modePaper(overrides: Partial<ModeResponse> = {}): ModeResponse {
     preview: PREVIEW_OK,
     cancelFailed: null,
     canTurnOn: { ok: true },
+    offPreview: null,
     ...overrides,
   };
 }
@@ -426,7 +431,13 @@ export const TWO_LEDGERS: NonNullable<ModeResponse['twoLedgers']> = {
   }),
   endRet: { live: 1.13, paper: 1.28, baseline: 1.75 },
   // 체결가 −0.02 · 실제 수수료 −0.06 · 기타 −0.07 → 합 −0.15%p = 1.13 − 1.28 (예시-값표 §2.2).
-  breakdown: { fills: -0.02, fees: -0.06, other: -0.07, total: -0.15 },
+  breakdown: {
+    fills: -0.02,
+    fees: -0.06,
+    other: -0.07,
+    total: -0.15,
+    valuedAt: kst('2026-10-07', '16:00'),
+  },
 };
 
 /** SCR-MODE.live (1:38520): 실전 9/1부터 · 27일째. */
@@ -441,6 +452,7 @@ export function modeLive(overrides: Partial<ModeResponse> = {}): ModeResponse {
     preview: null,
     cancelFailed: null,
     canTurnOn: { ok: true },
+    offPreview: LIVE_OFF_PREVIEW,
     ...overrides,
   };
 }
@@ -460,166 +472,15 @@ export const LIVE_PENDING_BUY: Order = {
   status: 'pending',
 };
 
-// The live ledger the off-modal reads: what is still pending (계획 '예정') and the cash that
-// stays (구성 '달러 현금'). 예시-값표 §2.2, 10/7 16:00.
-const liveSell: Order = {
-  id: 'live-20261007-sell-1',
-  market: 'KR',
-  side: 'sell',
-  instrument: KOSPI200,
-  qty: 5,
-  price: 36_370,
-  amountKrw: 181_850,
-  fee: { krw: 27 },
-  at: kst('2026-10-07', '09:05'),
-  status: 'filled',
-  fill: 'live',
+/**
+ * 실전 끄기 미리보기 (CONTRACT ModeResponse.offPreview): the 22:30 buy that gets cancelled and the
+ * live account's cash (예시-값표 §2.2, 10/7 16:00: 원화 현금 85,964원 · 달러 현금 $125.67 =
+ * 173,726원). The modal shows the 달러 line, the currency of the cancelled buy.
+ */
+export const LIVE_OFF_PREVIEW: NonNullable<ModeResponse['offPreview']> = {
+  cancel: [LIVE_PENDING_BUY],
+  cash: [
+    { currency: 'KRW', krw: 85_964 },
+    { currency: 'USD', usd: 125.67, krw: 173_726 },
+  ],
 };
-const liveFx: Order = {
-  id: 'live-20261007-fx-1',
-  market: 'KR',
-  side: 'fx',
-  fx: { krw: 173_000, usd: 125.22, rate: 1381.5 },
-  at: kst('2026-10-07', '09:10'),
-  status: 'filled',
-  fill: 'live',
-};
-
-export const LIVE_STAGES: NonNullable<PlanResponse['schedule']['now']>['stages'] = [
-  { kind: 'sell', status: 'done', at: kst('2026-10-07', '09:05'), orders: [liveSell] },
-  { kind: 'fx', status: 'done', at: kst('2026-10-07', '09:10'), orders: [liveFx] },
-  { kind: 'buy', status: 'pending', at: kst('2026-10-07', '22:30'), orders: [LIVE_PENDING_BUY] },
-];
-
-export function livePlan(): PlanResponse {
-  return {
-    ledger: 'live',
-    example: true,
-    ruleShares: null,
-    rules: [],
-    schedule: {
-      now: { ruleId: INDEX_HALF.id, status: 'in-progress', stages: LIVE_STAGES },
-      items: [{ kind: 'next-check', at: NEXT_CHECK }],
-    },
-    drift: {
-      periods: null,
-      period: 'all',
-      since: '2026-09-01',
-      lines: [],
-      staleFrom: null,
-      events: [],
-      empty: null,
-    },
-  };
-}
-
-/** 실전 장부 구성 (예시-값표 §2.2): 합 10,112,670원. */
-export function liveHome(): HomeResponse {
-  const next = {
-    kind: 'order',
-    at: kst('2026-10-07', '22:30'),
-    market: 'US',
-    side: 'buy',
-    instrumentName: SP500.name,
-    qty: 2,
-  } as const;
-  return {
-    ledger: 'live',
-    example: true,
-    startDate: '2026-09-01',
-    basis: {
-      valuedAt: kst('2026-10-07', '16:00'),
-      krClose: '2026-10-07',
-      usClose: '2026-10-06',
-      fxRate: 1382.4,
-      fxAt: kst('2026-10-07', '16:00'),
-      coinAt: kst('2026-10-07', '16:00'),
-    },
-    stale: [],
-    total: 10_112_670,
-    pnl: { amount: 112_670, pct: 1.13 },
-    baseline: { pct: 1.75 },
-    planChip: { ruleId: INDEX_HALF.id, status: 'in-progress', next },
-    trend: {
-      periods: null,
-      period: 'all',
-      periodPnl: null,
-      series: LIVE_AND_BASELINE.map(([date, value, baseline]) => ({
-        date,
-        value,
-        ret: ret2(value, LIVE_START),
-        baseline,
-        baselineRet: ret2(baseline, LIVE_START),
-      })),
-      events: [{ date: '2026-10-07', kind: 'in-progress' }],
-      empty: null,
-    },
-    planCard: null,
-    composition: {
-      groupBy: ['instrument', 'kind', 'country', 'currency', 'rule'],
-      groups: [
-        {
-          key: INDEX_HALF.id,
-          rule: INDEX_HALF,
-          pct: 80.6,
-          target: 80,
-          rows: [
-            {
-              kind: 'holding',
-              instrument: KOSPI200,
-              pct: 40.5,
-              krw: 4_096_250,
-              pnlPct: 5.3,
-              qty: 113,
-            },
-            {
-              kind: 'holding',
-              instrument: SP500,
-              pct: 38.4,
-              krw: 3_881_779,
-              usd: 2_808,
-              pnlPct: -2.1,
-              qty: 45,
-            },
-            {
-              kind: 'cash',
-              cash: { currency: 'USD' },
-              pct: 1.7,
-              krw: 173_726,
-              usd: 125.67,
-              chip: { kind: 'buy-wait', instrumentName: SP500.name, qty: 2 },
-            },
-          ],
-        },
-        {
-          key: MOMENTUM.id,
-          rule: MOMENTUM,
-          pct: 18.5,
-          target: 20,
-          rows: [
-            { kind: 'holding', instrument: SAMSUNG, pct: 7.8, krw: 788_200, pnlPct: -0.5, qty: 14 },
-            { kind: 'holding', instrument: NVDA, pct: 7.2, krw: 731_566, pnlPct: -1.6, qty: 3 },
-            { kind: 'holding', instrument: BTC, pct: 3.5, krw: 355_185, pnlPct: -0.8, qty: 0.0027 },
-          ],
-        },
-        {
-          key: 'cash',
-          label: 'cash',
-          pct: 0.9,
-          target: null,
-          rows: [
-            {
-              kind: 'cash',
-              cash: { currency: 'KRW' },
-              pct: 0.9,
-              krw: 85_964,
-              chip: { kind: 'sub-share' },
-            },
-          ],
-        },
-      ],
-      pendingBar: null,
-      outsideRules: null,
-    },
-  };
-}

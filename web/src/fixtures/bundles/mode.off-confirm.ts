@@ -4,17 +4,7 @@
 import type { ModeResponse } from '../../api/types';
 import type { FixtureBundle } from '../types';
 import { kst } from '../world';
-import {
-  NOW,
-  PREFLIGHT_OK,
-  TWO_LEDGERS,
-  liveHome,
-  livePlan,
-  liveShell,
-  modePaper,
-  modeLive,
-  shell,
-} from '../ops';
+import { NOW, PREFLIGHT_OK, TWO_LEDGERS, liveShell, modePaper, modeLive, shell } from '../ops';
 
 const OFF_AT = kst('2026-10-07', '16:12');
 
@@ -37,8 +27,6 @@ const bundle = {
       $after: shell({ modeChangedAt: OFF_AT }),
     },
     '/api/mode': { $afterWrite: 'POST /api/mode/paper', $before: modeLive(), $after: afterOff },
-    '/api/plan?ledger=live': livePlan(),
-    '/api/home?ledger=live': liveHome(),
     'POST /api/mode/paper': { mode: 'paper', cancelFailed: [] },
   },
 } satisfies FixtureBundle;

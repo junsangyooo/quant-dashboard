@@ -1,9 +1,29 @@
 // Contract enums → component props and words. One place, so every screen maps them the same way.
 import { copy } from '../copy';
+import { metricCopy } from '../copy/metrics';
 import type { RebalanceState } from '../components/Chips';
 import type { CalendarState as CellState, EventKind as MarkerKind } from '../components/Markers';
-import { formatDateTime, formatMonthDay, formatTime, kstDateKey } from '../lib/format';
-import type { Banner, CalendarState, EventKind, Market, RuleStatus, Side } from './types';
+import {
+  MINUS,
+  formatDateTime,
+  formatKrw,
+  formatMonthDay,
+  formatNumber,
+  formatPercent,
+  formatTime,
+  formatUsd,
+  kstDateKey,
+} from '../lib/format';
+import type {
+  Banner,
+  CalendarState,
+  EventKind,
+  Margin,
+  Market,
+  MetricRef,
+  RuleStatus,
+  Side,
+} from './types';
 
 /** Status chip of a rule. AI rules use other words for the same seven chips. */
 export function ruleStatusChip(
@@ -138,6 +158,68 @@ export function marketName(market: Market | 'FX'): string {
 
 export function sideName(side: Side): string {
   return copy.side[side];
+}
+
+// ── AI rule metrics ──────────────────────────────────────────────────────────
+
+/** '이익률', 'AI 매출', '지상방산 수주잔고' — the server sends the key and the company's word. */
+export function metricName(metric: MetricRef): string {
+  const name = metricCopy.names[metric.key];
+  if (typeof name === 'string') return name;
+  const param = metric.param?.trim();
+  if (param) return name(param);
+  return metric.key === 'guidance' ? metricCopy.noParam.guidance : name(metricCopy.noParam.segment);
+}
+
+/** One decimal under 100 of a unit ('3.1조', '45.5억'), whole above ('4,500억'); no '.0'. */
+function scaled(abs: number, scale: number, unit: string, whole = false): string {
+  const value = abs / scale;
+  const text = formatNumber(value, whole || value >= 100 ? 0 : 1);
+  return `${text.endsWith('.0') ? text.slice(0, -2) : text}${unit}`;
+}
+
+function compactKrw(abs: number): string {
+  const u = metricCopy.units;
+  if (abs >= 1e12) return scaled(abs, 1e12, u.jo);
+  if (abs >= 1e8) return scaled(abs, 1e8, u.eok);
+  if (abs >= 1e4) return scaled(abs, 1e4, u.man, true);
+  return formatKrw(abs);
+}
+
+function compactUsd(abs: number): string {
+  const u = metricCopy.units;
+  if (abs >= 1e9) return `$${scaled(abs, 1e9, u.usdBillion)}`;
+  if (abs >= 1e6) return `$${scaled(abs, 1e6, u.usdMillion)}`;
+  return formatUsd(abs);
+}
+
+/**
+ * What is left to the line (CONTRACT Margin): '2.3%p', '2.1%', '3.1조', '$350M', '0.12x',
+ * '2분기', '3개월', '1년'; a count is the bare number.
+ */
+export function marginText(margin: Margin): string {
+  const { value } = margin;
+  const u = metricCopy.units;
+  switch (margin.unit) {
+    case 'pp':
+      return `${formatNumber(value, 1)}${copy.units.pp}`;
+    case 'pct':
+      return formatPercent(value, 1);
+    case 'KRW':
+      return `${value < 0 ? MINUS : ''}${compactKrw(Math.abs(value))}`;
+    case 'USD':
+      return `${value < 0 ? MINUS : ''}${compactUsd(Math.abs(value))}`;
+    case 'x':
+      return `${formatNumber(value, 2)}${u.times}`;
+    case 'count':
+      return formatNumber(value);
+    case 'quarter':
+      return `${formatNumber(value)}${u.quarter}`;
+    case 'month':
+      return `${formatNumber(value)}${u.month}`;
+    case 'year':
+      return `${formatNumber(value)}${u.year}`;
+  }
 }
 
 /** A retry time on the same KST day reads '09:30'; on another day '10/8 22:30'. */

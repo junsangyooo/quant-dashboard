@@ -232,7 +232,7 @@ describe('basis lines', () => {
       '규칙 안 비중 · 원화 기준 · 출금 대기 현금 제외 · 환율 1,382.4원 16:00',
     ],
   ])('%#', (card, text) => {
-    expect(basisLineText(card, null)).toBe(text);
+    expect(basisLineText(card)).toBe(text);
   });
 });
 

@@ -6,9 +6,19 @@
 // - stack (390, Figma 1:61226): one column; lines run down a rail 28px in from the card edge,
 //   exception cards sit indented with a stub from the rail, and a branch that skips cards takes a
 //   detour lane 24px right of the cards.
+import type { FlowDisplay, NowBlock } from '../../api/types';
 import { ARROW } from '../../charts/geometry/deviation';
 import { r2 } from '../../charts/geometry/scale';
-import { edgeLabelOf, type EdgeLabel, type FlowEdge, type FlowNode } from './proposed';
+
+export type FlowNode = FlowDisplay['nodes'][number];
+export type FlowEdge = FlowDisplay['edges'][number];
+export type NowRow = NowBlock['rows'][number];
+/** Branch words of a line ('예', '아니오 · 그대로', '아니오 · 대기' …). */
+export type EdgeLabel = NonNullable<FlowEdge['label']>;
+
+export function edgeLabelOf(edge: FlowEdge): EdgeLabel | null {
+  return edge.label ?? null;
+}
 
 export interface Box {
   x: number;

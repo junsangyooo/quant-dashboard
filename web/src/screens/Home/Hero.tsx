@@ -84,8 +84,7 @@ function BaselineSheet({ onClose }: { onClose: () => void }) {
 /** 계획 칩 줄: status chip + next action ›; before the first check only the words (명세 정정). */
 export function PlanChipLine({ home, now }: { home: HomeResponse; now: string | null }) {
   const { status, next } = home.planChip;
-  const rule = home.planCard?.rule;
-  const chip = ruleStatusChip(status, rule?.ai ?? false);
+  const chip = ruleStatusChip(status, home.planCard.rule.ai);
   const text = nextActionText(next, { now });
   return (
     <Link to="/plan" className={styles.planLine}>

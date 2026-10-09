@@ -38,6 +38,7 @@ import { treatmentLabel } from '../History/historyModel';
 import { logoTone } from '../History/tones';
 import {
   fxDirection,
+  judgmentLine,
   orderFoot,
   orderHead,
   orderMain,
@@ -46,7 +47,6 @@ import {
   tokensLabel,
   votesLabel,
 } from './dayModel';
-import { retriedOf } from './proposed';
 import styles from './Day.module.css';
 
 const SIDE_ICON: Record<Order['side'], LucideIcon> = {
@@ -71,8 +71,9 @@ export function OrderCard({
   const SideIcon = SIDE_ICON[order.side];
   const StatusIcon = STATUS_ICON[order.status];
   const failed = order.status === 'failed';
-  const retried = retriedOf(order);
-  const head = orderHead(order, direction);
+  const retried = order.retried;
+  const fx = order.direction ?? direction;
+  const head = orderHead(order, fx);
   const foot = orderFoot(order);
   return (
     <li className={clsx(styles.order, failed && styles.orderFailed)}>
@@ -86,7 +87,7 @@ export function OrderCard({
           <span className={clsx('t-label', styles.grow)}>{head}</span>
           <span className="t-label">{orderTime(order)}</span>
         </p>
-        <p className="t-body">{orderMain(order, direction)}</p>
+        <p className="t-body">{orderMain(order, fx)}</p>
         <div className={styles.orderFoot}>
           <span className={clsx('t-caption', styles.muted, styles.grow)}>{foot}</span>
           {order.status === 'filled' && order.fill ? (
@@ -324,6 +325,10 @@ export function EventCard({ event, toPlan }: { event: DayEvent; toPlan: boolean 
 export function AiJudgmentCard({ event }: { event: Extract<DayEvent, { judgment: unknown }> }) {
   const j = event.judgment;
   const votes = votesLabel(j.votes);
+  // The server sends codes, counts and dates (JudgmentItem); the lines are worded here. An empty
+  // 출력 hides its row (verdict, votes and action already sit in the 판단 box).
+  const input = judgmentLine(j.input);
+  const output = judgmentLine(j.output);
   return (
     <section className={styles.aiCard} aria-label={eventName(event.kind)}>
       <NodeCard
@@ -365,24 +370,28 @@ export function AiJudgmentCard({ event }: { event: Extract<DayEvent, { judgment:
             <Flag country={marketCountry(j.instrument.market)} decorative />
           </NodeRow>
         ) : null}
-        <NodeRow>
-          <NodeRowLabel>{dc.ai.input}</NodeRowLabel>
-          <Text variant="caption" grow>
-            {j.inputSummary.join(' · ')}
-          </Text>
-        </NodeRow>
+        {input !== null ? (
+          <NodeRow>
+            <NodeRowLabel>{dc.ai.input}</NodeRowLabel>
+            <Text variant="caption" grow>
+              {input}
+            </Text>
+          </NodeRow>
+        ) : null}
         <NodeRow>
           <NodeRowLabel>{dc.ai.ai}</NodeRowLabel>
           <Text variant="label" tone="ai" grow>
             {`${dc.ai.model[j.model]} · ${tokensLabel(j.tokens)}`}
           </Text>
         </NodeRow>
-        <NodeRow>
-          <NodeRowLabel>{dc.ai.output}</NodeRowLabel>
-          <Text variant="caption" grow>
-            {j.outputSummary.join(' · ')}
-          </Text>
-        </NodeRow>
+        {output !== null ? (
+          <NodeRow>
+            <NodeRowLabel>{dc.ai.output}</NodeRowLabel>
+            <Text variant="caption" grow>
+              {output}
+            </Text>
+          </NodeRow>
+        ) : null}
       </NodeCard>
     </section>
   );

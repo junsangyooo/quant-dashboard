@@ -29,7 +29,12 @@ import {
 } from 'lucide-react';
 import { accountCopy as t } from '../../copy/account';
 import { isApiError } from '../../api/client';
-import { usePushSubscribe, usePushTest, useSaveNotifications } from '../../api/queries';
+import {
+  usePushSubscribe,
+  usePushTest,
+  usePushUnsubscribe,
+  useSaveNotifications,
+} from '../../api/queries';
 import type { AccountResponse, NotifyEvent } from '../../api/types';
 import { Button } from '../../components/Buttons';
 import { Toggle } from '../../components/Controls';
@@ -92,7 +97,8 @@ type DeviceNote =
   | { kind: 'cannot'; reason: 'safari-tab' | 'denied' | 'unsupported' }
   | { kind: 'not-ready' }
   | { kind: 'off-not-ready' }
-  | { kind: 'failed' };
+  | { kind: 'failed' }
+  | { kind: 'off-failed' };
 
 interface Saved {
   events: Partial<Record<NotifyEvent, boolean>>;
@@ -104,6 +110,7 @@ export function NotificationsCard({ notifications: n }: { notifications: Notific
   const titleId = useId();
   const save = useSaveNotifications();
   const subscribe = usePushSubscribe();
+  const unsubscribe = usePushUnsubscribe();
   const test = usePushTest();
   // Saved changes since this page opened: the switches show them at once and keep them.
   const [saved, setSaved] = useState<Saved>({ events: {}, savedAt: null });
@@ -143,22 +150,33 @@ export function NotificationsCard({ notifications: n }: { notifications: Notific
     });
   };
 
-  // This device. Without browser support or with the server's 1단계 'unsupported', a capable
-  // browser reads 'not built yet' (준비 중) rather than 'this device cannot'.
+  // This device. While the server has no web push (`available` false, 1·2단계) every device
+  // reads 'not built yet' (준비 중); so does a capable browser the server calls 'unsupported'.
   const thisDevice = n.thisDevice;
-  const serverNote: DeviceNote | null = thisDevice.supported
-    ? null
-    : thisDevice.reason === 'unsupported' && browserCanPush()
-      ? { kind: 'not-ready' }
-      : { kind: 'cannot', reason: thisDevice.reason ?? 'unsupported' };
+  const serverNote: DeviceNote | null = !n.available
+    ? { kind: 'not-ready' }
+    : thisDevice.supported
+      ? null
+      : thisDevice.reason === 'unsupported' && browserCanPush()
+        ? { kind: 'not-ready' }
+        : { kind: 'cannot', reason: thisDevice.reason ?? 'unsupported' };
   const note = deviceNote ?? serverNote ?? { kind: 'hint' };
   const switchOn = thisDevice.supported && thisDevice.subscribed;
-  const switchDisabled = !thisDevice.supported || asking || subscribe.isPending;
+  const switchDisabled =
+    !n.available || !thisDevice.supported || asking || subscribe.isPending || unsubscribe.isPending;
 
   const onDevice = async () => {
     if (switchOn) {
-      // No endpoint stops one device yet (CONTRACT gap); say so instead of pretending.
-      setDeviceNote({ kind: 'off-not-ready' });
+      setDeviceNote(null);
+      unsubscribe.mutate(undefined, {
+        onError: (error) => {
+          setDeviceNote(
+            isApiError(error, 'not-implemented')
+              ? { kind: 'off-not-ready' }
+              : { kind: 'off-failed' },
+          );
+        },
+      });
       return;
     }
     setDeviceNote(null);
@@ -198,7 +216,7 @@ export function NotificationsCard({ notifications: n }: { notifications: Notific
         {t.notifications.title}
       </h2>
 
-      {noDevices && thisDevice.supported && !switchOn ? (
+      {noDevices && n.available && thisDevice.supported && !switchOn ? (
         <p className={clsx('t-caption', styles.muted)}>{t.notifications.start}</p>
       ) : null}
       <div className={styles.switchRow}>
@@ -210,7 +228,9 @@ export function NotificationsCard({ notifications: n }: { notifications: Notific
           <span
             className={clsx(
               't-caption',
-              note.kind === 'cannot' || note.kind === 'failed' ? styles.warning : styles.muted,
+              note.kind === 'cannot' || note.kind === 'failed' || note.kind === 'off-failed'
+                ? styles.warning
+                : styles.muted,
             )}
           >
             {note.kind === 'hint'
@@ -221,7 +241,9 @@ export function NotificationsCard({ notifications: n }: { notifications: Notific
                   ? t.notifications.notReady
                   : note.kind === 'off-not-ready'
                     ? t.notifications.offNotReady
-                    : t.notifications.subscribeFailed}
+                    : note.kind === 'off-failed'
+                      ? t.notifications.unsubscribeFailed
+                      : t.notifications.subscribeFailed}
           </span>
         </div>
         <Toggle

@@ -74,6 +74,8 @@ export const historyCopy = {
     pending: (side: string, time: string) => `${side} ${time}`,
     retry: (date: string, filled: boolean) => (filled ? `${date} 다시 · 체결` : `${date} 다시`),
     recovered: (date: string) => `${date} 정상`,
+    /** NEW — a 직접 할 일 closed by hand (CONTRACT HistoryEvent.resolvedOn: '10/9 직접 처리'). */
+    resolved: (date: string) => `${date} 직접 처리`,
     noChange: '—',
     before: '전',
     after: '후',

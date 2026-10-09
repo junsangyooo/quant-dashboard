@@ -91,13 +91,48 @@ export const healthCopy = {
     pushUndeliveredTitle: (days: number) => `알림이 ${String(days)}일째 기기에 안 닿아요`,
     pushUndeliveredLines: ['설정에서 시험 알림을 보내 봐요', '안 오면 이 기기 알림을 다시 켜요'],
     // AI 호출 · 공시 (2단계, 화면-맞춤 §3) — NEW.
+    // AI 호출 빨강: 세 번 실패한 일감이 사람을 기다려요 (facts reason 'task-failed', count,
+    // taskKind, since = 그중 가장 오래된 일감이 생긴 시각).
     aiCliTitle: (at: string) => `AI 호출 실패 · ${at}부터`,
-    aiCliLines: ['AI 판단이 멈췄어요', 'Claude 구독 로그인 확인 요청'],
+    /** NEW — the failed tasks: '팔기 확인 2건이 세 번 실패했어요'. */
+    aiTaskFailed: (task: string, n: number) => `${task} ${String(n)}건이 세 번 실패했어요`,
+    aiLogin: 'Claude 구독 로그인 확인 요청',
+    /** NEW — AI 일감 names (the engine's task kinds); another kind reads 'AI 일감'. */
+    aiTasks: {
+      'sell-confirm': '팔기 확인',
+      'buy-confirm': '사기 확인',
+      switch: '바꾸기 확인',
+      'monthly-review': '월 점검',
+      discovery: '분기 발굴',
+      extract: '지표 뽑기',
+    },
+    aiTaskOther: 'AI 일감',
+    // AI 호출 노랑: 한 달 토큰이 예산을 넘었어요, 멈추지는 않아요 (facts reason 'over-budget',
+    // tokens, budget; no time).
+    /** NEW */
+    aiBudgetTitle: 'AI 토큰 예산 넘음',
+    /** NEW */
+    aiBudgetLines: (used: string, budget: string) => [
+      `이번 달 ${used} · 예산 ${budget}`,
+      'AI 판단은 그대로 돌아요',
+    ],
+    /** NEW — '324만 토큰'. */
+    tokens: (n: string) => `${n} 토큰`,
+    // 공시 빨강: 공시 감시가 멈춰요, 다음 확인 때 다시 (facts source, market, state, since?).
     filingsTitle: (market: string) => `${market} 공시 수집 점검 중`,
     filingsLines: (market: string) => [
       `${market} 공시 감시가 멈췄어요`,
       '점검이 끝나면 자동으로 다시 받아요',
     ],
+    /** NEW — state other than maintenance (응답 없음 · 키 없음 · 실패). */
+    filingsStoppedTitle: (market: string) => `${market} 공시 수집 멈춤`,
+    /** NEW */
+    filingsStoppedLines: (market: string) => [
+      `${market} 공시 감시가 멈췄어요`,
+      '다음 확인 때 다시 받아요',
+    ],
+    /** NEW — facts.since, when the watch last received a filing. */
+    filingsSince: (at: string) => `마지막으로 받음 ${at}`,
     /** Small result line, by effect. */
     effect: {
       'orders-zero-live-blocked': '그동안 주문 0건 · 실전 켜기 막힘',
@@ -172,8 +207,6 @@ export const healthCopy = {
     ok: '전달 정상',
     warn: '전달 끊김',
     never: '아직 전달 없음',
-    /** NEW */
-    error: '기기 목록을 못 불러왔어요',
   },
 
   recent: {

@@ -113,7 +113,7 @@ export const PAPER_COMPOSITION: Composition = {
         },
         {
           kind: 'cash',
-          cash: { currency: 'USD' },
+          cash: { currency: 'USD', country: 'US' },
           pct: 1.7,
           krw: 175_510,
           usd: 126.96,
@@ -165,7 +165,7 @@ export const PAPER_COMPOSITION: Composition = {
       rows: [
         {
           kind: 'cash',
-          cash: { currency: 'KRW' },
+          cash: { currency: 'KRW', country: 'KR' },
           pct: 0.6,
           krw: 56_548,
           chip: { kind: 'sub-share' },
@@ -180,10 +180,10 @@ export const PAPER_COMPOSITION: Composition = {
 /** 3개월 (7/7–10/7) with the 1.4 events on the band. */
 export function paperTrend(period: HomePeriod = '3m'): Trend {
   const events: Trend['events'] = [
-    { date: '2026-08-21', kind: 'rebalance' },
-    { date: '2026-09-14', kind: 'partial-failed' },
-    { date: '2026-09-30', kind: 'dividend' },
-    { date: '2026-10-07', kind: 'in-progress' },
+    { date: '2026-08-21', kind: 'rebalance', kinds: ['rebalance'] },
+    { date: '2026-09-14', kind: 'partial-failed', kinds: ['partial-failed'] },
+    { date: '2026-09-30', kind: 'dividend', kinds: ['dividend'] },
+    { date: '2026-10-07', kind: 'in-progress', kinds: ['in-progress'] },
   ];
   const three = trendSeries(paperDaily3m, untouchedDaily3m);
   if (period === '1m') {
@@ -212,7 +212,7 @@ export function paperTrend(period: HomePeriod = '3m'): Trend {
       period,
       periodPnl: period === 'all' ? null : { amount: 243_800, pct: 2.44 },
       series: trendSeries(paperDailySinceStart, untouched),
-      events: [{ date: '2026-07-01', kind: 'start' }, ...events],
+      events: [{ date: '2026-07-01', kind: 'start', kinds: ['start'] }, ...events],
       empty: null,
     };
   }
@@ -314,7 +314,7 @@ export function homePartial(): HomeResponse {
     trend: {
       ...base.trend,
       events: base.trend.events.map((e) =>
-        e.date === '2026-10-07' ? { ...e, kind: 'partial-failed' } : e,
+        e.date === '2026-10-07' ? { ...e, kind: 'partial-failed', kinds: ['partial-failed'] } : e,
       ),
     },
     planCard: {
@@ -403,12 +403,12 @@ export const STALE_COMPOSITION: Composition = {
       rows: [
         {
           kind: 'cash',
-          cash: { currency: 'KRW' },
+          cash: { currency: 'KRW', country: 'KR' },
           pct: 0.5,
           krw: 47_675,
           chip: { kind: 'sub-share' },
         },
-        { kind: 'cash', cash: { currency: 'USD' }, pct: 0.0, krw: 2_295, usd: 1.66 },
+        { kind: 'cash', cash: { currency: 'USD', country: 'US' }, pct: 0.0, krw: 2_295, usd: 1.66 },
       ],
     },
   ],
@@ -445,9 +445,9 @@ export function homeStale(): HomeResponse {
       periodPnl: { amount: 196_664, pct: 1.96 },
       series: trendSeries(mine, untouched),
       events: [
-        { date: '2026-08-21', kind: 'rebalance' },
-        { date: '2026-09-14', kind: 'partial-failed' },
-        { date: '2026-09-30', kind: 'dividend' },
+        { date: '2026-08-21', kind: 'rebalance', kinds: ['rebalance'] },
+        { date: '2026-09-14', kind: 'partial-failed', kinds: ['partial-failed'] },
+        { date: '2026-09-30', kind: 'dividend', kinds: ['dividend'] },
       ],
       empty: null,
     },
@@ -511,7 +511,7 @@ export const LIVE_COMPOSITION: Composition = {
         },
         {
           kind: 'cash',
-          cash: { currency: 'USD' },
+          cash: { currency: 'USD', country: 'US' },
           pct: 1.7,
           krw: 173_726,
           usd: 125.67,
@@ -563,7 +563,7 @@ export const LIVE_COMPOSITION: Composition = {
       rows: [
         {
           kind: 'cash',
-          cash: { currency: 'KRW' },
+          cash: { currency: 'KRW', country: 'KR' },
           pct: 0.9,
           krw: 85_964,
           chip: { kind: 'sub-share' },
@@ -608,8 +608,8 @@ export function homeLive(): HomeResponse {
       periodPnl: null,
       series: trendSeries(liveDaily, liveUntouchedDaily),
       events: [
-        { date: '2026-09-01', kind: 'live-on' },
-        { date: '2026-10-07', kind: 'in-progress' },
+        { date: '2026-09-01', kind: 'live-on', kinds: ['live-on'] },
+        { date: '2026-10-07', kind: 'in-progress', kinds: ['in-progress'] },
       ],
       empty: null,
     },
@@ -628,7 +628,7 @@ export function homeLiveTodo(): HomeResponse {
     trend: {
       ...base.trend,
       events: base.trend.events.map((e) =>
-        e.date === '2026-10-07' ? { ...e, kind: 'partial-failed' } : e,
+        e.date === '2026-10-07' ? { ...e, kind: 'partial-failed', kinds: ['partial-failed'] } : e,
       ),
     },
     planCard: {
@@ -679,11 +679,11 @@ export const WITHDRAW_COMPOSITION: Composition = {
       pct: 5.8,
       target: null,
       rows: [
-        { kind: 'cash', cash: { currency: 'KRW' }, pct: 0.8, krw: 77_141 },
-        { kind: 'cash', cash: { currency: 'USD' }, pct: 0.0, krw: 622, usd: 0.45 },
+        { kind: 'cash', cash: { currency: 'KRW', country: 'KR' }, pct: 0.8, krw: 77_141 },
+        { kind: 'cash', cash: { currency: 'USD', country: 'US' }, pct: 0.0, krw: 622, usd: 0.45 },
         {
           kind: 'cash',
-          cash: { currency: 'KRW' },
+          cash: { currency: 'KRW', country: 'KR' },
           pct: 5.0,
           krw: 500_425,
           chip: { kind: 'withdraw-wait', until: '2026-10-12' },
@@ -712,7 +712,7 @@ export function homeWithdraw(): HomeResponse {
       period: 'all',
       periodPnl: null,
       series: trendSeries(patch(liveDaily, { '2026-10-07': 10_104_918 }), liveUntouchedDaily),
-      events: [{ date: '2026-09-01', kind: 'live-on' }],
+      events: [{ date: '2026-09-01', kind: 'live-on', kinds: ['live-on'] }],
       empty: null,
     },
     planCard: {
@@ -770,7 +770,7 @@ export function homeLiveFirst(): HomeResponse {
       series: [
         { date: '2026-09-01', value: START_CAPITAL, ret: 0, baseline: null, baselineRet: null },
       ],
-      events: [{ date: '2026-09-01', kind: 'live-on' }],
+      events: [{ date: '2026-09-01', kind: 'live-on', kinds: ['live-on'] }],
       empty: 'before-first-fill',
     },
     planCard: {
@@ -813,7 +813,7 @@ export function homeLiveFirst(): HomeResponse {
           rows: [
             {
               kind: 'cash',
-              cash: { currency: 'KRW' },
+              cash: { currency: 'KRW', country: 'KR' },
               pct: 100,
               krw: START_CAPITAL,
               chip: { kind: 'buy-from', at: kst('2026-09-01', '09:05') },
@@ -863,7 +863,8 @@ export function homeEmpty(): HomeResponse {
       gauge: { kind: 'drift', threshold: 2, needle: null },
       stages: null,
       nextCheckAt: kst('2026-07-01', '08:30'),
-      others: { count: 1, status: 'scheduled' },
+      // CONTRACT PlanCard.others: before the first check the other rule reads 'before-first'.
+      others: { count: 1, status: 'before-first' },
     },
     composition: {
       groupBy: [],
@@ -878,7 +879,7 @@ export function homeEmpty(): HomeResponse {
           rows: [
             {
               kind: 'cash',
-              cash: { currency: 'KRW' },
+              cash: { currency: 'KRW', country: 'KR' },
               pct: 100,
               krw: START_CAPITAL,
               chip: { kind: 'first-buy' },
@@ -938,12 +939,12 @@ export const HOLIDAY_COMPOSITION: Composition = {
       rows: [
         {
           kind: 'cash',
-          cash: { currency: 'KRW' },
+          cash: { currency: 'KRW', country: 'KR' },
           pct: 0.6,
           krw: 56_548,
           chip: { kind: 'sub-share' },
         },
-        { kind: 'cash', cash: { currency: 'USD' }, pct: 0.0, krw: 2_820, usd: 2.04 },
+        { kind: 'cash', cash: { currency: 'USD', country: 'US' }, pct: 0.0, krw: 2_820, usd: 2.04 },
       ],
     },
   ],
@@ -995,10 +996,10 @@ export function homeHoliday(): HomeResponse {
         untouched,
       ),
       events: [
-        { date: '2026-08-21', kind: 'rebalance' },
-        { date: '2026-09-14', kind: 'partial-failed' },
-        { date: '2026-09-30', kind: 'dividend' },
-        { date: '2026-10-07', kind: 'rebalance' },
+        { date: '2026-08-21', kind: 'rebalance', kinds: ['rebalance'] },
+        { date: '2026-09-14', kind: 'partial-failed', kinds: ['partial-failed'] },
+        { date: '2026-09-30', kind: 'dividend', kinds: ['dividend'] },
+        { date: '2026-10-07', kind: 'rebalance', kinds: ['rebalance'] },
       ],
       empty: null,
     },
@@ -1100,12 +1101,12 @@ export const CHECK_FAILED_COMPOSITION: Composition = {
       rows: [
         {
           kind: 'cash',
-          cash: { currency: 'KRW' },
+          cash: { currency: 'KRW', country: 'KR' },
           pct: 0.5,
           krw: 47_675,
           chip: { kind: 'sub-share' },
         },
-        { kind: 'cash', cash: { currency: 'USD' }, pct: 0.0, krw: 2_292, usd: 1.66 },
+        { kind: 'cash', cash: { currency: 'USD', country: 'US' }, pct: 0.0, krw: 2_292, usd: 1.66 },
       ],
     },
   ],
@@ -1144,9 +1145,9 @@ export function homeCheckFailed(): HomeResponse {
       periodPnl: { amount: 207_000, pct: 2.07 },
       series: trendSeries(mine, untouchedDaily3m),
       events: [
-        { date: '2026-08-21', kind: 'rebalance' },
-        { date: '2026-09-14', kind: 'partial-failed' },
-        { date: '2026-09-30', kind: 'dividend' },
+        { date: '2026-08-21', kind: 'rebalance', kinds: ['rebalance'] },
+        { date: '2026-09-14', kind: 'partial-failed', kinds: ['partial-failed'] },
+        { date: '2026-09-30', kind: 'dividend', kinds: ['dividend'] },
       ],
       empty: null,
     },

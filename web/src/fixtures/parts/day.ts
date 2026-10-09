@@ -2,7 +2,6 @@
 // numbers (§1.4, §3); 7/1, 9/9, 9/14, 9/30 and the weekend fill in what the table leaves out, and
 // say so. Every day's prev/next are the neighbouring event dates of the 기록 list.
 import type { Basis, DayResponse, Instrument, Order, RuleRef, Stage } from '../../api/types';
-import type { ProposedCheck, ProposedOrder } from '../../screens/Day/proposed';
 import { BTC, INDEX_HALF, KOSPI200, MOMENTUM, NVDA, SAMSUNG, SP500, kst } from '../world';
 import {
   PAPER_BUY_1007,
@@ -187,6 +186,7 @@ export function day0821(): DayResponse {
       result: 'rebalance',
       band: { threshold: 2, before: 2.3, after: 0.2 },
       ruleId: INDEX_HALF.id,
+      rule: INDEX_HALF,
       instrument: KOSPI200,
       weight: 52.3,
       over: 0.3,
@@ -198,7 +198,7 @@ export function day0821(): DayResponse {
 // ── 9/9 확인 실패 (값표 §1.4: 시세 응답 없음 → 9/10 정상, 주문 없음) ─────────────
 
 export function day0909(): DayResponse {
-  const check: ProposedCheck = {
+  const check: DayResponse['check'] = {
     at: kst('2026-09-09', '08:30'),
     result: 'failed',
     band: null,
@@ -223,7 +223,8 @@ export function day0909(): DayResponse {
 // 133,880,000원 = 53,552원 (수수료 27원) 체결. Weights are derived (not in the table): 삼성전자
 // +2.2%p at the check (벗어남 흐름 9/14), after = with the cash waiting for BTC (인계 3).
 
-const BTC_RETRIED: ProposedOrder = {
+/** Failed on 9/14 and sent again on 9/15 (CONTRACT Order.retried: the failed day keeps it). */
+const BTC_RETRIED: Order = {
   id: 'paper-20260914-buy-coin-1',
   market: 'COIN',
   side: 'buy',
@@ -283,6 +284,7 @@ export function day0914(): DayResponse {
       result: 'partial-failed',
       band: { threshold: 2, before: 2.2, after: -0.8 },
       ruleId: MOMENTUM.id,
+      rule: MOMENTUM,
       instrument: SAMSUNG,
       weight: 44.2,
       over: 0.2,
@@ -309,6 +311,7 @@ export function day0925(): DayResponse {
       holidayMarkets: ['KR'],
       band: null,
       ruleId: INDEX_HALF.id,
+      rule: INDEX_HALF,
       instrument: KOSPI200,
       weight: 51.1,
       toThreshold: 0.9,
@@ -342,6 +345,7 @@ export function day0930(): DayResponse {
       result: 'in-range',
       band: null,
       ruleId: INDEX_HALF.id,
+      rule: INDEX_HALF,
       instrument: KOSPI200,
       weight: 51.8,
       toThreshold: 0.2,
@@ -364,6 +368,7 @@ const CHECK_1007 = {
   at: kst('2026-10-07', '08:30'),
   band: { threshold: 2, before: 2.4, after: 0.2 },
   ruleId: INDEX_HALF.id,
+  rule: INDEX_HALF,
   instrument: KOSPI200,
   weight: 52.4,
   over: 0.4,
@@ -472,9 +477,16 @@ export function dayAi(): DayResponse {
           tokens: 24_000,
           verdict: 'hold',
           votes: ['hold', 'hold'],
-          inputSummary: ['셀트리온', '하루 −8.1%', '최근 공시 2건'],
-          outputSummary: ['근거 유지', '팔 조건 그대로'],
           action: 'none',
+          // 급락 확인: the stock, the drop against its index that day, the filings in the packet;
+          // out: the news the web search found (CONTRACT JudgmentItem — the model's words stay in
+          // the record, not in the response).
+          input: [
+            { key: 'instrument', instrument: CELLTRION },
+            { key: 'shock', date: '2026-10-02', value: -8.1 },
+            { key: 'filings', value: 2 },
+          ],
+          output: [{ key: 'news', value: 3 }],
         },
       },
     ],
@@ -483,6 +495,7 @@ export function dayAi(): DayResponse {
       result: 'in-range',
       band: null,
       ruleId: INDEX_HALF.id,
+      rule: INDEX_HALF,
       instrument: KOSPI200,
       weight: 51.9,
       toThreshold: 0.1,

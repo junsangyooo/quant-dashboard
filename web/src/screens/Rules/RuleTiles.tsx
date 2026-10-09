@@ -39,7 +39,6 @@ import {
   MINUS,
 } from '../../lib/format';
 import { logoTone } from '../History/tones';
-import { conditionDeviationOf } from './proposed';
 import styles from './Rules.module.css';
 
 type TileKind = 'weight' | 'start' | 'condition' | 'action' | 'data' | 'result';
@@ -335,7 +334,7 @@ export function RuleTiles({
   const allEtf = what.instruments.every((i) => i.kind === 'etf');
   const targets = condition.targetEach;
   const sameTarget = targets.every((t) => t === targets[0]);
-  const deviation = conditionDeviationOf(condition);
+  const deviation = condition.deviation;
   const chip = ruleStatusChip(now.status);
 
   return (
@@ -381,8 +380,8 @@ export function RuleTiles({
         picture={
           <ConditionPicture
             threshold={condition.threshold}
-            now={stale ? null : (deviation?.now ?? null)}
-            atCheck={stale ? null : (deviation?.atCheck ?? null)}
+            now={stale ? null : deviation.now}
+            atCheck={stale ? null : deviation.atCheck}
           />
         }
         value={

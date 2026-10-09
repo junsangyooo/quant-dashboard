@@ -6,7 +6,7 @@ import { kst } from '../world';
 import {
   LAST_CHECK,
   NEXT_CHECK,
-  account,
+  PUSH_DEVICES,
   recent14,
   shell,
   sources,
@@ -51,10 +51,12 @@ const health: HealthResponse = {
     '2026-10-07': {
       date: '2026-10-07',
       state: 'failed',
-      run: { at: LAST_CHECK, result: 'failed', seconds: 12 },
+      // run.reason is a code for 'failed' · 'todo' results (CONTRACT recent14).
+      run: { at: LAST_CHECK, result: 'failed', seconds: 12, reason: 'no-quote' },
     },
   }),
   lastRun: { at: LAST_CHECK, result: 'failed', seconds: 12, reason: 'no-quote' },
+  devices: PUSH_DEVICES,
 };
 
 const bundle = {
@@ -67,7 +69,6 @@ const bundle = {
       banner: { kind: 'check-failed', at: LAST_CHECK, retryAt: RETRY, link: 'health' },
     }),
     '/api/health': health,
-    '/api/account': account(),
   },
 } satisfies FixtureBundle;
 

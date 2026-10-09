@@ -123,7 +123,7 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
 }
 
 export async function request<T>(
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
@@ -171,4 +171,5 @@ export const api = {
     request<T>('GET', path, { query, signal }),
   post: <T = undefined>(path: string, body?: unknown) => request<T>('POST', path, { body }),
   put: <T = undefined>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
+  delete: <T = undefined>(path: string) => request<T>('DELETE', path),
 };

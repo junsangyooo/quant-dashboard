@@ -11,7 +11,6 @@ import {
   formatTime,
   kstDateKey,
 } from '../../lib/format';
-import { pendingOf } from './proposed';
 
 // ── URL state ───────────────────────────────────────────────────────────────
 
@@ -205,7 +204,7 @@ export function rowTitle(e: HistoryEvent): string {
 
 /** Text after the mini stage icons: '매수 22:30', '9/15 다시 · 체결', '수수료 206원'. */
 export function stageNote(e: HistoryEvent): string | null {
-  const pending = pendingOf(e);
+  const pending = e.pending;
   if (e.kind === 'in-progress' && pending) {
     return hc.list.pending(sideName(pending.side), formatTime(pending.at));
   }

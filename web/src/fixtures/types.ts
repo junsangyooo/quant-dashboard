@@ -195,6 +195,7 @@ export interface FixtureResponses {
   'POST /api/mode/cancel-retry'?: Script<CancelRetryResponse>;
   'PUT /api/account/notifications'?: Script<NotificationsResponse>;
   'POST /api/account/push'?: Script<NoContent>;
+  'DELETE /api/account/push'?: Script<NoContent>;
   'POST /api/account/push/test'?: Script<PushTestResponse>;
 }
 

@@ -165,7 +165,9 @@ export function ModeScreen() {
       />
     ) : null;
     const turnOff =
-      m.mode === 'live' ? <TurnOffSection key="turn-off" ref={turnOffRef} now={now} /> : null;
+      m.mode === 'live' ? (
+        <TurnOffSection key="turn-off" ref={turnOffRef} now={now} offPreview={m.offPreview} />
+      ) : null;
 
     let left: ReactNode[];
     let right: ReactNode[];

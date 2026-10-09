@@ -178,6 +178,9 @@ describe('모의투자·실전 (SCR-MODE)', () => {
     expect(
       await within(dialog).findByText('달러 현금 $125.67은 계좌에 남아요'),
     ).toBeInTheDocument();
+    // /api/mode offPreview lists every positive balance; the modal keeps the drawn single line,
+    // the currency of the cancelled buy (원화 현금 85,964원 stays unmentioned).
+    expect(within(dialog).queryByText(/원화 현금/)).toBeNull();
     expect(within(dialog).getByText('보유 종목은 그대로')).toBeInTheDocument();
     expect(within(dialog).getByText('모의투자는 계속')).toBeInTheDocument();
     expect(within(dialog).queryByLabelText(/PIN/)).toBeNull();
@@ -245,6 +248,8 @@ describe('모의투자·실전 (SCR-MODE)', () => {
   it('breaks the gap down into three lines that add up to the end difference', async () => {
     await openMode(modeLive);
     const card = region(modeCopy.twoLedgers.title);
+    // The heading carries the valuation time the contract now sends (breakdown.valuedAt).
+    expect(within(card).getByText('차이 분해 · 9/1부터 · 10/7 16:00')).toBeInTheDocument();
     const b = TWO_LEDGERS.breakdown;
     expect(Math.round((b.fills + b.fees + b.other) * 100)).toBe(Math.round(b.total * 100));
     expect(Math.round((TWO_LEDGERS.endRet.live - TWO_LEDGERS.endRet.paper) * 100)).toBe(

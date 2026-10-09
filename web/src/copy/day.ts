@@ -112,6 +112,43 @@ export const dayCopy = {
       buy: '매수',
       skip: '사지 않음',
     },
+    /** The two answers of a twice-asked judgment; 'switch' · 'keep' (바꾸기 확인) are NEW. */
+    vote: {
+      hold: '유지',
+      weaken: '약화',
+      invalidated: '반증',
+      switch: '바꾸기',
+      keep: '그대로',
+    },
+    /**
+     * NEW — one phrase per JudgmentItem (CONTRACT AiJudgment input · output); the 입력 and 출력
+     * lines join them with ' · ' in the server's order, e.g. '셀트리온 · 10/2 지수 대비 −8.1% ·
+     * 최근 공시 2건'. An instrument item is its name.
+     */
+    items: {
+      sold: (name: string) => `팔 종목 ${name}`,
+      bought: (name: string) => `살 종목 ${name}`,
+      shock: (date: string, pct: string) => `${date} 지수 대비 ${pct}`,
+      condition: (n: number) => `반증 조건 ${String(n)}번`,
+      filing: (date: string) => `${date} 공시`,
+      review: (verdict: string) => `월 점검 ${verdict}`,
+      reviewMonths: (verdict: string, months: number) => `월 점검 ${verdict} ${String(months)}달째`,
+      month: (month: number) => `${String(month)}월`,
+      cost: (pct: string) => `바꾸기 비용 ${pct}`,
+      filings: (n: number) => `최근 공시 ${String(n)}건`,
+      news: (n: number) => `뉴스 ${String(n)}건`,
+      picks: (n: number) => `보유 ${String(n)}종목`,
+      held: (n: number) => `보유 ${String(n)}종목`,
+      candidates: (n: number) => `후보 ${String(n)}종목`,
+      checks: (n: number) => `살 조건 ${String(n)}개 충족`,
+      hold: (n: number) => `유지 ${String(n)}`,
+      weaken: (n: number) => `약화 ${String(n)}`,
+      invalidated: (n: number) => `반증 ${String(n)}`,
+      rewritten: (n: number) => `팔 조건 고침 ${String(n)}`,
+      'new-picks': (n: number) => `새 종목 ${String(n)}`,
+      expired: (n: number) => `만료 후보 ${String(n)}`,
+      'slot-full': '자리 없음 → 바꾸기 확인',
+    },
     action: {
       none: '주문 0건',
       sell: '매도',

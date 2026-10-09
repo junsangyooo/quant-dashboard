@@ -116,6 +116,7 @@ export const PAPER_FX_1007: Order = {
   id: 'paper-20261007-fx-1',
   market: 'KR', // 환전 is booked on the KRW account (contract Order.market)
   side: 'fx',
+  direction: 'krw-usd',
   fx: { krw: 173_000, usd: 125.3, rate: 1380.6 },
   at: kst('2026-10-07', '09:10'),
   status: 'filled',
@@ -211,6 +212,7 @@ export const LIVE_FIRST_FX: Order = {
   id: 'live-20260901-fx-1',
   market: 'KR',
   side: 'fx',
+  direction: 'krw-usd',
   approx: true,
   fx: { krw: 4_710_000, usd: 3_389, rate: 1389.8 },
   at: kst('2026-09-01', '09:10'),

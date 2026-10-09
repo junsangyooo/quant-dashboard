@@ -9,7 +9,6 @@ import { dayCopy as dc } from '../../copy/day';
 import { failureCopy, historyCopy as hc } from '../../copy/history';
 import { formatMonthDay, formatPpMagnitude, formatTime } from '../../lib/format';
 import { bandWeights, checkChip, openMarkets, positionLine } from './dayModel';
-import { checkFailureOf } from './proposed';
 import styles from './Day.module.css';
 
 export function CheckCard({
@@ -24,7 +23,7 @@ export function CheckCard({
   const band = check.band;
   const weights = bandWeights(check);
   const position = positionLine(check, ruleName);
-  const failure = checkFailureOf(check);
+  const failure = check.failure;
   const decided =
     check.result === 'rebalance' ||
     check.result === 'in-progress' ||

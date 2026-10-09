@@ -18,7 +18,14 @@ const bundle = {
       status: { kind: 'ok', lastCheckAt: kst('2026-07-01', '08:30') },
     }),
     '/api/rules': {
-      rules: [{ rule: INDEX_HALF, share: { pct: 99.6, target: 100 }, status: 'in-progress' }],
+      rules: [
+        {
+          rule: INDEX_HALF,
+          share: { pct: 99.6, target: 100 },
+          status: 'in-progress',
+          example: true,
+        },
+      ],
     },
     '/api/rules/index_half': ruleIndexFirstDay(),
   },

@@ -169,6 +169,25 @@ describe('SCR-HISTORY 모의투자 기본 (1:58215 · 1:59344)', () => {
     expect(textOf(byDate('2026-08-21'))).toContain('+12,300원10,084,600원');
   });
 
+  it('says when a 직접 할 일 was closed by hand (resolvedOn: 10/9 직접 처리)', async () => {
+    const data = paperResponse();
+    const resolved: HistoryResponse = {
+      ...data,
+      months: data.months.map((m) => ({
+        ...m,
+        events: m.events.map((e) =>
+          e.date === '2026-09-09' ? { ...e, resolvedOn: '2026-10-09' } : e,
+        ),
+      })),
+    };
+    await ready({
+      ...historyPaper,
+      responses: { ...historyPaper.responses, '/api/history': resolved },
+    });
+    const row = rows().find((r) => r.getAttribute('href')?.startsWith('/day/2026-09-09')) ?? null;
+    expect(textOf(row)).toContain('확인 실패시세 응답 없음9/10 정상10/9 직접 처리');
+  });
+
   it('완료 조건: calendar — 9/9 ✕, 9/14 일부 실패, 10/7 점선, 한쪽 휴장 반쪽 점, no weekend cells; not by colour alone', async () => {
     await ready();
     const grid = screen.getByRole('group', { name: '매일 확인' });

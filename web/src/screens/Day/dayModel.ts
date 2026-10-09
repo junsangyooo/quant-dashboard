@@ -1,6 +1,6 @@
 // Pure helpers of the 그날 panel: order lines, the 그날 확인 chip and lines, the basis line.
 import { marketName, sideName } from '../../api/adapters';
-import type { AiJudgment, Basis, DayResponse, Order, Stage } from '../../api/types';
+import type { AiJudgment, Basis, DayResponse, JudgmentItem, Order, Stage } from '../../api/types';
 import type { RebalanceState } from '../../components/Chips';
 import { dayCopy as dc } from '../../copy/day';
 import {
@@ -32,7 +32,10 @@ export function stageOrders(stages: readonly Stage[]): { stage: Stage; order: Or
     .flatMap((stage) => stage.orders.map((order) => ({ stage, order })));
 }
 
-/** 원→달러 unless the buys of the same day are in won (then the dollars came back). */
+/**
+ * 원→달러 unless the buys of the same day are in won (then the dollars came back). The order's
+ * own `direction` (CONTRACT Order) wins; this is the fallback for an order without it.
+ */
 export function fxDirection(stages: readonly Stage[]): 'krw-usd' | 'usd-krw' {
   const buys = stages.filter((s) => s.kind === 'buy').flatMap((s) => s.orders);
   const usdBuy = buys.some((o) => o.instrument?.currency === 'USD');
@@ -190,10 +193,46 @@ export function tokensLabel(n: number): string {
 /** "두 번 다 '유지'" or "'유지' · '약화'". */
 export function votesLabel(votes: AiJudgment['votes']): string | null {
   if (!votes || votes.length === 0) return null;
-  const words = votes.map((v) => dc.ai.verdict[v]);
+  const words = votes.map((v) => dc.ai.vote[v]);
   const [a, b] = words;
   if (words.length === 2 && a !== undefined && b !== undefined) {
     return a === b ? dc.ai.twice(a) : dc.ai.votes(a, b);
   }
   return words.join(' · ');
+}
+
+/** One item of the 입력 · 출력 lines (CONTRACT JudgmentItem) in words. */
+export function judgmentItemText(item: JudgmentItem): string {
+  const w = dc.ai.items;
+  switch (item.key) {
+    case 'instrument':
+      return item.instrument.name;
+    case 'sold':
+      return w.sold(item.instrument.name);
+    case 'bought':
+      return w.bought(item.instrument.name);
+    case 'shock':
+      return w.shock(formatMonthDay(item.date), formatPercent(item.value, 1));
+    case 'condition':
+      return w.condition(item.value);
+    case 'filing':
+      return w.filing(formatMonthDay(item.date));
+    case 'review': {
+      const verdict = dc.ai.verdict[item.value];
+      return item.months === undefined ? w.review(verdict) : w.reviewMonths(verdict, item.months);
+    }
+    case 'month':
+      return w.month(Number(item.value.slice(5, 7)));
+    case 'cost':
+      return w.cost(formatPercent(item.value, 2));
+    case 'slot-full':
+      return w['slot-full'];
+    default:
+      return w[item.key](item.value);
+  }
+}
+
+/** The 입력 or 출력 line: items in the server's order, joined with ' · '; null when empty. */
+export function judgmentLine(items: readonly JudgmentItem[]): string | null {
+  return items.length === 0 ? null : items.map(judgmentItemText).join(' · ');
 }

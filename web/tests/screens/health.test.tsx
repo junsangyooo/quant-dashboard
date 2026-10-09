@@ -82,7 +82,10 @@ describe('작동 (SCR-HEALTH)', () => {
     const widths = sourceRows().map(
       (r) => r.querySelector<HTMLElement>('[class*="ageFill"]')?.style.width,
     );
-    expect(widths).toEqual(['8%', '20%', '8%', '62%', '12%', '5%']);
+    // 토스 연결: the contract's age is days since connecting ÷ 90 (0.87 on 10/7, 12 days left);
+    // the bar puts the expiry at the late/stale edge, so it ends at 65.25% (the drawing's 62%
+    // came from the old cadence-relative 1.24).
+    expect(widths).toEqual(['8%', '20%', '8%', '65.25%', '12%', '5%']);
   });
 
   it('shows 토스 연결 만료 예정 only as 할 일 1 and a yellow card; the header stays 정상 · 08:30 확인', async () => {
@@ -280,14 +283,22 @@ describe('작동 (SCR-HEALTH)', () => {
 
     serve(healthPhase2);
     renderApp('/health');
-    await screen.findByRole('heading', { level: 2, name: '정상' });
-    expect(screen.getByText('자료 9개 중 할 일 1')).toBeInTheDocument();
+    // The final contract makes the paused filing watch a red card and counts its 'maintenance'
+    // source as stale, so the summary reads '점검 1'; 할 일 2 = 토스 연결 + the AI budget card.
+    await screen.findByRole('heading', { level: 2, name: '점검 1' });
+    expect(screen.getByText('자료 9개 중 낡음 1 · 할 일 2')).toBeInTheDocument();
     const names = sourceRows().map((r) => r.querySelector('[class*="rowName"]')?.textContent);
     expect(names).toEqual([...SIX, '공시', 'AI 호출', '지표 표']);
     const filings = sourceRows()[6];
     expect(filings).toHaveTextContent('점검 중');
     expect(filings).toHaveTextContent('한국 공시 감시 멈춤');
-    expect(screen.getByRole('article', { name: '한국 공시 수집 점검 중' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: '한국 공시 수집 점검 중' })).toHaveTextContent(
+      '마지막으로 받음 10/6 18:00',
+    );
+    // ai-cli yellow (over-budget) has no time: no '…부터' in its title.
+    expect(screen.getByRole('article', { name: 'AI 토큰 예산 넘음' })).toHaveTextContent(
+      '이번 달 324만 토큰 · 예산 300만 토큰',
+    );
   });
 
   it('asks again from the error state (다시 불러오기)', async () => {

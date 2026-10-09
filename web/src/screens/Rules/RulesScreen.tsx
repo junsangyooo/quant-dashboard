@@ -104,15 +104,13 @@ function RuleChips({ rules, selected }: { rules: readonly ListItem[]; selected: 
 
 function RuleHead({
   detail,
-  stale,
   children,
 }: {
   detail: RuleDetailResponse;
-  stale: boolean;
   /** '흐름' chips: part of the head, 8 under the status chips (Figma 17:5855 '흐름 고르기'). */
   children?: ReactNode;
 }) {
-  const chip = ruleStatusChip(stale ? 'quote-wait' : detail.status, detail.rule.ai);
+  const chip = ruleStatusChip(detail.status, detail.rule.ai);
   const name = ruleName(detail.rule);
   return (
     <div className={styles.ruleHead}>
@@ -195,12 +193,12 @@ function Detail({ id, lane, nowIso }: { id: string; lane: string | null; nowIso:
     );
   }
   const detail = q.data;
-  // The contract has no 'stale' list here: '시세 대기' is the rule's own stale signal (기획 §5
-  // SCR-RULES error 자료 낡음: 지금 칸에 '낡음', 상태 칩 '시세 대기', 게이지·편차 점 숨김).
-  const stale = detail.status === 'quote-wait';
+  // Sources that were stale at the last check (CONTRACT RuleDetailResponse.stale): the '지금'
+  // box says '낡음' and the deviation points hide (기획 §5 SCR-RULES error 자료 낡음).
+  const stale = detail.stale.length > 0;
   return (
     <div className={styles.detail}>
-      <RuleHead detail={detail} stale={stale}>
+      <RuleHead detail={detail}>
         {detail.display.kind === 'flow' ? (
           <LaneChips display={detail.display} ruleId={detail.rule.id} />
         ) : null}
@@ -237,9 +235,8 @@ export function RulesScreen() {
   const selected = known?.rule.id ?? rules[0]?.rule.id ?? null;
   const many = rules.length > 1;
   const lane = params.get('lane');
-  // The list has no 'example' flag; the selected rule's answer (same query as Detail) has it.
-  const detail = useRule(selected ?? undefined, lane ? { lane } : {});
-  const example = detail.data?.example ?? false;
+  // The list head's '예시' chip (CONTRACT RulesListResponse rules[].example).
+  const example = rules.some((r) => r.example);
 
   if (list.isPending) {
     return (

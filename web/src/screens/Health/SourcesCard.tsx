@@ -1,16 +1,17 @@
 // 자료별 (1:62685): title + legend (제때 · 늦음 · 낡음) + '막대 = 갱신 주기 대비 나이', then a row per
 // source the API lists: state dot · name · chip, second line (기준 · 받은 시각 · 주기), and the
-// age bar over three zones. The push row opens the device list (from /api/account).
+// age bar over three zones. The push row opens the device list (HealthResponse.devices).
 import clsx from 'clsx';
 import { useId, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Laptop, Monitor, Smartphone, type LucideIcon } from 'lucide-react';
 import { healthCopy as t } from '../../copy/health';
-import { useAccount } from '../../api/queries';
+import type { HealthResponse } from '../../api/types';
 import { LinkButton } from '../../components/Buttons';
 import { SignalChip, type SignalKind } from '../../components/Chips';
-import { Skeleton } from '../../components/State';
 import { formatDateTime } from '../../lib/format';
 import { sortSources, sourceView, type Source, type SourceView } from './text';
+
+type Device = HealthResponse['devices'][number];
 import styles from './Health.module.css';
 
 /** Placeholder rows while the status is unknown: the 1단계 sources, values '—'. */
@@ -72,27 +73,18 @@ function deviceIcon(name: string): LucideIcon {
   return Monitor;
 }
 
-function DeviceList({ id, now }: { id: string; now: string | null }) {
-  const q = useAccount();
+function DeviceList({
+  id,
+  devices,
+  now,
+}: {
+  id: string;
+  devices: readonly Device[];
+  now: string | null;
+}) {
   // Server time of the shell; without it the 8-day check waits.
   const nowMs = now === null ? null : Date.parse(now);
-  if (q.isPending) {
-    return (
-      <div id={id} className={styles.devices}>
-        <Skeleton text="body" width={180} />
-        <Skeleton text="body" width={160} />
-      </div>
-    );
-  }
-  if (q.isError) {
-    return (
-      <div id={id} className={styles.devices}>
-        <p className={clsx('t-caption', styles.muted)}>{t.devices.error}</p>
-      </div>
-    );
-  }
-  const devices = q.data.notifications.devices;
-  const warn = (d: (typeof devices)[number]) =>
+  const warn = (d: Device) =>
     !d.ok ||
     d.lastDelivery === null ||
     (nowMs !== null && nowMs - Date.parse(d.lastDelivery) > STALE_DELIVERY_MS);
@@ -135,10 +127,13 @@ function DeviceList({ id, now }: { id: string; now: string | null }) {
 
 export function SourcesCard({
   sources,
+  devices = [],
   now,
   unknown = false,
 }: {
   sources: readonly Source[] | null;
+  /** '알림 기기' expands to these (empty before web push, 3단계). */
+  devices?: readonly Device[];
   now: string | null;
   unknown?: boolean;
 }) {
@@ -202,7 +197,7 @@ export function SourcesCard({
                       }
                     />
                   </button>
-                  {open ? <DeviceList id={listId} now={now} /> : null}
+                  {open ? <DeviceList id={listId} devices={devices} now={now} /> : null}
                 </>
               ) : (
                 <div className={styles.row}>

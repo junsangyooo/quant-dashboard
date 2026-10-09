@@ -11,7 +11,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Fragment, useState, type ReactNode } from 'react';
-import { ruleStatusChip } from '../../api/adapters';
+import { marginText, ruleStatusChip } from '../../api/adapters';
 import type { Instrument, NowBlock, Side } from '../../api/types';
 import { Flag, InitialLogo, KindBadge, type Country } from '../../components/Badges';
 import { ExceptionChip, RebalanceChip, type ExceptionKind } from '../../components/Chips';
@@ -37,16 +37,8 @@ import {
   pnlDirection,
 } from '../../lib/format';
 import { logoTone } from '../History/tones';
-import {
-  kvNoteOf,
-  moreOf,
-  nowNoteOf,
-  nowUntilOf,
-  retriedOf,
-  targetsOf,
-  type FlowNode,
-  type NowRow,
-} from './proposed';
+import type { FlowNode, NowRow } from './flowLayout';
+import { kvView, orderText, periodText } from './nowWords';
 import styles from './Rules.module.css';
 
 const NODE_KIND: Record<FlowNode['type'], NodeKind> = {
@@ -126,13 +118,15 @@ export function nowSuffix(node: FlowNode): string | null {
       parts.push(rc.now.month);
       break;
     case 'now-last': {
-      const until = nowUntilOf(now);
+      const until = now.until;
       if (now.at) {
         parts.push(rc.now.last(until ? rc.now.range(when(now.at), when(until)) : when(now.at)));
       }
       break;
     }
     case 'now':
+      // A block date on a card other than the start (실적 · 월 점검 결과: the day it last ran).
+      if (now.at && node.type !== 'start') parts.push(when(now.at));
       break;
   }
   const rows = instrumentRows(now);
@@ -144,8 +138,6 @@ export function nowSuffix(node: FlowNode): string | null {
   ) {
     parts.push(rc.now.weightsPnl);
   }
-  const note = nowNoteOf(now);
-  if (note) parts.push(note);
   return parts.length ? `· ${parts.join(' · ')}` : null;
 }
 
@@ -172,15 +164,22 @@ function Logos({
   );
 }
 
-function ProgressRow({ row }: { row: InstrumentRow }) {
+/**
+ * 0–100 toward the line: a held stock's sell condition, or a candidate's buy price (the 분기 발굴
+ * lane's condition card, CONTRACT instrument row progress · margin).
+ */
+function ProgressRow({ row, buy }: { row: InstrumentRow; buy: boolean }) {
   const progress = Math.max(0, Math.min(100, row.progress ?? 0));
+  const left = row.margin ? marginText(row.margin) : null;
   return (
     <div className={styles.nowStack}>
       <NodeRow>
         <Text variant="caption" grow className={styles.ellipsis}>
           {`${row.instrument.name} ${formatPercent(progress, 0)}`}
         </Text>
-        {row.marginText ? <Text variant="label">{row.marginText}</Text> : null}
+        {left !== null ? (
+          <Text variant="label">{buy ? rc.now.buyMargin(left) : rc.now.sellMargin(left)}</Text>
+        ) : null}
       </NodeRow>
       <span className={styles.progress} aria-hidden>
         <span className={styles.progressZone} />
@@ -194,7 +193,7 @@ function ProgressRow({ row }: { row: InstrumentRow }) {
           {rc.now.progress.zone}
         </Text>
         <Text variant="caption" tone="muted" grow align="end">
-          {rc.now.progress.to}
+          {buy ? rc.now.progress.toBuy : rc.now.progress.to}
         </Text>
       </NodeRow>
     </div>
@@ -204,7 +203,7 @@ function ProgressRow({ row }: { row: InstrumentRow }) {
 function orderRight(row: Extract<NowRow, { kind: 'order' }>): string {
   if (row.status === 'filled' && row.at) {
     const date = formatMonthDay(row.at);
-    return retriedOf(row) ? rc.now.retried(date) : rc.now.filled(date);
+    return row.retried === true ? rc.now.retried(date) : rc.now.filled(date);
   }
   if (row.status === 'pending' && row.at) return rc.now.pending(formatTime(row.at));
   if (row.status === 'failed') return rc.now.failed;
@@ -255,12 +254,15 @@ function MiniBand({ value, threshold }: { value: number | null; threshold: numbe
 
 export function NowRows({
   node,
+  lane,
   colorIndex,
   ai,
   nowIso,
   stale,
 }: {
   node: FlowNode;
+  /** The flow's lane: on 분기 발굴 a condition card's bars run to the candidates' buy price. */
+  lane: string;
   colorIndex: number;
   ai: boolean;
   nowIso: string | null;
@@ -268,9 +270,24 @@ export function NowRows({
 }) {
   const now = node.now;
   const out: ReactNode[] = [];
+  const buy = lane === 'quarterly' && node.type === 'condition';
+  // The start card's '55일 뒤' comes from kv daysToNext when the server counts it.
+  const daysToNext = now.rows.find(
+    (r): r is Extract<NowRow, { kind: 'kv' }> => r.kind === 'kv' && r.key === 'daysToNext',
+  );
 
-  if (node.type === 'start' && now.at) {
-    const rel = relative(now.at, nowIso);
+  if (node.type === 'start' && now.at && lane === 'earnings') {
+    // 실적 공시 lane: the start card's date is the last earnings filing, not the next run.
+    out.push(
+      <NodeRow key="last-filing">
+        <Text variant="caption" grow>
+          {rc.now.lastFiling(when(now.at))}
+        </Text>
+      </NodeRow>,
+    );
+  } else if (node.type === 'start' && now.at) {
+    const days = daysToNext ? Number(daysToNext.value) : NaN;
+    const rel = Number.isFinite(days) ? rc.now.inDays(days) : relative(now.at, nowIso);
     out.push(
       <NodeRow key="next">
         <Text variant="caption" grow>
@@ -287,8 +304,8 @@ export function NowRows({
 
   const insts = instrumentRows(now);
   if (node.type === 'weight' && insts.length > 0) {
-    const targets = targetsOf(node);
-    const more = moreOf(node);
+    const targets = node.targets;
+    const more = node.more;
     out.push(
       <Text key="weights" variant="label" as="p">
         {insts.map((r) => (r.weight === undefined ? '—' : r.weight.toFixed(1))).join(' · ') +
@@ -305,16 +322,25 @@ export function NowRows({
   }
 
   let bare: Instrument[] = [];
+  // An AI card's bare instruments are its picks ('3종목 고름'), unless the block holds a
+  // verdict: then they are the stock that was judged, named in full.
+  const judged = now.rows.some((r) => r.kind === 'kv' && r.key === 'verdict');
   const flushBare = (key: string) => {
     if (bare.length === 0) return;
     const list = bare;
     bare = [];
+    const caption =
+      node.type !== 'ai'
+        ? null
+        : judged
+          ? list.map((inst) => inst.name).join(' · ')
+          : rc.now.picked(list.length + (node.more ?? 0));
     out.push(
       <NodeRow key={key}>
         <Logos instruments={list} colorIndex={colorIndex} />
-        {node.type === 'ai' ? (
+        {caption !== null ? (
           <Text variant="caption" grow>
-            {rc.now.picked(list.length + (moreOf(node) ?? 0))}
+            {caption}
           </Text>
         ) : null}
       </NodeRow>,
@@ -323,12 +349,20 @@ export function NowRows({
 
   now.rows.forEach((row, i) => {
     const key = `r${String(i)}`;
+    const detail =
+      row.kind === 'instrument'
+        ? row.period !== undefined
+          ? periodText(row.period)
+          : row.margin
+            ? marginText(row.margin)
+            : null
+        : null;
     if (
       row.kind !== 'instrument' ||
       row.weight !== undefined ||
       row.ret !== undefined ||
       row.progress !== undefined ||
-      row.marginText !== undefined
+      detail !== null
     ) {
       flushBare(`${key}-logos`);
     }
@@ -336,10 +370,10 @@ export function NowRows({
       case 'instrument': {
         if (node.type === 'weight') return;
         if (row.progress !== undefined) {
-          out.push(<ProgressRow key={key} row={row} />);
+          out.push(<ProgressRow key={key} row={row} buy={buy} />);
           return;
         }
-        if (row.weight === undefined && row.ret === undefined && row.marginText !== undefined) {
+        if (row.weight === undefined && row.ret === undefined && detail !== null) {
           out.push(
             <NodeRow key={key}>
               <InitialLogo
@@ -348,13 +382,29 @@ export function NowRows({
                 tone={logoTone(colorIndex, i)}
               />
               <Text variant="caption" grow>
-                {`${row.instrument.name} · ${row.marginText}`}
+                {rc.now.period(row.instrument.name, detail)}
               </Text>
             </NodeRow>,
           );
           return;
         }
         if (row.weight === undefined && row.ret === undefined) {
+          if (node.type === 'start') {
+            // A start card names its one company (실적 공시: whose filing came in).
+            out.push(
+              <NodeRow key={key}>
+                <InitialLogo
+                  initials={row.instrument.initials}
+                  size={20}
+                  tone={logoTone(colorIndex, i)}
+                />
+                <Text variant="caption" grow>
+                  {row.instrument.name}
+                </Text>
+              </NodeRow>,
+            );
+            return;
+          }
           bare.push(row.instrument);
           return;
         }
@@ -431,7 +481,7 @@ export function NowRows({
           <NodeRow key={key}>
             <NodeIcon icon={Icon} />
             <Text variant="caption" grow>
-              {row.text}
+              {orderText(row.side, row.text)}
             </Text>
             <Text variant="caption" tone="muted">
               {orderRight(row)}
@@ -462,18 +512,19 @@ export function NowRows({
         return;
       }
       case 'kv': {
-        const note = kvNoteOf(row);
+        if (row === daysToNext && node.type === 'start') return;
+        const view = kvView(row.key, row.value, row.note);
         out.push(
           <NodeRow key={key}>
-            {row.key ? (
+            {view.label !== null ? (
               <Text variant="caption" tone="muted" className={styles.kvKey}>
-                {row.key}
+                {view.label}
               </Text>
             ) : null}
-            <Text variant="caption" tone={row.key ? undefined : 'muted'} grow>
-              {row.value}
+            <Text variant="caption" tone={view.label !== null ? undefined : 'muted'} grow>
+              {view.value}
             </Text>
-            {note ? <Text variant="label">{note}</Text> : null}
+            {view.note !== null ? <Text variant="label">{view.note}</Text> : null}
           </NodeRow>,
         );
         return;
@@ -493,7 +544,7 @@ export function NowRows({
 function StockContent({ node, colorIndex }: { node: FlowNode; colorIndex: number }) {
   const insts = instrumentRows(node.now).map((r) => r.instrument);
   if (insts.length === 0) return null;
-  const more = moreOf(node);
+  const more = node.more;
   const markets = [...new Set(insts.map(country))];
   const kinds = [...new Set(insts.map((i) => i.kind))];
   return (
@@ -519,7 +570,7 @@ function StockContent({ node, colorIndex }: { node: FlowNode; colorIndex: number
 }
 
 function WeightContent({ node, colorIndex }: { node: FlowNode; colorIndex: number }) {
-  const targets = targetsOf(node);
+  const targets = node.targets;
   if (!targets || targets.length === 0) return null;
   return (
     <NodeRow>
@@ -612,6 +663,7 @@ function AiFields({ node }: { node: FlowNode }) {
 
 export function FlowCard({
   node,
+  lane,
   colorIndex,
   ai,
   nowIso,
@@ -619,6 +671,7 @@ export function FlowCard({
   goesTo,
 }: {
   node: FlowNode;
+  lane: string;
   colorIndex: number;
   ai: boolean;
   nowIso: string | null;
@@ -633,7 +686,16 @@ export function FlowCard({
       kind={kind}
       title={node.title}
       nowSuffix={stale ? <StaleTag /> : (suffix ?? undefined)}
-      now={<NowRows node={node} colorIndex={colorIndex} ai={ai} nowIso={nowIso} stale={stale} />}
+      now={
+        <NowRows
+          node={node}
+          lane={lane}
+          colorIndex={colorIndex}
+          ai={ai}
+          nowIso={nowIso}
+          stale={stale}
+        />
+      }
       className={styles.flowCard}
     >
       {node.type === 'stock' ? <StockContent node={node} colorIndex={colorIndex} /> : null}

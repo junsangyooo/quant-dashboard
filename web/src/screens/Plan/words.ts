@@ -27,7 +27,6 @@ import {
   formatUsd,
   kstDateKey,
 } from '../../lib/format';
-import { reviewAtOf } from './proposed';
 
 /** '[예시] 종목 모멘텀' for example rules. */
 export function ruleName(rule: RuleRef): string {
@@ -108,8 +107,9 @@ export function nextActionText(next: NextAction, options: NextTextOptions): stri
       return `${quoteWaitBasis(next)} · ${n.ordersZero}`;
     case 'next-check': {
       const text = n.nextCheck(formatDateTime(next.at));
-      const review = reviewAtOf(next);
-      return review === null ? text : `${text} · ${n.review(formatMonthDay(review))}`;
+      return next.reviewAt === undefined
+        ? text
+        : `${text} · ${n.review(formatMonthDay(next.reviewAt))}`;
     }
   }
 }
@@ -133,9 +133,10 @@ export function shareParts(share: { pct: number; target: number | null }): {
 }
 
 /** The small basis line under a rule card. */
-export function basisLineText(card: RuleCard, metricTableAt: string | null): string {
+export function basisLineText(card: RuleCard): string {
   const b = card.basisLine;
   const c = planCopy.basis;
+  const metricTableAt = b.metricTableAt ?? null;
   if (card.gauge.kind === 'sell-condition') {
     return metricTableAt === null
       ? c.sellCondition

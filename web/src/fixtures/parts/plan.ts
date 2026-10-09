@@ -8,7 +8,6 @@ import type {
   ScheduleItem,
 } from '../../api/types';
 import type { LinePoint } from '../../charts/geometry/lineChart';
-import type { NextCheckProposal, RuleCardProposal } from '../../screens/Plan/proposed';
 import { driftIndex, driftMomentum } from '../charts';
 import { BTC, INDEX_HALF, KOSPI200, MOMENTUM, NVDA, SAMSUNG, SP500, kst } from '../world';
 import {
@@ -145,7 +144,7 @@ export function paperDrift(period: DriftPeriod = '3m'): Drift {
   };
 }
 
-/** 실전: 27거래일 since 9/1, no period chips; ⏻ 실전 켬 on both rules. */
+/** 실전: 27거래일 since 9/1, no period chips; ⏻ 실전 켬 is the ledger's event (ruleId null). */
 function liveDrift(
   index: readonly LinePoint[],
   last: Drift['events'][number]['kind'] | null,
@@ -157,8 +156,7 @@ function liveDrift(
     lines: lines(index, liveDriftMomentum),
     staleFrom: null,
     events: [
-      { date: '2026-09-01', kind: 'live-on', ruleId: INDEX_HALF.id },
-      { date: '2026-09-01', kind: 'live-on', ruleId: MOMENTUM.id },
+      { date: '2026-09-01', kind: 'live-on', ruleId: null },
       ...(last ? [{ date: '2026-10-07', kind: last, ruleId: INDEX_HALF.id }] : []),
     ],
     empty: null,
@@ -228,7 +226,13 @@ export function planPartial(): PlanResponse {
         stages: stages1007(PAPER_SELL_1007, PAPER_FX_1007, PAPER_BUY_1007_FAILED),
       },
       items: [
-        { kind: 'retry', at: kst('2026-10-08', '22:30'), market: 'US', side: 'buy' },
+        {
+          kind: 'retry',
+          at: kst('2026-10-08', '22:30'),
+          market: 'US',
+          side: 'buy',
+          ruleId: INDEX_HALF.id,
+        },
         HOLIDAY_1009,
         { kind: 'sub-share-cash', krw: 56_548 },
       ],
@@ -504,6 +508,7 @@ export function planFirstDay(): PlanResponse {
                 id: 'paper-20260701-fx-1',
                 market: 'KR',
                 side: 'fx',
+                direction: 'krw-usd',
                 fx: { krw: 4_967_000, usd: 3_568.24, rate: 1392.0 },
                 at: kst('2026-07-01', '09:10'),
                 status: 'filled',
@@ -651,22 +656,27 @@ const BROADCOM: Instrument = {
 /** '3년 발굴' (AI 판단 포함). The card shows no '[예시]' prefix in Figma. */
 export const DISCOVERY = { id: 'discovery_3y', name: '3년 발굴', ai: true, colorIndex: 1 } as const;
 
-/** 다음 확인 10/8 08:30 · 점검 11/1 — `reviewAt` is a proposed field (contract gap). */
-const DISCOVERY_NEXT: NextCheckProposal = {
+/** 다음 확인 10/8 08:30 · 점검 11/1 (CONTRACT next-check.reviewAt: the next monthly review). */
+const DISCOVERY_NEXT: NextAction = {
   kind: 'next-check',
   at: kst('2026-10-08', '08:30'),
   reviewAt: kst('2026-11-01', '08:30'),
 };
 
 /** Equal weights (same-amount buys); the AI card shows sell-condition progress instead. */
-const DISCOVERY_CARD: RuleCard & RuleCardProposal = {
+const DISCOVERY_CARD: RuleCard = {
   rule: DISCOVERY,
   share: { pct: 18.5, target: 20 },
   status: 'hold',
   next: DISCOVERY_NEXT,
   gauge: {
     kind: 'sell-condition',
-    needle: { instrument: HD_ELECTRIC, progress: 54, metric: '이익률', marginText: '2.3%p' },
+    needle: {
+      instrument: HD_ELECTRIC,
+      progress: 54,
+      metric: { key: 'op_margin' },
+      margin: { unit: 'pp', value: 2.3 },
+    },
   },
   rows: [
     {
@@ -675,8 +685,8 @@ const DISCOVERY_CARD: RuleCard & RuleCardProposal = {
       target: 33.3,
       toThreshold: null,
       progress: 54,
-      metric: '이익률',
-      marginText: '2.3%p',
+      metric: { key: 'op_margin' },
+      margin: { unit: 'pp', value: 2.3 },
     },
     {
       instrument: HANWHA_AERO,
@@ -684,8 +694,8 @@ const DISCOVERY_CARD: RuleCard & RuleCardProposal = {
       target: 33.3,
       toThreshold: null,
       progress: 41,
-      metric: '수주잔고',
-      marginText: '3.1조',
+      metric: { key: 'backlog' },
+      margin: { unit: 'KRW', value: 3_100_000_000_000 },
     },
     {
       instrument: BROADCOM,
@@ -693,8 +703,8 @@ const DISCOVERY_CARD: RuleCard & RuleCardProposal = {
       target: 33.4,
       toThreshold: null,
       progress: 12,
-      metric: 'AI 매출',
-      marginText: '2분기',
+      metric: { key: 'segment_revenue', param: 'AI' },
+      margin: { unit: 'quarter', value: 2 },
     },
   ],
   basisLine: {
@@ -706,7 +716,7 @@ const DISCOVERY_CARD: RuleCard & RuleCardProposal = {
     staleBasisDate: null,
     metricTableAt: '2026-10-08',
   },
-  vsIndex: { since: '2026-07-01', points: discoveryVsIndex },
+  vsIndex: { since: '2026-07-01', points: [...discoveryVsIndex] },
 };
 
 /**
@@ -735,16 +745,18 @@ export function planDiscovery(): PlanResponse {
       items: [
         { kind: 'next-check', at: kst('2026-10-08', '08:30') },
         HOLIDAY_1009,
-        { kind: 'earnings', date: '2026-10-24', instrument: HD_ELECTRIC },
-        { kind: 'monthly-review', at: kst('2026-11-01', '08:30') },
-        { kind: 'discovery', at: kst('2026-12-01', '08:30') },
+        // The server does not send 'earnings' yet (no public source of report dates); the item
+        // is kept so the screen's line for it stays drawn and tested.
+        { kind: 'earnings', date: '2026-10-24', instrument: HD_ELECTRIC, ruleId: DISCOVERY.id },
+        { kind: 'monthly-review', at: kst('2026-11-01', '08:30'), ruleId: DISCOVERY.id },
+        { kind: 'discovery', at: kst('2026-12-01', '08:30'), ruleId: DISCOVERY.id },
         { kind: 'sub-share-cash', krw: 56_548 },
       ],
     },
     drift: {
       ...base.drift,
       lines: base.drift.lines.filter((l) => l.ruleId === INDEX_HALF.id),
-      events: base.drift.events.filter((e) => e.ruleId === INDEX_HALF.id),
+      events: base.drift.events.filter((e) => e.ruleId === null || e.ruleId === INDEX_HALF.id),
     },
   };
 }

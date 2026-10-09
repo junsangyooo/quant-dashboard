@@ -1,7 +1,10 @@
 // SCR-RULES responses (/api/rules, /api/rules/{id}?lane=) of the 예시-값표 worlds and of the
 // 3년 발굴 proposal (Figma 탐색 17:5855 · 17:6432 · 17:7193 · 17:7808, 화면-맞춤.md §5–6).
-// The flow cards' words are the rule definition's (data); the numbers are the table's for the
-// two 모의투자 rules and illustrative for 3년 발굴 (as on the 탐색 page).
+// The flow cards' titles are the rule definition's (data); the '지금' boxes carry data only
+// (CONTRACT NowBlock: kv key codes with dates · counts · names · codes, order rows with the
+// instrument's name or the 환전 direction code), shaped like the engine's builder
+// (autotrade/api/views/discovery.py). The numbers are the table's for the two 모의투자 rules and
+// illustrative for 3년 발굴 (as on the 탐색 page).
 import type {
   FlowDisplay,
   Instrument,
@@ -10,16 +13,10 @@ import type {
   RulesListResponse,
   TilesDisplay,
 } from '../../api/types';
-import type {
-  EdgeProposal,
-  FlowEdge,
-  KvRowProposal,
-  NowBlockProposal,
-  NowRow,
-  OrderRowProposal,
-  ProposedNode,
-  TilesConditionProposal,
-} from '../../screens/Rules/proposed';
+
+type Node = FlowDisplay['nodes'][number];
+type FlowEdge = FlowDisplay['edges'][number];
+type NowRow = NowBlock['rows'][number];
 import { BTC, INDEX_HALF, KOSPI200, MOMENTUM, NVDA, SAMSUNG, SP500, kst } from '../world';
 import { PAPER_BUY_1007, PAPER_FX_1007, PAPER_SELL_1007, stages1007 } from './common';
 import { CELLTRION, DISCOVERY } from './day';
@@ -32,8 +29,8 @@ export function rulesList(
 ): RulesListResponse {
   return {
     rules: [
-      { rule: INDEX_HALF, share: { pct: 81.1, target: 80 }, status: index },
-      { rule: MOMENTUM, share: { pct: 18.3, target: 20 }, status: momentum },
+      { rule: INDEX_HALF, share: { pct: 81.1, target: 80 }, status: index, example: true },
+      { rule: MOMENTUM, share: { pct: 18.3, target: 20 }, status: momentum, example: true },
     ],
   };
 }
@@ -41,8 +38,8 @@ export function rulesList(
 export function rulesListDiscovery(): RulesListResponse {
   return {
     rules: [
-      { rule: INDEX_HALF, share: { pct: 81.1, target: 80 }, status: 'in-progress' },
-      { rule: DISCOVERY, share: { pct: 18.3, target: 20 }, status: 'hold' },
+      { rule: INDEX_HALF, share: { pct: 81.1, target: 80 }, status: 'in-progress', example: true },
+      { rule: DISCOVERY, share: { pct: 18.3, target: 20 }, status: 'hold', example: true },
     ],
   };
 }
@@ -60,7 +57,7 @@ const MEASURED: NonNullable<TilesDisplay['measured']> = {
 };
 
 /** 조건 tile points (인계 '작은 불일치' 2): now +0.2%p (빈 점), 08:30 check +2.4%p (주황 점). */
-const CONDITION_1007: TilesDisplay['condition'] & TilesConditionProposal = {
+const CONDITION_1007: TilesDisplay['condition'] = {
   threshold: 2,
   targetEach: [50, 50],
   deviation: { now: 0.2, atCheck: 2.4 },
@@ -84,6 +81,7 @@ export function ruleIndexHalf(): RuleDetailResponse {
     share: { pct: 81.1, target: 80 },
     status: 'in-progress',
     example: true,
+    stale: [],
     display: indexTiles(
       {
         status: 'in-progress',
@@ -97,7 +95,7 @@ export function ruleIndexHalf(): RuleDetailResponse {
 
 /** 출시 첫날 (값표 §4, Figma 1:61661): 자산의 99.6% · 목표 100%, 환전 09:10 ✓ · 매수 22:30 ⏳. */
 export function ruleIndexFirstDay(): RuleDetailResponse {
-  const condition: TilesDisplay['condition'] & TilesConditionProposal = {
+  const condition: TilesDisplay['condition'] = {
     threshold: 2,
     targetEach: [50, 50],
     deviation: { now: 0.2, atCheck: null },
@@ -107,6 +105,7 @@ export function ruleIndexFirstDay(): RuleDetailResponse {
     share: { pct: 99.6, target: 100 },
     status: 'in-progress',
     example: true,
+    stale: [],
     display: indexTiles(
       {
         status: 'in-progress',
@@ -121,12 +120,13 @@ export function ruleIndexFirstDay(): RuleDetailResponse {
   };
 }
 
-/** 시세 대기 (값표 §3): no 10/7 rebalance; status '시세 대기', points hidden. */
+/** 시세 대기 (값표 §3): no 10/7 rebalance; status '시세 대기', US quotes stale at the check. */
 export function ruleIndexStale(): RuleDetailResponse {
   const base = ruleIndexHalf();
   return {
     ...base,
     status: 'quote-wait',
+    stale: ['us-quotes'],
     display: indexTiles(
       { status: 'quote-wait', stages: null, nextCheckAt: kst('2026-10-08', '08:30') },
       CONDITION_1007,
@@ -136,20 +136,32 @@ export function ruleIndexStale(): RuleDetailResponse {
 
 // ── flow helpers ────────────────────────────────────────────────────────────
 
-type Node = ProposedNode;
-
 function now(
   headKey: NowBlock['headKey'],
   rows: NowRow[],
-  extra: Partial<NowBlock & NowBlockProposal> = {},
+  extra: Partial<Pick<NowBlock, 'at' | 'until'>> = {},
 ): NowBlock {
-  const block: NowBlock & NowBlockProposal = { headKey, rows, ...extra };
-  return block;
+  return { headKey, rows, ...extra };
 }
 
-function kv(key: string, value: string, note?: string): NowRow {
-  const row: Extract<NowRow, { kind: 'kv' }> & KvRowProposal = { kind: 'kv', key, value, note };
-  return row;
+/** A kv row: a key code with data (dates YYYY-MM-DD, counts, names, codes; '-' for none). */
+function kv(key: string, value: string | number, note?: string | number): NowRow {
+  return note === undefined
+    ? { kind: 'kv', key, value: String(value) }
+    : { kind: 'kv', key, value: String(value), note: String(note) };
+}
+
+/** One order of a plan: the instrument's name, or the 환전 direction code. */
+function order(
+  side: Extract<NowRow, { kind: 'order' }>['side'],
+  text: string,
+  status: 'filled' | 'pending' | 'failed',
+  at: string,
+  retried?: true,
+): NowRow {
+  return retried
+    ? { kind: 'order', side, text, status, at, retried }
+    : { kind: 'order', side, text, status, at };
 }
 
 function inst(
@@ -177,14 +189,6 @@ const EXCEPTIONS: NowRow = {
 // ── [예시] 종목 모멘텀: 노드 카드 9종 (Figma 1:62197 · 1:61226, 값표 §1.1 · §1.3) ─────────
 
 function momentumFlow(): FlowDisplay {
-  const retried: Extract<NowRow, { kind: 'order' }> & OrderRowProposal = {
-    kind: 'order',
-    side: 'buy',
-    text: '매수 1 · BTC',
-    status: 'filled',
-    at: kst('2026-09-15', '09:02'),
-    retried: true,
-  };
   const nodes: Node[] = [
     {
       id: 'start',
@@ -209,21 +213,19 @@ function momentumFlow(): FlowDisplay {
       ]),
     },
     {
+      // '8종목 중 상위 3' was a free note in the drawing; the contract sends no sentences, and
+      // the ranks 1–3 under '후보군 8종목' say the same.
       id: 'data',
       type: 'data',
       col: 2,
       row: 0,
       title: '30일 수익률',
       subtitle: '종목마다 · 어제 종가 기준',
-      now: now(
-        'now',
-        [
-          { kind: 'rank', rank: 1, instrument: SAMSUNG, ret: 6.2 },
-          { kind: 'rank', rank: 2, instrument: NVDA, ret: 4.8 },
-          { kind: 'rank', rank: 3, instrument: BTC, ret: 0.9 },
-        ],
-        { note: '8종목 중 상위 3' },
-      ),
+      now: now('now', [
+        { kind: 'rank', rank: 1, instrument: SAMSUNG, ret: 6.2 },
+        { kind: 'rank', rank: 2, instrument: NVDA, ret: 4.8 },
+        { kind: 'rank', rank: 3, instrument: BTC, ret: 0.9 },
+      ]),
     },
     {
       id: 'ai',
@@ -236,13 +238,9 @@ function momentumFlow(): FlowDisplay {
         { key: 'ai', value: '상위 3 고르고 비중' },
         { key: 'output', value: '3종목 · 비중' },
       ],
-      now: now(
-        'now-last-judgment',
-        [inst(SAMSUNG), inst(NVDA), inst(BTC), kv('', '지난번과 같은 3종목')],
-        {
-          at: kst('2026-10-07', '08:30'),
-        },
-      ),
+      now: now('now-last-judgment', [inst(SAMSUNG), inst(NVDA), inst(BTC)], {
+        at: kst('2026-10-07', '08:30'),
+      }),
     },
     {
       id: 'weight',
@@ -274,6 +272,8 @@ function momentumFlow(): FlowDisplay {
       }),
     },
     {
+      // The last plan (9/14~9/15): one row per order. BTC failed on 9/14 and was sent again on
+      // 9/15 (retried: the row shows the retry's outcome). No 환전: the coin is bought in won.
       id: 'action',
       type: 'action',
       col: 0,
@@ -282,15 +282,8 @@ function momentumFlow(): FlowDisplay {
       now: now(
         'now-last',
         [
-          {
-            kind: 'order',
-            side: 'sell',
-            text: '매도 1 · 삼성전자',
-            status: 'filled',
-            at: kst('2026-09-14', '09:05'),
-          },
-          { kind: 'order', side: 'fx', text: '환전 없음 · 코인은 원화' },
-          retried,
+          order('sell', SAMSUNG.name, 'filled', kst('2026-09-14', '09:05')),
+          order('buy', BTC.name, 'filled', kst('2026-09-15', '09:02'), true),
         ],
         { at: '2026-09-14', until: '2026-09-15' },
       ),
@@ -340,6 +333,8 @@ export function ruleMomentum(
     share: { pct: 18.3, target: 20 },
     status,
     example: true,
+    // 시세 대기 world: the US quotes (NVDA) were stale at the check.
+    stale: status === 'quote-wait' ? ['us-quotes'] : [],
     display: momentumFlow(),
   };
 }
@@ -378,6 +373,28 @@ const LANES: FlowDisplay['lanes'] = [
   { id: 'quarterly', label: { kind: 'quarterly' } },
 ];
 
+const HANWHA_OCEAN: Instrument = {
+  id: 'KR:042660',
+  name: '한화오션',
+  kind: 'stock',
+  market: 'KR',
+  currency: 'KRW',
+  initials: '한',
+};
+
+/**
+ * The open plan of 10/7 (분기 발굴 뒤 매수): one row per order, the 환전 as its direction code.
+ * The same block fills the 매일 and 분기 lanes' 행동 card (engine `_action_block`).
+ */
+function discoveryAction(): NowBlock {
+  return now('now', [
+    order('fx', 'krw-usd', 'filled', kst('2026-10-07', '09:10')),
+    order('buy', HD.name, 'filled', kst('2026-10-07', '09:05')),
+    order('buy', HANWHA_AERO.name, 'filled', kst('2026-10-07', '09:05')),
+    order('buy', BROADCOM.name, 'pending', kst('2026-10-07', '22:30')),
+  ]);
+}
+
 function discoveryDaily(): FlowDisplay {
   const nodes: Node[] = [
     {
@@ -390,6 +407,8 @@ function discoveryDaily(): FlowDisplay {
       now: now('now', [], { at: kst('2026-10-08', '08:30') }),
     },
     {
+      // 종가 dates with their source state, the newest filing's company and how many came in,
+      // the metric table's date and how many companies it has values for.
       id: 'data',
       type: 'data',
       col: 1,
@@ -399,23 +418,27 @@ function discoveryDaily(): FlowDisplay {
       now: now(
         'now-check',
         [
-          kv('시세', '한국 10/7 · 미국 10/6', '정상'),
-          kv('공시', 'HD현대일렉트릭 3Q', '새 1'),
-          kv('지표', '15종목 중 12 최신', '—'),
+          kv('krClose', '2026-10-07', 'fresh'),
+          kv('usClose', '2026-10-06', 'fresh'),
+          kv('filings', HD.name, 1),
+          kv('metricTable', '2026-10-06', 12),
         ],
         { at: kst('2026-10-07', '08:30') },
       ),
     },
     {
+      // Nothing hit: the held stock nearest its sell condition, and the count of hits.
       id: 'condition',
       type: 'condition',
       col: 2,
       row: 0,
       title: '팔·살 조건에 걸렸나요?',
       subtitle: '팔 조건 · 급락 · 관련 공시 · 살 값',
-      now: now('now-check', [inst(HD, { progress: 54, marginText: '여유 2.3%p' })], {
-        at: kst('2026-10-07', '08:30'),
-      }),
+      now: now(
+        'now-check',
+        [inst(HD, { progress: 54, margin: { unit: 'pp', value: 2.3 } }), kv('hits', 0)],
+        { at: kst('2026-10-07', '08:30') },
+      ),
     },
     {
       id: 'ai',
@@ -428,11 +451,9 @@ function discoveryDaily(): FlowDisplay {
         { key: 'ai', value: 'Sonnet · 두 번 묻기' },
         { key: 'output', value: '유지 · 약화 · 반증' },
       ],
-      now: now(
-        'now-last-judgment',
-        [inst(CELLTRION, { marginText: '급락 확인' }), kv('', "두 번 다 '유지' · 팔지 않음")],
-        { at: kst('2026-10-02', '08:34') },
-      ),
+      now: now('now-last-judgment', [inst(CELLTRION), kv('verdict', 'hold', 'shock')], {
+        at: kst('2026-10-02', '08:34'),
+      }),
     },
     {
       id: 'confirm',
@@ -441,7 +462,12 @@ function discoveryDaily(): FlowDisplay {
       row: 1,
       title: "둘 다 '반증'인가요?",
       subtitle: "사는 쪽은 한 번 '근거 있음'이면 삼",
-      now: now('now-month', [kv('', '판단 1 · 유지', '매도 0 · 매수 0')]),
+      now: now('now-month', [
+        kv('judgments', 1),
+        kv('sells', 0),
+        kv('buys', 0),
+        kv('votes', 'hold,hold'),
+      ]),
     },
     {
       id: 'result',
@@ -458,11 +484,7 @@ function discoveryDaily(): FlowDisplay {
       col: 1,
       row: 2,
       title: '매도 · 판 돈은 지수 ETF로',
-      now: now('now-month', [
-        { kind: 'order', side: 'sell', text: '매도 0건' },
-        { kind: 'order', side: 'fx', text: '환전 없음 · 같은 나라 ETF' },
-        { kind: 'order', side: 'buy', text: '매수 0건 · 후보 살 값' },
-      ]),
+      now: discoveryAction(),
     },
     {
       id: 'exception',
@@ -492,21 +514,16 @@ function discoveryDaily(): FlowDisplay {
 }
 
 function discoveryQuarterly(): FlowDisplay {
-  const noWait: FlowEdge & EdgeProposal = {
-    from: 'condition',
-    to: 'result',
-    style: 'taken',
-    labelKey: 'no-wait',
-  };
   const nodes: Node[] = [
     {
+      // 12/1 is 55 days after 10/7 (kv daysToNext; the card says '55일 뒤').
       id: 'start',
       type: 'start',
       col: 0,
       row: 0,
       title: '4·6·9·12월 1일',
       subtitle: '실적 공시가 다 나온 뒤',
-      now: now('now', [], { at: '2026-12-01' }),
+      now: now('now', [kv('daysToNext', 55)], { at: kst('2026-12-01', '08:30') }),
     },
     {
       id: 'data',
@@ -515,17 +532,10 @@ function discoveryQuarterly(): FlowDisplay {
       row: 0,
       title: '거시 · 흐름 · 실적 · 값',
       subtitle: '금리·환율·업종 흐름·후보 재무',
-      now: now(
-        'now',
-        [
-          kv('거시', '금리·환율·물가', '갱신'),
-          kv('흐름', '6~8개 · 확인·반증 조건', '갱신'),
-          kv('후보', '실적에 흐름이 보임', '40여'),
-        ],
-        { note: '기준 전날' },
-      ),
+      now: now('now', [kv('lastDiscovery', '2026-10-07')]),
     },
     {
+      // The picks this discovery added (3 shown, '외 12'), then the candidates and the tokens.
       id: 'ai',
       type: 'ai',
       col: 2,
@@ -539,7 +549,7 @@ function discoveryQuarterly(): FlowDisplay {
       ],
       now: now(
         'now-last-judgment',
-        [inst(HD), inst(HANWHA_AERO), inst(BROADCOM), kv('', '후보 6 · 약 72만 토큰')],
+        [inst(HD), inst(HANWHA_AERO), inst(BROADCOM), kv('candidates', 6), kv('tokens', 720_000)],
         { at: '2026-10-07' },
       ),
     },
@@ -548,39 +558,44 @@ function discoveryQuarterly(): FlowDisplay {
       type: 'stock',
       col: 0,
       row: 1,
-      title: '보유 15 · 후보 6',
+      title: '보유 · 후보',
       more: 12,
       now: now('now', [
-        inst(HD, { weight: 6.9, ret: 3.2 }),
-        inst(HANWHA_AERO, { weight: 6.6, ret: -1.1 }),
-        inst(BROADCOM, { weight: 6.8, ret: 2.4 }),
+        inst(HD, { weight: 6.9 }),
+        inst(HANWHA_AERO, { weight: 6.6 }),
+        inst(BROADCOM, { weight: 6.8 }),
+        kv('candidates', 6),
       ]),
     },
     {
+      // Same-amount weights: no per-instrument targets, the kv targetEach instead.
       id: 'weight',
       type: 'weight',
       col: 1,
       row: 1,
-      title: '같은 금액 · 종목당 6.7%',
+      title: '같은 금액',
       subtitle: '확신으로 나누지 않음',
       more: 12,
       now: now('now', [
         inst(HD, { weight: 6.9 }),
         inst(HANWHA_AERO, { weight: 6.6 }),
         inst(BROADCOM, { weight: 6.8 }),
-        kv('', '목표 6.7%씩 · 고를 때만 맞춤'),
+        kv('targetEach', 6.7),
       ]),
     },
     {
+      // The candidate nearest its buy price: 0 = price on the day it was picked, 100 = buy price.
       id: 'condition',
       type: 'condition',
       col: 2,
       row: 1,
       title: '살 값에 왔나요?',
       subtitle: '후보마다 살 조건 · 매일 확인',
-      now: now('now-check', [kv('', '한화오션 살 값까지', '4.1%')], {
-        at: kst('2026-10-07', '08:30'),
-      }),
+      now: now(
+        'now-check',
+        [inst(HANWHA_OCEAN, { progress: 72, margin: { unit: 'pct', value: 4.1 } })],
+        { at: kst('2026-10-07', '08:30') },
+      ),
     },
     {
       id: 'action',
@@ -588,24 +603,17 @@ function discoveryQuarterly(): FlowDisplay {
       col: 0,
       row: 2,
       title: '새 종목 매수',
-      now: now(
-        'now',
-        [
-          { kind: 'order', side: 'sell', text: '매도 없음' },
-          { kind: 'order', side: 'fx', text: '환전 1 · 원 → 달러' },
-          { kind: 'order', side: 'buy', text: '매수 9 · 같은 금액', status: 'filled' },
-        ],
-        { note: '10/7 발굴 뒤' },
-      ),
+      now: discoveryAction(),
     },
     {
+      // '대기 6' is the candidate count (kv candidates), not a status.
       id: 'result',
       type: 'result',
       col: 2,
       row: 2,
       title: '후보로 대기',
       subtitle: '살 값이 오면 매일 확인에서 삼',
-      now: now('now', [kv('', '대기 6')]),
+      now: now('now', [kv('candidates', 6)]),
     },
     {
       id: 'exception',
@@ -628,7 +636,7 @@ function discoveryQuarterly(): FlowDisplay {
       edge('stock', 'weight', 'taken'),
       edge('weight', 'condition', 'taken'),
       edge('condition', 'action', 'not-taken', 'yes'),
-      noWait,
+      edge('condition', 'result', 'taken', 'no-wait'),
       edge('action', 'result', 'not-taken'),
       edge('action', 'exception', 'exception'),
     ],
@@ -638,13 +646,14 @@ function discoveryQuarterly(): FlowDisplay {
 function discoveryEarnings(): FlowDisplay {
   const nodes: Node[] = [
     {
+      // The last earnings filing: its company and the day it came in.
       id: 'start',
       type: 'start',
       col: 0,
       row: 0,
       title: '실적 공시가 나오면',
       subtitle: 'DART · EDGAR · 매일 확인',
-      now: now('now', [kv('', 'HD현대일렉트릭')], { at: '2026-10-24' }),
+      now: now('now', [inst(CELLTRION)], { at: '2026-10-06' }),
     },
     {
       id: 'ai',
@@ -659,26 +668,24 @@ function discoveryEarnings(): FlowDisplay {
       ],
       now: now(
         'now-last',
-        [inst(CELLTRION, { marginText: '2Q · 6개' }), kv('', '틀린 값 0 · 회당 0.2센트')],
+        [inst(CELLTRION, { period: '2026Q2' }), kv('metrics', 6), kv('tokens', 8_400)],
         { at: '2026-10-06' },
       ),
     },
     {
+      // The newest rows of the metric table (company · period) and how many companies it covers.
       id: 'data',
       type: 'data',
       col: 2,
       row: 0,
       title: '지표 표',
       subtitle: '종목 · 지표 · 값 · 기간 · 출처',
-      now: now(
-        'now',
-        [
-          kv('HD', '수주잔고 · 2Q', '갱신'),
-          kv('셀', '영업이익 목표 · 3Q', '갱신'),
-          kv('AV', 'AI 매출 · FQ3', '대기'),
-        ],
-        { note: '15종목' },
-      ),
+      now: now('now', [
+        inst(CELLTRION, { period: '2026Q2' }),
+        inst(HD, { period: '2026Q2' }),
+        inst(BROADCOM, { period: '2026Q3' }),
+        kv('companies', 15),
+      ]),
     },
     {
       id: 'result',
@@ -687,7 +694,7 @@ function discoveryEarnings(): FlowDisplay {
       row: 1,
       title: '매일 확인에서 대조',
       subtitle: '팔 조건 · 계획 게이지에 반영',
-      now: now('now', [{ kind: 'status', status: 'hold', at: '2026-10-06' }]),
+      now: now('now', [{ kind: 'status', status: 'hold' }], { at: '2026-10-06' }),
     },
   ];
   return {
@@ -712,24 +719,17 @@ function discoveryMonthly(): FlowDisplay {
       row: 0,
       title: '매달 1일',
       subtitle: '전날 밤 · 보유 종목 전부',
-      now: now('now', [], { at: '2026-11-01' }),
+      now: now('now', [], { at: kst('2026-11-01', '08:30') }),
     },
     {
+      // The packet: the picks it covers and the filings of the last 30 days.
       id: 'data',
       type: 'data',
       col: 1,
       row: 0,
       title: '자료 꾸러미',
       subtitle: '가격 · 재무 · 지표 표 · 최근 공시',
-      now: now(
-        'now',
-        [
-          kv('가격', '지수 대비 · 고른 날부터', '15'),
-          kv('재무', '분기 실적 · 값', '15'),
-          kv('공시', '지난달 새 공시', '4'),
-        ],
-        { note: '종목당 약 6천 토큰' },
-      ),
+      now: now('now', [kv('picks', 15), kv('newFilings', 4)]),
     },
     {
       id: 'ai',
@@ -744,7 +744,7 @@ function discoveryMonthly(): FlowDisplay {
       ],
       now: now(
         'now-last-judgment',
-        [kv('', '유지 13 · 약화 2 · 반증 0'), kv('', '15종목 약 12만 토큰')],
+        [kv('hold', 13), kv('weaken', 2), kv('invalidated', 0), kv('tokens', 120_000)],
         { at: '2026-10-01' },
       ),
     },
@@ -755,7 +755,7 @@ function discoveryMonthly(): FlowDisplay {
       row: 1,
       title: '반증이면 매일 흐름의 두 번 확인으로',
       subtitle: '약화 두 달 연속도 같은 길',
-      now: now('now', [{ kind: 'status', status: 'hold', at: '2026-10-01' }]),
+      now: now('now', [{ kind: 'status', status: 'hold' }], { at: '2026-10-01' }),
     },
   ];
   return {
@@ -786,6 +786,7 @@ export function ruleDiscovery(lane: DiscoveryLane): RuleDetailResponse {
     share: { pct: 18.3, target: 20 },
     status: 'hold',
     example: true,
+    stale: [],
     display: DISCOVERY_LANES[lane](),
   };
 }

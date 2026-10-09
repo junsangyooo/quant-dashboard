@@ -182,7 +182,10 @@ describe('SCR-RULES · [예시] 종목 모멘텀 (1:61226 · 1:62197)', () => {
     expect(textOf(ai)).toContain('AI상위 3 고르고 비중');
     expect(textOf(ai)).toContain('출력3종목 · 비중');
     expect(textOf(ai)).toContain('· 마지막 판단 10/7 08:30');
-    expect(textOf(ai)).toContain('3종목 고름지난번과 같은 3종목');
+    // The contract carries no free sentences in '지금' boxes, so the drawn '지난번과 같은 3종목'
+    // is gone; the logos and '3종목 고름' stay.
+    expect(textOf(ai)).toContain('3종목 고름');
+    expect(textOf(ai)).not.toContain('지난번과 같은');
   });
 
   it('cards read like the drawing (지금 values)', async () => {
@@ -192,12 +195,14 @@ describe('SCR-RULES · [예시] 종목 모멘텀 (1:61226 · 1:62197)', () => {
     expect(card('후보군 8종목')).toContain('외 5');
     expect(card('후보군 8종목')).toContain('· 규칙 안 비중 · 손익');
     expect(card('후보군 8종목')).toContain('삼성전자42.0%+1.4%');
-    expect(card('30일 수익률')).toContain('· 8종목 중 상위 3');
+    // No head note ('8종목 중 상위 3' was free text): the ranks under 후보군 8종목 say it.
+    expect(card('30일 수익률')).toContain('1삼성전자+6.2%2NVDA+4.8%3BTC+0.9%');
     expect(card('42 · 40 · 18')).toContain('42.0 · 39.0 · 18.9목표 42 · 40 · 18');
     expect(card('2%p 넘게 벗어났나요?')).toContain('BTC +1.0%p리밸런싱까지 1.0%p');
     expect(card('리밸런싱 주문')).toContain('· 마지막 9/14~9/15');
-    expect(card('리밸런싱 주문')).toContain('매도 1 · 삼성전자9/14 체결');
-    expect(card('리밸런싱 주문')).toContain('매수 1 · BTC9/15 다시 · 체결');
+    // One row per order: the server sends the instrument's name, the screen adds the side.
+    expect(card('리밸런싱 주문')).toContain('매도 · 삼성전자9/14 체결');
+    expect(card('리밸런싱 주문')).toContain('매수 · BTC9/15 다시 · 체결');
     expect(card('다음 확인으로 미룸')).toContain('지금 해당 없음');
     expect(card('리밸런싱 상태')).toContain('목표 범위 안마지막 확인 10/7 08:30');
   });
@@ -253,6 +258,49 @@ describe('3년 발굴 lanes (탐색 17:5855 · 17:6432 · 17:7193 · 17:7808)', 
     expect(lane('실적 공시')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(lane('매달 1일'));
     expect(await findText('반증이면 매일 흐름의 두 번 확인으로')).toBeInTheDocument();
+  });
+
+  it('words the 지금 data of each lane (kv key codes, order rows, progress, periods)', async () => {
+    renderState(rulesDaily, '/rules/discovery_3y');
+    await screen.findByRole('heading', { level: 1, name: '3년 발굴' });
+    const card = (title: string) => textOf(screen.getByText(title).closest('article'));
+    expect(card('시세 · 새 공시 · 지표 표')).toContain('한국 종가10/7정상미국 종가10/6정상');
+    expect(card('시세 · 새 공시 · 지표 표')).toContain('공시HD현대일렉트릭새 1지표 표10/612종목');
+    expect(card('팔·살 조건에 걸렸나요?')).toContain('HD현대일렉트릭 54%여유 2.3%p');
+    expect(card('팔·살 조건에 걸렸나요?')).toContain('걸린 종목0');
+    expect(card('근거가 깨졌나요?')).toContain('셀트리온판정유지급락');
+    expect(card('근거가 깨졌나요?')).not.toContain('고름');
+    expect(card("둘 다 '반증'인가요?")).toContain("판단1매도0매수0두 번 확인두 번 다 '유지'");
+    expect(card('매도 · 판 돈은 지수 ETF로')).toContain('환전 · 원 → 달러10/7 체결');
+    expect(card('매도 · 판 돈은 지수 ETF로')).toContain('매수 · Broadcom22:30 대기');
+
+    const lane = (name: string) =>
+      within(screen.getByRole('group', { name: '흐름' })).getByRole('button', { name });
+    fireEvent.click(lane('4·6·9·12월 1일'));
+    await findText('흐름과 기업 고르기');
+    expect(
+      textOf(screen.getByText('4·6·9·12월 1일', { selector: 'p' }).closest('article')),
+    ).toContain('55일 뒤');
+    expect(card('거시 · 흐름 · 실적 · 값')).toContain('마지막 발굴10/7');
+    expect(card('흐름과 기업 고르기')).toContain('후보 대기6종목약 72만 토큰');
+    expect(card('같은 금액')).toContain('종목당 목표6.7%');
+    expect(card('살 값에 왔나요?')).toContain('한화오션 72%살 값까지 4.1%');
+    expect(card('살 값에 왔나요?')).toContain('살 값');
+    expect(card('후보로 대기')).toContain('후보 대기6종목');
+
+    fireEvent.click(lane('실적 공시'));
+    await findText('실적 지표 뽑기');
+    expect(card('실적 공시가 나오면')).toContain('마지막 공시 10/6');
+    expect(card('실적 공시가 나오면')).toContain('셀트리온');
+    expect(card('실적 지표 뽑기')).toContain('셀트리온 · 2Q뽑은 지표6약 8천 토큰');
+    expect(textOf(screen.getByText('지표 표', { selector: 'p' }).closest('article'))).toContain(
+      'Broadcom · 3Q지표 표15종목',
+    );
+
+    fireEvent.click(lane('매달 1일'));
+    await findText('반증이면 매일 흐름의 두 번 확인으로');
+    expect(card('자료 꾸러미')).toContain('보유15종목새 공시 · 30일4건');
+    expect(card('유지 · 약화 · 반증')).toContain('유지13약화2반증0약 12만 토큰');
   });
 
   it('no lane chips for a rule with one lane', async () => {

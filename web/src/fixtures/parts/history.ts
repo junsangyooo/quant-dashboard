@@ -2,7 +2,6 @@
 // Numbers are 값표 §1.4 (모의투자) and §2 (실전); where the table is silent the value is derived
 // from it and the assumption is written next to it.
 import type { CalendarState, HistoryEvent, HistoryResponse } from '../../api/types';
-import type { ProposedHistoryEvent } from '../../screens/History/proposed';
 import { paperDailySinceStart } from '../charts';
 import { INDEX_HALF, KOSPI200, MOMENTUM, START_CAPITAL, kst } from '../world';
 import { BASIS_1007 } from './common';
@@ -59,7 +58,7 @@ export const PAPER_CALENDAR = weekdayCalendar('2026-07-01', '2026-10-09', '2026-
 });
 
 /** 10/7 리밸런싱 중: 매도·환전 체결, 매수 22:30 대기 (값표 §1.4). Fees so far 27원. */
-export const EVENT_1007: ProposedHistoryEvent = {
+export const EVENT_1007: HistoryEvent = {
   date: '2026-10-07',
   kind: 'in-progress',
   rule: INDEX_HALF,
@@ -104,7 +103,7 @@ export const EVENT_0909: HistoryEvent = {
   dayTotal: 10_100_300,
 };
 
-export const EVENT_0821: ProposedHistoryEvent = {
+export const EVENT_0821: HistoryEvent = {
   date: '2026-08-21',
   kind: 'rebalance',
   rule: INDEX_HALF,
@@ -347,7 +346,7 @@ const LIVE_CALENDAR = weekdayCalendar('2026-09-01', '2026-10-09', '2026-10-07', 
  * then 10/7 27원. Month changes from the 실전 line: 9/30 10,060,000 → 9월 +60,000, 10월 +52,670.
  */
 export function historyLive(): HistoryResponse {
-  const live1007: ProposedHistoryEvent = {
+  const live1007: HistoryEvent = {
     ...EVENT_1007,
     fill: 'live',
     dayChange: 14_670,

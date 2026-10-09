@@ -61,12 +61,14 @@ export const accountCopy = {
       /** NEW — spec recovery: '브라우저 설정 허용 후 다시 켜기'. */
       denied: '브라우저 설정 → 알림 허용 → 다시 켜기',
     },
-    /** NEW — phase 1: push answers 501 not-implemented. */
+    /** NEW — notifications.available false (1·2단계), or push answers 501 not-implemented. */
     notReady: '알림은 준비 중이에요 · 다음 단계에서 켤 수 있어요',
-    /** NEW — turning this device off has no endpoint yet. */
+    /** NEW — DELETE /api/account/push answers 501 until web push (3단계). */
     offNotReady: '이 기기 알림 끄기는 준비 중이에요',
     /** NEW */
     subscribeFailed: '켜지 못했어요 · 다시 시도',
+    /** NEW — turning this device off failed. */
+    unsubscribeFailed: '끄지 못했어요 · 다시 시도',
     eventsTitle: (n: number) => `받을 사건 · 처음부터 ${String(n)}개 켜짐`,
     hideAmounts: '알림에 금액 숨기기',
     saved: (at: string) => `${at} 저장됨`,

@@ -20,6 +20,7 @@ import {
   type YAxis,
 } from '../../charts/geometry/lineChart';
 import {
+  formatDateTime,
   formatKrw,
   formatManAxis,
   formatMonthDay,
@@ -211,7 +212,6 @@ export function TwoLedgersCard({ data }: { data: TwoLedgers }) {
     { key: 'fees', label: t.twoLedgers.fees, value: b.fees, tone: 'cat-4' as const },
     { key: 'other', label: t.twoLedgers.other, value: b.other, tone: 'cat-5' as const },
   ];
-  const last = data.series.at(-1);
   const legend: { key: LineKey; text: string }[] = [
     { key: 'live', text: t.twoLedgers.live(signedPct(data.endRet.live)) },
     { key: 'paper', text: t.twoLedgers.paper(signedPct(data.endRet.paper)) },
@@ -307,7 +307,7 @@ export function TwoLedgersCard({ data }: { data: TwoLedgers }) {
       ) : null}
 
       <p className={clsx('t-label', styles.muted)}>
-        {t.twoLedgers.breakdown(formatMonthDay(data.since), last ? formatMonthDay(last.date) : '')}
+        {t.twoLedgers.breakdown(formatMonthDay(data.since), formatDateTime(b.valuedAt))}
       </p>
       <CompositionBar
         label={parts.map((p) => `${p.label} ${formatPp(p.value, 2)}`).join(' · ')}

@@ -5,43 +5,40 @@ import clsx from 'clsx';
 import { useState, type Ref } from 'react';
 import { Hourglass } from 'lucide-react';
 import { modeCopy as t } from '../../copy/mode';
-import { useHome, usePlan, useTurnLiveOff } from '../../api/queries';
-import type { Currency, Order } from '../../api/types';
+import { useTurnLiveOff } from '../../api/queries';
+import type { Currency, ModeResponse } from '../../api/types';
 import { Button } from '../../components/Buttons';
 import { InfoChip } from '../../components/Chips';
 import { ConfirmModal } from '../../components/ConfirmModal';
-import { Skeleton } from '../../components/State';
 import { cancelBody, cancelHead, cashStaysLine } from './text';
 import styles from './Mode.module.css';
 
-/** Orders the pipeline sent that have not filled: what turning live off cancels. */
-function pendingOrders(
-  stages: readonly { orders: readonly Order[] }[] | null | undefined,
-): Order[] {
-  return (stages ?? []).flatMap((s) => s.orders.filter((o) => o.status === 'pending'));
-}
+type OffPreview = ModeResponse['offPreview'];
 
-function OffDetails({ now, failed }: { now: string | null; failed: boolean }) {
-  const plan = usePlan({ ledger: 'live' });
-  const home = useHome({ ledger: 'live' });
-  const orders = pendingOrders(plan.data?.schedule.now?.stages);
+/**
+ * What turning live off does (CONTRACT ModeResponse.offPreview): the pending orders it cancels
+ * and, for the currency of each cancelled buy, the cash that stays ('달러 현금 $125.67은 계좌에
+ * 남아요' — the design shows that one line, not every cash balance the server lists).
+ */
+function OffDetails({
+  now,
+  failed,
+  offPreview,
+}: {
+  now: string | null;
+  failed: boolean;
+  offPreview: OffPreview;
+}) {
+  const orders = offPreview?.cancel ?? [];
   const currencies = new Set<Currency>(
     orders.filter((o) => o.side === 'buy').map((o) => o.instrument?.currency ?? 'KRW'),
   );
-  const cashRows = (home.data?.composition.groups ?? []).flatMap((g) =>
-    g.rows.filter((r) => r.kind === 'cash'),
-  );
-  const usd = cashRows
-    .filter((r) => r.cash?.currency === 'USD')
-    .reduce((s, r) => s + (r.usd ?? 0), 0);
-  const krw = cashRows.filter((r) => r.cash?.currency === 'KRW').reduce((s, r) => s + r.krw, 0);
+  const cash = (offPreview?.cash ?? []).filter((c) => currencies.has(c.currency));
 
   return (
     <div className={styles.modalBody}>
       <p className={clsx('t-label', styles.muted)}>{t.turnOff.cancelOrders}</p>
-      {plan.isPending ? (
-        <Skeleton text="body" width={220} />
-      ) : orders.length > 0 ? (
+      {orders.length > 0 ? (
         <ul className={styles.modalOrders}>
           {orders.map((o) => (
             <li key={o.id} className={styles.modalOrder}>
@@ -56,13 +53,11 @@ function OffDetails({ now, failed }: { now: string | null; failed: boolean }) {
       ) : (
         <p className={clsx('t-body', styles.muted)}>{t.turnOff.noOrders}</p>
       )}
-      {home.isPending && currencies.size > 0 ? <Skeleton text="caption" width={200} /> : null}
-      {home.data && currencies.has('USD') && usd > 0 ? (
-        <p className={clsx('t-caption', styles.muted)}>{cashStaysLine('USD', usd)}</p>
-      ) : null}
-      {home.data && currencies.has('KRW') && krw > 0 ? (
-        <p className={clsx('t-caption', styles.muted)}>{cashStaysLine('KRW', krw)}</p>
-      ) : null}
+      {cash.map((c) => (
+        <p key={c.currency} className={clsx('t-caption', styles.muted)}>
+          {c.currency === 'USD' ? cashStaysLine('USD', c.usd) : cashStaysLine('KRW', c.krw)}
+        </p>
+      ))}
       <div className={styles.chips}>
         <InfoChip>{t.turnOff.holdingsStay}</InfoChip>
         <InfoChip>{t.turnOff.paperContinues}</InfoChip>
@@ -78,9 +73,11 @@ function OffDetails({ now, failed }: { now: string | null; failed: boolean }) {
 
 export function TurnOffSection({
   now,
+  offPreview,
   ref,
 }: {
   now: string | null;
+  offPreview: OffPreview;
   ref?: Ref<HTMLDivElement> | undefined;
 }) {
   const [open, setOpen] = useState(false);
@@ -117,7 +114,7 @@ export function TurnOffSection({
           });
         }}
       >
-        <OffDetails now={now} failed={turnOff.isError} />
+        <OffDetails now={now} failed={turnOff.isError} offPreview={offPreview} />
       </ConfirmModal>
     </div>
   );

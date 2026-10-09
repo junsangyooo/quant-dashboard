@@ -47,6 +47,7 @@ const health: HealthResponse = {
   sources: [blank('kr-quotes'), blank('us-quotes'), blank('fx')],
   recent14: weekdays.map((date) => ({ date, state: 'before-record' })),
   lastRun: null,
+  devices: [],
 };
 
 const bundle = {

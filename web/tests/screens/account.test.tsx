@@ -196,6 +196,48 @@ describe('설정 (SCR-ACCOUNT)', () => {
     expect(within(notifications()).queryByText(N.subscribeFailed)).toBeNull();
   });
 
+  it('turns this device off with DELETE /api/account/push; 501 reads 끄기 준비 중', async () => {
+    const notImplemented = {
+      $status: 501,
+      $body: { error: 'not-implemented', detail: { feature: 'push' } },
+    } as const;
+    const bundle: FixtureBundle = {
+      ...accountDefault,
+      responses: { ...accountDefault.responses, 'DELETE /api/account/push': notImplemented },
+    };
+    const { calls } = await open(bundle);
+    await userEvent.click(within(notifications()).getByRole('switch', { name: N.thisDevice }));
+    expect(await within(notifications()).findByText(N.offNotReady)).toBeInTheDocument();
+    expect(writes(calls)).toEqual([
+      { method: 'DELETE', path: '/api/account/push', body: undefined },
+    ]);
+  });
+
+  it('reads 준비 중 and keeps the switch shut while the server has no web push (available false)', async () => {
+    stubPushBrowser();
+    const base = account();
+    const phase2: FixtureBundle = {
+      ...accountEmpty,
+      responses: {
+        ...accountEmpty.responses,
+        '/api/account': {
+          ...base,
+          notifications: {
+            ...base.notifications,
+            available: false,
+            thisDevice: { supported: true, subscribed: false },
+            devices: [],
+            testResults: null,
+          },
+        },
+      },
+    };
+    await open(phase2);
+    expect(within(notifications()).getByText(N.notReady)).toBeInTheDocument();
+    expect(within(notifications()).getByRole('switch', { name: N.thisDevice })).toBeDisabled();
+    expect(within(notifications()).queryByText(N.start)).toBeNull();
+  });
+
   it('says the device cannot receive when the permission is denied', async () => {
     stubPushBrowser('denied');
     const { calls } = await open(accountEmpty);

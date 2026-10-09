@@ -153,7 +153,7 @@ export function HealthScreen() {
             ))}
           </section>
         ) : null}
-        <SourcesCard sources={h.sources} now={now} />
+        <SourcesCard sources={h.sources} devices={h.devices} now={now} />
         <RecentCard days={h.recent14} lastRun={h.lastRun} />
       </>
     );

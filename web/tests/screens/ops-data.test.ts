@@ -10,12 +10,12 @@ import type {
 import { bundleIds, loadBundle } from '../../src/fixtures/registry';
 import { fixtureFetch } from '../../src/fixtures/runtime';
 import {
+  LIVE_OFF_PREVIEW,
   PERFORMANCE,
   PERFORMANCE_SHORT,
   PREVIEW_OK,
   TWO_LEDGERS,
-  liveHome,
-  livePlan,
+  modeLive,
   modePaper,
   shell,
 } from '../../src/fixtures/ops';
@@ -149,19 +149,17 @@ describe('예시-값표 numbers in the bundles', () => {
     expect(TWO_LEDGERS.series).toHaveLength(27); // 실전 9/1~10/7 = 27일째
   });
 
-  it('adds the live ledger up to 10,112,670원 with 달러 현금 $125.67 and the pending buy', () => {
-    const home = liveHome();
-    const rows = home.composition.groups.flatMap((g) => g.rows);
-    expect(rows.reduce((s, r) => s + r.krw, 0)).toBe(home.total);
-    expect(home.total).toBe(10_112_670);
-    for (const g of home.composition.groups) {
-      expect(Math.round(g.rows.reduce((s, r) => s + r.pct, 0) * 10) / 10).toBe(g.pct);
-    }
-    expect(rows.find((r) => r.cash?.currency === 'USD')?.usd).toBe(125.67);
-    const pending = livePlan()
-      .schedule.now?.stages.flatMap((s) => s.orders)
-      .filter((o) => o.status === 'pending');
-    expect(pending).toEqual([expect.objectContaining({ qty: 2, amountUsd: 124.8 })]);
+  // The off modal used to read the live ledger's /api/home and /api/plan; the contract now sends
+  // what turning off does in /api/mode offPreview, so the check moved there (same §2.2 numbers).
+  it('turning live off cancels the pending buy and leaves 달러 현금 $125.67 (offPreview)', () => {
+    expect(modeLive().offPreview).toBe(LIVE_OFF_PREVIEW);
+    expect(modePaper().offPreview).toBeNull();
+    expect(LIVE_OFF_PREVIEW.cancel).toEqual([
+      expect.objectContaining({ status: 'pending', qty: 2, amountUsd: 124.8 }),
+    ]);
+    const usd = LIVE_OFF_PREVIEW.cash.find((c) => c.currency === 'USD');
+    expect(usd).toEqual({ currency: 'USD', usd: 125.67, krw: 173_726 });
+    expect(LIVE_OFF_PREVIEW.cash.find((c) => c.currency === 'KRW')?.krw).toBe(85_964);
   });
 
   it.each(bundleIds().filter((id) => MINE.test(id)))(

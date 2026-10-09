@@ -13,6 +13,7 @@ const fx: Order = {
   id: 'paper-20260701-fx-1',
   market: 'KR', // 환전 is booked on the KRW account (contract Order.market)
   side: 'fx',
+  direction: 'krw-usd',
   fx: { krw: 4_967_000, usd: 3_568.24, rate: 1392.0 },
   at: kst('2026-07-01', '09:10'),
   status: 'filled',
@@ -94,7 +95,7 @@ const bundle = {
             baselineRet: 0.05,
           },
         ],
-        events: [{ date: '2026-07-01', kind: 'start' }],
+        events: [{ date: '2026-07-01', kind: 'start', kinds: ['start'] }],
         empty: 'first-day',
       },
       planCard: {
@@ -141,7 +142,7 @@ const bundle = {
               },
               {
                 kind: 'cash',
-                cash: { currency: 'USD' },
+                cash: { currency: 'USD', country: 'US' },
                 pct: 49.6,
                 krw: 4_965_206,
                 usd: 3_568.24,
@@ -157,7 +158,7 @@ const bundle = {
             rows: [
               {
                 kind: 'cash',
-                cash: { currency: 'KRW' },
+                cash: { currency: 'KRW', country: 'KR' },
                 pct: 0.4,
                 krw: 40_252,
                 chip: { kind: 'sub-share' },

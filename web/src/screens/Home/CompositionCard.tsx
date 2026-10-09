@@ -148,10 +148,17 @@ export function viewGroups(c: Composition, by: GroupKey, tones: ReadonlyMap<stri
     const k = keyOf(r.instrument);
     place(r, k.key, k.name);
   }
-  if (by === 'currency') {
+  // Cash joins its currency, and its country (CONTRACT CompRow.cash.country: 원화 현금 한국,
+  // 달러 현금 미국); by kind it keeps its own '현금' group.
+  if (by === 'currency' || by === 'country') {
     for (const r of cashRows) {
-      const cur = r.cash?.currency ?? 'KRW';
-      place(r, cur, homeCopy.composition.currencies[cur]);
+      if (by === 'currency') {
+        const cur = r.cash?.currency ?? 'KRW';
+        place(r, cur, homeCopy.composition.currencies[cur]);
+      } else {
+        const country = r.cash?.country === 'US' ? 'us' : 'kr';
+        place(r, country, copy.country[country]);
+      }
     }
   }
   // Map keeps insertion order: groups appear in the order of their first row.
@@ -159,7 +166,7 @@ export function viewGroups(c: Composition, by: GroupKey, tones: ReadonlyMap<stri
     ...g,
     dot: `cat-${String((i % 5) + 1)}` as SegmentTone,
   }));
-  return by === 'currency' || cashRows.length === 0 ? groups : [...groups, cashGroup()];
+  return by !== 'kind' || cashRows.length === 0 ? groups : [...groups, cashGroup()];
 }
 
 /** Bar segments: groups, with waiting-to-withdraw cash hatched at the end. */

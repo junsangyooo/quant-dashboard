@@ -1,5 +1,5 @@
-// SCR-ACCOUNT · 1단계 (CONTRACT.md: 푸시 501, /api/account 의 thisDevice는 supported:false ·
-// 'unsupported', devices []): a browser that can push reads this as '알림은 준비 중이에요'.
+// SCR-ACCOUNT · 1·2단계 (CONTRACT.md: notifications.available false, 푸시 501, thisDevice
+// supported:false · 'unsupported', devices []): every device reads '알림은 준비 중이에요'.
 import type { AccountResponse } from '../../api/types';
 import type { FixtureBundle } from '../types';
 import { kst } from '../world';
@@ -8,6 +8,7 @@ import { NOW, events, shell } from '../ops';
 const phase1: AccountResponse = {
   thisDevice: { name: 'Mac · Chrome', kind: 'mac', enteredAt: kst('2026-10-07', '16:02') },
   notifications: {
+    available: false,
     thisDevice: { supported: false, reason: 'unsupported', subscribed: false },
     events: events(),
     hideAmounts: false,

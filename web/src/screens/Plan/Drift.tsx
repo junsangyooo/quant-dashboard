@@ -21,10 +21,11 @@ import { copy } from '../../copy';
 import { planCopy } from '../../copy/plan';
 import { eventLabel } from '../../lib/labels';
 import { formatMonthDay, formatPpMagnitude } from '../../lib/format';
-import type { ProposedPoint } from './proposed';
 import { ruleName } from './words';
 
 type Drift = PlanResponse['drift'];
+/** One point of a line chart (drift lines, 지수 대비); null breaks the line. */
+type DriftPoint = Drift['lines'][number]['points'][number];
 
 const dayHref = (date: string) => `/day/${date}`;
 
@@ -38,12 +39,13 @@ export function driftSeries(drift: Drift, rules: readonly RuleRef[], only?: stri
     });
 }
 
-/** Markers of one rule, or of every rule with duplicates (⏻ on both rules) merged. */
+/** Markers of one rule (plus the ledger's own), or of every rule with duplicates merged. */
 export function driftEvents(drift: Drift, only?: string): ChartEvent[] {
   const seen = new Set<string>();
   const out: ChartEvent[] = [];
   for (const e of drift.events) {
-    if (only !== undefined && e.ruleId !== only) continue;
+    // A ledger-wide event (시작 · 실전 켬·끔: ruleId null) belongs on every rule's chart.
+    if (only !== undefined && e.ruleId !== null && e.ruleId !== only) continue;
     const kind = markerKind(e.kind);
     const key = `${e.date}-${e.kind}`;
     if (kind === null || seen.has(key)) continue;
@@ -76,7 +78,7 @@ function DriftTable({
 }: {
   caption: string;
   columns: readonly string[];
-  lines: readonly (readonly ProposedPoint[])[];
+  lines: readonly (readonly DriftPoint[])[];
 }) {
   const dates = [...new Set(lines.flatMap((l) => l.map((p) => p.date)))].sort();
   return (
@@ -144,7 +146,7 @@ export function VsIndexChart({
   label,
 }: {
   since: string;
-  points: readonly ProposedPoint[];
+  points: readonly DriftPoint[];
   label: string;
 }) {
   const [ref, width] = useElementWidth(384);

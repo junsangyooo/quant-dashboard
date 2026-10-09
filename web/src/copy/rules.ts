@@ -82,6 +82,8 @@ export const rulesCopy = {
     range: (from: string, to: string) => `${from}~${to}`,
     weightsPnl: '규칙 안 비중 · 손익',
     next: (at: string) => `다음 ${at}`,
+    /** NEW — the 실적 공시 lane's start card: the last earnings filing came in that day. */
+    lastFiling: (at: string) => `마지막 공시 ${at}`,
     inHours: (n: number) => `${String(n)}시간 뒤`,
     inDays: (n: number) => `${String(n)}일 뒤`,
     more: (n: number) => `외 ${String(n)}`,
@@ -95,8 +97,60 @@ export const rulesCopy = {
     none: '—',
     lastCheck: (at: string) => `마지막 확인 ${at}`,
     exceptionsNone: '지금 해당 없음',
-    progress: { from: '고른 날', zone: '확인 구간 80%~', to: '팔 조건' },
+    progress: {
+      from: '고른 날',
+      zone: '확인 구간 80%~',
+      to: '팔 조건',
+      /** NEW — a candidate's bar ends at its buy price (CONTRACT instrument row progress). */
+      toBuy: '살 값',
+    },
+    /** NEW — what is left on a progress row: to the sell condition, or above the buy price. */
+    sellMargin: (text: string) => `여유 ${text}`,
+    buyMargin: (text: string) => `살 값까지 ${text}`,
     targets: (parts: string) => `목표 ${parts}`,
+    /** NEW — an instrument with its earnings period ('셀트리온 · 2Q'; CONTRACT row period). */
+    period: (name: string, period: string) => `${name} · ${period}`,
+    quarter: (q: string) => `${q}Q`,
+    /** NEW — one order of the plan: '매도 · 삼성전자', '환전 · 원 → 달러' (text = name or code). */
+    order: (side: string, what: string) => `${side} · ${what}`,
+    fxDirection: { 'krw-usd': '원 → 달러', 'usd-krw': '달러 → 원' },
+    /**
+     * NEW — kv rows of the AI rule's '지금' boxes (CONTRACT NowBlock kv keys): the server sends
+     * dates, counts, names and codes ('-' = none); these are the words around them.
+     */
+    kv: {
+      krClose: '한국 종가',
+      usClose: '미국 종가',
+      filings: '공시',
+      metricTable: '지표 표',
+      hits: '걸린 종목',
+      verdict: '판정',
+      judgments: '판단',
+      sells: '매도',
+      buys: '매수',
+      votes: '두 번 확인',
+      metrics: '뽑은 지표',
+      companies: '지표 표',
+      picks: '보유',
+      newFilings: '새 공시 · 30일',
+      hold: '유지',
+      weaken: '약화',
+      invalidated: '반증',
+      lastDiscovery: '마지막 발굴',
+      candidates: '후보 대기',
+      targetEach: '종목당 목표',
+      /** Source state of a close date ('fresh' …), as on 작동. */
+      state: {
+        fresh: '정상',
+        late: '늦음',
+        stale: '낡음',
+        maintenance: '점검 중',
+        unknown: '확인 불가',
+      },
+      newCount: (n: number) => `새 ${String(n)}`,
+      stocks: (n: number) => `${String(n)}종목`,
+      cases: (n: number) => `${String(n)}건`,
+    },
   },
 
   /** 예외 칩 설명 (기획 §5 SCR-RULES 행동: '휴장 → 다음 개장일 확인'). */

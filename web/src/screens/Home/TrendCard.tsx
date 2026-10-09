@@ -37,13 +37,17 @@ import styles from './Home.module.css';
 
 type Mode = 'amount' | 'rate';
 
-/** Trend events as band markers; a day with `count` events becomes a grouped '[n]' marker. */
+/**
+ * Trend events as band markers. A day's `kinds` lists every event of that day (CONTRACT Trend):
+ * two or more become a grouped '[n]' marker whose list names each one.
+ */
 export function trendEvents(events: HomeResponse['trend']['events']): ChartEvent[] {
   return events.flatMap((e) => {
-    const kind = markerKind(e.kind);
-    if (kind === null) return [];
-    const one: ChartEvent = { date: e.date, kind, label: eventLabel(e.date, kind) };
-    return Array.from({ length: Math.max(1, e.count ?? 1) }, () => one);
+    const kinds = e.kinds.length > 0 ? e.kinds : [e.kind];
+    return kinds.flatMap((k) => {
+      const kind = markerKind(k);
+      return kind === null ? [] : [{ date: e.date, kind, label: eventLabel(e.date, kind) }];
+    });
   });
 }
 

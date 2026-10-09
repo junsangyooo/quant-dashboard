@@ -3,6 +3,7 @@
 // - drift: −2 · 0 · +2, needle = the most deviated instrument (charts/Gauge).
 // - sell-condition (AI rule, Figma 탐색 17:7108): 0 고른 날 → 100 팔 조건, 80~100 확인 구간.
 import clsx from 'clsx';
+import { marginText, metricName } from '../../api/adapters';
 import { Gauge } from '../../charts/Gauge';
 import { GAUGE, annularSector, insetSector, polar } from '../../charts/geometry/gauge';
 import chartStyles from '../../charts/charts.module.css';
@@ -98,7 +99,7 @@ export function GaugeBlock({ gauge, logoTone, emptyCaption, className }: GaugeBl
     summary = `${gauge.needle.instrument.name} ${figure} · ${caption}`;
   } else if (gauge.kind === 'sell-condition' && gauge.needle) {
     figure = `${formatNumber(gauge.needle.progress)}%`;
-    caption = g.toSell(gauge.needle.metric, gauge.needle.marginText);
+    caption = g.toSell(metricName(gauge.needle.metric), marginText(gauge.needle.margin));
     summary = `${gauge.needle.instrument.name} ${figure} · ${caption}`;
   } else if (caption !== null) {
     summary = `${planCopy.row.dash} · ${caption}`;

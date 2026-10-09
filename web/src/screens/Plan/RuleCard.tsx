@@ -3,7 +3,7 @@
 // line. At 1440 the card carries its own drift chart (or, for an AI rule, '지수 대비').
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
-import { ruleStatusChip } from '../../api/adapters';
+import { marginText, metricName, ruleStatusChip } from '../../api/adapters';
 import type { PlanResponse, RuleCard as RuleCardData } from '../../api/types';
 import type { ChartEvent } from '../../charts/geometry/lineChart';
 import { InitialLogo, type LogoTone } from '../../components/Badges';
@@ -12,7 +12,6 @@ import { planCopy } from '../../copy/plan';
 import { formatMonthDay, formatNumber, formatPercent } from '../../lib/format';
 import { DriftPlot, VsIndexChart, driftHeading } from './Drift';
 import { GaugeBlock } from './GaugeBlock';
-import { metricTableAtOf, vsIndexOf } from './proposed';
 import {
   basisLineText,
   nextActionText,
@@ -39,7 +38,7 @@ export function RuleCard({ card, plan, now, tones, wide, onShowNow, onGroup }: R
   const chip = ruleStatusChip(card.status, card.rule.ai);
   const share = shareParts(card.share);
   const next = nextActionText(card.next, { now, withNextCheck: card.next.kind === 'holiday' });
-  const vsIndex = vsIndexOf(card);
+  const vsIndex = card.vsIndex ?? null;
   const name = ruleName(card.rule);
   const quoteWait = card.status === 'quote-wait';
   const emptyCaption = card.next.kind === 'quote-wait' ? quoteWaitBasis(card.next) : null;
@@ -126,9 +125,9 @@ export function RuleCard({ card, plan, now, tones, wide, onShowNow, onGroup }: R
             if (sell) {
               first = planCopy.row.progress(
                 `${formatNumber(row.progress ?? 0)}%`,
-                row.metric ?? '',
+                row.metric ? metricName(row.metric) : '',
               );
-              second = row.marginText !== undefined ? planCopy.row.margin(row.marginText) : null;
+              second = row.margin ? planCopy.row.margin(marginText(row.margin)) : null;
             } else {
               first = planCopy.row.weight(
                 row.weight === null ? planCopy.row.dash : formatPercent(row.weight),
@@ -158,9 +157,7 @@ export function RuleCard({ card, plan, now, tones, wide, onShowNow, onGroup }: R
           })}
         </ul>
 
-        <p className={clsx('t-caption', styles.muted)}>
-          {basisLineText(card, metricTableAtOf(card))}
-        </p>
+        <p className={clsx('t-caption', styles.muted)}>{basisLineText(card)}</p>
       </div>
       {chart}
     </article>

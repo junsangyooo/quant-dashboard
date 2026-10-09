@@ -10,6 +10,7 @@ import { rulesCopy as rc } from '../../copy/rules';
 import { useMinWidth } from '../History/useMinWidth';
 import { FlowCard } from './FlowCards';
 import {
+  edgeLabelOf,
   routeGrid,
   routeStack,
   stackGaps,
@@ -17,7 +18,6 @@ import {
   type Box,
   type RoutedEdge,
 } from './flowLayout';
-import { edgeLabelOf } from './proposed';
 import styles from './Rules.module.css';
 
 const LINE_CLASS: Record<RoutedEdge['style'], string | undefined> = {
@@ -214,6 +214,7 @@ export function FlowCanvas({ display, name, colorIndex, ai, nowIso, stale }: Flo
             >
               <FlowCard
                 node={node}
+                lane={display.lane}
                 colorIndex={colorIndex}
                 ai={ai}
                 nowIso={nowIso}
