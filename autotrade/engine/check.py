@@ -31,6 +31,7 @@ from autotrade.domain.ledger import CashFlowKind, apply_cash_flow
 from autotrade.domain.planner import Plan, PlanInput, PlanItem, StageKind, plan_rule
 from autotrade.domain.stages import StageMarket, schedule, stage_specs
 from autotrade.domain.weights import DriftReport
+from autotrade.engine import sleeves
 from autotrade.engine.bootstrap import start_amount_key, start_date_key
 from autotrade.engine.common import (
     buy_wait_krw,
@@ -100,7 +101,7 @@ def ensure_started(conn: sqlite3.Connection, ledger_id: str, d: date, at: dateti
     amount = Decimal(amount_text)
     state = apply_cash_flow(repo.load_state(conn, ledger_id), CashFlowKind.START, amount)
     repo.save_state(conn, ledger_id, state, at)
-    repo.insert_event(
+    event_id = repo.insert_event(
         conn,
         ledger_id=ledger_id,
         kind="start",
@@ -110,6 +111,16 @@ def ensure_started(conn: sqlite3.Connection, ledger_id: str, d: date, at: dateti
         currency=Currency.KRW,
         payload={"amount": amount},
     )
+    # The start amount is shared by the rules' target shares (PHASE2.md §1).
+    parts = sleeves.split_inflow(
+        conn, ledger_id, CashFlowKind.START, amount, Currency.KRW, None, event_id, at
+    )
+    if parts:
+        event = repo.start_event(conn, ledger_id)
+        if event is not None:
+            payload = dict(event.payload)
+            payload["sleeves"] = parts
+            repo.update_event(conn, event_id, at, payload=payload)
     repo.mark_ledger_started(conn, ledger_id, d, amount, at)
     return True
 
@@ -210,6 +221,46 @@ def _persist_plan(
         weights_after_est=plan.weights_after,
         created_at=at,
     )
+    insert_stages_and_orders(conn, cfg, ledger_id, rule.rule_id, plan, plan_id, d, at)
+    payload = {
+        "reason": reason,
+        "max_instrument": plan.report.max_instrument,
+        "max_drift": plan.report.max_drift,
+        "threshold": plan.report.threshold,
+        "over_by": plan.report.over_by,
+        "weights_before": plan.report.weights,
+        "weights_after_est": plan.weights_after,
+        "basis": basis,
+    }
+    if is_first and start is not None:
+        repo.update_event(conn, start.event_id, at, status="in-progress", plan_id=plan_id)
+    else:
+        repo.insert_event(
+            conn,
+            ledger_id=ledger_id,
+            kind="rebalance",
+            event_date=d,
+            occurred_at=at,
+            rule_id=rule.rule_id,
+            plan_id=plan_id,
+            status="in-progress",
+            payload=payload,
+        )
+    return plan_id
+
+
+def insert_stages_and_orders(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    ledger_id: str,
+    rule_id: str,
+    plan: Plan,
+    plan_id: int,
+    d: date,
+    at: datetime,
+) -> None:
+    """A plan's stages (sell -> FX -> buy, with their times) and its orders, one
+    idempotency key each."""
     specs = stage_specs(plan)
     due = schedule(specs, at, slotter_for(cfg))
     stage_ids: dict[tuple[StageKind, StageMarket], int] = {}
@@ -231,7 +282,7 @@ def _persist_plan(
                 idem_key=idem_key(
                     ledger_id,
                     d,
-                    rule.rule_id,
+                    rule_id,
                     order.stage.value,
                     market.value,
                     order.instrument.instrument_id,
@@ -260,7 +311,7 @@ def _persist_plan(
         repo.insert_order(
             conn,
             repo.NewOrder(
-                idem_key=idem_key(ledger_id, d, rule.rule_id, "fx", "FX", fx.direction.value, 1),
+                idem_key=idem_key(ledger_id, d, rule_id, "fx", "FX", fx.direction.value, 1),
                 ledger_id=ledger_id,
                 plan_id=plan_id,
                 stage_id=stage_ids[(StageKind.FX, StageMarket.FX)],
@@ -279,31 +330,6 @@ def _persist_plan(
             ),
             at,
         )
-    payload = {
-        "reason": reason,
-        "max_instrument": plan.report.max_instrument,
-        "max_drift": plan.report.max_drift,
-        "threshold": plan.report.threshold,
-        "over_by": plan.report.over_by,
-        "weights_before": plan.report.weights,
-        "weights_after_est": plan.weights_after,
-        "basis": basis,
-    }
-    if is_first and start is not None:
-        repo.update_event(conn, start.event_id, at, status="in-progress", plan_id=plan_id)
-    else:
-        repo.insert_event(
-            conn,
-            ledger_id=ledger_id,
-            kind="rebalance",
-            event_date=d,
-            occurred_at=at,
-            rule_id=rule.rule_id,
-            plan_id=plan_id,
-            status="in-progress",
-            payload=payload,
-        )
-    return plan_id
 
 
 def _has_any_plan(conn: sqlite3.Connection, ledger_id: str) -> bool:
@@ -368,7 +394,7 @@ def _check_body(
     # 2-4. Weights on what the rule holds, cash waiting to buy included.
     repo.expire_withdraw_waits(conn, ledger_id, d)
     waits = repo.withdraw_waits(conn, ledger_id)
-    state = repo.load_state(conn, ledger_id)
+    state = sleeves.base_view(conn, ledger_id)  # what '지수 반반' holds of the shared ledger
     parts = refresh_cash_parts(conn, ledger_id, at)
     waiting = buy_wait_krw(parts, quote.rate)
     held = withdraw_wait_amounts(parts)

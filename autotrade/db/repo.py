@@ -828,6 +828,20 @@ def fills_of_ledger(conn: sqlite3.Connection, ledger_id: str) -> list[FillRow]:
     ]
 
 
+def fills_of_rule(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> list[FillRow]:
+    """Fills of the orders of one rule's plans, in time order."""
+    return [
+        FillRow.from_row(r)
+        for r in _all(
+            conn,
+            "SELECT f.* FROM fills f JOIN orders o ON o.order_id = f.order_id"
+            " JOIN plans p ON p.plan_id = o.plan_id"
+            " WHERE f.ledger_id = ? AND p.rule_id = ? ORDER BY f.filled_at, f.fill_id",
+            (ledger_id, rule_id),
+        )
+    ]
+
+
 def fills_of_plan(conn: sqlite3.Connection, plan_id: int) -> list[FillRow]:
     return [
         FillRow.from_row(r)

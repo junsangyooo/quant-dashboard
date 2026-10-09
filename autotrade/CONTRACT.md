@@ -29,7 +29,7 @@ interface Instrument {
   kind: 'etf' | 'stock' | 'coin'
   market: Market
   currency: Currency
-  initials: string      // 로고 자리 이니셜(Figma 기준): 지수 ETF는 지정값(069500 'K2', SPYM 'SP'), 한글 이름은 첫 글자('삼'), 코인은 티커 첫 글자('B'), 그 밖은 티커 앞 두 글자('NV'). 현금 행은 화면이 ₩·$를 그린다
+  initials: string      // 로고 자리 이니셜(Figma 기준): 지수 ETF는 지정값(069500 'K2', SPYM 'SP'), 한글 이름은 첫 글자('삼'), 로마자로 시작하는 한국 종목 이름은 앞 로마자 두 글자까지('HD'·'SK'), 코인은 티커 첫 글자('B'), 그 밖은 티커 앞 두 글자('NV'). 현금 행은 화면이 ₩·$를 그린다
   outsideToss?: boolean // 토스 밖 계좌(코인)
 }
 
@@ -164,7 +164,7 @@ interface PlanCard {
   gauge: Gauge
   stages: Stage[] | null             // 진행 중일 때만
   nextCheckAt: string
-  others: { count: number; status: RuleStatus } | null   // '외 n개 규칙 · [상태]'
+  others: { count: number; status: RuleStatus } | null   // '외 n개 규칙 · [상태]'. 2단계: 3년 발굴의 몫이 0보다 크면 { count: 1, status: AI 규칙 상태 }
 }
 
 type Gauge =
@@ -252,7 +252,10 @@ interface RuleCard {
     fxRate: number | null; fxAt: string | null
     withdrawExcluded: boolean        // '출금 대기 현금 제외'
     staleMarket: Market | null; staleBasisDate: string | null   // '미국 시세 10/02 기준이라 계산 안 함'
+    metricTableAt?: string | null    // AI 규칙: '지표 표 10/8'(마지막 실적 지표 뽑기 시각)
   }
+  vsIndex?: { since: string; points: Array<{ date: string; value: number | null }> } | null
+  // AI 규칙: '지수 대비 · [since]부터'(pp1). 종목마다 고른 날부터 같은 시장 지수 대비 초과 수익의 평균(채점과 같은 계산, 판 종목은 판 날에 고정)
 }
 type ScheduleItem =
   | { kind: 'next-check'; at: string }
@@ -262,8 +265,8 @@ type ScheduleItem =
   | { kind: 'withdraw-wait'; krw: number; until: string }
   | { kind: 'new-cash'; krw: number }
   | { kind: 'first-check'; at: string }
-  | { kind: 'monthly-review'; at: string }      // AI 규칙
-  | { kind: 'discovery'; at: string }           // AI 규칙
+  | { kind: 'monthly-review'; at: string; ruleId: string }      // AI 규칙: 매달 1일 점검이 도는 시각(전날 22:00)
+  | { kind: 'discovery'; at: string; ruleId: string }           // AI 규칙: 4·6·9·12월 1일 발굴(전날 22:00)
   | { kind: 'earnings'; date: string; instrument: Instrument }   // AI 규칙
 ```
 
@@ -284,8 +287,8 @@ interface HistoryResponse {
   calendar: Array<{ date: string; state: CalendarState }>   // 평일만
   filters: {
     total: number
-    rules: Array<{ rule: RuleRef; count: number }>   // 규칙의 리밸런싱 + 그 규칙 종목의 배당
-    kinds: Array<{ kind: 'rebalance' | 'deposit' | 'withdrawal' | 'dividend' | 'failed' | 'ai'; count: number }>
+    rules: Array<{ rule: RuleRef; count: number }>   // 규칙의 리밸런싱 + 그 규칙 종목의 배당. AI 규칙은 그 규칙의 계획 + AI 판단 사건
+    kinds: Array<{ kind: 'rebalance' | 'deposit' | 'withdrawal' | 'dividend' | 'failed' | 'ai'; count: number }>   // 'ai'는 AI 규칙이 있을 때만
   }
   months: Array<{ month: string; change: number; events: HistoryEvent[] }>   // 최신순, 월 변동의 합 = 손익
   offPeriods: Array<{ from: string; to: string }>
@@ -347,6 +350,10 @@ interface AiJudgment {
   inputSummary: string[]; outputSummary: string[]    // 데이터 그대로(종목명·지표), 문장 아님
   action: 'none' | 'sell' | 'buy' | 'switch'
 }
+// 2단계 구현: 사건 하나에 판단 하나. ai-sell(두 번 다 '반증', action 'sell'), ai-buy(사기 확인 '근거 있음' 또는 바꾸기,
+// action 'buy'·'switch'), ai-check(확인했지만 그대로, action 'none'), monthly-review(그달 점검 전체: verdict는 가장 나쁜 판정,
+// outputSummary는 유지·약화·반증 수), discovery(분기 발굴: 새 종목·후보·만료 수). trigger는 일감에서 온다(지난 실적 공시를
+// 처음 읽는 'backfill'은 'filing'). tokens는 그 판단의 호출들을 더한 값이다
 ```
 
 ### `GET /api/rules` · `GET /api/rules/{id}?lane=` — SCR-RULES
@@ -382,7 +389,7 @@ interface FlowDisplay {                        // AI 규칙: 흐름 카드(D34)
     fields?: Array<{ key: 'input' | 'ai' | 'output'; value: string }>
     now: NowBlock
   }>
-  edges: Array<{ from: string; to: string; label?: 'yes' | 'no-keep' | 'no'; style: 'taken' | 'not-taken' | 'exception' }>
+  edges: Array<{ from: string; to: string; label?: 'yes' | 'no-keep' | 'no' | 'no-wait'; style: 'taken' | 'not-taken' | 'exception' }>   // no-wait = '아니오 · 후보로 대기'(분기 발굴)
 }
 interface NowBlock {
   headKey: 'now' | 'now-check' | 'now-last-judgment' | 'now-month' | 'now-last'   // '지금', '지금 · 확인 08:30' …
@@ -394,6 +401,8 @@ interface NowBlock {
     | { kind: 'order'; side: Side; text: string; status?: 'filled' | 'pending' | 'failed'; at?: string }
     | { kind: 'status'; status: RuleStatus; at?: string }
     | { kind: 'kv'; key: string; value: string }
+    // AI 규칙의 kv 키: metricTableAt, newFilings, hits, verdict, votes, filedOn, tokens, nextReview,
+    // hold·weaken·invalidated(그달 판정 수), daysToNext, candidates. 값은 데이터(시각·날짜·수)다
     | { kind: 'exceptions'; items: Array<'holiday' | 'quote-wait' | 'withdraw-wait'>; active: boolean }
   >
 }
@@ -412,12 +421,22 @@ interface HealthResponse {
     id: string
     severity: 'red' | 'yellow'
     kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'order-failed' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings'
+    // ai-cli: 노랑 facts { reason: 'over-budget', tokens, budget }(한 달 토큰이 예산을 넘음, 멈추지는 않음),
+    //         빨강 facts { reason: 'task-failed', count, taskKind }(세 번 실패한 일감이 사람을 기다림)
+    // filings: 노랑 facts { source: 'dart' | 'edgar', state, since }(공시 감시가 멈춤, 다음 확인 때 다시)
     // order-failed = 다시 시도까지 실패한 주문(facts: date, market, side, reason). order-rejected는 실전 브로커 거절(3단계)
     facts: Record<string, string | number>      // 화면 문구에 끼울 값(시장, 날짜, 남은 날 …)
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' }
     effect: 'orders-zero-live-blocked' | 'orders-and-reconcile-stop' | 'no-order-sent' | 'other'
   }>
   sources: Array<{                              // 1단계는 kr-quotes·us-quotes·fx 셋만(없는 연결은 줄을 만들지 않는다)
+    // 2단계: 3년 발굴의 몫이 0보다 크면 filings·ai-cli·metric-table을 더한다.
+    //  filings: state는 DART·EDGAR 중 나쁜 쪽(점검 중이면 'maintenance', 응답 없음·키 없음·실패면 'stale'),
+    //           basis는 마지막으로 둘이 받은 날, extra { dart, edgar }: 'ok' | 'maintenance' | 'stale' | 'failed' | 'no-key' | 'unknown'
+    //  ai-cli: state는 마지막 호출의 성공 여부, basis는 마지막 성공 호출의 모델, cadence 'event',
+    //          extra { monthTokens, budget, enabled(0·1, AUTOTRADE_AI_CALLS), due(기다리는 일감 수) }
+    //  metric-table: basis는 마지막으로 뽑은 날, cadence 'event'
+    //  summary.staleCount는 'maintenance'도 센다
     id: 'kr-quotes' | 'us-quotes' | 'fx' | 'toss-link' | 'toss-balance' | 'push-devices' | 'filings' | 'ai-cli' | 'metric-table'
     state: 'fresh' | 'late' | 'stale' | 'maintenance' | 'unknown'
     basis: string | null                        // 종가일·환율 값·만료일 …
@@ -544,3 +563,4 @@ type NotifyEvent =
 - 2026-10-09: API 구현에 맞춤(API 세션). 오류 코드 표, `/api/healthz`, 1단계 실전 켜기 409 `live-not-available`(+ `canTurnOn.cause`), 푸시 501, partial-todo `retry-failed`, 할 일 `order-failed`, 시세 대기 다음 할 일 `market: 'FX'`, 그날 확인 결과 `in-progress`·`withdraw-wait`·`no-run`, 변동 분해의 부호와 'all' 기준, 시작 사건의 단계·수수료, 환전 주문 `market: 'KR'`, recent14 평일만, 1단계 출처 3개(`extra.market`), 이니셜 규칙, 이 기기 판별, 보안 헤더·`no-store`를 더했다.
 - 2026-10-09: 이니셜 규칙을 Figma에 맞춤(K2·SP·삼·NV·B), 종목 id 예시 SPYM, 고정 자료 위치를 bundles/*.ts로(메인 세션).
 - 2026-10-09: 서버 무인 운영(엔진 세션). HistoryEvent에 `resolvedOn`(직접 할 일을 닫은 날)을 더했다. 배당 줄은 규칙(`rule`)을 싣고 규칙 칩 수에 들어간다(예시 '지수 반반 3'). 달러 배당의 `amount`·`krw`와 변동 분해의 `dividend`는 원화다. 직접 처리로 닫힌 리밸런싱은 `partial-failed`로 남는다. 사건이 있는 달은 스냅숏이 없어도 월 목록에 나온다(변동 0).
+- 2026-10-09: 2단계 '3년 발굴'(엔진 세션). 계획 탭에 AI 규칙 카드(게이지 `sell-condition`, 종목 줄 `progress`·`metric`·`marginText`, `vsIndex`, `basisLine.metricTableAt`)와 `ruleShares`(두 규칙의 지금 몫)를 더했다. 계약 공백의 제안 1·2·5(`vsIndex`, `metricTableAt`, 예정 항목 `ruleId`는 AI 규칙 항목에만)를 받았다. 지수 반반의 `share.target`은 규칙 몫 설정(모의 80)이다. 구성은 규칙별로 나뉜다: 3년 발굴 묶음에 그 규칙의 종목·그 규칙 몫의 지수 ETF·그 규칙 현금(칩 없음)이 들어간다. 홈 계획 카드 `others`, 규칙 목록·`/api/rules/discovery_3y?lane=`(FlowDisplay, 선 `no-wait` 더함, '지금' kv 키 목록), 그날 화면 AI 판단 사건(`judgment`), AI 규칙 계획의 리밸런싱 사건(`weights.target` 빈 배열·`threshold` 0), 기록의 `filters.kinds` 'ai'와 AI 규칙 칩, 작동 화면의 출처 filings·ai-cli·metric-table과 할 일 ai-cli·filings의 facts를 정했다. 몫이 0인 장부(실전)에는 AI 규칙이 나오지 않는다. 이니셜: 한국 종목 이름이 로마자로 시작하면 이름의 앞 로마자 두 글자까지다(HD현대일렉트릭 'HD', SK바이오팜 'SK').

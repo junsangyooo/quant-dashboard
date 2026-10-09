@@ -21,6 +21,14 @@ def initials(inst: Instrument) -> str:
     first = inst.name[:1]
     if "\uac00" <= first <= "\ud7a3":
         return first
+    if inst.ticker.isdigit() and first.isascii() and first.isalpha():
+        # A Korean company named in Latin letters first: 'HD현대일렉트릭' 'HD', 'SK바이오팜' 'SK'.
+        lead = ""
+        for ch in inst.name:
+            if not (ch.isascii() and ch.isalpha()) or len(lead) == 2:
+                break
+            lead += ch
+        return lead.upper()
     letters = [c for c in inst.ticker if c.isalnum()]
     return "".join(letters[: 1 if inst.kind.value == "coin" else 2]).upper()
 

@@ -110,9 +110,11 @@ def rule(
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
     ctx = context(request, conn, None)
-    if rule_id != ctx.rule.rule_id:
-        raise ApiError(404, "not-found", {"rule": rule_id})
-    return rules_view.rule_detail(ctx)
+    if rule_id == ctx.rule.rule_id:
+        return rules_view.rule_detail(ctx)
+    if rule_id == ctx.ai_rule.rule.rule_id and ctx.ai_rule.shown:
+        return ctx.ai_rule.detail(lane)
+    raise ApiError(404, "not-found", {"rule": rule_id})
 
 
 @router.get("/health")

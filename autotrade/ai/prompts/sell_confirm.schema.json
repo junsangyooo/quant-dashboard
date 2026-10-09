@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["trigger", "invalidate", "confirm", "bear_case", "bull_case", "verdict", "conviction"],
+  "properties": {
+    "trigger": {"type": "string", "maxLength": 300},
+    "invalidate": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "status", "evidence"],
+        "properties": {
+          "index": {"type": "integer", "minimum": 1},
+          "status": {"enum": ["걸림", "안 걸림", "모름"]},
+          "evidence": {"type": "string", "maxLength": 200}
+        }
+      }
+    },
+    "confirm": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "status", "evidence"],
+        "properties": {
+          "index": {"type": "integer", "minimum": 1},
+          "status": {"enum": ["충족", "미충족", "모름"]},
+          "evidence": {"type": "string", "maxLength": 200}
+        }
+      }
+    },
+    "bear_case": {"type": "string", "maxLength": 240},
+    "bull_case": {"type": "string", "maxLength": 240},
+    "verdict": {"enum": ["유지", "약화", "반증"]},
+    "conviction": {"enum": ["상", "중상", "중", "중하", "하"]}
+  }
+}

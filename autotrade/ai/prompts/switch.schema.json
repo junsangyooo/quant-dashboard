@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sold", "bought", "beats_cost", "decision", "reason"],
+  "properties": {
+    "sold": {"type": "string", "maxLength": 240},
+    "bought": {"type": "string", "maxLength": 240},
+    "beats_cost": {"type": "boolean"},
+    "decision": {"enum": ["바꾼다", "바꾸지 않는다"]},
+    "reason": {"type": "string", "maxLength": 300}
+  }
+}

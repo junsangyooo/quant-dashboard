@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["why_here", "valuation", "decision", "reason", "risks", "conviction"],
+  "properties": {
+    "why_here": {"type": "string", "maxLength": 300},
+    "valuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "evidence"],
+      "properties": {
+        "state": {"enum": ["과열", "적정", "싸다"]},
+        "evidence": {"type": "string", "maxLength": 240}
+      }
+    },
+    "decision": {"enum": ["근거 있음", "근거 없음"]},
+    "reason": {"type": "string", "maxLength": 300},
+    "risks": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 160}},
+    "conviction": {"enum": ["상", "중상", "중", "중하", "하"]}
+  }
+}

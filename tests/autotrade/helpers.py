@@ -12,6 +12,13 @@ from autotrade.domain.instruments import Currency
 from autotrade.domain.ledger import LedgerState, Position
 from autotrade.timeutil import KST
 
+# Phase-1 tests reproduce the example table with '지수 반반' alone (§4: 100% of the ledger).
+PHASE1_SHARES = {
+    "paper": {"index_half": Decimal(100), "discovery_3y": Decimal(0)},
+    "live": {"index_half": Decimal(100), "discovery_3y": Decimal(0)},
+}
+PHASE1_ENV = {"AUTOTRADE_PAPER_SHARES": "index_half=100,discovery_3y=0"}
+
 
 def kst(text: str) -> datetime:
     """'2026-10-07 08:30' -> aware KST datetime."""

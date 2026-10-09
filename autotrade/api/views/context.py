@@ -16,18 +16,19 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import cached_property
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from autotrade.api.views import fmt
 from autotrade.api.views.orders import plan_stages
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.refs import rule_ref
 from autotrade.config import Config
-from autotrade.db import repo
+from autotrade.db import ai_repo, repo
 from autotrade.db.models import EventRow, LedgerRow, PlanRow, RunRow, SnapshotRow
 from autotrade.domain.cash import CashPart, Purpose
 from autotrade.domain.instruments import Currency, Instrument
-from autotrade.domain.money import ZERO, usd_in_krw
+from autotrade.domain.ledger import LedgerState
+from autotrade.domain.money import ZERO, round_won, usd_in_krw
 from autotrade.domain.status import RuleStatus, StatusFlags, rule_status
 from autotrade.domain.weights import DriftReport, drift_report
 from autotrade.engine.bootstrap import MODE, start_amount_key, start_date_key
@@ -35,9 +36,13 @@ from autotrade.engine.common import buy_wait_krw, load_rule
 from autotrade.engine.status import next_check_at
 from autotrade.engine.valuation import Valuation, ValuationError, value_ledger
 from autotrade.market.calendar import KRX, NYSE, CalendarRangeError
+from autotrade.rules.discovery import RULE_ID as AI_RULE
 from autotrade.rules.index_half import RULE_ID
 from autotrade.rules.model import RuleDef
 from autotrade.timeutil import at_kst, is_weekday, kst_date
+
+if TYPE_CHECKING:
+    from autotrade.api.views.discovery import AiRule
 
 SERIES_MARKET = {"kr-quotes": "KR", "us-quotes": "US", "fx": "FX"}
 EXECUTOR = {"paper": "paper", "live": "live"}
@@ -288,24 +293,59 @@ class LedgerContext:
             )
         else:
             val = self.valuation
+            sleeve = self.ai_sleeve
+            ledger = repo.load_state(self.conn, self.ledger_id)
             if val is not None:
                 for p in sorted(val.positions, key=lambda p: p.value_krw, reverse=True):
-                    group = (
-                        self.rule.rule_id if p.instrument.instrument_id in rule_ids else "outside"
-                    )
-                    comp.rows.append(
-                        CompRow(
-                            "holding",
-                            group,
-                            p.value_krw,
-                            instrument=p.instrument,
-                            currency=p.instrument.currency,
-                            qty=p.qty,
-                            avg_price=p.avg_price,
-                            cost_krw=p.cost_krw,
+                    iid = p.instrument.instrument_id
+                    mine = sleeve.positions.get(iid)
+                    ai_qty = 0 if mine is None else mine.qty
+                    ai_krw = round_won(p.value_krw * ai_qty / p.qty) if ai_qty else ZERO
+                    base_qty = p.qty - ai_qty
+                    if base_qty > 0:
+                        total_native = ledger.positions[iid].cost_native
+                        native = total_native - (ZERO if mine is None else mine.cost_native)
+                        group = self.rule.rule_id if iid in rule_ids else "outside"
+                        comp.rows.append(
+                            CompRow(
+                                "holding",
+                                group,
+                                p.value_krw - ai_krw,
+                                instrument=p.instrument,
+                                currency=p.instrument.currency,
+                                qty=base_qty,
+                                avg_price=native / base_qty,
+                                cost_krw=p.cost_krw - (ZERO if mine is None else mine.cost_krw),
+                            )
                         )
-                    )
+                    if mine is not None and ai_qty > 0:
+                        comp.rows.append(
+                            CompRow(
+                                "holding",
+                                AI_RULE,
+                                ai_krw,
+                                instrument=p.instrument,
+                                currency=p.instrument.currency,
+                                qty=ai_qty,
+                                avg_price=mine.cost_native / ai_qty,
+                                cost_krw=mine.cost_krw,
+                            )
+                        )
             comp.rows.extend(self._cash_rows())
+            for currency in Currency:
+                amount = sleeve.cash_of(currency)
+                if amount <= 0:
+                    continue
+                usd = currency is Currency.USD
+                comp.rows.append(
+                    CompRow(
+                        "cash",
+                        AI_RULE,
+                        usd_in_krw(amount, self.fx_rate) if usd else amount,
+                        currency=currency,
+                        usd=amount if usd else None,
+                    )
+                )
         for row, pct in zip(comp.rows, fmt.allocate_pct1([r.krw for r in comp.rows]), strict=True):
             row.pct = pct
         return comp
@@ -364,6 +404,19 @@ class LedgerContext:
     @property
     def rule_share(self) -> Decimal:
         return self.composition.group_pct(self.rule.rule_id)
+
+    # ── the AI rule (phase 2) ────────────────────────────────────────────────────────────
+
+    @cached_property
+    def ai_rule(self) -> AiRule:
+        from autotrade.api.views.discovery import AiRule
+
+        return AiRule(self)
+
+    @cached_property
+    def ai_sleeve(self) -> LedgerState:
+        """The AI rule's part of the ledger (empty where it has no share)."""
+        return ai_repo.load_sleeve(self.conn, self.ledger_id, AI_RULE)
 
     # ── weights, status, next action ─────────────────────────────────────────────────────
 
@@ -489,8 +542,14 @@ class LedgerContext:
             }
         return {"kind": "drift", "threshold": fmt.pp1(self.rule.threshold), "needle": needle}
 
+    @cached_property
+    def target_pct(self) -> float:
+        """The rule's target share of the ledger (PHASE2.md §1; 100% while it is alone)."""
+        stored = ai_repo.shares(self.conn, self.ledger_id).get(self.rule.rule_id)
+        return float(stored) if stored is not None else fmt.pct1(self.rule.asset_share)
+
     def share(self) -> dict[str, Any]:
-        return {"pct": float(self.rule_share), "target": fmt.pct1(self.rule.asset_share)}
+        return {"pct": float(self.rule_share), "target": self.target_pct}
 
     def rule_json(self) -> dict[str, Any]:
         return rule_ref(self.rule, 0)

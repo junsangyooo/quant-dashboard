@@ -1,7 +1,9 @@
 """python -m autotrade.jobs tick — cron calls it every 5 minutes (deploy/autotrade.cron).
 
 Each tick asks autotrade/jobs/schedule.py what is due, in this order — dividends, check, retry,
-stages, snapshot, backup — and runs it through the same job functions as the per-task commands.
+watch, ai-plan, stages, snapshot, backup, ai-queue — and runs it through the same job functions
+as the per-task commands. The AI calls themselves run in their own cron line
+(python -m autotrade.jobs ai), because a model call has no time limit (ops notes §7).
 Every task that ran prints one JSON line (stdout -> data/logs/autotrade-jobs.log); a tick with
 nothing due prints nothing. A task that breaks is logged and the tick goes on with the next one.
 """
@@ -14,14 +16,18 @@ from pathlib import Path
 from typing import Any
 
 from autotrade.engine.check import FAILED
+from autotrade.jobs.ai_tasks import plan_job, queue_job, watch_job
 from autotrade.jobs.schedule import (
     Due,
+    ai_plan_due,
     backup_due,
     check_due,
     dividends_due,
+    queue_due,
     retry_due,
     snapshot_due,
     stages_due,
+    watch_due,
 )
 from autotrade.jobs.tasks import (
     JobContext,
@@ -32,7 +38,17 @@ from autotrade.jobs.tasks import (
     stage_job,
 )
 
-TASKS = ("dividends", "check", "retry", "stages", "snapshot", "backup")
+TASKS = (
+    "dividends",
+    "check",
+    "retry",
+    "watch",
+    "ai-plan",
+    "stages",
+    "snapshot",
+    "backup",
+    "ai-queue",
+)
 # What a log line keeps from a job's report (the full report stays in the database records).
 KEEP = (
     "result",
@@ -48,6 +64,14 @@ KEEP = (
     "path",
     "bytes",
     "removed",
+    "tasks",
+    "filings",
+    "vs_index",
+    "scored",
+    "month",
+    "sell",
+    "buy",
+    "waiting",
 )
 
 
@@ -64,6 +88,12 @@ def _due(task: str, ctx: JobContext, ledger_id: str, at: datetime, backup_dir: P
         return stages_due(ctx.conn, ledger_id, at)
     if task == "snapshot":
         return snapshot_due(ctx.conn, ctx.cfg, ledger_id, at)
+    if task == "watch":
+        return watch_due(ctx.conn, ctx.cfg, ledger_id, at)
+    if task == "ai-queue":
+        return queue_due(ctx.conn, ledger_id, at)
+    if task == "ai-plan":
+        return ai_plan_due(ctx.conn, ctx.cfg, ledger_id, at)
     return backup_due(ctx.conn, ctx.cfg, [ledger_id], backup_dir, at)
 
 
@@ -78,6 +108,12 @@ def _run(task: str, ctx: JobContext, ledger_id: str, at: datetime) -> dict[str, 
         return stage_job(ctx, ledger_id, at)
     if task == "snapshot":
         return snapshot_job(ctx, ledger_id, at)
+    if task == "watch":
+        return watch_job(ctx, ledger_id, at)
+    if task == "ai-queue":
+        return queue_job(ctx, ledger_id, at)
+    if task == "ai-plan":
+        return plan_job(ctx, ledger_id, at)
     return backup_job(ctx, at)
 
 

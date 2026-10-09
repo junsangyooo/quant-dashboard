@@ -22,7 +22,11 @@ INDEX_HALF_MEASURED: dict[str, Any] = {
 
 
 def rule_list(ctx: LedgerContext) -> dict[str, Any]:
-    return {"rules": [{"rule": ctx.rule_json(), "share": ctx.share(), "status": ctx.status.value}]}
+    rules = [{"rule": ctx.rule_json(), "share": ctx.share(), "status": ctx.status.value}]
+    ai = ctx.ai_rule
+    if ai.shown:
+        rules.append({"rule": ai.rule_json(), "share": ai.share(), "status": ai.status})
+    return {"rules": rules}
 
 
 def tiles(ctx: LedgerContext) -> dict[str, Any]:

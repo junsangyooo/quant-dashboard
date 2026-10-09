@@ -9,11 +9,14 @@ import sqlite3
 from datetime import datetime
 
 from autotrade.config import Config
-from autotrade.db import repo
+from autotrade.db import ai_repo, repo
 from autotrade.db.connection import transaction
 from autotrade.db.migrations import migrate
+from autotrade.domain import metrics
 from autotrade.domain.instruments import kr_etf, us_etf
 from autotrade.engine.common import LIVE, PAPER
+from autotrade.engine.seed import import_seed
+from autotrade.rules.discovery import discovery_3y
 from autotrade.rules.index_half import index_half
 
 MODE = "mode"
@@ -52,3 +55,11 @@ def bootstrap(conn: sqlite3.Connection, cfg: Config, at: datetime) -> None:
         repo.upsert_instrument(conn, us, at)
         rule = index_half(kr, us, cfg.threshold)
         repo.upsert_rule(conn, rule.rule_id, rule.name, rule.kind, rule.to_json(), at)
+        # Phase 2: the AI rule, its metric dictionary, the rule shares and its first judgments.
+        ai_rule = discovery_3y()
+        repo.upsert_rule(conn, ai_rule.rule_id, ai_rule.name, ai_rule.kind, ai_rule.to_json(), at)
+        ai_repo.sync_dictionary(conn, metrics.DICTIONARY)
+        for ledger_id, shares in cfg.rule_shares.items():
+            for rule_id, pct in shares.items():
+                ai_repo.ensure_share(conn, ledger_id, rule_id, pct, at)
+        import_seed(conn, at)

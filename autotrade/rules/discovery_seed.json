@@ -1,0 +1,356 @@
+{
+  "source": "T24",
+  "about": "T24 3년 발굴 1차(2026-10-07)의 15종목. picks.csv의 글 조건을 사람이 고정 형식(PHASE2.md §3)으로 옮겼다(AI를 부르지 않음). 옮기며 확신이 없던 곳은 조건이나 종목의 note에 적었다. 글로만 판단할 수 있는 조건은 사건형(event)이다. confirm_text·invalidate_text는 picks.csv 원문이다.",
+  "rule_id": "discovery_3y",
+  "ledger_id": "paper",
+  "picks": [
+    {
+      "market": "KR",
+      "ticker": "012450",
+      "name": "한화에어로스페이스",
+      "yahoo": "012450.KS",
+      "picked_on": "2026-10-07",
+      "close": "972000",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "방산 수출",
+      "confidence": "중",
+      "rationale": "2Q 영업이익 +58%, 지상방산 수주잔고 38조. PBR이 5년 중간 아래",
+      "confirm_text": "지상방산 영업이익률 20% 이상, 수주잔고 35조 이상",
+      "invalidate_text": "지상방산 영업이익이 2분기 연속 전년보다 감소, 또는 수주잔고 30조 미만",
+      "confirm": [
+        {"type": "level", "metric": "segment_op_margin:지상방산", "op": ">=", "value": 20, "unit": "%"},
+        {"type": "level", "metric": "segment_backlog:지상방산", "op": ">=", "value": 35000000000000, "unit": "KRW", "note": "'수주잔고 35조'를 지상방산 부문 수주잔고(2Q 38.3조, T24 한국 보고서)로 읽었다"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "segment_operating_income:지상방산", "change": "yoy", "direction": "down", "periods": 2},
+        {"type": "level", "metric": "segment_backlog:지상방산", "op": "<", "value": 30000000000000, "unit": "KRW", "note": "수주잔고를 회사 전체가 아니라 지상방산 부문 것으로 읽었다"}
+      ],
+      "note": "수주잔고의 범위(지상방산 부문)를 보고서 문맥으로 정했다"
+    },
+    {
+      "market": "KR",
+      "ticker": "009540",
+      "name": "HD한국조선해양",
+      "yahoo": "009540.KS",
+      "picked_on": "2026-10-07",
+      "close": "301500",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "조선",
+      "confidence": "중(선행 PER 값 의심)",
+      "rationale": "분기 영업이익 1.04 → 1.36 → 1.65조로 가속, 고점 대비 −24%",
+      "confirm_text": "연결 영업이익률 15% 이상, 2027년까지 영업이익 전년보다 증가",
+      "invalidate_text": "영업이익 2분기 연속 전년보다 감소, 또는 연간 신규 수주 < 매출 × 0.8",
+      "confirm": [
+        {"type": "level", "metric": "op_margin", "op": ">=", "value": 15, "unit": "%"},
+        {"type": "streak", "metric": "operating_income", "change": "yoy", "direction": "up", "periods": 1, "note": "'2027년까지 전년보다 증가'를 분기마다 전년 같은 분기보다 늘었는지로 옮겼다. 기한(2027년)은 형식에 담지 못했다"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "operating_income", "change": "yoy", "direction": "down", "periods": 2},
+        {"type": "level", "metric": "book_to_bill", "op": "<", "value": 0.8, "unit": "x", "note": "연간 신규 수주 ÷ 매출. 회사는 수주를 달러로, 매출을 원으로 내므로 같은 통화로 맞춰 뽑아야 계산된다. 원문은 연간 값이지만 분기 값이 쌓이면 분기로도 계산된다"}
+      ],
+      "note": "T24 확신 칸에 '선행 PER 값 의심'이 있다. 수주/매출 조건은 통화가 달라 지표 표가 채워지기 전에는 '모름'이다"
+    },
+    {
+      "market": "KR",
+      "ticker": "042660",
+      "name": "한화오션",
+      "yahoo": "042660.KS",
+      "picked_on": "2026-10-07",
+      "close": "74100",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "조선·미 해군 정비",
+      "confidence": "중하",
+      "rationale": "분기 영업이익 2,480 → 7,360억, 고점 대비 −51%",
+      "confirm_text": "영업이익률 10% 이상, 이익 전년보다 증가",
+      "invalidate_text": "영업이익 2분기 연속 전년보다 감소, 또는 이익률 7% 미만",
+      "confirm": [
+        {"type": "level", "metric": "op_margin", "op": ">=", "value": 10, "unit": "%"},
+        {"type": "streak", "metric": "operating_income", "change": "yoy", "direction": "up", "periods": 1, "note": "'이익'을 영업이익으로 읽었다"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "operating_income", "change": "yoy", "direction": "down", "periods": 2},
+        {"type": "level", "metric": "op_margin", "op": "<", "value": 7, "unit": "%"}
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "267260",
+      "name": "HD현대일렉트릭",
+      "yahoo": "267260.KS",
+      "picked_on": "2026-10-07",
+      "close": "628000",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "AI 전력망(변압기)",
+      "confidence": "중",
+      "rationale": "수주잔고 84.9억$(+30%), 이익률 25%, 선행 PER 18.4",
+      "confirm_text": "분기 수주 12억$ 이상, 수주잔고 80억$ 이상, 이익률 22% 이상",
+      "invalidate_text": "수주잔고 2분기 연속 전년보다 감소, 또는 이익률 20% 미만",
+      "confirm": [
+        {"type": "level", "metric": "new_orders", "op": ">=", "value": 1200000000, "unit": "USD", "note": "분기 수주(달러)로 읽었다"},
+        {"type": "level", "metric": "backlog", "op": ">=", "value": 8000000000, "unit": "USD"},
+        {"type": "level", "metric": "op_margin", "op": ">=", "value": 22, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "backlog", "change": "yoy", "direction": "down", "periods": 2},
+        {"type": "level", "metric": "op_margin", "op": "<", "value": 20, "unit": "%"}
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "068270",
+      "name": "셀트리온",
+      "yahoo": "068270.KS",
+      "picked_on": "2026-10-07",
+      "close": "183500",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "바이오시밀러",
+      "confidence": "중",
+      "rationale": "2Q 영업이익 +86%, 회사가 3Q 5,000억대·4Q 6,000억대 목표 제시",
+      "confirm_text": "3Q 영업이익 5,000억 이상, 4Q 6,000억 이상",
+      "invalidate_text": "3Q 4,500억 미만, 또는 4Q 5,000억 미만",
+      "confirm": [
+        {"type": "level", "metric": "operating_income", "op": ">=", "value": 500000000000, "unit": "KRW", "period": "2026Q3"},
+        {"type": "level", "metric": "operating_income", "op": ">=", "value": 600000000000, "unit": "KRW", "period": "2026Q4"}
+      ],
+      "invalidate": [
+        {"type": "level", "metric": "operating_income", "op": "<", "value": 450000000000, "unit": "KRW", "period": "2026Q3"},
+        {"type": "level", "metric": "operating_income", "op": "<", "value": 500000000000, "unit": "KRW", "period": "2026Q4"}
+      ],
+      "note": "3Q·4Q를 2026년의 분기로 읽었다. 반증 조건이 두 분기에 묶여 있어 2027년부터는 월 점검이 새로 써야 한다"
+    },
+    {
+      "market": "KR",
+      "ticker": "326030",
+      "name": "SK바이오팜",
+      "yahoo": "326030.KS",
+      "picked_on": "2026-10-07",
+      "close": "76000",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "미국 신약(엑스코프리)",
+      "confidence": "중(거래 얇음)",
+      "rationale": "엑스코프리 미국 매출 +46%, PBR 5년 최저권",
+      "confirm_text": "엑스코프리 미국 매출 전년보다 25% 이상 증가",
+      "invalidate_text": "엑스코프리 미국 매출 2분기 연속 전 분기보다 감소",
+      "confirm": [
+        {"type": "level", "metric": "segment_revenue:엑스코프리 미국", "change": "yoy", "op": ">=", "value": 25, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "segment_revenue:엑스코프리 미국", "change": "qoq", "direction": "down", "periods": 2}
+      ],
+      "note": "회사가 엑스코프리 매출을 원화와 달러로 함께 낸다. 연속 비교는 같은 통화의 값끼리만 한다"
+    },
+    {
+      "market": "KR",
+      "ticker": "003230",
+      "name": "삼양식품",
+      "yahoo": "003230.KS",
+      "picked_on": "2026-10-07",
+      "close": "1217000",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "K-푸드 수출",
+      "confidence": "중",
+      "rationale": "최근 4분기 영업이익 +45%, 이익률 23%, 선행 PER 13",
+      "confirm_text": "매출 전년보다 20% 이상, 이익률 20% 이상",
+      "invalidate_text": "매출 증가율 2분기 연속 10% 미만, 또는 이익률 18% 미만",
+      "confirm": [
+        {"type": "level", "metric": "revenue", "change": "yoy", "op": ">=", "value": 20, "unit": "%"},
+        {"type": "level", "metric": "op_margin", "op": ">=", "value": 20, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "level", "metric": "revenue", "change": "yoy", "op": "<", "value": 10, "unit": "%", "periods": 2, "note": "'매출 증가율'을 전년 같은 분기 대비로 읽었다"},
+        {"type": "level", "metric": "op_margin", "op": "<", "value": 18, "unit": "%"}
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "071050",
+      "name": "한국금융지주",
+      "yahoo": "071050.KS",
+      "picked_on": "2026-10-07",
+      "close": "174400",
+      "benchmark": "069500.KS",
+      "benchmark_close": "108550",
+      "theme": "증권·주주환원",
+      "confidence": "하",
+      "rationale": "순이익 +85%, 자사주 소각 의무화, 배당 약 5%",
+      "confirm_text": "분기 순이익 6,000억 이상 유지",
+      "invalidate_text": "분기 순이익 2분기 연속 5,000억 미만",
+      "confirm": [
+        {"type": "level", "metric": "net_income", "op": ">=", "value": 600000000000, "unit": "KRW"}
+      ],
+      "invalidate": [
+        {"type": "level", "metric": "net_income", "op": "<", "value": 500000000000, "unit": "KRW", "periods": 2, "note": "순이익을 지배주주 순이익으로 본다"}
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "AVGO",
+      "name": "Broadcom",
+      "yahoo": "AVGO",
+      "picked_on": "2026-10-06",
+      "close": "375.81",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "AI 맞춤칩·네트워크",
+      "confidence": "상",
+      "rationale": "AI 매출 +221%, FY27 PER 19.4(시장 수준)",
+      "confirm_text": "FQ4 AI 매출 $21.7B 이상, FY27 AI 매출 성장 가이던스 60% 이상",
+      "invalidate_text": "AI 매출 2분기 연속 전 분기보다 감소, 또는 상위 XPU 고객 이탈 공시",
+      "confirm": [
+        {"type": "level", "metric": "segment_revenue:AI", "op": ">=", "value": 21700000000, "unit": "USD", "period": "FY2026Q4", "note": "FQ4를 브로드컴 회계연도 2026년 4분기(8~10월)로 읽었다"},
+        {"type": "level", "metric": "guidance:FY27 AI 매출 성장", "op": ">=", "value": 60, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "segment_revenue:AI", "change": "qoq", "direction": "down", "periods": 2},
+        {"type": "event", "kind": "customer_loss", "text": "상위 XPU 고객 이탈 또는 자체설계 전환 공시"}
+      ],
+      "note": "AI 매출의 분기는 회계 분기(FY2026Q4 꼴)로 쌓아야 연속 비교가 맞는다"
+    },
+    {
+      "market": "US",
+      "ticker": "TSM",
+      "name": "TSMC",
+      "yahoo": "TSM",
+      "picked_on": "2026-10-06",
+      "close": "482.3",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "파운드리·첨단 패키징",
+      "confidence": "상",
+      "rationale": "2026 성장 40% 초과, 장비주보다 싼 PER 21.9",
+      "confirm_text": "월매출 전년비 25% 이상 지속, 2027 성장 가이던스 20% 이상",
+      "invalidate_text": "월매출 전년비 3개월 연속 10% 미만, 또는 2027 설비투자 축소",
+      "confirm": [
+        {"type": "level", "metric": "monthly_revenue_yoy", "op": ">=", "value": 25, "unit": "%", "note": "'지속'을 가장 최근 달로만 본다"},
+        {"type": "level", "metric": "guidance:2027 매출 성장", "op": ">=", "value": 20, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "level", "metric": "monthly_revenue_yoy", "op": "<", "value": 10, "unit": "%", "periods": 3},
+        {"type": "event", "kind": "capex_cut", "text": "2027 설비투자 축소"}
+      ],
+      "note": "미국 ADR이라 공시는 6-K(월매출 발표 포함)로 온다"
+    },
+    {
+      "market": "US",
+      "ticker": "AMZN",
+      "name": "Amazon",
+      "yahoo": "AMZN",
+      "picked_on": "2026-10-06",
+      "close": "256.29",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "AI 클라우드(AWS)",
+      "confidence": "중",
+      "rationale": "AWS 성장 5분기 연속 가속(+37%), 수주잔고 $496B",
+      "confirm_text": "AWS 성장 30% 이상, AWS 영업이익률 35% 이상",
+      "invalidate_text": "AWS 성장 2분기 연속 25% 미만, 또는 2027년 연간 FCF 적자",
+      "confirm": [
+        {"type": "level", "metric": "segment_revenue:AWS", "change": "yoy", "op": ">=", "value": 30, "unit": "%"},
+        {"type": "level", "metric": "segment_op_margin:AWS", "op": ">=", "value": 35, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "level", "metric": "segment_revenue:AWS", "change": "yoy", "op": "<", "value": 25, "unit": "%", "periods": 2},
+        {"type": "level", "metric": "fcf", "op": "<", "value": 0, "unit": "USD", "period": "FY2027", "note": "'2027년 연간 FCF 적자'를 FY2027 FCF < 0으로 옮겼다. 연간 값이 나오는 2028년 초에야 판단된다"}
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "LLY",
+      "name": "Eli Lilly",
+      "yahoo": "LLY",
+      "picked_on": "2026-10-06",
+      "close": "1157.49",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "비만 치료제",
+      "confidence": "중상",
+      "rationale": "매출 +48%, 가이던스 상향, PER 24(과거보다 낮음)",
+      "confirm_text": "2027 매출 성장 가이던스 15% 이상, Foundayo 분기 매출 증가",
+      "invalidate_text": "티르제파타이드 매출 2분기 연속 전 분기보다 감소, 또는 2027 매출 성장 가이던스 10% 미만",
+      "confirm": [
+        {"type": "level", "metric": "guidance:2027 매출 성장", "op": ">=", "value": 15, "unit": "%"},
+        {"type": "streak", "metric": "segment_revenue:Foundayo", "change": "qoq", "direction": "up", "periods": 1}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "segment_revenue:티르제파타이드", "change": "qoq", "direction": "down", "periods": 2, "note": "티르제파타이드 매출을 마운자로와 젭바운드의 합으로 본다"},
+        {"type": "level", "metric": "guidance:2027 매출 성장", "op": "<", "value": 10, "unit": "%"}
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "MTZ",
+      "name": "MasTec",
+      "yahoo": "MTZ",
+      "picked_on": "2026-10-06",
+      "close": "228.3",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "송배전·데이터센터 시공",
+      "confidence": "중",
+      "rationale": "수주잔고 사상 최대(+30%), PER 18.4, 고점 대비 −48%",
+      "confirm_text": "수주잔고 전년보다 15% 이상 증가, 2026 EPS $9.30 달성",
+      "invalidate_text": "수주잔고 2분기 연속 전 분기보다 감소, 또는 순부채가 EBITDA의 2.5배 초과",
+      "confirm": [
+        {"type": "level", "metric": "backlog", "change": "yoy", "op": ">=", "value": 15, "unit": "%"},
+        {"type": "level", "metric": "eps", "op": ">=", "value": 9.30, "unit": "USD", "period": "FY2026", "note": "2026 EPS를 회사 가이던스와 같은 조정 EPS로 읽었다"}
+      ],
+      "invalidate": [
+        {"type": "streak", "metric": "backlog", "change": "qoq", "direction": "down", "periods": 2},
+        {"type": "level", "metric": "net_debt_to_ebitda", "op": ">", "value": 2.5, "unit": "x"}
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "MOD",
+      "name": "Modine",
+      "yahoo": "MOD",
+      "picked_on": "2026-10-06",
+      "close": "189.91",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "데이터센터 냉각",
+      "confidence": "중",
+      "rationale": "데이터센터 매출 +90%, PER 18.7, 고점 대비 −41%",
+      "confirm_text": "FY27 데이터센터 매출 성장 60% 이상, 가이던스 상향",
+      "invalidate_text": "데이터센터 성장 30% 미만, 또는 EBITDA 마진 2분기 연속 하락",
+      "confirm": [
+        {"type": "level", "metric": "guidance:FY27 데이터센터 매출 성장", "op": ">=", "value": 60, "unit": "%"},
+        {"type": "event", "kind": "guidance_raise", "text": "데이터센터 가이던스 상향"}
+      ],
+      "invalidate": [
+        {"type": "level", "metric": "segment_revenue:데이터센터", "change": "yoy", "op": "<", "value": 30, "unit": "%"},
+        {"type": "streak", "metric": "ebitda_margin", "change": "qoq", "direction": "down", "periods": 2, "note": "'2분기 연속 하락'을 전 분기 대비로 읽었다. 전년 대비일 수도 있다"}
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "HII",
+      "name": "Huntington Ingalls",
+      "yahoo": "HII",
+      "picked_on": "2026-10-06",
+      "close": "263.75",
+      "benchmark": "SPY",
+      "benchmark_close": "779.09",
+      "theme": "미 해군 함정",
+      "confidence": "중하",
+      "rationale": "EPS +37%, 수주잔고 $57B, PER 12.7",
+      "confirm_text": "2026 FCF 가이던스 달성, 조선 마진 6% 이상",
+      "invalidate_text": "FCF 가이던스 하향, 또는 조선 마진 5.5% 미만",
+      "confirm": [
+        {"type": "event", "kind": "guidance_met", "text": "2026년 FCF 가이던스 달성", "note": "두 숫자(실적 FCF와 가이던스)를 대는 조건이라 사건형으로 두었다"},
+        {"type": "level", "metric": "segment_op_margin:조선", "op": ">=", "value": 6, "unit": "%"}
+      ],
+      "invalidate": [
+        {"type": "event", "kind": "guidance_cut", "text": "FCF 가이던스 하향"},
+        {"type": "level", "metric": "segment_op_margin:조선", "op": "<", "value": 5.5, "unit": "%", "note": "조선 마진을 Ingalls와 Newport News를 합친 조선 영업이익률로 본다"}
+      ]
+    }
+  ]
+}

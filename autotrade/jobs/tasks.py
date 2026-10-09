@@ -21,6 +21,7 @@ from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.db.connection import transaction
 from autotrade.domain.instruments import Currency, Instrument, Market
+from autotrade.engine import discovery_plan
 from autotrade.engine.check import FAILED, TODO, needs_retry, run_check
 from autotrade.engine.common import load_rule
 from autotrade.engine.dividends import book_dividends, watched_instruments
@@ -189,6 +190,8 @@ def stage_job(
         with transaction(ctx.conn, rollback=dry_run):
             run_id = repo.insert_run(ctx.conn, ledger_id, "stage", d, at)
             results = run_due_stages(ctx.conn, ctx.cfg, ledger_id, at, executor, errors)
+            # The AI rule's picks follow their fills at once (a sold pick is closed).
+            discovery_plan.reconcile(ctx.conn, ledger_id, at)
             result = stage_result([r.status for r in results])
             elapsed = int((ctx.clock() - started) * 1000)
             repo.finish_run(

@@ -8,13 +8,14 @@ from datetime import datetime
 from decimal import Decimal
 
 from autotrade.config import Config
-from autotrade.db import repo
+from autotrade.db import ai_repo, repo
 from autotrade.db.models import OrderRow
 from autotrade.domain.cash import CashPart, Claim, Purpose, partition
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.money import ZERO, usd_in_krw
 from autotrade.domain.planner import FxDirection
 from autotrade.domain.stages import Slotter
+from autotrade.engine.sleeves import BASE_RULE, base_view
 from autotrade.market.calendar import KRX, NYSE
 from autotrade.rules.model import RuleDef
 
@@ -33,9 +34,15 @@ def load_rule(conn: sqlite3.Connection, rule_id: str) -> tuple[RuleDef, dict[str
     return rule, instruments
 
 
-def pending_claims(conn: sqlite3.Connection, ledger_id: str) -> list[Claim]:
-    """Cash that pending buys and conversions will spend, and for which instruments."""
+def pending_claims(
+    conn: sqlite3.Connection, ledger_id: str, rule_id: str | None = None
+) -> list[Claim]:
+    """Cash that pending buys and conversions will spend, and for which instruments
+    (one rule's orders when rule_id is given)."""
     orders = repo.pending_orders(conn, ledger_id)
+    if rule_id is not None:
+        rules = {o.plan_id: repo.get_plan(conn, o.plan_id).rule_id for o in orders}
+        orders = [o for o in orders if rules[o.plan_id] == rule_id]
     buys_by_plan: dict[int, list[OrderRow]] = {}
     for o in orders:
         if o.side == "buy":
@@ -61,14 +68,25 @@ def pending_claims(conn: sqlite3.Connection, ledger_id: str) -> list[Claim]:
 def refresh_cash_parts(
     conn: sqlite3.Connection, ledger_id: str, at: datetime, checked_at: datetime | None = None
 ) -> list[CashPart]:
-    """Recompute and store what each part of the cash is for (pending_cash)."""
-    state = repo.load_state(conn, ledger_id)
+    """Recompute and store what each part of the base rule's cash is for (pending_cash).
+
+    Other rules' sleeves keep their cash apart (autotrade/engine/sleeves.py): their cash, their
+    pending orders and their part of new money are left out here.
+    """
+    state = base_view(conn, ledger_id)
     if checked_at is None:
         last = repo.last_cash_check(conn, ledger_id)
         checked_at = None if last is None else last.started_at
-    new_cash = repo.inflows_since(conn, ledger_id, checked_at)
+    new_cash = dict(repo.inflows_since(conn, ledger_id, checked_at))
+    for flow in ai_repo.sleeve_flows_since(
+        conn, ledger_id, checked_at, ("start", "deposit", "dividend")
+    ):
+        new_cash[flow.currency] = new_cash.get(flow.currency, ZERO) - flow.amount
     parts = partition(
-        state.cash, repo.withdraw_waits(conn, ledger_id), pending_claims(conn, ledger_id), new_cash
+        state.cash,
+        repo.withdraw_waits(conn, ledger_id),
+        pending_claims(conn, ledger_id, BASE_RULE),
+        new_cash,
     )
     repo.replace_cash_parts(conn, ledger_id, parts, at)
     return parts

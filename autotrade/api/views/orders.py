@@ -118,6 +118,11 @@ def plan_stages(
     orders = repo.orders_of_plan(conn, plan_id)
     fills = {f.order_id: f for f in repo.fills_of_plan(conn, plan_id)}
     stages = {s.stage_id: s for s in repo.stages_of(conn, plan_id)}
+    known = dict(instruments)  # the AI rule trades companies the caller may not list
+    for o in orders:
+        if o.instrument_id is not None and o.instrument_id not in known:
+            known[o.instrument_id] = repo.get_instrument(conn, o.instrument_id)
+    instruments = known
     groups: dict[tuple[str, str, str], list[OrderRow]] = {}
     for o in orders:
         key = (o.stage, o.market, o.instrument_id or o.fx_direction or "fx")

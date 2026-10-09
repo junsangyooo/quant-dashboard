@@ -8,6 +8,7 @@ from typing import Any
 
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext, event_kind, event_krw
+from autotrade.api.views.discovery import AI_EVENT_KINDS, judgment
 from autotrade.api.views.orders import plan_stages, stages_mini
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import (
@@ -19,6 +20,7 @@ from autotrade.api.views.series import (
 from autotrade.db import repo
 from autotrade.db.models import EventRow, PlanRow, RunRow, SnapshotRow
 from autotrade.domain.money import ZERO
+from autotrade.rules.discovery import RULE_ID as AI_RULE
 from autotrade.timeutil import from_iso, kst_date
 
 REBALANCE_KINDS = ("rebalance", "partial-failed", "in-progress")
@@ -139,10 +141,27 @@ class DayData:
         return None
 
 
-def _weights_mini(ctx: LedgerContext, weights: Any) -> list[float]:
+def _weights_mini(ctx: LedgerContext, weights: Any, ev: EventRow | None = None) -> list[float]:
     if not isinstance(weights, dict):
         return []
-    return [fmt.pct1(Decimal(str(weights.get(iid, "0")))) for iid in ctx.rule.instrument_ids]
+    return [fmt.pct1(Decimal(str(weights.get(iid, "0")))) for iid in _plan_ids(ctx, ev)]
+
+
+def _plan_ids(ctx: LedgerContext, ev: EventRow | None) -> list[str]:
+    """The instruments a rebalance row lists: the fixed rule's two, or what the AI rule's plan
+    held and bought (its weights before and after, in name order)."""
+    if ev is None or ev.rule_id != AI_RULE:
+        return list(ctx.rule.instrument_ids)
+    ids: set[str] = set()
+    for key in ("weights_before", "weights_after_est"):
+        found = ev.payload.get(key)
+        if isinstance(found, dict):
+            ids |= set(found)
+    return sorted(ids)
+
+
+def _rule_of(ctx: LedgerContext, ev: EventRow) -> dict[str, Any]:
+    return ctx.ai_rule.rule_json() if ev.rule_id == AI_RULE else ctx.rule_json()
 
 
 def _retry(data: DayData, plan: PlanRow) -> dict[str, Any] | None:
@@ -181,11 +200,11 @@ def history_event(data: DayData, ev: EventRow) -> dict[str, Any]:
     elif ev.kind == "rebalance" and ev.plan_id is not None:
         plan = data.plans_by_id[ev.plan_id]
         stages = plan_stages(ctx.conn, plan.plan_id, ctx.instruments, ctx.executor)
-        out["rule"] = ctx.rule_json()
+        out["rule"] = _rule_of(ctx, ev)
         out["stagesMini"] = stages_mini(stages)
         out["weightsMini"] = {
-            "before": _weights_mini(ctx, ev.payload.get("weights_before")),
-            "after": _weights_mini(ctx, ev.payload.get("weights_after_est")),
+            "before": _weights_mini(ctx, ev.payload.get("weights_before"), ev),
+            "after": _weights_mini(ctx, ev.payload.get("weights_after_est"), ev),
         }
         out["fill"] = ctx.executor
         max_drift = ev.payload.get("max_drift")
@@ -197,6 +216,11 @@ def history_event(data: DayData, ev: EventRow) -> dict[str, Any]:
         retry = _retry(data, plan)
         if retry is not None:
             out["retry"] = retry
+    elif ev.kind in AI_EVENT_KINDS:
+        out["rule"] = ctx.ai_rule.rule_json()
+        iid = ev.payload.get("instrument_id")
+        if isinstance(iid, str):
+            out["instrument"] = instrument_json(repo.get_instrument(ctx.conn, iid))
     elif ev.kind == "check-failed":
         error = str(ev.payload.get("error") or "")
         out["failureReason"] = "no-quote" if error.startswith("no-quote") else "other"
@@ -231,6 +255,11 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
     rule_dividends = [
         e for e in year_events if e.kind == "dividend" and e.rule_id == ctx.rule.rule_id
     ]
+    ai_events = [
+        e
+        for e in year_events
+        if e.kind in AI_EVENT_KINDS or (e.kind == "rebalance" and e.rule_id == AI_RULE)
+    ]
     plan_kinds = [event_kind(e) for e in rebalances]
     check_days = [d for d in data.runs if d.year == chosen]
     fees = sum(
@@ -255,6 +284,8 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
         "dividend": sum(1 for e in year_events if e.kind == "dividend"),
         "failed": sum(1 for e in year_events if e.kind == "check-failed"),
     }
+    if ctx.ai_rule.shown:
+        kinds_count["ai"] = sum(1 for e in year_events if e.kind in AI_EVENT_KINDS)
     changes = month_changes(ctx, ctx.total)
     months: list[dict[str, Any]] = []
     for month in sorted(changes, reverse=True):
@@ -309,8 +340,20 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
         ],
         "filters": {
             "total": len(year_events),
-            # The rule chip counts its rebalances and dividends (§1.4: '지수 반반 3').
-            "rules": [{"rule": ctx.rule_json(), "count": len(rebalances) + len(rule_dividends)}],
+            # The rule chip counts its rebalances and dividends (§1.4: '지수 반반 3'); the AI
+            # rule's chip its plans and its judgments.
+            "rules": [
+                {
+                    "rule": ctx.rule_json(),
+                    "count": len([e for e in rebalances if e.rule_id != AI_RULE])
+                    + len(rule_dividends),
+                },
+                *(
+                    [{"rule": ctx.ai_rule.rule_json(), "count": len(ai_events)}]
+                    if ctx.ai_rule.shown
+                    else []
+                ),
+            ],
             "kinds": [{"kind": k, "count": n} for k, n in kinds_count.items()],
         },
         "months": months,
@@ -389,19 +432,21 @@ def day_events(ctx: LedgerContext, data: DayData, d: date) -> list[dict[str, Any
         if ev.kind == "rebalance" and ev.plan_id is not None:
             plan = data.plans_by_id[ev.plan_id]
             stages = plan_stages(ctx.conn, plan.plan_id, ctx.instruments, ctx.executor)
+            ids = _plan_ids(ctx, ev)
+            ai = ev.rule_id == AI_RULE
             out.append(
                 {
                     "kind": kind,
-                    "rule": ctx.rule_json(),
+                    "rule": _rule_of(ctx, ev),
                     "stagesMini": stages_mini(stages),
                     "weights": {
                         "instruments": [
-                            instrument_json(ctx.instruments[i]) for i in ctx.rule.instrument_ids
+                            instrument_json(repo.get_instrument(ctx.conn, i)) for i in ids
                         ],
-                        "before": _weights_mini(ctx, ev.payload.get("weights_before")),
-                        "after": _weights_mini(ctx, ev.payload.get("weights_after_est")),
-                        "target": [fmt.pct1(t.weight) for t in ctx.rule.targets],
-                        "threshold": fmt.pp1(ctx.rule.threshold),
+                        "before": _weights_mini(ctx, ev.payload.get("weights_before"), ev),
+                        "after": _weights_mini(ctx, ev.payload.get("weights_after_est"), ev),
+                        "target": [] if ai else [fmt.pct1(t.weight) for t in ctx.rule.targets],
+                        "threshold": 0.0 if ai else fmt.pp1(ctx.rule.threshold),
                     },
                     "stages": stages,
                     "feesKrw": fmt.krw(
@@ -426,6 +471,14 @@ def day_events(ctx: LedgerContext, data: DayData, d: date) -> list[dict[str, Any
             out.append(item)
         elif ev.kind in ("live-on", "live-off"):
             out.append({"kind": ev.kind, "at": fmt.iso(ev.occurred_at)})
+        elif ev.kind in AI_EVENT_KINDS:
+            out.append(
+                {
+                    "kind": ev.kind,
+                    "rule": ctx.ai_rule.rule_json(),
+                    "judgment": judgment(ctx.conn, ev),
+                }
+            )
     return out
 
 

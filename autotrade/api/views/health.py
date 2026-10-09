@@ -197,9 +197,10 @@ def _run_json(run: RunRow) -> dict[str, Any]:
 def health(ctx: LedgerContext) -> dict[str, Any]:
     rows = {r.series: r for r in repo.all_freshness(ctx.conn)}
     sources = [_source(ctx, s, rows.get(s)) for s in SOURCE_IDS]
+    sources += ctx.ai_rule.sources()  # filings, ai-cli, metric-table where the AI rule runs
     todos: list[dict[str, Any]] = []
     for src in sources:
-        if src["state"] == "stale":
+        if src["state"] == "stale" and src["id"] in SOURCE_IDS:
             row = rows[src["id"]]
             market = "FX" if src["id"] == "fx" else SOURCE_MARKET[src["id"]].value
             todos.append(
@@ -250,6 +251,7 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
                 "effect": "other",
             }
         )
+    todos += ctx.ai_rule.todos()
     data = DayData(ctx)
     recent: list[dict[str, Any]] = []
     for i in range(13, -1, -1):
@@ -266,7 +268,7 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
     )
     last = ctx.last_check
     last_success = _last_success(ctx)
-    stale_count = sum(1 for s in sources if s["state"] == "stale")
+    stale_count = sum(1 for s in sources if s["state"] in ("stale", "maintenance"))
     if last is None:
         kind = "before-first"
     elif failure is not None:

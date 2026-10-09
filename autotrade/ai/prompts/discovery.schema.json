@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["macro", "flows", "picks", "candidates"],
+  "properties": {
+    "macro": {"type": "string", "maxLength": 1500},
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "why", "confirm", "invalidate", "priced_in"],
+        "properties": {
+          "name": {"type": "string", "maxLength": 60},
+          "why": {"type": "string", "maxLength": 400},
+          "confirm": {"type": "string", "maxLength": 300},
+          "invalidate": {"type": "string", "maxLength": 300},
+          "priced_in": {"type": "string", "maxLength": 300}
+        }
+      }
+    },
+    "picks": {"type": "array", "maxItems": 20, "items": "__PICK__"},
+    "candidates": {"type": "array", "maxItems": 10, "items": "__PICK__"}
+  }
+}

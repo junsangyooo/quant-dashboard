@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["relevant", "touches", "reason"],
+  "properties": {
+    "relevant": {"type": "boolean"},
+    "touches": {"type": "array", "maxItems": 6, "items": {"type": "integer", "minimum": 1}},
+    "reason": {"type": "string", "maxLength": 200}
+  }
+}

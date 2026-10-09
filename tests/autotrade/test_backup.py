@@ -134,7 +134,7 @@ def test_v3_keeps_the_events_and_widens_them(tmp_path: Path) -> None:
                 ("2026-07-01T07:00:00+00:00",) * 3,
             )
         assert current_version(conn) == 2
-        assert migrate(conn, at) == len(MIGRATIONS) == 3
+        assert migrate(conn, at) == len(MIGRATIONS)
         [start] = repo.events_of_ledger(conn, "paper")
         assert (start.kind, start.amount, start.ref) == ("start", Decimal("10000000"), None)
         snap = repo.get_snapshot(conn, "paper", date(2026, 7, 1))

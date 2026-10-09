@@ -11,12 +11,12 @@ import pytest
 from autotrade.jobs.cli import build_parser, main
 
 from .fakes import KR, US, World
-from .helpers import kst
+from .helpers import PHASE1_ENV, kst
 
 
 def run(argv: list[str], world: World, db: Path) -> tuple[int, dict[str, Any]]:
     lines: list[str] = []
-    env = {"AUTOTRADE_PAPER_START_DATE": "2026-07-01"}
+    env = {"AUTOTRADE_PAPER_START_DATE": "2026-07-01", **PHASE1_ENV}
     code = main([*argv, "--db", str(db)], sources=world.sources(), env=env, out=lines.append)
     return code, json.loads(lines[0]) if lines else {}
 

@@ -20,13 +20,17 @@ from autotrade.engine.bootstrap import bootstrap
 from autotrade.jobs.tasks import JobContext
 
 from ..fakes import World
-from ..helpers import kst
+from ..helpers import PHASE1_SHARES, kst
 from .support import PIN, Clock, owner_pin
 
 
 @pytest.fixture
 def api_cfg(tmp_path: Path) -> Config:
-    return Config(db_path=tmp_path / "autotrade.db", paper_start_date=date(2026, 7, 1))
+    return Config(
+        db_path=tmp_path / "autotrade.db",
+        paper_start_date=date(2026, 7, 1),
+        rule_shares=PHASE1_SHARES,
+    )
 
 
 @pytest.fixture

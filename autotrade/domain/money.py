@@ -85,10 +85,16 @@ def floor_div(x: Decimal, unit: Decimal) -> int:
 
 @dataclass(frozen=True)
 class FeeRates:
-    """Commission rates as fractions (0.00015 = 0.015%). FX spread is inside the rate."""
+    """Commission rates as fractions (0.00015 = 0.015%). FX spread is inside the rate.
+
+    kr_stock_sell_tax: the Korean securities transaction tax on a stock sale (ETFs are exempt),
+    0.20% for 2026 (KOSPI 0.05% + 농특세 0.15%; KOSDAQ 0.20%) as the owner's notes read it; it
+    only touches the AI rule's Korean stocks. Check before live trading (open question).
+    """
 
     kr: Decimal = Decimal("0.00015")
     us: Decimal = Decimal("0.001")
+    kr_stock_sell_tax: Decimal = Decimal("0.0020")
 
     def rate_for(self, currency: Currency) -> Decimal:
         return self.kr if currency is Currency.KRW else self.us

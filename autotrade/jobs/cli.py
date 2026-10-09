@@ -11,6 +11,12 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve).
   snapshot   16:00 valuation and the untouched baseline
   dividends  download recent dividends of what the ledger holds and book those paid by today
   backup     copy the database to data/backup/autotrade/autotrade-<date>.db (7 kept)
+  watch      the AI rule's daily code checks (filings, sell and buy conditions, price shocks,
+             the 'vs index' line, scores); it queues AI tasks and never trades
+  ai-plan    turn the AI rule's decisions into a plan (the tick runs it before 09:05)
+  ai         run the due AI tasks through the subscription CLI (its own cron line, its own lock
+             data/autotrade.db-ai.lock: a call has no time limit). Calls only when
+             AUTOTRADE_AI_CALLS=1; without it the tasks wait and nothing is recorded
   todos      list the open '직접 할 일' (manual actions) with their ids
   resolve    resolve <todo-id> [--note TEXT]: close a manual action after handling it (e.g. in
              the Toss app); the rule plans again at the next check
@@ -43,8 +49,9 @@ from autotrade.config import Config, load_config
 from autotrade.db.connection import connect, json_default
 from autotrade.db.migrations import current_version
 from autotrade.engine.bootstrap import bootstrap
+from autotrade.jobs.ai_tasks import ai_job, plan_job, watch_job
 from autotrade.jobs.backup import backup_dir_for
-from autotrade.jobs.lock import job_lock, lock_path
+from autotrade.jobs.lock import ai_lock_path, job_lock, lock_path
 from autotrade.jobs.tasks import (
     FAILING_RESULTS,
     JobContext,
@@ -69,13 +76,27 @@ COMMANDS = (
     "snapshot",
     "dividends",
     "backup",
+    "watch",
+    "ai-plan",
+    "ai",
     "todos",
     "resolve",
     "status",
     "migrate",
     "set-pin",
 )
-LOCKED = ("tick", "check", "retry", "stage", "snapshot", "dividends", "backup", "resolve")
+LOCKED = (
+    "tick",
+    "check",
+    "retry",
+    "stage",
+    "snapshot",
+    "dividends",
+    "backup",
+    "watch",
+    "ai-plan",
+    "resolve",
+)
 LOCK_WAIT_S = 120.0
 EXIT_BUSY = 3
 
@@ -131,6 +152,13 @@ def _dump(report: dict[str, Any], *, line: bool = False) -> str:
     return json.dumps(report, default=_cli_default, ensure_ascii=False, indent=2, sort_keys=True)
 
 
+def _quiet(report: dict[str, Any]) -> bool:
+    """An AI run with nothing to do writes nothing (cron calls it every 5 minutes)."""
+    return report.get("result") == "nothing-due" or (
+        report.get("result") == "disabled" and not report.get("due")
+    )
+
+
 def _dispatch(
     args: argparse.Namespace,
     ctx: JobContext,
@@ -155,6 +183,12 @@ def _dispatch(
         return dividend_job(ctx, ledger, at, dry_run=dry)
     if args.command == "backup":
         return backup_job(ctx, at)
+    if args.command == "watch":
+        return watch_job(ctx, ledger, at, dry_run=dry)
+    if args.command == "ai":
+        return ai_job(ctx, clock)
+    if args.command == "ai-plan":
+        return plan_job(ctx, ledger, at, dry_run=dry)
     if args.command == "todos":
         return todos_job(ctx, ledger, at)
     if args.command == "resolve":
@@ -191,7 +225,7 @@ def _run(
     conn = connect(cfg.db_path)
     try:
         bootstrap(conn, cfg, clock())
-        ctx = JobContext(conn, cfg, sources or default_sources())
+        ctx = JobContext(conn, cfg, sources or default_sources(cfg))
         if args.command == "tick":
             return _tick(args, ctx, clock, out)
         report = _dispatch(args, ctx, clock, stdin)
@@ -200,7 +234,9 @@ def _run(
         return 2
     finally:
         conn.close()
-    out(_dump(report))
+    if args.command == "ai" and _quiet(report):
+        return 0
+    out(_dump(report, line=args.command == "ai"))  # the AI log gets one line per run
     return 1 if report.get("result") in FAILING_RESULTS else 0
 
 
@@ -228,6 +264,12 @@ def main(
             return fixed
         return (now or (lambda: datetime.now(UTC)))()
 
+    if args.command == "ai":
+        with job_lock(ai_lock_path(cfg.db_path), 0.0) as locked:
+            if not locked:  # the previous run is still asking
+                out(_dump({"job": "ai", "result": "busy", "at": clock()}, line=True))
+                return 0
+            return _run(args, cfg, sources, clock, out, stdin or sys.stdin)
     if args.command not in LOCKED:
         return _run(args, cfg, sources, clock, out, stdin or sys.stdin)
     tick = args.command == "tick"

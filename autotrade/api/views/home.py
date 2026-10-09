@@ -18,6 +18,7 @@ from autotrade.api.views.series import (
 from autotrade.db import repo
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO
+from autotrade.rules.discovery import RULE_ID as AI_RULE
 from autotrade.timeutil import kst_date
 
 HOME_PERIODS = ("1m", "3m", "1y", "all")
@@ -53,7 +54,7 @@ def plan_card(ctx: LedgerContext) -> dict[str, Any] | None:
         "gauge": ctx.gauge(),
         "stages": ctx.stages,
         "nextCheckAt": fmt.iso(ctx.next_check),
-        "others": None,
+        "others": {"count": 1, "status": ctx.ai_rule.status} if ctx.ai_rule.shown else None,
     }
 
 
@@ -86,10 +87,22 @@ def composition(ctx: LedgerContext) -> dict[str, Any]:
             "key": rule_id,
             "rule": ctx.rule_json(),
             "pct": float(comp.group_pct(rule_id)),
-            "target": fmt.pct1(ctx.rule.asset_share),
+            "target": ctx.target_pct,
             "rows": [_row_json(r) for r in rule_rows],
         }
     ]
+    ai = ctx.ai_rule
+    ai_rows = [r for r in comp.rows if r.group == AI_RULE]
+    if ai.shown and (ai_rows or ai.target):
+        groups.append(
+            {
+                "key": AI_RULE,
+                "rule": ai.rule_json(),
+                "pct": float(comp.group_pct(AI_RULE)),
+                "target": None if ai.target is None else float(ai.target),
+                "rows": [_row_json(r) for r in ai_rows],
+            }
+        )
     outside = [r for r in comp.rows if r.group == "outside"]
     if outside:
         groups.append(

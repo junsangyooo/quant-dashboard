@@ -30,10 +30,10 @@ from autotrade.market.service import MarketSources
 from autotrade.timeutil import KST
 
 from .fakes import KR, US, World
-from .helpers import kst
+from .helpers import PHASE1_ENV, PHASE1_SHARES, kst
 from .test_engine_first_day import first_day_world
 
-ENV = {"AUTOTRADE_PAPER_START_DATE": "2026-07-01"}
+ENV = {"AUTOTRADE_PAPER_START_DATE": "2026-07-01", **PHASE1_ENV}
 
 
 def tick(
@@ -289,7 +289,7 @@ def test_before_the_start_date_nothing_runs(world: World, db: Path) -> None:
     first_day_world(world)
     conn = connect(db)
     try:
-        bootstrap(conn, Config(db_path=db), kst("2026-06-30 12:00"))
+        bootstrap(conn, Config(db_path=db, rule_shares=PHASE1_SHARES), kst("2026-06-30 12:00"))
         with transaction(conn):
             repo.set_setting(conn, start_date_key("paper"), "2026-07-06", kst("2026-06-30 12:00"))
     finally:
@@ -299,8 +299,24 @@ def test_before_the_start_date_nothing_runs(world: World, db: Path) -> None:
         assert [x["task"] for x in lines] in ([], ["backup"])
     conn = connect(db)
     try:
-        assert retry_due(conn, Config(db_path=db), "paper", kst("2026-07-01 10:00")) is None
-        assert check_due(conn, Config(db_path=db), "paper", kst("2026-07-01 08:30")) is None
+        assert (
+            retry_due(
+                conn,
+                Config(db_path=db, rule_shares=PHASE1_SHARES),
+                "paper",
+                kst("2026-07-01 10:00"),
+            )
+            is None
+        )
+        assert (
+            check_due(
+                conn,
+                Config(db_path=db, rule_shares=PHASE1_SHARES),
+                "paper",
+                kst("2026-07-01 08:30"),
+            )
+            is None
+        )
     finally:
         conn.close()
 
@@ -379,11 +395,20 @@ def test_a_ledger_without_an_executor_cannot_tick(
 
 def test_the_crontab_block(tmp_path: Path) -> None:
     text = (Path(__file__).resolve().parents[2] / "deploy" / "autotrade.cron").read_text()
-    [line] = [x for x in text.splitlines() if x and not x.startswith("#")]
-    assert line.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && flock -n ")
-    assert ".venv/bin/python -m autotrade.jobs tick" in line
-    assert line.endswith(">> data/logs/autotrade-jobs.log 2>&1")
-    assert "%" not in line  # cron would cut the line at an unescaped %
+    [tick, ai] = [x for x in text.splitlines() if x and not x.startswith("#")]
+    assert tick.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && ")
+    assert " flock -n data/autotrade.db-cron.lock timeout 10m " in tick
+    assert "AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env" in tick  # DART key only
+    assert ".venv/bin/python -m autotrade.jobs tick" in tick
+    assert tick.endswith(">> data/logs/autotrade-jobs.log 2>&1")
+    # The AI line: its own lock, no time limit, and no AUTOTRADE_AI_CALLS until the owner's go.
+    assert ai.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && flock -n ")
+    assert ".venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1" in ai
+    assert "timeout" not in ai
+    assert "AUTOTRADE_AI_CALLS" not in ai
+    assert "ANTHROPIC_API_KEY" not in ai
+    for line in (tick, ai):
+        assert "%" not in line  # cron would cut the line at an unescaped %
     assert "UTC" in text
 
 

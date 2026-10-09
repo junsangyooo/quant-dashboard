@@ -29,6 +29,7 @@ from autotrade.domain.dividends import HeldFill, after_tax, qty_before_ex_date
 from autotrade.domain.instruments import Currency, Instrument, Market
 from autotrade.domain.ledger import CashFlowKind, apply_cash_flow
 from autotrade.domain.money import usd_in_krw
+from autotrade.engine import sleeves
 from autotrade.engine.common import load_rule, refresh_cash_parts
 from autotrade.rules.index_half import RULE_ID
 from autotrade.timeutil import et_date, kst_date, require_aware
@@ -112,6 +113,7 @@ def _book_one(
     if krw_rate is not None:
         payload["krw_rate"] = krw_rate
     rule, _ = load_rule(conn, RULE_ID)
+    ledger_qty = qty
     event_id = repo.insert_event(
         conn,
         ledger_id=ledger_id,
@@ -124,6 +126,22 @@ def _book_one(
         ref=dividend_ref(inst.instrument_id, div.ex_date),
         payload=payload,
     )
+    # Rules sharing the ledger get the part their shares earned (engine/sleeves.py).
+    parts = sleeves.split_dividend(
+        conn,
+        ledger_id,
+        inst.instrument_id,
+        div.ex_date,
+        ledger_qty,
+        amounts.net,
+        inst.currency,
+        krw_rate,
+        event_id,
+        at,
+    )
+    if parts:
+        payload["sleeves"] = parts
+        repo.update_event(conn, event_id, at, payload=payload)
     return {
         "event_id": event_id,
         "instrument_id": inst.instrument_id,

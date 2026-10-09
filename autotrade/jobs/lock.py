@@ -21,6 +21,11 @@ def lock_path(db_path: Path) -> Path:
     return db_path.with_name(db_path.name + "-jobs.lock")
 
 
+def ai_lock_path(db_path: Path) -> Path:
+    """The AI runner's own lock: a model call may take minutes and must not hold up the tick."""
+    return db_path.with_name(db_path.name + "-ai.lock")
+
+
 @contextmanager
 def job_lock(path: Path, wait_s: float = 0.0, poll_s: float = 0.2) -> Iterator[bool]:
     """Hold the lock for the block. Yields False (and holds nothing) when it stayed busy."""

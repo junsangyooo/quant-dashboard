@@ -22,6 +22,14 @@ backup files) say what already ran today, so every task runs once however often 
                                                    valuation is retried after 30 min
   backup     after the snapshot (every day;        until midnight (copies are named by KST date)
              from 16:00 on weekends)
+  ai-plan    after the watch, while decisions come   until the Korean order time (09:05): a later
+             (the AI rule's plan)                    decision waits for the next morning
+  watch      08:30, after the check (the AI rule's   any time that day; a crashed run is tried
+             daily code checks, phase 2)             again after 30 min. Sessions missed while
+                                                     down are scanned by the next run
+  ai-queue   22:00 the evening before the 1st        until the 3rd of the month (the monthly
+             (monthly reviews; discovery on the      review must not be skipped)
+             1st of 4·6·9·12월)
 
 Why the windows end where they do:
 - check -> 09:30: from then on the 09:30 retry is the same check as the final attempt.
@@ -43,13 +51,16 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from autotrade.config import Config
-from autotrade.db import repo
+from autotrade.db import ai_repo, repo
+from autotrade.engine import discovery_plan, reviews
+from autotrade.engine import watch as watch_engine
 from autotrade.engine.bootstrap import start_date_key
 from autotrade.engine.check import FAILED, TODO
 from autotrade.engine.runner import eligible_stages
 from autotrade.jobs.backup import backup_path
 from autotrade.market.calendar import KRX, NYSE
 from autotrade.market.service import DIVIDENDS_SERIES
+from autotrade.rules.discovery import RULE_ID as DISCOVERY
 from autotrade.timeutil import at_kst, is_weekday, kst_date
 
 TICK_EVERY = timedelta(minutes=5)  # deploy/autotrade.cron
@@ -58,6 +69,8 @@ DIVIDEND_RETRY_EVERY = timedelta(minutes=60)
 RETRY_CUTOFF = time(15, 30)
 SNAPSHOT_RETRY_EVERY = timedelta(minutes=30)
 SNAPSHOT_DONE = ("ok", "not-started", "weekend")
+WATCH_RETRY_EVERY = timedelta(minutes=30)
+WATCH_DONE = ("ok", "partial", "nothing")
 
 
 @dataclass(frozen=True)
@@ -180,3 +193,49 @@ def backup_due(
             if waiting and not _waiting_for_start(conn, ledger_id, d):
                 return None  # the snapshot may still come: back up after it
     return Due("backup", "after-snapshot" if is_weekday(d) else "daily")
+
+
+def watch_due(conn: sqlite3.Connection, cfg: Config, ledger_id: str, now: datetime) -> Due | None:
+    """The AI rule's daily checks: weekdays from the check time, once (a crash retries)."""
+    d = kst_date(now)
+    scheduled = at_kst(d, cfg.check_time)
+    if not is_weekday(d) or now < scheduled or not reviews.rule_active(conn, ledger_id):
+        return None
+    runs = [r for r in ai_repo.job_runs_on(conn, watch_engine.JOB, d) if r.ledger_id == ledger_id]
+    if any(r.result in WATCH_DONE for r in runs):
+        return None
+    if runs:
+        if now - runs[-1].started_at < WATCH_RETRY_EVERY:
+            return None
+        return Due("watch", "retry")
+    return Due("watch", _timing(now, scheduled))
+
+
+def queue_due(conn: sqlite3.Connection, ledger_id: str, now: datetime) -> Due | None:
+    """The month's reviews (and the quarter's discovery), from 22:00 the evening before."""
+    month = reviews.review_month(now)
+    if month is None or not reviews.rule_active(conn, ledger_id):
+        return None
+    if reviews.queued_for(conn, ledger_id, month):
+        return None
+    return Due("ai-queue", "on-time" if kst_date(now) < month else "late")
+
+
+def ai_plan_due(conn: sqlite3.Connection, cfg: Config, ledger_id: str, now: datetime) -> Due | None:
+    """The AI rule's plan: weekdays in [check time, Korean order time), after the ledger's
+    first plan, with no discovery plan today or still running, and something to plan."""
+    d = kst_date(now)
+    start, end = discovery_plan.window(cfg, d)
+    if not is_weekday(d) or not start <= now < end or not reviews.rule_active(conn, ledger_id):
+        return None
+    first = repo.start_event(conn, ledger_id)
+    if first is None or first.plan_id is None:
+        return None  # the start event's plan (the long-term rule's first buy) comes first
+    if repo.plan_on(conn, ledger_id, DISCOVERY, d) is not None:
+        return None
+    if repo.open_plans(conn, ledger_id, DISCOVERY):
+        return None
+    if not discovery_plan.has_work(conn, ledger_id, now):
+        return None
+    prior = discovery_plan.last_run(conn, ledger_id, d)
+    return Due("ai-plan", "new-decision" if prior is not None else _timing(now, start))

@@ -6,6 +6,8 @@
 - A buy is cut to what the cash can pay (plan price = prior close, fill = next open).
 - A conversion fills at the newest stored rate at or before the stage time, if it is recent.
 - Fees: Korea 0.015% (floored to the won), US 0.1% (rounded to the cent); FX spread is ignored.
+  Selling a Korean stock (the AI rule's picks) also pays the securities transaction tax, kept in
+  the fill's fee (FeeRates.kr_stock_sell_tax).
 """
 
 from __future__ import annotations
@@ -26,8 +28,8 @@ from autotrade.broker.base import (
     Waiting,
 )
 from autotrade.db import repo
-from autotrade.domain.instruments import Currency
-from autotrade.domain.money import FeeRates, krw_to_usd, trade_fee, usd_to_krw
+from autotrade.domain.instruments import Currency, Kind
+from autotrade.domain.money import FeeRates, floor_won, krw_to_usd, trade_fee, usd_to_krw
 from autotrade.domain.planner import FxDirection, Side
 from autotrade.market.freshness import weekday_age
 from autotrade.market.types import Bar, FxQuote
@@ -93,6 +95,8 @@ class PaperExecutor:
             return Failed(FailureReason.OTHER, f"not a trade: {req.side.value}")
         gross = price * qty
         fee = trade_fee(currency, gross, self.fees)
+        if req.side is Side.SELL and currency is Currency.KRW and req.instrument.kind is Kind.STOCK:
+            fee += floor_won(gross * self.fees.kr_stock_sell_tax)
         return TradeFilled(
             qty, price, gross, fee, f"{bar.source}:open:{req.session_date.isoformat()}"
         )

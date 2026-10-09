@@ -22,12 +22,19 @@ from autotrade.db.models import DividendRow
 from autotrade.domain.dividends import estimated_pay_date
 from autotrade.domain.instruments import Instrument, Market
 from autotrade.market.calendar import calendar_for
+from autotrade.market.filings import DartFilingSource, EdgarFilingSource, FilingSource
 from autotrade.market.freshness import (
     Freshness,
     Series,
     expected_session,
     fx_freshness,
     quote_freshness,
+)
+from autotrade.market.research import (
+    AdjustedSource,
+    ValuationSource,
+    YahooAdjustedSource,
+    YahooValuationSource,
 )
 from autotrade.market.sources import (
     BarSource,
@@ -57,14 +64,21 @@ class MarketSources:
     us: BarSource
     fx: FxSource
     dividends: DividendSource | None = None  # None: dividends are not fetched
+    # Phase 2 (the AI rule's daily watch, autotrade/engine/watch.py). None: not fetched.
+    adjusted: AdjustedSource | None = None
+    valuation: ValuationSource | None = None
+    dart: FilingSource | None = None
+    edgar: FilingSource | None = None
 
 
-def default_sources() -> MarketSources:
-    """The phase-1 public sources: Yahoo for Korea (pykrx as fallback), the US and the rate.
+def default_sources(cfg: Config | None = None) -> MarketSources:
+    """The public sources: Yahoo for Korea (pykrx as fallback), the US and the rate; for the AI
+    rule, Yahoo's adjusted closes and ratios, DART (with the key from the settings) and EDGAR.
 
     Yahoo first (owner's decision 2026-10-09): pykrx's ETF lookup needs a KRX login, and logging
     in would share the screener cron's KRX session (ops notes §8).
     """
+    cfg = cfg or Config()
     return MarketSources(
         kr=FallbackBarSource(
             [RetryingBarSource(YahooBarSource()), RetryingBarSource(PykrxBarSource())]
@@ -72,6 +86,10 @@ def default_sources() -> MarketSources:
         us=RetryingBarSource(YahooBarSource()),
         fx=RetryingFxSource(YahooFxSource()),
         dividends=RetryingDividendSource(YahooDividendSource()),
+        adjusted=YahooAdjustedSource(),
+        valuation=YahooValuationSource(),
+        dart=DartFilingSource(cfg.dart_api_key),
+        edgar=EdgarFilingSource(cfg.edgar_user_agent),
     )
 
 

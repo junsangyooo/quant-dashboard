@@ -376,11 +376,324 @@ CREATE INDEX dividends_paid ON dividends(pay_date);
 ALTER TABLE snapshots ADD COLUMN baseline_cash_krw TEXT
 """
 
+# V4: phase 2, the AI rule '3년 발굴' (autotrade/PHASE2.md).
+# - plans: the AI rule's plans have reason 'ai' (what they carry is in basis). The CHECK cannot be
+#   altered, so the table is rebuilt; stages, orders and events reference it, which is why this
+#   migration runs with foreign keys off and checks them before committing (FK_OFF).
+# - events: the AI rule's kinds (CONTRACT.md EventKind) join the CHECK.
+# - rule_shares: each rule's target share of a ledger (PHASE2.md §1).
+# - sleeve_*: what a rule other than the base rule (index_half) owns inside the shared ledger.
+#   The base rule's part is the ledger minus the other rules' sleeves.
+# - picks (판단 장부), metric_dictionary / metric_values (지표 사전·지표 표), filings (공시),
+#   ai_tasks (일감) and ai_calls (호출 기록), scores (채점), switches (바꾸기), rule_daily ('지수
+#   대비' line), job_runs (the new jobs' runs), source_states (DART·EDGAR·AI CLI).
+V4 = """
+CREATE TABLE plans_v4 (
+    plan_id            INTEGER PRIMARY KEY,
+    ledger_id          TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id            TEXT NOT NULL REFERENCES rules(rule_id),
+    plan_date          TEXT NOT NULL,
+    run_id             INTEGER REFERENCES runs(run_id),
+    reason             TEXT NOT NULL CHECK (reason IN ('start', 'drift', 'new_cash', 'ai')),
+    status             TEXT NOT NULL
+                       CHECK (status IN ('in-progress', 'partial-failed', 'done', 'todo',
+                                         'resolved')),
+    basis              TEXT NOT NULL,
+    weights_before     TEXT NOT NULL,
+    weights_after_est  TEXT NOT NULL,
+    created_at         TEXT NOT NULL,
+    completed_at       TEXT,
+    UNIQUE (ledger_id, rule_id, plan_date)
+);
+
+INSERT INTO plans_v4 SELECT plan_id, ledger_id, rule_id, plan_date, run_id, reason, status, basis,
+                            weights_before, weights_after_est, created_at, completed_at
+    FROM plans;
+
+DROP TABLE plans;
+
+ALTER TABLE plans_v4 RENAME TO plans;
+
+CREATE TABLE events_v4 (
+    event_id     INTEGER PRIMARY KEY,
+    ledger_id    TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    kind         TEXT NOT NULL CHECK (kind IN ('start', 'rebalance', 'check-failed', 'dividend',
+                                                'deposit', 'withdrawal', 'live-on', 'live-off',
+                                                'todo-resolved', 'discovery', 'ai-buy',
+                                                'ai-sell', 'ai-check', 'monthly-review')),
+    event_date   TEXT NOT NULL,
+    occurred_at  TEXT NOT NULL,
+    rule_id      TEXT REFERENCES rules(rule_id),
+    plan_id      INTEGER UNIQUE REFERENCES plans(plan_id),
+    status       TEXT,
+    amount       TEXT,
+    currency     TEXT,
+    ref          TEXT,
+    payload      TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+
+INSERT INTO events_v4 SELECT event_id, ledger_id, kind, event_date, occurred_at, rule_id, plan_id,
+                             status, amount, currency, ref, payload, created_at, updated_at
+    FROM events;
+
+DROP TABLE events;
+
+ALTER TABLE events_v4 RENAME TO events;
+
+CREATE INDEX events_ledger ON events(ledger_id, event_date);
+CREATE UNIQUE INDEX events_one_start ON events(ledger_id) WHERE kind = 'start';
+CREATE UNIQUE INDEX events_one_check_failure ON events(ledger_id, event_date)
+    WHERE kind = 'check-failed';
+CREATE UNIQUE INDEX events_ref ON events(ledger_id, ref) WHERE ref IS NOT NULL;
+
+CREATE TABLE rule_shares (
+    ledger_id   TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id     TEXT NOT NULL REFERENCES rules(rule_id),
+    target_pct  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (ledger_id, rule_id)
+);
+
+CREATE TABLE sleeve_positions (
+    ledger_id      TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id        TEXT NOT NULL REFERENCES rules(rule_id),
+    instrument_id  TEXT NOT NULL REFERENCES instruments(instrument_id),
+    currency       TEXT NOT NULL,
+    qty            INTEGER NOT NULL CHECK (qty > 0),
+    cost_native    TEXT NOT NULL,
+    cost_krw       TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    PRIMARY KEY (ledger_id, rule_id, instrument_id)
+);
+
+CREATE TABLE sleeve_cash (
+    ledger_id   TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id     TEXT NOT NULL REFERENCES rules(rule_id),
+    currency    TEXT NOT NULL CHECK (currency IN ('KRW', 'USD')),
+    amount      TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (ledger_id, rule_id, currency)
+);
+
+CREATE TABLE sleeve_totals (
+    ledger_id          TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id            TEXT NOT NULL REFERENCES rules(rule_id),
+    realized_krw       TEXT NOT NULL DEFAULT '0',
+    fees_krw           TEXT NOT NULL DEFAULT '0',
+    contributions_krw  TEXT NOT NULL DEFAULT '0',
+    income_krw         TEXT NOT NULL DEFAULT '0',
+    updated_at         TEXT NOT NULL,
+    PRIMARY KEY (ledger_id, rule_id)
+);
+
+CREATE TABLE sleeve_flows (
+    flow_id      INTEGER PRIMARY KEY,
+    ledger_id    TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id      TEXT NOT NULL REFERENCES rules(rule_id),
+    event_id     INTEGER,
+    kind         TEXT NOT NULL CHECK (kind IN ('start', 'deposit', 'withdrawal', 'dividend')),
+    amount       TEXT NOT NULL,
+    currency     TEXT NOT NULL CHECK (currency IN ('KRW', 'USD')),
+    krw_rate     TEXT,
+    occurred_at  TEXT NOT NULL
+);
+CREATE INDEX sleeve_flows_rule ON sleeve_flows(ledger_id, rule_id, occurred_at);
+
+CREATE TABLE picks (
+    pick_id           INTEGER PRIMARY KEY,
+    ledger_id         TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id           TEXT NOT NULL REFERENCES rules(rule_id),
+    instrument_id     TEXT NOT NULL REFERENCES instruments(instrument_id),
+    status            TEXT NOT NULL CHECK (status IN ('candidate', 'held', 'sold', 'expired')),
+    picked_on         TEXT NOT NULL,
+    picked_price      TEXT NOT NULL,
+    benchmark         TEXT NOT NULL,
+    benchmark_price   TEXT NOT NULL,
+    theme             TEXT NOT NULL,
+    rationale         TEXT NOT NULL DEFAULT '',
+    confirm           TEXT NOT NULL DEFAULT '[]',
+    invalidate        TEXT NOT NULL DEFAULT '[]',
+    buy               TEXT NOT NULL DEFAULT '[]',
+    texts             TEXT NOT NULL DEFAULT '{}',
+    confidence        TEXT,
+    source            TEXT NOT NULL,
+    last_verdict      TEXT CHECK (last_verdict IN ('hold', 'weaken', 'invalidated')),
+    last_verdict_at   TEXT,
+    weak_months       INTEGER NOT NULL DEFAULT 0,
+    decision          TEXT CHECK (decision IN ('buy', 'sell')),
+    decided_at        TEXT,
+    decision_task_id  INTEGER,
+    shock_until       TEXT,
+    closed_on         TEXT,
+    closed_reason     TEXT,
+    note              TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+CREATE UNIQUE INDEX picks_open ON picks(ledger_id, rule_id, instrument_id)
+    WHERE status IN ('candidate', 'held');
+
+CREATE TABLE metric_dictionary (
+    key          TEXT PRIMARY KEY,
+    label        TEXT NOT NULL,
+    unit_kind    TEXT NOT NULL CHECK (unit_kind IN ('pct', 'money', 'ratio', 'count', 'any')),
+    period_kind  TEXT NOT NULL CHECK (period_kind IN ('quarter', 'month', 'year', 'any')),
+    source       TEXT NOT NULL CHECK (source IN ('financials', 'extraction', 'derived')),
+    param        TEXT,
+    description  TEXT NOT NULL
+);
+
+CREATE TABLE filings (
+    filing_id      INTEGER PRIMARY KEY,
+    instrument_id  TEXT NOT NULL REFERENCES instruments(instrument_id),
+    source         TEXT NOT NULL CHECK (source IN ('dart', 'edgar')),
+    source_ref     TEXT NOT NULL,
+    form           TEXT NOT NULL,
+    items          TEXT,
+    title          TEXT NOT NULL,
+    filed_on       TEXT NOT NULL,
+    url            TEXT,
+    kind           TEXT NOT NULL CHECK (kind IN ('earnings', 'other', 'skipped')),
+    status         TEXT NOT NULL CHECK (status IN ('new', 'queued', 'done', 'relevant',
+                                                   'irrelevant', 'skipped', 'failed')),
+    fetched_at     TEXT NOT NULL,
+    UNIQUE (source, source_ref, instrument_id)
+);
+CREATE INDEX filings_by_instrument ON filings(instrument_id, filed_on);
+
+CREATE TABLE metric_values (
+    instrument_id  TEXT NOT NULL REFERENCES instruments(instrument_id),
+    metric         TEXT NOT NULL,
+    period         TEXT NOT NULL,
+    value          TEXT NOT NULL,
+    unit           TEXT NOT NULL,
+    filing_id      INTEGER REFERENCES filings(filing_id),
+    quote          TEXT,
+    source         TEXT NOT NULL,
+    call_id        INTEGER,
+    extracted_at   TEXT NOT NULL,
+    PRIMARY KEY (instrument_id, metric, period)
+);
+
+CREATE TABLE ai_tasks (
+    task_id      INTEGER PRIMARY KEY,
+    kind         TEXT NOT NULL CHECK (kind IN ('extract', 'screen', 'sell-confirm',
+                                               'buy-confirm', 'monthly-review', 'discovery',
+                                               'switch')),
+    status       TEXT NOT NULL CHECK (status IN ('pending', 'running', 'done', 'failed',
+                                                 'cancelled')),
+    ledger_id    TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id      TEXT NOT NULL REFERENCES rules(rule_id),
+    pick_id      INTEGER REFERENCES picks(pick_id),
+    filing_id    INTEGER REFERENCES filings(filing_id),
+    trigger      TEXT NOT NULL,
+    detail       TEXT NOT NULL DEFAULT '{}',
+    dedup_key    TEXT NOT NULL UNIQUE,
+    not_before   TEXT NOT NULL,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    last_error   TEXT,
+    result       TEXT,
+    created_at   TEXT NOT NULL,
+    started_at   TEXT,
+    finished_at  TEXT
+);
+CREATE INDEX ai_tasks_queue ON ai_tasks(status, not_before);
+
+CREATE TABLE ai_calls (
+    call_id      INTEGER PRIMARY KEY,
+    task_id      INTEGER REFERENCES ai_tasks(task_id),
+    purpose      TEXT NOT NULL,
+    caller       TEXT NOT NULL,
+    model        TEXT NOT NULL,
+    effort       TEXT,
+    web          INTEGER NOT NULL DEFAULT 0,
+    prompt       TEXT NOT NULL,
+    input        TEXT NOT NULL,
+    output       TEXT,
+    usage        TEXT,
+    tokens       INTEGER NOT NULL DEFAULT 0,
+    cost_usd     TEXT,
+    duration_ms  INTEGER,
+    exit_code    INTEGER,
+    error        TEXT,
+    started_at   TEXT NOT NULL,
+    finished_at  TEXT
+);
+CREATE INDEX ai_calls_by_time ON ai_calls(started_at);
+CREATE INDEX ai_calls_by_task ON ai_calls(task_id);
+
+CREATE TABLE switches (
+    switch_id       INTEGER PRIMARY KEY,
+    ledger_id       TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id         TEXT NOT NULL REFERENCES rules(rule_id),
+    sold_pick_id    INTEGER NOT NULL REFERENCES picks(pick_id),
+    bought_pick_id  INTEGER NOT NULL REFERENCES picks(pick_id),
+    decided_on      TEXT NOT NULL,
+    task_id         INTEGER REFERENCES ai_tasks(task_id),
+    costs           TEXT NOT NULL DEFAULT '{}',
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE scores (
+    kind            TEXT NOT NULL CHECK (kind IN ('pick', 'sell', 'switch')),
+    ref_id          INTEGER NOT NULL,
+    horizon_months  INTEGER NOT NULL CHECK (horizon_months IN (6, 12, 24, 36)),
+    start_on        TEXT NOT NULL,
+    due_on          TEXT NOT NULL,
+    end_on          TEXT NOT NULL,
+    value_return    TEXT NOT NULL,
+    index_return    TEXT NOT NULL,
+    excess          TEXT NOT NULL,
+    scored_at       TEXT NOT NULL,
+    PRIMARY KEY (kind, ref_id, horizon_months)
+);
+
+CREATE TABLE rule_daily (
+    ledger_id   TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    rule_id     TEXT NOT NULL REFERENCES rules(rule_id),
+    date        TEXT NOT NULL,
+    excess_pp   TEXT,
+    details     TEXT NOT NULL DEFAULT '{}',
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (ledger_id, rule_id, date)
+);
+
+CREATE TABLE job_runs (
+    run_id      INTEGER PRIMARY KEY,
+    job         TEXT NOT NULL,
+    ledger_id   TEXT,
+    run_date    TEXT NOT NULL,
+    started_at  TEXT NOT NULL,
+    ended_at    TEXT,
+    result      TEXT,
+    error       TEXT,
+    details     TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX job_runs_by_date ON job_runs(job, run_date);
+
+CREATE TABLE source_states (
+    source_id     TEXT PRIMARY KEY,
+    state         TEXT NOT NULL CHECK (state IN ('ok', 'maintenance', 'stale', 'failed',
+                                                 'no-key', 'unknown')),
+    detail        TEXT,
+    attempted_at  TEXT,
+    ok_at         TEXT,
+    updated_at    TEXT NOT NULL
+)
+"""
+
 MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (1, "initial schema", V1),
     (2, "pin, sessions, lockout, notification preferences", V2),
     (3, "event refs, todo resolutions, dividends, baseline dividend cash", V3),
+    (4, "the AI rule: shares, sleeves, picks, metrics, filings, AI tasks and calls", V4),
 )
+
+# Migrations that rebuild a table other tables reference. SQLite's documented procedure: foreign
+# keys off around the transaction, PRAGMA foreign_key_check before the commit.
+FK_OFF = frozenset({4})
 
 
 def _statements(sql: str) -> list[str]:
@@ -403,11 +716,24 @@ def migrate(conn: sqlite3.Connection, now: datetime | None = None) -> int:
     for version, name, sql in MIGRATIONS:
         if version in applied:
             continue
-        with transaction(conn):
-            for statement in _statements(sql):
-                conn.execute(statement)
-            conn.execute(
-                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
-                (version, name, stamp),
-            )
+        fk_off = version in FK_OFF
+        if fk_off:
+            conn.execute("PRAGMA foreign_keys=OFF")  # no effect inside a transaction
+        try:
+            with transaction(conn):
+                for statement in _statements(sql):
+                    conn.execute(statement)
+                if fk_off:
+                    broken = conn.execute("PRAGMA foreign_key_check").fetchall()
+                    if broken:
+                        raise sqlite3.IntegrityError(
+                            f"migration {version} breaks foreign keys: {broken[:5]}"
+                        )
+                conn.execute(
+                    "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+                    (version, name, stamp),
+                )
+        finally:
+            if fk_off:
+                conn.execute("PRAGMA foreign_keys=ON")
     return current_version(conn)

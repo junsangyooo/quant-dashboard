@@ -34,6 +34,7 @@ from autotrade.domain.ledger import FxFill, TradeFill, apply_fx, apply_trade
 from autotrade.domain.money import ZERO
 from autotrade.domain.planner import FxDirection, Side
 from autotrade.domain.stages import StageMarket
+from autotrade.engine import sleeves
 from autotrade.engine.check import idem_key
 from autotrade.engine.common import refresh_cash_parts, slotter_for, withdraw_wait_amounts
 from autotrade.market.calendar import KRX, calendar_for
@@ -101,8 +102,14 @@ def _execute(
     executor: Executor,
     fetch: FetchErrors,
 ) -> Outcome:
-    state = repo.load_state(conn, ledger_id)
-    held = withdraw_wait_amounts(repo.cash_parts(conn, ledger_id))
+    # A rule spends and sells only its own part of the shared ledger (engine/sleeves.py).
+    rule_id = repo.get_plan(conn, order.plan_id).rule_id
+    state = sleeves.view(conn, ledger_id, rule_id)
+    held = (
+        withdraw_wait_amounts(repo.cash_parts(conn, ledger_id))
+        if rule_id == sleeves.BASE_RULE
+        else {}
+    )
     deadline = _deadline_passed(cfg, stage, at)
     if order.side == "fx":
         if order.fx_direction is None:
@@ -171,6 +178,7 @@ def _apply_trade_fill(
     )
     state = apply_trade(repo.load_state(conn, ledger_id), fill)
     repo.save_state(conn, ledger_id, state, at)
+    sleeves.apply_trade_fill(conn, ledger_id, plan.rule_id, fill, at)
     fee_krw = fill.to_krw(filled.fee)
     repo.insert_fill(
         conn,
@@ -220,11 +228,10 @@ def _apply_fx_fill(
     if order.fx_direction is None:
         raise ValueError("fx fill without direction")
     direction = FxDirection(order.fx_direction)
-    state = apply_fx(
-        repo.load_state(conn, ledger_id),
-        FxFill(direction, filled.from_amount, filled.to_amount, filled.rate),
-    )
+    fx_fill = FxFill(direction, filled.from_amount, filled.to_amount, filled.rate)
+    state = apply_fx(repo.load_state(conn, ledger_id), fx_fill)
     repo.save_state(conn, ledger_id, state, at)
+    sleeves.apply_fx_fill(conn, ledger_id, repo.get_plan(conn, order.plan_id).rule_id, fx_fill, at)
     repo.insert_fill(
         conn,
         repo.NewFill(

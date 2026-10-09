@@ -84,7 +84,7 @@ def test_bootstrap_rows(conn: sqlite3.Connection, cfg: Config) -> None:
     assert rule.instrument_ids == ("KR:069500", "US:SPYM")
     assert rule.threshold == D("0.02")
     assert rule.display["measured"]["median"] == "9.5"
-    assert [r.rule_id for r in repo.enabled_rules(conn)] == ["index_half"]
+    assert [r.rule_id for r in repo.enabled_rules(conn)] == ["discovery_3y", "index_half"]
     assert repo.get_instrument(conn, "US:SPYM").yahoo_symbol == "SPYM"
     bootstrap(conn, cfg, kst("2026-07-01 08:00"))  # idempotent
     with pytest.raises(repo.NotFoundError):

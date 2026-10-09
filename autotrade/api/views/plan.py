@@ -12,6 +12,7 @@ from autotrade.domain.cash import Purpose
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, usd_in_krw
 from autotrade.domain.status import RuleStatus
+from autotrade.rules.discovery import RULE_ID as AI_RULE
 
 DRIFT_PERIODS = ("3m", "1y", "all")
 
@@ -97,6 +98,11 @@ def schedule(ctx: LedgerContext) -> dict[str, Any]:
         items.append({"kind": "new-cash", "krw": _cash_krw(ctx, Purpose.NEW)})
     if _cash_krw(ctx, Purpose.SUB_SHARE) > 0:
         items.append({"kind": "sub-share-cash", "krw": _cash_krw(ctx, Purpose.SUB_SHARE)})
+    ai = ctx.ai_rule
+    if ai.shown:
+        if now is None and ai.open_plan is not None:
+            now = {"ruleId": AI_RULE, "status": ai.status, "stages": ai.stages or []}
+        items.extend(ai.schedule_items())
     return {"now": now, "items": items}
 
 
@@ -124,7 +130,7 @@ def drift_history(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
             "ruleId": ev.rule_id or ctx.rule.rule_id,
         }
         for ev in ctx.events
-        if ev.kind == "rebalance" and ev.event_date >= since
+        if ev.kind == "rebalance" and ev.event_date >= since and ev.rule_id != AI_RULE
     ]
     return {
         "periods": list(DRIFT_PERIODS) if long else None,
@@ -138,11 +144,21 @@ def drift_history(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
 
 
 def plan(ctx: LedgerContext, drift_period: str | None) -> dict[str, Any]:
+    cards = [rule_card(ctx)]
+    shares = None
+    ai = ctx.ai_rule
+    if ai.shown:
+        cards.append(ai.card())
+        # The bar shows when two rules or more have a share (CONTRACT.md PlanResponse).
+        shares = [
+            {"rule": ctx.rule_json(), "pct": float(ctx.rule_share)},
+            {"rule": ai.rule_json(), "pct": float(ctx.composition.group_pct(AI_RULE))},
+        ]
     return {
         "ledger": ctx.ledger_id,
         "example": False,
-        "ruleShares": None,  # one rule in phase 1: the bar shows from two rules on
-        "rules": [rule_card(ctx)],
+        "ruleShares": shares,
+        "rules": cards,
         "schedule": schedule(ctx),
         "drift": drift_history(ctx, drift_period),
     }

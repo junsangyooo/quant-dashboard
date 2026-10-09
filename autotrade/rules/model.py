@@ -1,8 +1,9 @@
 """Rule definitions: what a rule holds and when it acts. Stored as JSON in the rules table.
 
 A fixed rule names its instruments, their in-rule targets, the drift threshold and its share of
-the assets. 'display' carries the numbers the rules screen draws (tiles for fixed rules); the web
-writes the words (autotrade/CONTRACT.md).
+the assets. An AI rule ('3년 발굴') holds what its judgments pick, so it has no fixed targets or
+band. 'display' carries what the rules screen draws (tiles for fixed rules, flow lanes for AI
+rules); the web writes the words (autotrade/CONTRACT.md).
 """
 
 from __future__ import annotations
@@ -30,6 +31,12 @@ class RuleDef:
     display: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if self.kind == "ai":
+            if self.targets:
+                raise ValueError(f"{self.rule_id}: an AI rule has no fixed targets")
+            return
+        if self.kind != "fixed":
+            raise ValueError(f"{self.rule_id}: kind must be 'fixed' or 'ai'")
         total = sum((t.weight for t in self.targets), Decimal(0))
         if total != Decimal(1):
             raise ValueError(f"{self.rule_id}: targets sum to {total}, not 1")
