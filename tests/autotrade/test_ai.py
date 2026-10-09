@@ -366,6 +366,61 @@ def test_two_invalidations_sell(
     assert "| now.close | 100 (2026-10-12) |" in prompts[0]
     effort = runner.calls[0]["cmd"]
     assert effort[effort.index("--effort") + 1] == "low"
+    # A shock is checked against the news: the web is on for both calls (D31).
+    for call in runner.calls:
+        assert call["cmd"][-5:] == [
+            "--tools",
+            "WebSearch,WebFetch",
+            "--allowedTools",
+            "WebSearch",
+            "WebFetch",
+        ]
+    assert all(c.web for c in ai_repo.calls_of_task(p2conn, tid))
+
+
+def test_news_found_on_a_shock_is_kept_and_other_triggers_stay_web_free(
+    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
+) -> None:
+    prices(world, "042660.KS", "069500.KS")
+    news = [{"fact": "수주 1건 취소", "source": "yna.co.kr", "date": "2026-10-12"}, {"fact": ""}]
+    tid = shock_task(p2conn)
+    runner = ScriptedRunner()
+    runner.add("sell", sell("유지", news), sell("유지"))
+    run(p2ctx, runner)
+    result = ai_repo.get_task(p2conn, tid).result
+    assert result is not None
+    assert result["new_facts"] == [news[0]]  # the malformed one is left out
+    event = repo.event_by_ref(p2conn, "paper", f"ai:{tid}")
+    assert event is not None
+    assert "yna.co.kr 2026-10-12" in event.payload["output_summary"]
+    # A sell condition (not a shock) is confirmed from the packet only.
+    put_trigger = {"kind": "condition", "index": 1, "digest": "x", "period": "2026Q2", "value": "5"}
+    cond = task(
+        p2conn,
+        "sell-confirm",
+        pick_of(p2conn, OCEAN).pick_id,
+        "sc-cond",
+        "condition",
+        detail={
+            "triggers": [
+                {
+                    **put_trigger,
+                    "condition": {
+                        "type": "level",
+                        "metric": "op_margin",
+                        "op": "<",
+                        "value": 7,
+                        "unit": "%",
+                    },
+                }
+            ]
+        },
+    )
+    runner.add("sell", sell("유지"), sell("유지"))
+    run(p2ctx, runner, AT + timedelta(minutes=5))
+    assert [c.web for c in ai_repo.calls_of_task(p2conn, cond)] == [False, False]
+    assert runner.calls[-1]["cmd"][-2:] == ["--tools", ""]
+    assert "6. 급락으로 걸렸으면" in runner.prompts("sell")[-1]
 
 
 def test_one_invalidation_only_holds(

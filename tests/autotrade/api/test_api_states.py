@@ -49,7 +49,17 @@ def test_before_the_first_check(logged_in: TestClient, clock: Clock) -> None:
     assert home["total"] == 10000000  # '모의투자 시작 금액'
     assert home["pnl"] is None
     assert home["baseline"] is None
-    assert home["planCard"] is None
+    # The plan card is there before the first check, with an empty gauge (CONTRACT-GAPS 정리).
+    assert home["planCard"] == {
+        "rule": {"id": "index_half", "name": "지수 반반", "ai": False, "colorIndex": 0},
+        "share": {"pct": 0.0, "target": 100.0},
+        "status": "scheduled",
+        "next": {"kind": "first-check", "at": "2026-07-01T08:30:00+09:00"},
+        "gauge": {"kind": "drift", "threshold": 2.0, "needle": None},
+        "stages": None,
+        "nextCheckAt": "2026-07-01T08:30:00+09:00",
+        "others": None,  # '지수 반반' alone in phase-1 shares
+    }
     assert home["trend"]["empty"] == "before-first-check"
     assert home["planChip"] == {
         "ruleId": "index_half",
@@ -118,12 +128,23 @@ def test_quote_wait(
     assert (us["state"], us["basis"]) == ("stale", "2026-10-02")
     [todo] = health["todos"]
     assert todo["kind"] == "stale"
-    assert todo["facts"] == {"market": "US", "basisDate": "2026-10-02", "tradingDays": 2}
+    # 예시-값표 §3: US closes of 10/05 and 10/06 missing.
+    assert todo["facts"] == {
+        "market": "US",
+        "basisDate": "2026-10-02",
+        "tradingDays": 2,
+        "missingDates": "2026-10-05,2026-10-06",
+    }
     assert todo["action"] == {"kind": "auto-retry", "at": "2026-10-08T08:30:00+09:00"}
     assert health["summary"]["kind"] == "check"
     assert health["summary"]["staleCount"] == 1
+    assert health["summary"]["todoCount"] == 0  # the engine waits for the quotes itself
     day = logged_in.get("/api/day/2026-10-07").json()
     assert day["check"]["result"] == "quote-wait"
+    # The rule screen: '시세 대기' and '낡음' on the US quotes, no dot for now.
+    rule = logged_in.get("/api/rules/index_half").json()
+    assert (rule["status"], rule["stale"]) == ("quote-wait", ["us-quotes"])
+    assert rule["display"]["condition"]["deviation"]["now"] is None
 
 
 def test_partial_failure_then_manual_action(
@@ -167,6 +188,7 @@ def test_partial_failure_then_manual_action(
         "at": "2026-10-08T22:30:00+09:00",
         "market": "US",
         "side": "buy",
+        "ruleId": "index_half",
     } in plan["schedule"]["items"]
 
     # The retry fails too: '직접 할 일'.
@@ -189,6 +211,16 @@ def test_partial_failure_then_manual_action(
         {"kind": "manual"},
         "US",
     )
+    assert health["summary"]["todoCount"] == 1  # the same '할 일 1' as the header
+    # The order keeps its first failure and carries the retry's outcome.
+    [us] = logged_in.get("/api/plan").json()["schedule"]["now"]["stages"][-1]["orders"]
+    assert (us["status"], us["at"]) == ("failed", "2026-10-07T22:30:00+09:00")
+    assert us["failure"] == {
+        "reason": "no-quote",
+        "retryAt": "2026-10-08T22:30:00+09:00",
+        "manual": True,
+    }
+    assert us["retried"] == {"at": "2026-10-08T22:30:00+09:00", "status": "failed"}
     home = logged_in.get("/api/home").json()
     assert home["planChip"]["next"] == {"kind": "todo", "market": "US", "side": "buy"}
     history = logged_in.get("/api/history").json()

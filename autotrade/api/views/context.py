@@ -19,7 +19,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from autotrade.api.views import fmt
-from autotrade.api.views.orders import plan_stages
+from autotrade.api.views.orders import plan_stages, settled
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.refs import rule_ref
 from autotrade.config import Config
@@ -438,6 +438,15 @@ class LedgerContext:
         fresh = self.last_check.details.get("freshness", {})
         return fresh if isinstance(fresh, dict) else {}
 
+    def stale_at_check(self) -> list[str]:
+        """The data sources the last check found not fresh ('kr-quotes', 'us-quotes', 'fx')."""
+        out: list[str] = []
+        for series in ("kr-quotes", "us-quotes", "fx"):
+            info = self.check_freshness.get(series)
+            if isinstance(info, dict) and info.get("state") not in (None, "fresh"):
+                out.append(series)
+        return out
+
     def stale_source(self) -> tuple[str, str, int] | None:
         """(market, basis date, sessions missing) of the series that made the last check wait."""
         for series in ("us-quotes", "kr-quotes", "fx"):
@@ -476,11 +485,11 @@ class LedgerContext:
     def _first_open_order(self) -> dict[str, Any] | None:
         for stage in self.stages or []:
             for order in stage["orders"]:
-                if order["status"] != "filled" and order["side"] != "fx":
+                if not settled(order) and order["side"] != "fx":
                     return dict(order)
         for stage in self.stages or []:
             for order in stage["orders"]:
-                if order["status"] != "filled":
+                if not settled(order):
                     return dict(order)
         return None
 

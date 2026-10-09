@@ -114,3 +114,9 @@ def push_subscribe() -> Response:
 @router.post("/account/push/test")
 def push_test() -> Response:
     raise ApiError(501, "not-implemented", {"feature": "push"})
+
+
+@router.delete("/account/push")
+def push_unsubscribe() -> Response:
+    """Stop pushing to this device (phase 3)."""
+    raise ApiError(501, "not-implemented", {"feature": "push"})

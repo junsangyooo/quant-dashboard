@@ -377,6 +377,31 @@ def buy_checks(
     return out
 
 
+def buy_gap(pick: ai_repo.PickRow, price: Decimal) -> dict[str, str] | None:
+    """How near a candidate is to its buy price (the 'until the buy price' bar): progress from
+    the pick day's price (0) to the line (100), and the gap in % still to go."""
+    for data in pick.buy:
+        if data.get("type") != "price":
+            continue
+        try:
+            cond = parse_condition(data)
+        except ConditionError:
+            continue
+        if cond.value is None or cond.op is None or cond.value <= 0:
+            continue
+        line, start = cond.value, pick.picked_price
+        span = start - line if cond.op in ("<", "<=") else line - start
+        gone = start - price if cond.op in ("<", "<=") else price - start
+        progress = HUNDRED if span <= 0 else max(Decimal(0), min(HUNDRED, gone * HUNDRED / span))
+        return {
+            "price": str(price),
+            "line": str(line),
+            "progress": str(progress.quantize(Decimal(1))),
+            "gap_pct": str(((price / line - 1) * HUNDRED).quantize(Decimal("0.1"))),
+        }
+    return None
+
+
 def _buy_check(
     conn: sqlite3.Connection,
     pick: ai_repo.PickRow,
@@ -384,10 +409,15 @@ def _buy_check(
     data: WatchInput,
     at: datetime,
     tasks: list[dict[str, Any]],
+    gaps: dict[str, dict[str, str]],
 ) -> None:
     if pick.decision is not None or not pick.buy:
         return
     close = latest_close(data, inst)
+    if close is not None:
+        gap = buy_gap(pick, close[1])
+        if gap is not None:
+            gaps[str(pick.pick_id)] = gap
     checks = buy_checks(
         conn, pick, None if close is None else close[1], data.valuations.get(inst.instrument_id, {})
     )
@@ -481,12 +511,13 @@ def run_watch(
         counts = _record_filings(conn, pick, infos, at, tasks)
         filings = {k: filings[k] + counts[k] for k in filings}
         repo.set_setting(conn, FILINGS_SEEN.format(pick.instrument_id), today.isoformat(), at)
+    gaps: dict[str, dict[str, str]] = {}
     for pick in watched_picks(conn, ledger_id):
         inst = repo.get_instrument(conn, pick.instrument_id)
         if pick.status == "held":
             _sell_checks(conn, cfg, pick, inst, data, checked, at, tasks)
         else:
-            _buy_check(conn, pick, inst, data, at, tasks)
+            _buy_check(conn, pick, inst, data, at, tasks, gaps)
     through = dict(checked)
     for market in (Market.KR, Market.US):
         bench = data.adjusted.get(SCORE_BENCHMARK[market.value])
@@ -512,6 +543,7 @@ def run_watch(
         "tasks": tasks,
         "vs_index": None if not points else str(points[-1][1]),
         "scored": scored,
+        "buy_gaps": gaps,
     }
     errors = {
         **{f"adjusted:{k}": v for k, v in data.adjusted_errors.items()},

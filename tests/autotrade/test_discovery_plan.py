@@ -290,3 +290,11 @@ def test_without_the_start_plan_the_planner_waits(
     with transaction(p2conn):
         p2conn.execute("UPDATE events SET plan_id = NULL WHERE kind = 'start'")
     assert ai_plan_due(p2conn, p2ctx.cfg, "paper", kst("2026-07-02 08:40")) is None
+
+
+def test_selling_the_index_etf_pays_no_transaction_tax() -> None:
+    from autotrade.domain.discovery_plan import sell_net
+
+    assert sell_net(Holding(KR_ETF, 10, D(33000)), 10, FEES) == D(330000) - D(49)
+    assert sell_net(Holding(A, 10, D(33000)), 10, FEES) == D(330000) - D(49) - D(660)
+    assert sell_net(Holding(C, 10, D(100)), 10, FEES) == D(1000) - D("1.00")

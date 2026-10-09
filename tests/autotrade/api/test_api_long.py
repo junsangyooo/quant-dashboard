@@ -101,9 +101,19 @@ def test_long_record(
     assert logged_in.get("/api/home?period=1m").json()["trend"]["series"][0]["date"] == "2026-09-07"
     assert logged_in.get("/api/home?period=1y").json()["trend"]["series"][0]["date"] == "2026-07-01"
     markers = {m["date"]: m for m in trend["events"]}
-    assert markers["2026-09-30"] == {"date": "2026-09-30", "kind": "dividend"}
-    # Two events on one day (a rebalance at 08:30, the deposit at noon) share one marker.
-    assert markers["2026-10-06"] == {"date": "2026-10-06", "kind": "rebalance", "count": 2}
+    assert markers["2026-09-30"] == {
+        "date": "2026-09-30",
+        "kind": "dividend",
+        "kinds": ["dividend"],
+    }
+    # Two events on one day (a rebalance at 08:30, the deposit at noon) share one marker that
+    # lists both kinds.
+    assert markers["2026-10-06"] == {
+        "date": "2026-10-06",
+        "kind": "rebalance",
+        "count": 2,
+        "kinds": ["rebalance", "deposit"],
+    }
 
     pnl = home["pnl"]
     contributions = D("11000000")

@@ -43,7 +43,9 @@ def account(session: SessionRow, prefs: NotificationPrefs | None) -> dict[str, A
             "enteredAt": fmt.iso(session.created_at),
         },
         "notifications": {
-            # Web push is not built yet (phase 3): no device can subscribe.
+            # Web push is not built yet (phase 3): no device can subscribe, and the screen says
+            # '알림은 준비 중' from `available` (the VAPID key and unsubscribing come with it).
+            "available": False,
             "thisDevice": {"supported": False, "reason": "unsupported", "subscribed": False},
             "events": [
                 {"id": k, "on": v, **({"locked": True} if k in LOCKED_EVENTS else {})}

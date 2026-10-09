@@ -3,7 +3,8 @@
   kind            model (effort)   calls  what the answer does
   extract         haiku            1      metric values into the metric table (T27)
   screen          haiku            1      'relevant' -> a sell confirmation (filing)
-  sell-confirm    sonnet (low)     2      both '반증' -> sell (D27); else hold, recorded
+  sell-confirm    sonnet (low)     2      both '반증' -> sell (D27); else hold, recorded. A shock
+                                          is checked against the news with the web (D31)
   buy-confirm     sonnet (low)     1      '근거 있음' -> buy, or a switch question when no slot
   monthly-review  sonnet (low)     1      verdict, sell conditions rewritten; '반증' or two months
                                           of '약화' -> a sell confirmation
@@ -458,13 +459,38 @@ def _summary_of_pick(inst: Instrument, task: ai_repo.TaskRow) -> list[str]:
     return out
 
 
+def is_shock(task: ai_repo.TaskRow) -> bool:
+    """A price shock is among what set the confirmation off."""
+    return any(
+        isinstance(t, dict) and t.get("kind") == "shock" for t in task.detail.get("triggers", [])
+    )
+
+
 def prepare_sell_confirm(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
+    """Two independent calls. A shock is checked against the news with the web (D31: news
+    usually explains a price shock before any filing does); every other question is web-free."""
     pick, inst = _held(env, task)
     quotes = pk.quotes_for_pick(env.sources, pick, inst, kst_date(env.at))
     packet = _pick_packet(env, task, pick, inst, quotes)
     prompt = load("sell_confirm")
-    calls = [_call(prompt, f"sell-confirm#{i}", packet, "sonnet", "low") for i in (1, 2)]
-    return Prepared(calls, packet, {"instrument": inst.instrument_id})
+    web = is_shock(task)
+    calls = [_call(prompt, f"sell-confirm#{i}", packet, "sonnet", "low", web=web) for i in (1, 2)]
+    return Prepared(calls, packet, {"instrument": inst.instrument_id, "web": web})
+
+
+def new_facts(results: Sequence[CliResult]) -> list[dict[str, str]]:
+    """The web facts both answers found (fact, source, date), malformed ones left out."""
+    out: list[dict[str, str]] = []
+    for r in results:
+        for item in r.output.get("new_facts") or []:
+            if not isinstance(item, Mapping):
+                continue
+            fact, source, day = item.get("fact"), item.get("source"), item.get("date")
+            if all(isinstance(x, str) and x.strip() for x in (fact, source, day)):
+                out.append(
+                    {"fact": str(fact)[:240], "source": str(source)[:200], "date": str(day)[:10]}
+                )
+    return out
 
 
 def apply_sell_confirm(
@@ -493,6 +519,8 @@ def apply_sell_confirm(
         str(r.output.get("bear_case" if v == "invalidated" else "bull_case") or "")
         for r, v in zip(results, votes, strict=True)
     ]
+    facts = new_facts(results)
+
     _event(
         env,
         task,
@@ -505,11 +533,15 @@ def apply_sell_confirm(
             action="sell" if sell else "none",
             instrument_id=inst.instrument_id,
             inputs=_summary_of_pick(inst, task),
-            outputs=[" · ".join(pk.VERDICT_KO[v] for v in votes), *[r[:120] for r in reasons if r]],
+            outputs=[
+                " · ".join(pk.VERDICT_KO[v] for v in votes),
+                *[r[:120] for r in reasons if r],
+                *[f"{f['source']} {f['date']}" for f in facts[:2]],
+            ],
             votes=votes,
         ),
     )
-    return {"votes": votes, "sell": sell}
+    return {"votes": votes, "sell": sell, "new_facts": facts}
 
 
 # ── buy confirmation ─────────────────────────────────────────────────────────────────────────

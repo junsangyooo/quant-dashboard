@@ -7,8 +7,41 @@ from typing import Any
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext
 from autotrade.api.views.history import DayData
+from autotrade.api.views.orders import plan_stages
 from autotrade.api.views.series import long_record
 from autotrade.db import repo
+from autotrade.domain.instruments import Currency
+from autotrade.domain.money import usd_in_krw
+
+
+def off_preview(ctx: LedgerContext) -> dict[str, Any] | None:
+    """What turning live off leaves behind (SCR-MODE off modal): the live ledger's orders that
+    would be cancelled and the cash that stays in the account. Null unless live is on."""
+    if ctx.mode != "live":
+        return None
+    cancel: list[dict[str, Any]] = []
+    for plan in repo.open_plans(ctx.conn, "live"):
+        for stage in plan_stages(ctx.conn, plan.plan_id, ctx.instruments, "live"):
+            cancel.extend(o for o in stage["orders"] if o["status"] == "pending")
+    state = repo.load_state(ctx.conn, "live")
+    quote = repo.fx_at(ctx.conn, ctx.now)
+    rate = quote.rate if quote is not None else ctx.fx_rate
+    cash: list[dict[str, Any]] = []
+    for currency in Currency:
+        amount = state.cash_of(currency)
+        if amount <= 0:
+            continue
+        if currency is Currency.KRW:
+            cash.append({"currency": "KRW", "krw": fmt.krw(amount)})
+        else:
+            cash.append(
+                {
+                    "currency": "USD",
+                    "usd": fmt.usd(amount),
+                    "krw": fmt.krw(usd_in_krw(amount, rate)),
+                }
+            )
+    return {"cancel": cancel, "cash": cash}
 
 
 def mode(ctx: LedgerContext) -> dict[str, Any]:
@@ -42,4 +75,5 @@ def mode(ctx: LedgerContext) -> dict[str, Any]:
         "preview": None,
         "cancelFailed": None,
         "canTurnOn": {"ok": False, "cause": "live-not-available"},
+        "offPreview": off_preview(ctx),
     }

@@ -168,3 +168,35 @@ def test_only_the_paper_ledger_has_an_executor() -> None:
     assert executor_for("paper", paper) is paper
     with pytest.raises(LiveOrdersBlockedError):
         executor_for("live", paper)
+
+
+def test_the_korean_transaction_tax_is_charged_on_stock_sales_only() -> None:
+    """2026: KOSPI 0.05% + 농특세 0.15%, KOSDAQ 0.20% on a stock sale; domestic ETFs are exempt."""
+    from autotrade.domain.instruments import Instrument, Kind, Market
+
+    stock = Instrument(
+        "KR:042660", Market.KR, Currency.KRW, Kind.STOCK, "042660", "한화오션", "042660.KS"
+    )
+    us_stock = Instrument(
+        "US:AVGO", Market.US, Currency.USD, Kind.STOCK, "AVGO", "Broadcom", "AVGO"
+    )
+    reader = Reader()
+    day = date(2026, 10, 7)
+    for inst, price in ((KOSPI, "33000"), (stock, "33000"), (us_stock, "330.00")):
+        reader.bars[(inst.instrument_id, day)] = Bar(
+            inst.instrument_id, day, D(price), D(price), D(price), D(price), "t"
+        )
+    ex = executor(reader)
+    etf_sale = ex.trade(trade(Side.SELL, 10, held=10))
+    assert isinstance(etf_sale, TradeFilled)
+    assert etf_sale.fee == D(49)  # 330,000 x 0.015% = 49.5 -> 49, and no tax: an ETF
+    stock_sale = ex.trade(trade(Side.SELL, 10, held=10, instrument=stock))
+    assert isinstance(stock_sale, TradeFilled)
+    assert stock_sale.fee == D(49) + D(660)  # + 330,000 x 0.20%
+    stock_buy = ex.trade(trade(Side.BUY, 10, instrument=stock))
+    assert isinstance(stock_buy, TradeFilled)
+    assert stock_buy.fee == D(49)  # a buy pays no tax
+    us_sale = ex.trade(trade(Side.SELL, 10, held=10, instrument=us_stock))
+    assert isinstance(us_sale, TradeFilled)
+    assert us_sale.fee == D("3.30")  # 0.1% only: the Korean tax is for Korean stocks
+    assert FeeRates().kr_stock_sell_tax == D("0.0020")

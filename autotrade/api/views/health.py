@@ -12,11 +12,12 @@ from typing import Any
 
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext
-from autotrade.api.views.history import OK_RESULTS, DayData
+from autotrade.api.views.history import OK_RESULTS, DayData, failure_reason
+from autotrade.api.views.orders import waiting_retry
 from autotrade.db import repo
 from autotrade.db.models import FreshnessRow, RunRow
 from autotrade.domain.instruments import Market
-from autotrade.market.calendar import calendar_for
+from autotrade.market.calendar import CalendarRangeError, calendar_for
 from autotrade.market.freshness import FreshState, Series, quote_freshness, weekday_age
 from autotrade.timeutil import from_iso
 
@@ -36,13 +37,8 @@ def _todo_orders(ctx: LedgerContext) -> list[dict[str, Any]]:
 
 
 def _retry_orders(ctx: LedgerContext) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for stage in ctx.stages or []:
-        for order in stage["orders"]:
-            failure = order.get("failure")
-            if isinstance(failure, dict) and failure.get("retryAt"):
-                out.append(order)
-    return out
+    """Failed orders whose retry is still to come."""
+    return [o for stage in ctx.stages or [] for o in stage["orders"] if waiting_retry(o)]
 
 
 def _today_check_failure(ctx: LedgerContext) -> tuple[RunRow, datetime | None] | None:
@@ -185,12 +181,26 @@ def _source(ctx: LedgerContext, series: str, row: FreshnessRow | None) -> dict[s
     }
 
 
+def _missing_dates(row: FreshnessRow) -> list[date]:
+    """The sessions a stale market's closes are missing ('10/05·10/06 종가를 못 받았어요')."""
+    market = SOURCE_MARKET.get(row.series)
+    if market is None or not row.basis or not row.expected:
+        return []
+    try:
+        latest, expected = date.fromisoformat(row.basis[:10]), date.fromisoformat(row.expected[:10])
+        return calendar_for(market).trading_days(latest, expected)
+    except (ValueError, CalendarRangeError):
+        return []
+
+
 def _run_json(run: RunRow) -> dict[str, Any]:
     out: dict[str, Any] = {
         "at": fmt.iso(run.started_at),
         "result": run.result or "running",
         "seconds": round((run.duration_ms or 0) / 1000, 1),
     }
+    if run.result in ("failed", "todo"):
+        out["reason"] = failure_reason(run)
     return out
 
 
@@ -203,16 +213,20 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
         if src["state"] == "stale" and src["id"] in SOURCE_IDS:
             row = rows[src["id"]]
             market = "FX" if src["id"] == "fx" else SOURCE_MARKET[src["id"]].value
+            facts: dict[str, Any] = {
+                "market": market,
+                "basisDate": str(row.basis or "")[:10],
+                "tradingDays": row.missing_sessions,
+            }
+            missing = _missing_dates(row)
+            if missing:
+                facts["missingDates"] = ",".join(fmt.day(d) for d in missing)
             todos.append(
                 {
                     "id": f"stale:{src['id']}",
                     "severity": "red",
                     "kind": "stale",
-                    "facts": {
-                        "market": market,
-                        "basisDate": str(row.basis or "")[:10],
-                        "tradingDays": row.missing_sessions,
-                    },
+                    "facts": facts,
                     "action": {"kind": "auto-retry", "at": fmt.iso(ctx.next_check)},
                     "effect": "orders-zero-live-blocked",
                 }
@@ -225,10 +239,7 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
                 "id": f"check-failed:{fmt.day(run.run_date)}",
                 "severity": "red",
                 "kind": "check-failed",
-                "facts": {
-                    "at": fmt.iso(run.started_at),
-                    "reason": "no-quote" if (run.error or "").startswith("no-quote") else "other",
-                },
+                "facts": {"at": fmt.iso(run.started_at), "reason": failure_reason(run)},
                 "action": {"kind": "auto-retry", "at": fmt.iso(retry_at)}
                 if retry_at
                 else {"kind": "manual"},
@@ -273,15 +284,18 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
         kind = "before-first"
     elif failure is not None:
         kind = "check-failed"
-    elif stale_count or todos:
-        kind = "check"
+    elif stale_count or any(t["severity"] == "red" for t in todos):
+        kind = "check"  # a yellow card alone is '정상 · 할 일 n'
     else:
         kind = "ok"
     summary: dict[str, Any] = {
         "kind": kind,
         "sourcesTotal": len(sources),
         "staleCount": stale_count,
-        "todoCount": len(todos),
+        # '할 일 n': the cards the owner has to act on himself (action 'manual'): every yellow
+        # card, and a red one once the engine has stopped retrying. Retried faults are counted by
+        # staleCount and failCount.
+        "todoCount": sum(1 for t in todos if t["action"]["kind"] == "manual"),
         "failCount": fail_count,
         "lastCheckAt": None if last is None else fmt.iso(last.started_at),
         "nextCheckAt": fmt.iso(ctx.next_check),
@@ -296,11 +310,13 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
     if last is not None:
         last_run = _run_json(last)
         if last.error:
-            last_run["reason"] = "no-quote" if last.error.startswith("no-quote") else "other"
+            last_run["reason"] = failure_reason(last)
     return {
         "summary": summary,
         "todos": todos,
         "sources": sources,
         "recent14": recent,
         "lastRun": last_run,
+        # The push devices (what '알림 기기' expands to). Web push comes in phase 3: none yet.
+        "devices": [],
     }

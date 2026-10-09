@@ -74,7 +74,11 @@ def test_a_rebalance_before_its_first_stage(
     assert order["fx"] == {"krw": 173000, "usd": 125.3, "rate": 1380.6}
     assert order["approx"] is True
     assert sell["orders"][0]["fee"] == {"krw": 27}
-    assert home["trend"]["events"][-1] == {"date": "2026-10-07", "kind": "in-progress"}
+    assert home["trend"]["events"][-1] == {
+        "date": "2026-10-07",
+        "kind": "in-progress",
+        "kinds": ["in-progress"],
+    }
     assert logged_in.get("/api/history").json()["tiles"]["rebalances"]["inProgress"] == 1
 
 

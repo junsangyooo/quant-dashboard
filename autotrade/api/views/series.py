@@ -90,9 +90,9 @@ def series_points(ctx: LedgerContext, since: date) -> list[dict[str, Any]]:
     return points
 
 
-def event_markers(
-    ctx: LedgerContext, since: date | None = None, *, grouped: bool = True
-) -> list[dict[str, Any]]:
+def event_markers(ctx: LedgerContext, since: date | None = None) -> list[dict[str, Any]]:
+    """One marker per day (CONTRACT.md Trend.events): the day's first event kind, every kind of
+    the day in `kinds`, and `count` when there are two or more (a bundle marker)."""
     by_date: dict[str, list[str]] = {}
     for ev in ctx.events:
         if since is not None and ev.event_date < since:
@@ -103,10 +103,10 @@ def event_markers(
     out: list[dict[str, Any]] = []
     for d in sorted(by_date):
         kinds = by_date[d]
-        if grouped and len(kinds) > 1:
-            out.append({"date": d, "kind": kinds[0], "count": len(kinds)})
-        else:
-            out.extend({"date": d, "kind": k} for k in (kinds if not grouped else kinds[:1]))
+        marker: dict[str, Any] = {"date": d, "kind": kinds[0], "kinds": kinds}
+        if len(kinds) > 1:
+            marker["count"] = len(kinds)
+        out.append(marker)
     return out
 
 

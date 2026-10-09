@@ -5,7 +5,12 @@
   second failure or a cancelled order shows failure.manual ('직접 할 일').
 - Stages are grouped by kind in the order sell -> fx -> buy, across markets ('매수(⏳ 22:30)'
   holds the Korean buy at 09:05 and the US buy at 22:30). Stages without orders are left out.
-- A conversion order has market 'KR' (it is a won-side operation at the broker).
+- A conversion order has market 'KR' (it is a won-side operation at the broker) and a
+  `direction` ('krw-usd' | 'usd-krw').
+- An order that failed and was sent again keeps its failure on the day it failed ('failed',
+  `failure.reason`, `failure.retryAt`) and carries the outcome of the retry once it is known:
+  `retried: {at, status: 'filled' | 'failed'}` ('9/15 다시 · 체결'). Such an order is settled
+  when the retry filled (`settled`), and waits for nothing.
 """
 
 from __future__ import annotations
@@ -51,6 +56,7 @@ def order_json(
 
     if latest.side == "fx":
         krw_to_usd = latest.fx_direction == "krw_to_usd"
+        out["direction"] = "krw-usd" if krw_to_usd else "usd-krw"
         if fill is not None and fill.received is not None and fill.krw_rate is not None:
             krw_amount = fill.gross if krw_to_usd else fill.received
             usd_amount = fill.received if krw_to_usd else fill.gross
@@ -90,26 +96,51 @@ def order_json(
                 else {"usd": fmt.usd(latest.est_fee)}
             )
 
-    if fill is not None:
+    failed = [a for a in attempts if a.status in ("failed", "cancelled")]
+    if fill is not None and not failed:
         out["status"] = "filled"
         out["at"] = fmt.iso(fill.filled_at)
         out["fill"] = executor
         return out
-    out["at"] = fmt.iso(stage.due_at)
-    failed = [a for a in attempts if a.status in ("failed", "cancelled")]
     if latest.status == "pending" and not failed:
+        out["at"] = fmt.iso(stage.due_at)
         out["status"] = "pending"
         return out
     out["status"] = "failed"
-    last_failure = failed[-1] if failed else latest
-    reason = last_failure.failure_reason or "other"
+    first_failure = failed[0] if failed else latest
+    out["at"] = fmt.iso(first_failure.executed_at or stage.due_at)
+    reason = first_failure.failure_reason or "other"
     failure: dict[str, Any] = {"reason": reason if reason != "cancel-failed" else "other"}
-    if latest.status == "pending":
-        failure["retryAt"] = fmt.iso(stage.due_at)
-    else:
+    if len(attempts) > 1 or latest.status == "pending":
+        failure["retryAt"] = fmt.iso(first_failure.retry_at or stage.due_at)
+    if fill is not None:  # the retry filled: '9/15 다시 · 체결'
+        out["fill"] = executor
+        out["retried"] = {"at": fmt.iso(fill.filled_at), "status": "filled"}
+    elif latest is not first_failure and latest.status in ("failed", "cancelled"):
+        out["retried"] = {"at": fmt.iso(latest.executed_at or stage.due_at), "status": "failed"}
+    if fill is None and latest.status != "pending":
         failure["manual"] = True
     out["failure"] = failure
     return out
+
+
+def settled(order: Mapping[str, Any]) -> bool:
+    """Filled, or failed and filled on a retry: nothing left to do for it."""
+    retried = order.get("retried")
+    return order.get("status") == "filled" or (
+        isinstance(retried, Mapping) and retried.get("status") == "filled"
+    )
+
+
+def waiting_retry(order: Mapping[str, Any]) -> bool:
+    """Failed, and sent again later ('다시 10/08 22:30'); the retry has no outcome yet."""
+    failure = order.get("failure")
+    return (
+        isinstance(failure, Mapping)
+        and bool(failure.get("retryAt"))
+        and "retried" not in order
+        and not failure.get("manual")
+    )
 
 
 def plan_stages(

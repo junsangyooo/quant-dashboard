@@ -3,7 +3,8 @@
   claude -p <prompt> --safe-mode --model <m> --output-format json --json-schema <schema>
          --system-prompt <short> --no-session-persistence [--effort low]
          --tools ""                                              (no tools)
-         --tools WebSearch,WebFetch --allowedTools WebSearch WebFetch   (quarterly discovery only)
+         --tools WebSearch,WebFetch --allowedTools WebSearch WebFetch
+                         (the quarterly discovery and a sell confirmation set off by a shock)
 
 - ANTHROPIC_API_KEY is removed from the environment: with it the CLI bills the paid API (root
   ops notes §7). Nothing else is added.

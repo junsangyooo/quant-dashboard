@@ -6,6 +6,7 @@ from typing import Any
 
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext, event_kind
+from autotrade.api.views.orders import waiting_retry
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import long_record, period_start, snapshot_drift
 from autotrade.domain.cash import Purpose
@@ -15,6 +16,7 @@ from autotrade.domain.status import RuleStatus
 from autotrade.rules.discovery import RULE_ID as AI_RULE
 
 DRIFT_PERIODS = ("3m", "1y", "all")
+LEDGER_EVENTS = ("start", "live-on", "live-off")  # events of the whole ledger, not of one rule
 
 
 def rule_card(ctx: LedgerContext) -> dict[str, Any]:
@@ -69,18 +71,23 @@ def schedule(ctx: LedgerContext) -> dict[str, Any]:
     if ctx.open_plan is not None:
         now = {"ruleId": ctx.rule.rule_id, "status": ctx.status.value, "stages": ctx.stages or []}
     items: list[dict[str, Any]] = []
-    for stage in ctx.stages or []:
-        for order in stage["orders"]:
-            failure = order.get("failure")
-            if isinstance(failure, dict) and failure.get("retryAt"):
-                items.append(
-                    {
-                        "kind": "retry",
-                        "at": failure["retryAt"],
-                        "market": order["market"],
-                        "side": order["side"],
-                    }
-                )
+    ai = ctx.ai_rule
+    open_stages = [(ctx.rule.rule_id, ctx.stages)]
+    if ai.shown:
+        open_stages.append((AI_RULE, ai.stages))
+    for rule_id, stages in open_stages:
+        for stage in stages or []:
+            for order in stage["orders"]:
+                if waiting_retry(order):
+                    items.append(
+                        {
+                            "kind": "retry",
+                            "at": order["failure"]["retryAt"],
+                            "market": order["market"],
+                            "side": order["side"],
+                            "ruleId": rule_id,
+                        }
+                    )
     if ctx.last_check is None:
         items.append({"kind": "first-check", "at": fmt.iso(ctx.first_check_at)})
     else:
@@ -98,7 +105,6 @@ def schedule(ctx: LedgerContext) -> dict[str, Any]:
         items.append({"kind": "new-cash", "krw": _cash_krw(ctx, Purpose.NEW)})
     if _cash_krw(ctx, Purpose.SUB_SHARE) > 0:
         items.append({"kind": "sub-share-cash", "krw": _cash_krw(ctx, Purpose.SUB_SHARE)})
-    ai = ctx.ai_rule
     if ai.shown:
         if now is None and ai.open_plan is not None:
             now = {"ruleId": AI_RULE, "status": ai.status, "stages": ai.stages or []}
@@ -123,14 +129,17 @@ def drift_history(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
             stale_from = fmt.day(snap.date)
         elif value is not None:
             stale_from = None
+    # A rule's plans sit on its line; the start and live on/off belong to the whole ledger
+    # (ruleId null). The AI rule has no drift line, so its plans are not marked here.
     events = [
         {
             "date": fmt.day(ev.event_date),
             "kind": event_kind(ev),
-            "ruleId": ev.rule_id or ctx.rule.rule_id,
+            "ruleId": None if ev.kind in LEDGER_EVENTS else (ev.rule_id or ctx.rule.rule_id),
         }
         for ev in ctx.events
-        if ev.kind == "rebalance" and ev.event_date >= since and ev.rule_id != AI_RULE
+        if ev.event_date >= since
+        and (ev.kind in LEDGER_EVENTS or (ev.kind == "rebalance" and ev.rule_id != AI_RULE))
     ]
     return {
         "periods": list(DRIFT_PERIODS) if long else None,

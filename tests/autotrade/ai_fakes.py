@@ -18,7 +18,16 @@ from typing import Any
 KINDS = {
     ("metrics", "notes"): "extract",
     ("relevant", "touches", "reason"): "screen",
-    ("trigger", "invalidate", "confirm", "bear_case", "bull_case", "verdict", "conviction"): "sell",
+    (
+        "trigger",
+        "invalidate",
+        "confirm",
+        "bear_case",
+        "bull_case",
+        "verdict",
+        "conviction",
+        "new_facts",
+    ): "sell",
     ("why_here", "valuation", "decision", "reason", "risks", "conviction"): "buy",
     (
         "facts",
@@ -99,8 +108,9 @@ class ScriptedRunner:
         return [c["cmd"][c["cmd"].index("-p") + 1] for c in self.calls if c["kind"] == kind]
 
 
-def sell(verdict: str) -> dict[str, Any]:
+def sell(verdict: str, facts: list[dict[str, str]] | None = None) -> dict[str, Any]:
     return {
+        "new_facts": facts or [],
         "trigger": "급락의 원인은 수주 취소 공시다",
         "invalidate": [{"index": 1, "status": "걸림", "evidence": "metric.op_margin.2026Q2 5.0"}],
         "confirm": [],

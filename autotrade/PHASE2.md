@@ -71,7 +71,9 @@
 - **호출**: 구독 CLI다. T26·T27 방식을 따른다.
   - `claude -p <프롬프트> --safe-mode --model <m> --output-format json --json-schema <스키마> --system-prompt <짧게> --no-session-persistence --tools ""`, 필요하면 `--effort low`
   - 환경에서 `ANTHROPIC_API_KEY`를 지운다. stdin은 DEVNULL, cwd는 빈 중립 폴더다.
-  - 웹은 분기 발굴에서만 켠다(`--tools WebSearch,WebFetch --allowedTools WebSearch WebFetch`).
+  - 웹은 분기 발굴과, 급락으로 걸린 팔기 확인에서만 켠다(`--tools WebSearch,WebFetch --allowedTools WebSearch WebFetch`).
+    - 급락은 공시보다 뉴스가 먼저 설명하는 일이 많다(D31). 급락 확인은 그 회사의 최근 뉴스를 찾아 출처와 날짜를 `new_facts`에 남긴다.
+    - 그 밖의 확인(팔 조건·공시·월 점검으로 걸린 것), 사기 확인, 월 점검, 지표 뽑기, 공시 가리기, 바꾸기는 웹 없이 꾸러미만 쓴다.
 - **모델**
   - 실적 지표 뽑기·공시 가리기: Haiku
   - 확인·월 점검: Sonnet(`--effort low`)

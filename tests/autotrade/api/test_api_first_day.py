@@ -121,7 +121,7 @@ def test_home(logged_in: TestClient, world: World, jobs: JobContext) -> None:
     assert home["composition"]["pendingBar"] is None
     assert home["trend"]["empty"] == "first-day"
     assert home["trend"]["periods"] is None
-    assert home["trend"]["events"] == [{"date": "2026-07-01", "kind": "start"}]
+    assert home["trend"]["events"] == [{"date": "2026-07-01", "kind": "start", "kinds": ["start"]}]
 
 
 def test_plan(logged_in: TestClient, world: World, jobs: JobContext) -> None:
@@ -166,6 +166,7 @@ def test_rules(logged_in: TestClient, world: World, jobs: JobContext) -> None:
                 "rule": {"id": "index_half", "name": "지수 반반", "ai": False, "colorIndex": 0},
                 "share": {"pct": 99.6, "target": 100.0},
                 "status": "in-progress",
+                "example": False,
             }
         ]
     }
@@ -177,7 +178,14 @@ def test_rules(logged_in: TestClient, world: World, jobs: JobContext) -> None:
     assert [i["id"] for i in display["what"]["instruments"]] == [KOSPI, SNP]
     assert display["what"]["weights"] == [50.0, 50.0]
     assert display["when"] == {"time": "08:30", "days": "weekdays", "tz": "KST"}
-    assert display["condition"] == {"threshold": 2.0, "targetEach": [50.0, 50.0]}
+    # Figma 1:61661: the hollow point at +0.2%p now, no orange point (the 08:30 check held
+    # nothing to deviate).
+    assert display["condition"] == {
+        "threshold": 2.0,
+        "targetEach": [50.0, 50.0],
+        "deviation": {"now": 0.2, "atCheck": None},
+    }
+    assert detail["stale"] == []
     assert display["action"] == {"stages": ["sell", "fx", "buy"]}
     assert display["measured"] == {
         "median": 9.5,

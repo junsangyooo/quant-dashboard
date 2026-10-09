@@ -59,6 +59,11 @@ CALENDAR_PRIORITY = (
 )
 
 
+def failure_reason(run: RunRow) -> str:
+    """A failed check's reason as a code (CONTRACT.md: codes, never sentences)."""
+    return "no-quote" if (run.error or "").startswith("no-quote") else "other"
+
+
 class DayData:
     """Runs, plans and snapshots of the ledger, indexed by KST date."""
 
@@ -160,6 +165,13 @@ def _plan_ids(ctx: LedgerContext, ev: EventRow | None) -> list[str]:
     return sorted(ids)
 
 
+def _targets(ctx: LedgerContext, ev: EventRow) -> list[float]:
+    """The target tick of the mini bars: the fixed rule's targets; the AI rule has none."""
+    if ev.rule_id == AI_RULE:
+        return []
+    return [fmt.pct1(t.weight) for t in ctx.rule.targets]
+
+
 def _rule_of(ctx: LedgerContext, ev: EventRow) -> dict[str, Any]:
     return ctx.ai_rule.rule_json() if ev.rule_id == AI_RULE else ctx.rule_json()
 
@@ -205,7 +217,11 @@ def history_event(data: DayData, ev: EventRow) -> dict[str, Any]:
         out["weightsMini"] = {
             "before": _weights_mini(ctx, ev.payload.get("weights_before"), ev),
             "after": _weights_mini(ctx, ev.payload.get("weights_after_est"), ev),
+            "target": _targets(ctx, ev),
         }
+        waiting = next((st for st in stages if st["status"] == "pending"), None)
+        if waiting is not None and event_kind(ev) == "in-progress":
+            out["pending"] = {"side": waiting["kind"], "at": waiting["at"]}  # '매수 22:30'
         out["fill"] = ctx.executor
         max_drift = ev.payload.get("max_drift")
         if max_drift is not None:
@@ -398,6 +414,12 @@ def _check_json(ctx: LedgerContext, data: DayData, d: date) -> dict[str, Any]:
         "at": fmt.iso(run.started_at),
         "result": DAY_RESULT.get(run.result or "", "failed"),
     }
+    if out["result"] == "failed":  # '시세 응답 없음 · 9/10 정상' (codes and a date)
+        failure: dict[str, Any] = {"reason": failure_reason(run)}
+        recovered = data.recovered_on(d)
+        if recovered is not None:
+            failure["recoveredOn"] = recovered
+        out["failure"] = failure
     if closed:
         out["holidayMarkets"] = closed
     drift = run.details.get("drift")
@@ -416,6 +438,7 @@ def _check_json(ctx: LedgerContext, data: DayData, d: date) -> dict[str, Any]:
         "after": None if after_drift is None else fmt.pp1(after_drift),
     }
     out["ruleId"] = ctx.rule.rule_id
+    out["rule"] = ctx.rule_json()
     out["instrument"] = instrument_json(ctx.instruments[iid])
     out["weight"] = fmt.pct1(Decimal(str(drift["weights"][iid])))
     out["toThreshold"] = fmt.pp1(Decimal(str(drift["to_threshold"])))

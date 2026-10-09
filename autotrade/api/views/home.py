@@ -43,18 +43,22 @@ def baseline(ctx: LedgerContext) -> dict[str, Any] | None:
     return {"pct": fmt.ret2((last.baseline_krw - last.contributions) / last.contributions)}
 
 
-def plan_card(ctx: LedgerContext) -> dict[str, Any] | None:
-    if not ctx.started or ctx.last_check is None:
-        return None  # before the first check only the chip row shows
+def plan_card(ctx: LedgerContext) -> dict[str, Any]:
+    """The first rule's card. Before the first check it is there with an empty gauge (the rule's
+    name and target show; the needle and the stages come with the first check)."""
+    checked = ctx.started and ctx.last_check is not None
+    others = None
+    if ctx.ai_rule.shown:
+        others = {"count": 1, "status": ctx.ai_rule.status if checked else "before-first"}
     return {
         "rule": ctx.rule_json(),
         "share": ctx.share(),
         "status": ctx.status.value,
         "next": ctx.next_action,
         "gauge": ctx.gauge(),
-        "stages": ctx.stages,
+        "stages": ctx.stages if checked else None,
         "nextCheckAt": fmt.iso(ctx.next_check),
-        "others": {"count": 1, "status": ctx.ai_rule.status} if ctx.ai_rule.shown else None,
+        "others": others,
     }
 
 
@@ -70,7 +74,9 @@ def _row_json(row: CompRow) -> dict[str, Any]:
             amount = fmt.krw(row.avg_price) if cur is Currency.KRW else fmt.usd(row.avg_price)
             out["avgCost"] = {"amount": amount, "currency": cur.value}
     else:
-        out["cash"] = {"currency": (row.currency or Currency.KRW).value}
+        cur = row.currency or Currency.KRW
+        # 묶어 보기 '나라': won cash is Korean, dollar cash American.
+        out["cash"] = {"currency": cur.value, "country": COUNTRY[cur]}
         if row.usd is not None:
             out["usd"] = fmt.usd(row.usd)
         if row.chip is not None:
