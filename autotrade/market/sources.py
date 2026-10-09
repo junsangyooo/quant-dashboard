@@ -1,6 +1,7 @@
 """Public market data sources behind small interfaces (read-only, no login).
 
-- Korean daily bars: pykrx per ticker (no KRX login needed), falling back to Yahoo ('069500.KS').
+- Korean daily bars: Yahoo ('069500.KS', ~20 min delayed), falling back to pykrx (its ETF
+  lookup needs a KRX login since 1.2.8, so it rarely answers; see service.default_sources).
 - US daily bars: Yahoo via yfinance.
 - KRW per USD: Yahoo 'KRW=X' (phase 1 source).
 

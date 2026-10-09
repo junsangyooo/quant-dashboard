@@ -51,10 +51,14 @@ class MarketSources:
 
 
 def default_sources() -> MarketSources:
-    """The phase-1 public sources (pykrx -> Yahoo for Korea, Yahoo for the US and the rate)."""
+    """The phase-1 public sources: Yahoo for Korea (pykrx as fallback), the US and the rate.
+
+    Yahoo first (owner's decision 2026-10-09): pykrx's ETF lookup needs a KRX login, and logging
+    in would share the screener cron's KRX session (ops notes §8).
+    """
     return MarketSources(
         kr=FallbackBarSource(
-            [RetryingBarSource(PykrxBarSource()), RetryingBarSource(YahooBarSource())]
+            [RetryingBarSource(YahooBarSource()), RetryingBarSource(PykrxBarSource())]
         ),
         us=RetryingBarSource(YahooBarSource()),
         fx=RetryingFxSource(YahooFxSource()),

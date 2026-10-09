@@ -29,7 +29,7 @@ def test_wal_and_versions(tmp_path: Path) -> None:
     assert journal_mode(conn) == "wal"
     assert migrate(conn) == len(MIGRATIONS)
     assert migrate(conn) == len(MIGRATIONS)  # idempotent
-    assert current_version(conn) == 1
+    assert current_version(conn) == len(MIGRATIONS)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {
         "settings",

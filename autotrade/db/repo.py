@@ -33,7 +33,7 @@ from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.ledger import LedgerState, Position
 from autotrade.domain.money import ZERO
 from autotrade.market.types import PAIR_USDKRW, Bar, FxQuote
-from autotrade.timeutil import to_iso
+from autotrade.timeutil import from_iso, to_iso
 
 
 class NotFoundError(LookupError):
@@ -638,6 +638,47 @@ def orders_of_ledger(conn: sqlite3.Connection, ledger_id: str) -> list[OrderRow]
             conn, "SELECT * FROM orders WHERE ledger_id = ? ORDER BY order_id", (ledger_id,)
         )
     ]
+
+
+def orders_of_plan(conn: sqlite3.Connection, plan_id: int) -> list[OrderRow]:
+    return [
+        OrderRow.from_row(r)
+        for r in _all(conn, "SELECT * FROM orders WHERE plan_id = ? ORDER BY order_id", (plan_id,))
+    ]
+
+
+def plans_of_ledger(conn: sqlite3.Connection, ledger_id: str) -> list[PlanRow]:
+    return [
+        PlanRow.from_row(r)
+        for r in _all(
+            conn, "SELECT * FROM plans WHERE ledger_id = ? ORDER BY plan_id", (ledger_id,)
+        )
+    ]
+
+
+def runs_of_ledger(
+    conn: sqlite3.Connection, ledger_id: str, job: str, since: date | None = None
+) -> list[RunRow]:
+    sql = "SELECT * FROM runs WHERE ledger_id = ? AND job = ?"
+    params: list[Any] = [ledger_id, job]
+    if since is not None:
+        sql += " AND run_date >= ?"
+        params.append(since.isoformat())
+    return [RunRow.from_row(r) for r in _all(conn, sql + " ORDER BY run_id", params)]
+
+
+def snapshots_of_ledger(conn: sqlite3.Connection, ledger_id: str) -> list[SnapshotRow]:
+    return [
+        SnapshotRow.from_row(r)
+        for r in _all(
+            conn, "SELECT * FROM snapshots WHERE ledger_id = ? ORDER BY date", (ledger_id,)
+        )
+    ]
+
+
+def setting_updated_at(conn: sqlite3.Connection, key: str) -> datetime | None:
+    row = _one(conn, "SELECT updated_at FROM settings WHERE key = ?", (key,))
+    return None if row is None else from_iso(str(row["updated_at"]))
 
 
 def pending_orders(conn: sqlite3.Connection, ledger_id: str) -> list[OrderRow]:

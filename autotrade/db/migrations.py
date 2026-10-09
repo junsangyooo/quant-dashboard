@@ -275,7 +275,54 @@ CREATE TABLE data_freshness (
 )
 """
 
-MIGRATIONS: tuple[tuple[int, str, str], ...] = ((1, "initial schema", V1),)
+V2 = """
+CREATE TABLE auth_pin (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    pin_hash    TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE sessions (
+    session_id    TEXT PRIMARY KEY,
+    created_at    TEXT NOT NULL,
+    last_seen_at  TEXT NOT NULL,
+    expires_at    TEXT NOT NULL,
+    revoked_at    TEXT,
+    revoked_why   TEXT,
+    ip            TEXT,
+    user_agent    TEXT,
+    device_kind   TEXT NOT NULL DEFAULT 'other'
+                  CHECK (device_kind IN ('iphone-app', 'iphone-safari', 'mac', 'other')),
+    device_name   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX sessions_open ON sessions(revoked_at, expires_at);
+
+CREATE TABLE pin_locks (
+    ip            TEXT PRIMARY KEY,
+    failures      INTEGER NOT NULL DEFAULT 0,
+    locked_until  TEXT,
+    updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE pin_failures (
+    failure_id  INTEGER PRIMARY KEY,
+    ip          TEXT NOT NULL,
+    at          TEXT NOT NULL
+);
+CREATE INDEX pin_failures_at ON pin_failures(at);
+
+CREATE TABLE notification_prefs (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    events        TEXT NOT NULL,
+    hide_amounts  INTEGER NOT NULL DEFAULT 0,
+    saved_at      TEXT NOT NULL
+)
+"""
+
+MIGRATIONS: tuple[tuple[int, str, str], ...] = (
+    (1, "initial schema", V1),
+    (2, "pin, sessions, lockout, notification preferences", V2),
+)
 
 
 def _statements(sql: str) -> list[str]:

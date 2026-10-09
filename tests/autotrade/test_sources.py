@@ -204,7 +204,7 @@ def test_fallback_and_retries(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_default_sources_import_nothing_until_used() -> None:
     sources = default_sources()
-    assert sources.kr.name == "pykrx+yfinance"
+    assert sources.kr.name == "yfinance+pykrx"
     assert sources.us.name == "yfinance"
     assert sources.fx.name == "yfinance"
 

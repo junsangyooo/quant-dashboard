@@ -20,10 +20,14 @@ from typing import Any
 from autotrade.timeutil import to_iso
 
 
-def connect(path: Path | str) -> sqlite3.Connection:
+def connect(path: Path | str, *, check_same_thread: bool = True) -> sqlite3.Connection:
+    """Open the database. The web API passes check_same_thread=False: each request owns its
+    connection, but FastAPI may open and close it on different worker threads."""
     if str(path) != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path), isolation_level=None, timeout=30.0)
+    conn = sqlite3.connect(
+        str(path), isolation_level=None, timeout=30.0, check_same_thread=check_same_thread
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")

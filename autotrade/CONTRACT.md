@@ -13,8 +13,8 @@
   - `ret2`: 수익률 %, 소수 2자리(2.44)
 - **시각은 ISO 8601이고 시간대를 붙인다**(KST는 `+09:00`). 종가 기준일은 `YYYY-MM-DD`와 시장(`KR`/`US`)으로 준다. 미국 종가는 화면이 '(ET)'를 붙인다.
 - **장부는 `paper`(모의투자)와 `live`(실전) 둘이다.** 읽기 API는 `?ledger=`를 받는다. 없으면 지금 모드의 장부다. 다른 장부를 열면 화면은 '장부 칩'을 보인다(SCR-HISTORY.paper-ledger).
-- 모든 `/api/*`는 세션 쿠키가 필요하다(`/api/auth/*` 제외). 인가 실패는 403 JSON이다. 401은 쓰지 않는다(브라우저 인증 창과 충돌).
-- 오류 응답: `{"error": "<code>", "detail"?: {...}}`. 404도 JSON이다.
+- 모든 `/api/*`는 세션 쿠키가 필요하다(`/api/auth/*`·`/api/healthz` 제외). 인가 실패는 403 JSON이다. 401은 쓰지 않는다(브라우저 인증 창과 충돌).
+- 오류 응답: `{"error": "<code>", "detail"?: {...}}`. 404도 JSON이다. 코드는 '오류 코드' 표에 있다.
 
 ## 공통 타입
 ```ts
@@ -29,7 +29,7 @@ interface Instrument {
   kind: 'etf' | 'stock' | 'coin'
   market: Market
   currency: Currency
-  initials: string      // 로고 자리 이니셜(로고 없음)
+  initials: string      // 로고 자리 이니셜(로고 없음). 이름의 글자·숫자 앞 두 개, 대문자('KO', 'SP', '삼성')
   outsideToss?: boolean // 토스 밖 계좌(코인)
 }
 
@@ -58,7 +58,7 @@ interface Basis {                 // '기준' 칩과 시트
 
 interface Order {
   id: string
-  market: Market
+  market: Market                  // 환전(fx)은 'KR'(원화 계좌에서 09:10에 한다)
   side: Side
   instrument?: Instrument         // fx면 없음
   qty?: number                    // 주(코인은 소수)
@@ -89,7 +89,7 @@ type NextAction =
   | { kind: 'todo'; market: Market; side: Side }           // '직접 할 일 · 토스 앱에서 주문 확인'
   | { kind: 'withdraw-wait'; until: string }               // '10/12까지 · 리밸런싱 쉼'
   | { kind: 'holiday'; markets: Market[]; nextCheckAt: string }
-  | { kind: 'quote-wait'; market: Market; basisDate: string }
+  | { kind: 'quote-wait'; market: Market | 'FX'; basisDate: string }   // 'FX' = 환율이 낡음
   | { kind: 'next-check'; at: string }
 
 type EventKind =
@@ -124,7 +124,7 @@ interface ShellResponse {
 type Banner =
   | { kind: 'stale'; market: Market | 'FX'; basisDate: string; tradingDays: number; link: 'health' }
   | { kind: 'partial-retry'; date: string; market: Market; side: Side; retryAt: string; link: 'plan' }
-  | { kind: 'partial-todo'; date: string; market: Market; side: Side; reason: 'broker-rejected'; link: 'health' }
+  | { kind: 'partial-todo'; date: string; market: Market; side: Side; reason: 'broker-rejected' | 'retry-failed'; link: 'health' }   // retry-failed = 다시 시도까지 실패(모의투자는 이것뿐)
   | { kind: 'check-failed'; at: string; retryAt: string | null; link: 'health' }
   | { kind: 'cancel-failed'; market: Market; side: Side; link: 'mode' }
   | { kind: 'push-undelivered'; days: number; link: 'account' }
@@ -152,7 +152,7 @@ interface Trend {
   period: '1m' | '3m' | '1y' | 'all'
   periodPnl: { amount: number; pct: number } | null    // '전체'거나 기록이 짧으면 null
   series: Array<{ date: string; value: number; ret: number; baseline: number | null; baselineRet: number | null }>
-  events: Array<{ date: string; kind: EventKind; count?: number }>   // 겹치면 count로 묶음 표식
+  events: Array<{ date: string; kind: EventKind; count?: number }>   // 겹치면 count로 묶음 표식(kind는 그날 첫 사건)
   empty: null | 'before-first-check' | 'before-first-fill' | 'first-day'
 }
 
@@ -207,7 +207,9 @@ interface CompRow {
 
 ### `GET /api/home/breakdown?ledger=&period=` — 변동 분해 시트
 ```ts
-interface Breakdown { from: string; to: string; start: number; deposit: number; withdrawal: number; market: number; dividend: number; fees: number; end: number }  // krw, 합 = end - start
+interface Breakdown { from: string; to: string; start: number; deposit: number; withdrawal: number; market: number; dividend: number; fees: number; end: number }
+// krw. 부호 있음: withdrawal·fees는 0 이하. deposit + withdrawal + market + dividend + fees = end - start(market이 반올림 나머지를 받는다).
+// 'all'(기록 30거래일 미만이면 항상 'all')은 from = 시작일, start = 시작 금액이다. 시작 금액은 deposit에 넣지 않는다.
 ```
 
 ### `GET /api/plan?ledger=&drift=` — SCR-PLAN
@@ -292,7 +294,7 @@ interface HistoryEvent {
   date: string
   kind: EventKind
   rule?: RuleRef
-  stagesMini?: Array<'done' | 'pending' | 'failed'>
+  stagesMini?: Array<'done' | 'pending' | 'failed'>   // 리밸런싱, 그리고 시작(첫 매수). fill·fees도 같다
   weightsMini?: { before: number[]; after: number[] }
   fill?: 'paper' | 'live'
   deviation?: number                  // '2.3%p 벗어남'
@@ -320,6 +322,7 @@ interface DayResponse {
   check: {
     at: string | null                             // null = 주말·확인 없음
     result: 'rebalance' | 'in-range' | 'partial-failed' | 'failed' | 'holiday' | 'quote-wait' | 'weekend'
+          | 'in-progress' | 'withdraw-wait' | 'no-run'   // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎)
     holidayMarkets?: Market[]
     band: { threshold: number; before: number | null; after: number | null } | null   // pp1
     ruleId?: string; instrument?: Instrument; weight?: number; toThreshold?: number; over?: number
@@ -330,7 +333,8 @@ type DayEvent =
   | { kind: 'rebalance' | 'partial-failed' | 'in-progress'; rule: RuleRef; stagesMini: Array<'done' | 'pending' | 'failed'>;
       weights: { instruments: Instrument[]; before: number[]; after: number[]; target: number[]; threshold: number };
       stages: Stage[]; feesKrw: number }
-  | { kind: 'deposit' | 'withdrawal' | 'dividend' | 'start'; krw: number; treatment: 'pnl-excluded' | 'income' | 'invest-next-check' | 'withdraw-wait'; until?: string; instrument?: Instrument }
+  | { kind: 'deposit' | 'withdrawal' | 'dividend' | 'start'; krw: number; treatment: 'pnl-excluded' | 'income' | 'invest-next-check' | 'withdraw-wait'; until?: string; instrument?: Instrument;
+      stages?: Stage[]; feesKrw?: number }   // start는 첫 매수의 단계·수수료를 같이 싣는다
   | { kind: 'live-on' | 'live-off'; at: string }
   | { kind: 'ai-check' | 'ai-sell' | 'ai-buy' | 'monthly-review' | 'discovery'; rule: RuleRef; judgment: AiJudgment }   // 2단계
 interface AiJudgment {
@@ -406,21 +410,22 @@ interface HealthResponse {
   todos: Array<{
     id: string
     severity: 'red' | 'yellow'
-    kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings'
+    kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'order-failed' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings'
+    // order-failed = 다시 시도까지 실패한 주문(facts: date, market, side, reason). order-rejected는 실전 브로커 거절(3단계)
     facts: Record<string, string | number>      // 화면 문구에 끼울 값(시장, 날짜, 남은 날 …)
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' }
     effect: 'orders-zero-live-blocked' | 'orders-and-reconcile-stop' | 'no-order-sent' | 'other'
   }>
-  sources: Array<{
+  sources: Array<{                              // 1단계는 kr-quotes·us-quotes·fx 셋만(없는 연결은 줄을 만들지 않는다)
     id: 'kr-quotes' | 'us-quotes' | 'fx' | 'toss-link' | 'toss-balance' | 'push-devices' | 'filings' | 'ai-cli' | 'metric-table'
     state: 'fresh' | 'late' | 'stale' | 'maintenance' | 'unknown'
     basis: string | null                        // 종가일·환율 값·만료일 …
     receivedAt: string | null
     cadence: 'daily' | 'per-check' | '90d' | 'event'
     age: number                                 // 주기 대비 나이(0~1 이상)
-    extra?: Record<string, string | number>     // 기기 수, 남은 날 …
+    extra?: Record<string, string | number>     // 기기 수, 남은 날 …, 시세는 { market: 'KR' | 'US' }
   }>
-  recent14: Array<{ date: string; state: CalendarState; run?: { at: string; result: string; seconds: number } }>
+  recent14: Array<{ date: string; state: CalendarState; run?: { at: string; result: string; seconds: number } }>   // 최근 14일 중 평일만(10칸)
   lastRun: { at: string; result: string; seconds: number; reason?: string } | null
 }
 ```
@@ -451,7 +456,7 @@ interface ModeResponse {
         stages: Stage[]; outside: Array<{ instrument: Instrument; qty: number; approxKrw: number }> }
     | { kind: 'not-computable'; at: string; cause: 'stale' | 'other' }
   cancelFailed: Order[] | null
-  canTurnOn: { ok: true } | { ok: false; cause: 'checks' | 'preview' }
+  canTurnOn: { ok: true } | { ok: false; cause: 'checks' | 'preview' | 'live-not-available' }   // 1단계는 항상 live-not-available
 }
 ```
 
@@ -459,6 +464,7 @@ interface ModeResponse {
 ```ts
 interface AccountResponse {
   thisDevice: { name: string; kind: 'iphone-app' | 'iphone-safari' | 'mac' | 'other'; enteredAt: string }
+  // name·kind는 로그인 때의 User-Agent로 정한다(name 예: 'Mac · Chrome'). UA에 'Safari/'가 없는 iPhone을 홈 화면 앱으로 본다
   notifications: {
     thisDevice: { supported: boolean; reason?: 'safari-tab' | 'denied' | 'unsupported'; subscribed: boolean }
     events: Array<{ id: NotifyEvent; on: boolean; locked?: boolean }>
@@ -478,25 +484,45 @@ type NotifyEvent =
 ## 쓰기
 | 요청 | 본문 | 결과 |
 |---|---|---|
-| `POST /api/auth/pin` | `{pin}` | 204와 세션 쿠키. 틀리면 403 `{error:'pin', remaining}`, 잠기면 403 `{error:'locked', until, scope:'ip'|'global'}` |
+| `POST /api/auth/pin` | `{pin}` | 204와 세션 쿠키. 틀리면 403 `{error:'pin', remaining}`, 잠기면 403 `{error:'locked', until, scope:'ip'|'global'}`. 6자리 숫자가 아니면 400 `{error:'invalid-pin'}`(실패로 세지 않음). PIN이 아직 없으면 403 `{error:'no-pin'}` |
 | `POST /api/auth/logout` | — | 204, 쿠키 지움 |
 | `POST /api/auth/logout-others` | — | 204, 이 세션만 남김 |
-| `POST /api/account/pin` | `{current, next}` | 204, 다른 세션 모두 끊김. 403 `{error:'current-pin'}` |
-| `POST /api/mode/live` | `{pin, confirm:true, previewHash}` | 200 `{mode:'live'}`. 다시 계산한 미리보기 금액이 1% 이상 다르면 409 `{error:'preview-changed', preview}`. 점검 ✕면 409 `{error:'blocked'}` |
+| `POST /api/account/pin` | `{current, next}` | 204, 다른 세션 모두 끊김. 403 `{error:'current-pin'}`(틀린 PIN으로 셈, 잠기면 403 `{error:'locked'}`). `next`가 6자리 숫자가 아니면 400 `{error:'invalid-pin'}` |
+| `POST /api/mode/live` | `{pin, confirm:true, previewHash}` | 200 `{mode:'live'}`. 다시 계산한 미리보기 금액이 1% 이상 다르면 409 `{error:'preview-changed', preview}`. 점검 ✕면 409 `{error:'blocked', detail:{cause}}`. **1단계는 항상 409 `{error:'blocked', detail:{cause:'live-not-available'}}`** |
 | `POST /api/mode/paper` | — | 200 `{mode:'paper', cancelFailed: Order[]}` (PIN 없음, 세션만) |
 | `POST /api/mode/cancel-retry` | — | 200 `{cancelFailed: Order[]}` |
-| `PUT /api/account/notifications` | `{events?, hideAmounts?}` | 200 `{savedAt}` |
-| `POST /api/account/push` | `{subscription}` | 204 |
-| `POST /api/account/push/test` | — | 200 `{results}` |
+| `PUT /api/account/notifications` | `{events?: {[id]: boolean}, hideAmounts?}` | 200 `{savedAt}`. 보낸 것만 바뀐다. 없는 id는 400 `{error:'unknown-event', detail:{event}}`, 잠긴 id(check-failed)를 끄면 400 `{error:'locked-event', detail:{event}}` |
+| `POST /api/account/push` | `{subscription}` | 204. **1단계는 501 `{error:'not-implemented', detail:{feature:'push'}}`** |
+| `POST /api/account/push/test` | — | 200 `{results}`. **1단계는 501(위와 같음)** |
 
 - 중복 요청은 멱등이다. `POST /api/mode/live`는 진행 중이면 409 `{error:'in-progress'}`를 준다.
-- PIN 잠금은 접속 위치(IP)마다 5회 연속 실패면 30분이다. 전체 상한도 둔다.
-- 첫 PIN은 웹에서 만들지 않는다. 서버 CLI로만 만든다(`python -m autotrade.jobs set-pin`).
+- PIN 잠금은 접속 위치(IP)마다 5회 연속 실패면 30분이다. 전체 상한도 둔다: 어디서든 1시간에 20회 틀리면 그 1시간이 지날 때까지 새 로그인을 막는다(`scope:'global'`). 이미 열린 세션은 그대로다.
+- 첫 PIN은 웹에서 만들지 않는다. 서버 CLI로만 만든다(`python -m autotrade.jobs set-pin`, PIN은 표준 입력으로 두 번). CLI로 PIN을 다시 정하면 열린 세션이 모두 끊긴다.
+- `GET /api/healthz`는 세션 없이 200 `{ok: true, schema: number}`(DB 판 번호)를 준다. DB를 못 읽으면 503 `{error:'db'}`. 배포 헬스체크용이다.
+
+### 오류 코드
+| 상태 | `error` | `detail` | 언제 |
+|---|---|---|---|
+| 400 | `bad-request` | `{fields: string[]}` | 본문·쿼리·경로 값의 형식이 틀림(없는 `period`, 날짜 아님 …) |
+| 400 | `invalid-pin` | — | PIN이 6자리 숫자가 아님 |
+| 400 | `unknown-event` · `locked-event` | `{event}` | 알림 설정(위 표) |
+| 403 | `session` | — | 세션 쿠키가 없거나 만료·끊김 |
+| 403 | `no-pin` · `pin` · `locked` · `current-pin` | — | PIN(위 표). `pin`·`locked`는 `remaining`·`until`·`scope`를 맨 위에 싣는다 |
+| 404 | `not-found` | `{rule}`(규칙일 때) | 없는 `/api` 경로, 없는 규칙 id |
+| 404 | `no-ledger` | `{ledger}` | `?ledger=`로 시작한 적 없는 장부를 열 때. 지금 모드의 장부는 404 대신 첫 확인 전 상태를 준다 |
+| 405 | `method-not-allowed` | — | |
+| 409 | `blocked` · `preview-changed` · `in-progress` | `{cause}`(blocked) | 실전 켜기(위 표) |
+| 500 | `internal` | — | 서버 오류. 보안 헤더는 그대로 붙는다 |
+| 501 | `not-implemented` | `{feature}` | 1단계에 없는 기능(`push`) |
+| 503 | `db` | — | `/api/healthz`만 |
 
 ## 세션과 보안
 - 쿠키 `qsess`: HttpOnly, Secure, SameSite=Strict, Domain 없이 둔다(host-only). HMAC으로 서명하고 30일 동안 유효하다. 서버 비밀값은 `data/autotrade.secret`이다.
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`.
-- `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일은 immutable이다.
+- 모든 응답에 `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`를 붙인다. `/api/*` 응답은 `Cache-Control: no-store`다.
+- 세션은 서버 DB에 남는다(id·만료·끊김). 쿠키 값은 `<세션 id>.<만료 unix 초>.<HMAC>`이고, 끊긴 세션의 쿠키는 서명이 맞아도 403이다.
+- 접속 위치(IP)는 요청이 127.0.0.1(nginx)에서 왔을 때만 `X-Forwarded-For`를 읽는다(nginx가 붙인 맨 오른쪽 값).
+- `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일(`/assets/*`)은 immutable이다. `/api`가 아닌 다른 경로는 모두 `index.html`(화면 라우팅)이고, 빌드가 없으면 `/`는 503 안내 페이지다.
 
 ## 화면 상태와 고정 자료
 - 화면은 `src/fixtures/<상태 id>.json`(이 계약의 응답 묶음)으로 모든 상태를 띄운다. 개발 서버와 Playwright만 쓰고, 운영 빌드에는 넣지 않는다.
@@ -514,3 +540,4 @@ type NotifyEvent =
 
 ## 바뀐 것
 - 2026-10-09: 처음 씀(메인 세션).
+- 2026-10-09: API 구현에 맞춤(API 세션). 오류 코드 표, `/api/healthz`, 1단계 실전 켜기 409 `live-not-available`(+ `canTurnOn.cause`), 푸시 501, partial-todo `retry-failed`, 할 일 `order-failed`, 시세 대기 다음 할 일 `market: 'FX'`, 그날 확인 결과 `in-progress`·`withdraw-wait`·`no-run`, 변동 분해의 부호와 'all' 기준, 시작 사건의 단계·수수료, 환전 주문 `market: 'KR'`, recent14 평일만, 1단계 출처 3개(`extra.market`), 이니셜 규칙, 이 기기 판별, 보안 헤더·`no-store`를 더했다.

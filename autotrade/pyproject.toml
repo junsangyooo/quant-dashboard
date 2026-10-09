@@ -6,11 +6,14 @@
 #
 # Run everything from the repository root (Python 3.10, the server's version):
 #
+#   API=(--with fastapi==0.136.1 --with starlette==1.0.0 --with pydantic==2.13.4 \
+#        --with httpx==0.28.1 --with anyio==4.13.0)    # the web API and its TestClient
+#
 #   uv run --no-project --python 3.10 --with pytest --with pytest-cov \
-#       --with pandas==2.3.3 --with numpy==2.2.6 \
+#       --with pandas==2.3.3 --with numpy==2.2.6 "${API[@]}" \
 #       pytest tests/autotrade --cov=autotrade --cov-config=autotrade/pyproject.toml
 #
-#   uv run --no-project --python 3.10 --with mypy --with pytest \
+#   uv run --no-project --python 3.10 --with mypy --with pytest "${API[@]}" \
 #       mypy --config-file autotrade/pyproject.toml autotrade tests/autotrade
 #
 #   uv run --no-project --python 3.10 --with ruff \
@@ -55,6 +58,10 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["autotrade"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares dependencies and query parameters as argument defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.params.Depends"]
 
 [tool.ruff.format]
 quote-style = "double"
