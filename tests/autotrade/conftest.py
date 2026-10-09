@@ -45,6 +45,8 @@ def _no_live_orders(monkeypatch: pytest.MonkeyPatch) -> None:
         "AUTOTRADE_SECRETS_ENV",
         "AUTOTRADE_PAPER_SHARES",
         "AUTOTRADE_LIVE_SHARES",
+        "AUTOTRADE_DEV",
+        "AUTOTRADE_FAKE_NOW",
         "DART_API_KEY",
     ):
         monkeypatch.delenv(name, raising=False)

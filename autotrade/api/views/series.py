@@ -127,7 +127,8 @@ def snapshot_drift(ctx: LedgerContext, snap: SnapshotRow) -> Decimal | None:
     for pos in snap.positions:
         iid = str(pos.get("instrument_id"))
         if iid in values:
-            values[iid] = Decimal(str(pos.get("value_krw")))
+            value = Decimal(str(pos.get("value_krw")))
+            values[iid] = ctx.base_value(iid, int(pos.get("qty") or 0), value, snap.valued_at)
     waiting: dict[str, Decimal] = {}
     for part in snap.cash_parts:
         part_iid = str(part.get("instrument_id"))

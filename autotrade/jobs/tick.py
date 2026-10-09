@@ -10,7 +10,7 @@ nothing due prints nothing. A task that breaks is logged and the tick goes on wi
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -135,10 +135,12 @@ def run_tick(
     clock: Callable[[], datetime],
     backup_dir: Path,
     emit: Callable[[dict[str, Any]], None],
+    tasks: Sequence[str] = TASKS,
 ) -> list[dict[str, Any]]:
-    """Run every due task once, in order. Returns the lines it emitted."""
+    """Run every due task once, in order. Returns the lines it emitted. `tasks` narrows the list
+    (dev-seed replays without the backup)."""
     lines: list[dict[str, Any]] = []
-    for task in TASKS:
+    for task in (t for t in TASKS if t in tasks):
         at = clock()
         line: dict[str, Any] = {"at": at, "task": task, "ledger": ledger_id}
         try:

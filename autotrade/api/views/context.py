@@ -24,7 +24,7 @@ from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.refs import rule_ref
 from autotrade.config import Config
 from autotrade.db import ai_repo, repo
-from autotrade.db.models import EventRow, LedgerRow, PlanRow, RunRow, SnapshotRow
+from autotrade.db.models import EventRow, FillRow, LedgerRow, PlanRow, RunRow, SnapshotRow
 from autotrade.domain.cash import CashPart, Purpose
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.ledger import LedgerState
@@ -421,11 +421,32 @@ class LedgerContext:
     # ── weights, status, next action ─────────────────────────────────────────────────────
 
     @cached_property
+    def ai_fills(self) -> list[FillRow]:
+        return repo.fills_of_rule(self.conn, self.ledger_id, AI_RULE)
+
+    def base_value(self, instrument_id: str, qty: int, value_krw: Decimal, at: datetime) -> Decimal:
+        """'지수 반반''s part of a position's value at `at`: the shares the AI rule bought to park
+        its money in the same index ETF are its own (engine/sleeves.py base_view)."""
+        ai_qty = 0
+        for fill in self.ai_fills:
+            if fill.filled_at > at:
+                break
+            if fill.instrument_id == instrument_id and fill.qty:
+                ai_qty += fill.qty if fill.side == "buy" else -fill.qty
+        if qty <= 0 or ai_qty <= 0:
+            return value_krw
+        return value_krw * (qty - ai_qty) / qty
+
+    @cached_property
     def drift(self) -> DriftReport | None:
         val = self.valuation
         if val is None:
             return None
-        values = {iid: val.value_of(iid) for iid in self.rule.instrument_ids}
+        values = dict.fromkeys(self.rule.instrument_ids, ZERO)
+        for p in val.positions:
+            iid = p.instrument.instrument_id
+            if iid in values:
+                values[iid] = self.base_value(iid, p.qty, p.value_krw, val.at)
         waiting = buy_wait_krw(self.parts, self.fx_rate)
         targets = {t.instrument_id: t.weight for t in self.rule.targets}
         report = drift_report(values, waiting, targets, self.rule.threshold)

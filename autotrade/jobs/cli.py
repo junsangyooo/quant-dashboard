@@ -24,6 +24,10 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve).
   migrate    create or upgrade data/autotrade.db (deploy.sh runs it)
   set-pin    set the owner PIN (first time or reset). Reads it twice from standard input,
              never from the command line, and closes every open session.
+  dev-seed   development only: build a new database at --db by replaying the engine on a scripted
+             market (--world first-day | paper | discovery, autotrade/dev/worlds.py). No network,
+             no AI CLI. --pin sets the owner PIN without asking (default 123456); no other command
+             takes it. Refuses data/, the configured ledger and an existing file (exit 2).
 
 --at sets the clock for testing (ISO 8601; without an offset it is KST). Output is JSON.
 Jobs that write take a lock (data/autotrade.db-jobs.lock): tick skips its turn when another job
@@ -84,6 +88,7 @@ COMMANDS = (
     "status",
     "migrate",
     "set-pin",
+    "dev-seed",
 )
 LOCKED = (
     "tick",
@@ -119,7 +124,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--at", help="clock for testing, ISO 8601 (KST when no offset)")
     parser.add_argument("--db", help="database path (default: AUTOTRADE_DB or data/autotrade.db)")
     parser.add_argument("--note", help="resolve: what the owner did (kept in the event)")
+    parser.add_argument(
+        "--world", choices=("first-day", "paper", "discovery"), help="dev-seed: the world"
+    )
+    parser.add_argument("--pin", help="dev-seed only: the owner PIN of the new database")
     return parser
+
+
+def _dev_seed(
+    args: argparse.Namespace, env: Mapping[str, str] | None, out: Callable[[str], Any]
+) -> int:
+    # Imported here: the dev worlds are never needed by the server's jobs.
+    from autotrade.dev.worlds import DevSeedRefusedError, dev_seed
+
+    try:
+        report = dev_seed(Path(args.db) if args.db else None, args.world, args.pin, env=env)
+    except DevSeedRefusedError as exc:
+        print(
+            json.dumps({"job": "dev-seed", "result": "refused", "error": str(exc)}), file=sys.stderr
+        )
+        return 2
+    out(_dump(report))
+    return 0
 
 
 def _read_pin_twice(stdin: TextIO) -> tuple[str, str]:
@@ -254,6 +280,13 @@ def main(
     if args.todo_id is not None and args.command != "resolve":
         # Only 'resolve' takes a value; above all, a PIN is never a command-line argument.
         parser.error(f"{args.command} takes no argument")
+    if args.command != "dev-seed" and (args.pin is not None or args.world is not None):
+        # The owner PIN of a real ledger comes from standard input only (set-pin).
+        parser.error("--pin and --world are only for dev-seed")
+    if args.command == "dev-seed":
+        if args.world is None:
+            parser.error("dev-seed needs --world (first-day, paper or discovery)")
+        return _dev_seed(args, env, out)
     cfg = load_config(env)
     if args.db:
         cfg = replace(cfg, db_path=Path(args.db))

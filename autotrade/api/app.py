@@ -7,11 +7,15 @@
 - /docs, /redoc and /openapi.json are off. Unknown /api paths are JSON 404.
 - Everything else is the built web app from web/dist (autotrade/api/routes/static.py).
 - Every response carries the CSP of CONTRACT.md and the other security headers.
+- Development only: with AUTOTRADE_DEV=1, AUTOTRADE_FAKE_NOW (ISO 8601, KST without an offset)
+  stops the clock there, so a dev-seed world reads at its own time. Without AUTOTRADE_DEV the
+  variable is ignored; the production unit sets neither.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+import os
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -30,7 +34,7 @@ from autotrade.api.settings import ApiSettings, default_settings
 from autotrade.config import Config, load_config
 from autotrade.db.connection import connect
 from autotrade.engine.bootstrap import bootstrap
-from autotrade.timeutil import UTC
+from autotrade.timeutil import UTC, parse_cli_time
 
 CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
@@ -49,6 +53,15 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def dev_clock(env: Mapping[str, str]) -> Callable[[], datetime] | None:
+    """The fixed clock of a dev-seed world: AUTOTRADE_FAKE_NOW, honoured only with
+    AUTOTRADE_DEV=1 (never set on the server)."""
+    if env.get("AUTOTRADE_DEV") != "1" or not env.get("AUTOTRADE_FAKE_NOW"):
+        return None
+    fixed = parse_cli_time(env["AUTOTRADE_FAKE_NOW"])
+    return lambda: fixed
+
+
 def create_app(
     cfg: Config | None = None,
     settings: ApiSettings | None = None,
@@ -56,7 +69,7 @@ def create_app(
 ) -> FastAPI:
     config = cfg or load_config()
     api_settings = settings or default_settings(config)
-    now = clock or _utc_now
+    now = clock or dev_clock(os.environ) or _utc_now
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
