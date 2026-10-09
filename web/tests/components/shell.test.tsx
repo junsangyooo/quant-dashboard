@@ -1,13 +1,17 @@
-import { render, screen, within } from '@testing-library/react';
-import { createMemoryRouter, RouterProvider } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { copy } from '../../src/copy';
+import homePaper from '../../src/fixtures/bundles/home.paper';
 import { routes } from '../../src/routes';
+import { answerFrom, renderRoutes } from '../helpers';
 
 function renderAt(path: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
-  return render(<RouterProvider router={router} />);
+  return renderRoutes(routes, path);
 }
+
+beforeEach(() => {
+  answerFrom(homePaper);
+});
 
 describe('app shell', () => {
   it('starts with a skip link to the main region', () => {
@@ -17,11 +21,12 @@ describe('app shell', () => {
     expect(document.getElementById('main')?.tagName).toBe('MAIN');
   });
 
-  it('shows the header: wordmark, mode badge → 모드, status chip → 작동, gear → 설정', () => {
+  it('shows the header: wordmark, mode badge → 모드, status chip → 작동, gear → 설정', async () => {
     renderAt('/');
     const header = screen.getByRole('banner');
     expect(within(header).getByText(copy.wordmark)).toBeInTheDocument();
-    expect(within(header).getByRole('link', { name: copy.mode.paper })).toHaveAttribute(
+    // Mode and status come from /api/shell (fixture home.paper: 모의투자, checked 08:30).
+    expect(await within(header).findByRole('link', { name: copy.mode.paper })).toHaveAttribute(
       'href',
       '/mode',
     );

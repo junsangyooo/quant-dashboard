@@ -117,9 +117,10 @@ describe('percent and percentage points', () => {
 });
 
 describe('dates and times (KST)', () => {
+  // No zero padding (decision 2026-10-09); 예시-값표 writes some of these as 10/07, 10/08.
   it('formats month/day with a weekday', () => {
-    expect(formatMonthDayWeekday('2026-10-07', { padDay: true })).toBe('10/07(수)');
-    expect(formatMonthDayWeekday('2026-10-08', { padDay: true })).toBe('10/08(목)');
+    expect(formatMonthDayWeekday('2026-10-07')).toBe('10/7(수)');
+    expect(formatMonthDayWeekday('2026-10-08')).toBe('10/8(목)');
     expect(formatMonthDayWeekday('2026-07-01')).toBe('7/1(수)');
     expect(formatMonthDayWeekday('2026-08-21')).toBe('8/21(금)');
     expect(formatMonthDayWeekday('2026-09-25')).toBe('9/25(금)');
@@ -130,15 +131,14 @@ describe('dates and times (KST)', () => {
     expect(formatMonthDay('2026-10-07')).toBe('10/7');
     expect(formatMonthDay('2026-07-07')).toBe('7/7');
     expect(formatTime('2026-10-07T08:30:00+09:00')).toBe('08:30');
-    expect(formatDateTime('2026-10-07T08:30:00+09:00', { padDay: true })).toBe('10/07 08:30');
+    expect(formatDateTime('2026-10-07T08:30:00+09:00')).toBe('10/7 08:30');
+    expect(formatMonthDay('2026-10-02')).toBe('10/2');
   });
 
   it('converts instants to KST, across the date line', () => {
     expect(formatTime('2026-10-06T23:30:00Z')).toBe('08:30');
     expect(kstDateKey('2026-10-06T23:30:00Z')).toBe('2026-10-07');
-    expect(formatMonthDayWeekday(new Date('2026-10-06T15:00:00Z'), { padDay: true })).toBe(
-      '10/07(수)',
-    );
+    expect(formatMonthDayWeekday(new Date('2026-10-06T15:00:00Z'))).toBe('10/7(수)');
   });
 
   it('rejects unparseable input', () => {

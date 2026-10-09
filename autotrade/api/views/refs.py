@@ -7,12 +7,22 @@ from typing import Any
 from autotrade.domain.instruments import Instrument
 from autotrade.rules.model import RuleDef
 
+# Figma draws these logo stand-ins (디자인 page, read 2026-10-09): KOSPI200 ETF 'K2',
+# S&P 500 ETF 'SP', 삼성전자 '삼', NVDA 'NV', BTC 'B'. Cash rows get currency symbols in the web.
+INITIALS_OVERRIDE = {"069500": "K2", "SPYM": "SP", "SPLG": "SP"}
 
-def initials(name: str) -> str:
-    """Logo stand-in: the first two letters or digits of the name ('KOSPI200 ETF' -> 'KO',
-    'S&P 500 ETF' -> 'SP', '삼성전자' -> '삼성')."""
-    chars = [c for c in name if c.isalnum()]
-    return "".join(chars[:2]).upper()
+
+def initials(inst: Instrument) -> str:
+    """Logo stand-in, following Figma: an explicit value for the index ETFs, otherwise the first
+    Hangul syllable of a Korean name, the first letter of a coin ticker, or the first two
+    letters of the ticker."""
+    if inst.ticker in INITIALS_OVERRIDE:
+        return INITIALS_OVERRIDE[inst.ticker]
+    first = inst.name[:1]
+    if "\uac00" <= first <= "\ud7a3":
+        return first
+    letters = [c for c in inst.ticker if c.isalnum()]
+    return "".join(letters[: 1 if inst.kind.value == "coin" else 2]).upper()
 
 
 def instrument(inst: Instrument) -> dict[str, Any]:
@@ -22,7 +32,7 @@ def instrument(inst: Instrument) -> dict[str, Any]:
         "kind": inst.kind.value,
         "market": inst.market.value,
         "currency": inst.currency.value,
-        "initials": initials(inst.name),
+        "initials": initials(inst),
     }
 
 

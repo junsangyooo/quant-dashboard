@@ -8,3 +8,5 @@ design/tokens.json
 src/styles/tokens.css
 package-lock.json
 scripts/figma/dump.js
+src/styles/pretendard.css
+dist-e2e

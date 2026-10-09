@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
-// The smoke test runs against the production build served by `vite preview`, which sends
-// the same Content-Security-Policy as production (vite.config.ts).
+// The smoke test runs against the e2e build (production code plus fixtures, `--mode e2e`)
+// served by `vite preview`, which sends the production Content-Security-Policy. Pages pick a
+// state with `?fixture=<state id>` and never reach a server.
 const PORT = 4173;
 
 export default defineConfig({
@@ -14,7 +15,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `npm run build && npx vite preview --host 127.0.0.1 --port ${String(PORT)} --strictPort`,
+    command: `npm run build:e2e && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port ${String(PORT)} --strictPort`,
     url: `http://127.0.0.1:${String(PORT)}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

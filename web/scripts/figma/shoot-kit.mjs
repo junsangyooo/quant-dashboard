@@ -25,7 +25,7 @@ page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
 
 await page.goto(`${base}/_kit`, { waitUntil: 'networkidle' });
 await page.evaluate(() => document.fonts.ready);
-const fontOk = await page.evaluate(() => document.fonts.check('600 13px Pretendard'));
+const fontOk = await page.evaluate(() => document.fonts.check('600 13px Pretendard', '모의투자'));
 const ids =
   only ??
   (await page.$$eval('[data-figma-id]', (els) => els.map((e) => e.getAttribute('data-figma-id'))));

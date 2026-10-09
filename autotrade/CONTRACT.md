@@ -24,12 +24,12 @@ type Currency = 'KRW' | 'USD'
 type Side = 'buy' | 'sell' | 'fx'
 
 interface Instrument {
-  id: string            // 'KR:069500', 'US:SPLG'
+  id: string            // 'KR:069500', 'US:SPYM'
   name: string          // 'KOSPI200 ETF', 'S&P 500 ETF'
   kind: 'etf' | 'stock' | 'coin'
   market: Market
   currency: Currency
-  initials: string      // 로고 자리 이니셜(로고 없음). 이름의 글자·숫자 앞 두 개, 대문자('KO', 'SP', '삼성')
+  initials: string      // 로고 자리 이니셜(Figma 기준): 지수 ETF는 지정값(069500 'K2', SPYM 'SP'), 한글 이름은 첫 글자('삼'), 코인은 티커 첫 글자('B'), 그 밖은 티커 앞 두 글자('NV'). 현금 행은 화면이 ₩·$를 그린다
   outsideToss?: boolean // 토스 밖 계좌(코인)
 }
 
@@ -525,7 +525,7 @@ type NotifyEvent =
 - `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일(`/assets/*`)은 immutable이다. `/api`가 아닌 다른 경로는 모두 `index.html`(화면 라우팅)이고, 빌드가 없으면 `/`는 503 안내 페이지다.
 
 ## 화면 상태와 고정 자료
-- 화면은 `src/fixtures/<상태 id>.json`(이 계약의 응답 묶음)으로 모든 상태를 띄운다. 개발 서버와 Playwright만 쓰고, 운영 빌드에는 넣지 않는다.
+- 화면은 `src/fixtures/bundles/<상태 id>.ts`(이 계약의 응답 묶음, 타입 검사를 받음)로 모든 상태를 띄운다. 개발 서버와 Playwright만 쓰고, 운영 빌드에는 넣지 않는다.
 - 상태 id는 화면과 상태를 '.'으로 잇는다.
   - home.paper(모의투자 기본), home.live(실전 평상), home.live-first(실전 첫 체결 전), home.withdraw(출금 대기), home.stale(시세 대기), home.partial(일부 실패), home.offline, home.other-device, home.first-day(출시 첫날), home.empty(첫 확인 전)
   - plan.paper, plan.live, plan.stale, plan.partial, plan.live-todo, plan.first-day
@@ -541,3 +541,4 @@ type NotifyEvent =
 ## 바뀐 것
 - 2026-10-09: 처음 씀(메인 세션).
 - 2026-10-09: API 구현에 맞춤(API 세션). 오류 코드 표, `/api/healthz`, 1단계 실전 켜기 409 `live-not-available`(+ `canTurnOn.cause`), 푸시 501, partial-todo `retry-failed`, 할 일 `order-failed`, 시세 대기 다음 할 일 `market: 'FX'`, 그날 확인 결과 `in-progress`·`withdraw-wait`·`no-run`, 변동 분해의 부호와 'all' 기준, 시작 사건의 단계·수수료, 환전 주문 `market: 'KR'`, recent14 평일만, 1단계 출처 3개(`extra.market`), 이니셜 규칙, 이 기기 판별, 보안 헤더·`no-store`를 더했다.
+- 2026-10-09: 이니셜 규칙을 Figma에 맞춤(K2·SP·삼·NV·B), 종목 id 예시 SPYM, 고정 자료 위치를 bundles/*.ts로(메인 세션).

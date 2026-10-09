@@ -37,7 +37,7 @@ export interface NodeCardProps {
   title: ReactNode;
   /** Rows under the title (subtitle, logos, chips…). */
   children?: ReactNode;
-  /** Text after '지금', e.g. '· 마지막 판단 10/07 08:30'. */
+  /** Text after '지금', e.g. '· 마지막 판단 10/7 08:30'. */
   nowSuffix?: ReactNode;
   /** Value rows inside the '지금' box. */
   now: ReactNode;

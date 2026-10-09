@@ -172,31 +172,30 @@ export function kstParts(input: string | Date): KstParts {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-export interface MonthDayOptions {
-  /** Zero-pad the day: `10/07` instead of `10/7`. */
-  padDay?: boolean;
-}
+// One date rule, no zero padding anywhere: `10/7`, `7/1(수)`, `10/7 08:30`, `10/2 기준`
+// (decision 2026-10-09). 예시-값표.md mixes `10/07 08:30` and `7/1(수)`; where a spec string
+// is padded, the screen still prints the unpadded form.
 
-/** `2026-10-07` → `10/7` (or `10/07` with padDay) */
-export function formatMonthDay(input: string | Date, options: MonthDayOptions = {}): string {
+/** `2026-10-07` → `10/7` */
+export function formatMonthDay(input: string | Date): string {
   const p = kstParts(input);
-  return `${String(p.month)}/${options.padDay ? pad2(p.day) : String(p.day)}`;
+  return `${String(p.month)}/${String(p.day)}`;
 }
 
-/** `2026-10-07` → `10/07(수)` with padDay, `2026-07-01` → `7/1(수)` */
-export function formatMonthDayWeekday(input: string | Date, options: MonthDayOptions = {}): string {
-  return `${formatMonthDay(input, options)}(${kstParts(input).weekday})`;
+/** `2026-10-07` → `10/7(수)`, `2026-07-01` → `7/1(수)` */
+export function formatMonthDayWeekday(input: string | Date): string {
+  return `${formatMonthDay(input)}(${kstParts(input).weekday})`;
 }
 
-/** `2026-10-06T23:30:00Z` → `08:30` */
+/** `2026-10-06T23:30:00Z` → `08:30` (hours keep two digits) */
 export function formatTime(input: string | Date): string {
   const p = kstParts(input);
   return `${pad2(p.hour)}:${pad2(p.minute)}`;
 }
 
-/** `10/07 08:30` */
-export function formatDateTime(input: string | Date, options: MonthDayOptions = {}): string {
-  return `${formatMonthDay(input, options)} ${formatTime(input)}`;
+/** `10/7 08:30` */
+export function formatDateTime(input: string | Date): string {
+  return `${formatMonthDay(input)} ${formatTime(input)}`;
 }
 
 /** KST calendar date key `YYYY-MM-DD` for an instant or a date key. */

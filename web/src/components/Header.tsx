@@ -7,26 +7,20 @@ import { ModeBadge, type Mode } from './Badges';
 import { IconButton } from './Buttons';
 import { HeaderStatusChip, type HeaderStatus } from './Chips';
 import { NavItem, TABS, type CurrentKind, type TabKey } from './Nav';
+import { Skeleton } from './State';
 import styles from './Header.module.css';
 
 export interface HeaderProps {
-  mode: Mode;
-  status: HeaderStatus;
-  statusLabel: string;
+  /** null until the first /api/shell answer arrives (skeleton in its place). */
+  mode: Mode | null;
+  status: { status: HeaderStatus; label: string } | null;
   current: TabKey | null;
   currentKind?: CurrentKind | undefined;
   /** `auto` switches 390 → 1440 at 900px; the others force one (gallery). */
   layout?: 'auto' | '390' | '1440' | undefined;
 }
 
-export function Header({
-  mode,
-  status,
-  statusLabel,
-  current,
-  currentKind,
-  layout = 'auto',
-}: HeaderProps) {
+export function Header({ mode, status, current, currentKind, layout = 'auto' }: HeaderProps) {
   return (
     <header
       className={clsx(
@@ -38,10 +32,14 @@ export function Header({
       <div className={styles.inner}>
         <div className={styles.left}>
           <span className="t-heading-1">{copy.wordmark}</span>
-          <ModeBadge mode={mode} to="/mode" />
-          <HeaderStatusChip status={status} to="/health">
-            {statusLabel}
-          </HeaderStatusChip>
+          {mode ? <ModeBadge mode={mode} to="/mode" /> : <Skeleton text="label" width={64} />}
+          {status ? (
+            <HeaderStatusChip status={status.status} to="/health">
+              {status.label}
+            </HeaderStatusChip>
+          ) : (
+            <Skeleton text="caption" width={121} />
+          )}
         </div>
         <nav className={styles.tabs}>
           <ul className={styles.tabList}>

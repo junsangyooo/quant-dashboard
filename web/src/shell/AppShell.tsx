@@ -5,7 +5,8 @@ import { Outlet, ScrollRestoration, useLocation, useMatches } from 'react-router
 import { copy } from '../copy';
 import { Header } from '../components/Header';
 import { BottomTabs } from '../components/Nav';
-import { shellFixture } from '../fixtures/shell';
+import { ModeChangedChip, ShellBanner } from '../components/State';
+import { dismissModeChange, useHeaderStatus, useShell } from '../api/queries';
 import { isPageHandle, type PageHandle } from './page';
 import styles from './AppShell.module.css';
 
@@ -25,19 +26,22 @@ export function AppShell() {
   const { pathname } = useLocation();
   const main = useRef<HTMLElement>(null);
   const firstRender = useRef(true);
+  const shell = useShell();
+  const status = useHeaderStatus();
 
-  // Move focus to the new page's content after client-side navigation.
+  // Move focus to the new page's content after client-side navigation; the
+  // 'changed on another device' chip stays until the user moves to another page.
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
+    dismissModeChange();
     main.current?.focus({ preventScroll: true });
   }, [pathname]);
 
   // Sub-pages sit under 자산 in the sitemap; Figma keeps 자산 underlined there (1:63806).
   const current = page.tab ?? (page.kind === 'sub' ? 'home' : null);
-  const state = shellFixture;
 
   return (
     <div className={styles.shell}>
@@ -45,18 +49,25 @@ export function AppShell() {
         {copy.skipLink}
       </a>
       <Header
-        mode={state.mode}
-        status={state.status}
-        statusLabel={state.statusLabel}
+        mode={shell.data?.mode ?? null}
+        status={status}
         current={current}
         currentKind={page.kind === 'tab' ? 'page' : 'true'}
       />
+      {page.kind !== 'sheet' ? (
+        <div className={styles.bannerSlot}>
+          <ShellBanner />
+        </div>
+      ) : null}
       <main
         id="main"
         ref={main}
         tabIndex={-1}
         className={clsx(styles.main, page.kind !== 'tab' && styles.sub)}
       >
+        <div className={styles.modeChange}>
+          <ModeChangedChip />
+        </div>
         <Outlet />
       </main>
       {page.kind === 'tab' ? <BottomTabs current={page.tab ?? null} /> : null}

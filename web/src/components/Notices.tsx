@@ -8,7 +8,7 @@ import type { Mode } from './Badges';
 import styles from './Notices.module.css';
 
 export interface AlertBannerProps {
-  /** The fact, e.g. '미국 시세 10/02 기준 · 2거래일째 갱신 없음'. */
+  /** The fact, e.g. '미국 시세 10/2 기준 · 2거래일째 갱신 없음'. */
   children: ReactNode;
   /** Optional move link (버튼/링크), e.g. '작동 보기 ›'. */
   action?: ReactNode;

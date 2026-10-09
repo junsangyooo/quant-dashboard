@@ -59,3 +59,30 @@
   height: 24px;
   color: var(--text-primary);
 }
+
+/* 이상 배너: 390 full width right under the header; from 900px in the body column. */
+.bannerSlot:empty {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .bannerSlot {
+    width: 100%;
+    max-width: calc(var(--layout-content-max) + 2 * var(--space-grid));
+    margin-inline: auto;
+    padding: var(--space-grid) var(--space-grid) 0;
+  }
+
+  .bannerSlot > * {
+    border-radius: var(--radius-card);
+  }
+}
+
+/* '다른 기기에서 바뀜' chip at the top of the body. */
+.modeChange:empty {
+  display: none;
+}
+
+.modeChange {
+  padding-bottom: var(--space-block);
+}

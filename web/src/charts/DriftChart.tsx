@@ -131,7 +131,7 @@ export function DriftChart({
             textAnchor={gap.x > g.plotW / 2 ? 'end' : 'start'}
             dominantBaseline="hanging"
           >
-            {copy.chart.awaitingQuoteFrom(formatMonthDay(gap.date, { padDay: true }))}
+            {copy.chart.awaitingQuoteFrom(formatMonthDay(gap.date))}
           </text>
         ))}
       </svg>

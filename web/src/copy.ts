@@ -63,6 +63,70 @@ export const copy = {
     withdrawPending: '출금 대기',
   },
 
+  /** AI rules reuse the seven chips with other words (화면-맞춤.md ②, CONTRACT RuleStatus). */
+  ruleStatusAi: {
+    hold: '유지',
+    sellScheduled: '매도 예정',
+    buyScheduled: '매수 예정',
+    inProgress: '주문 중',
+  },
+
+  market: {
+    KR: '한국',
+    US: '미국',
+    COIN: '코인',
+    FX: '환율',
+  },
+
+  side: {
+    buy: '매수',
+    sell: '매도',
+    fx: '환전',
+  },
+
+  /** Shared screen states (기획 §5: loading · error · offline · other device · example). */
+  state: {
+    example: '예시',
+    retry: '다시 불러오기',
+    offlineLoaded: (time: string) => `${time} 불러온 값 · 연결 안 됨`,
+    modeChanged: (time: string, from: string, toWithParticle: string) =>
+      `${time} 다른 기기에서 ${from} → ${toWithParticle} 바뀜`,
+    /** Target mode with its particle: '모의투자로' / '실전으로'. */
+    modeTo: { paper: '모의투자로', live: '실전으로' },
+    errors: {
+      history: '기록을 못 불러왔어요',
+      day: '그날 기록을 못 불러왔어요',
+      rules: '규칙을 못 불러왔어요',
+      health: (time: string) => `상태를 못 불러왔어요 · ${time} 시도`,
+    },
+  },
+
+  /** 이상 배너 (SCR-HOME 섹션 '이상 배너'): one fact and a move link. */
+  banner: {
+    stale: (market: string, date: string, days: number) =>
+      `${market} 시세 ${date} 기준 · ${String(days)}거래일째 갱신 없음`,
+    /** FX has no '시세' (not drawn in Figma; composed from the stale line). */
+    staleFx: (date: string, days: number) =>
+      `환율 ${date} 기준 · ${String(days)}거래일째 갱신 없음`,
+    partialRetry: (date: string, market: string, side: string, retryAt: string) =>
+      `${date} ${market} ${side} 실패 · ${retryAt} 다시 시도`,
+    partialTodo: (date: string, market: string, side: string, reason: string) =>
+      `${date} ${market} ${side} 실패 · ${reason} · 직접 할 일`,
+    /** Why a failure became 직접 할 일. 'retry-failed' is not drawn; composed like the drawn one. */
+    todoReason: { 'broker-rejected': '토스 주문 거부', 'retry-failed': '다시 시도도 실패' },
+    checkFailed: (at: string, retryAt: string | null) =>
+      retryAt === null ? `${at} 확인 실패` : `${at} 확인 실패 · ${retryAt} 자동 재시도`,
+    cancelFailed: (market: string, side: string) =>
+      `모의투자로 바뀜 · ${market} ${side} 주문 취소 안 됨`,
+    pushUndelivered: (days: number) => `알림이 ${String(days)}일째 기기에 안 닿아요`,
+    link: {
+      health: '작동 보기',
+      plan: '계획 보기',
+      mode: '다시 시도',
+      account: '시험 알림',
+    },
+  },
+
   exception: {
     holiday: '휴장',
     awaitingQuote: '시세 대기',
@@ -99,8 +163,15 @@ export const copy = {
     withdraw: '출금',
     dividend: '배당',
     liveOn: '실전 켬',
+    liveOff: '실전 끔',
     start: '시작',
     runFail: '확인 실패',
+    // AI rule events (2단계, 화면-맞춤.md 기록): no Figma markers yet.
+    discovery: '발굴',
+    aiBuy: '매수',
+    aiSell: '매도',
+    aiCheck: 'AI 확인',
+    monthlyReview: '월 점검',
   },
 
   calendar: {
@@ -157,9 +228,10 @@ export const copy = {
 } as const;
 
 // Sample copy for the DEV-only component gallery (/_kit). Same sources as above.
+// Dates follow the no-padding rule (10/7, 10/2); the spec writes some as 10/07, 10/02.
 export const kitCopy = {
   title: '컴포넌트',
-  banner: '미국 시세 10/02 기준 · 2거래일째 갱신 없음',
+  banner: '미국 시세 10/2 기준 · 2거래일째 갱신 없음',
   bannerLink: '작동 보기',
   linkButton: '규칙 보기',
   expandButton: '비교 기준 설명',
@@ -184,12 +256,12 @@ export const kitCopy = {
   checkbox: '내용을 확인했고 실전으로 켤게요',
   statusLines: {
     ok: '토스 잔고 08:30 대조 일치',
-    warn: '미국 시세 10/02 기준 · 2거래일째 갱신 없음',
-    error: '10/07 08:30 확인 실패 · 09:30 자동 재시도',
-    wait: '다음 확인 10/08(목) 08:30',
+    warn: '미국 시세 10/2 기준 · 2거래일째 갱신 없음',
+    error: '10/7 08:30 확인 실패 · 09:30 자동 재시도',
+    wait: '다음 확인 10/8(목) 08:30',
   },
   checkRows: {
-    pass: { name: '작동 정상', desc: '마지막 확인 10/07 08:30' },
+    pass: { name: '작동 정상', desc: '마지막 확인 10/7 08:30' },
     blocked: { name: '작동 · 점검 1', desc: '미국 시세 낡음' },
     warn: { name: '토스 연결', desc: '만료 10/19 · 12일 남음' },
   },
@@ -214,7 +286,7 @@ export const kitCopy = {
     start: {
       title: '매일 08:30',
       sub: '한국 시간 · 평일',
-      next: '다음 10/08 08:30',
+      next: '다음 10/8 08:30',
       in: '23시간 뒤',
     },
     asset: { title: '후보군 8종목', more: '외 5', nowSuffix: '· 규칙 안 비중 · 손익' },
@@ -230,7 +302,7 @@ export const kitCopy = {
         ['AI', '상위 3 고르고 비중'],
         ['출력', '3종목 · 비중'],
       ],
-      nowSuffix: '· 마지막 판단 10/07 08:30',
+      nowSuffix: '· 마지막 판단 10/7 08:30',
       picked: '3종목 고름',
       same: '지난번과 같은 3종목',
     },
@@ -260,7 +332,7 @@ export const kitCopy = {
     result: {
       title: '리밸런싱 상태',
       sub: '지금 상태 · 마지막 실행',
-      last: '마지막 확인 10/07 08:30',
+      last: '마지막 확인 10/7 08:30',
     },
   },
   assets: {

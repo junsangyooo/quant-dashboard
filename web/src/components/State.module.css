@@ -1,0 +1,68 @@
+/* Shared screen states: skeleton bars, error block. */
+
+/* A bar replacing one line of text: 70% of the line height (Figma 1:50024, e.g. 12.6 of 18). */
+.line {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.bar {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--radius-control);
+  background: var(--border-default);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.bar-display {
+  height: calc(var(--type-display-line-height) * 0.7);
+}
+
+.bar-title {
+  height: calc(var(--type-title-line-height) * 0.7);
+}
+
+.bar-heading-1 {
+  height: calc(var(--type-heading-1-line-height) * 0.7);
+}
+
+.bar-body,
+.bar-body-strong,
+.bar-figure {
+  height: calc(var(--type-body-line-height) * 0.7);
+}
+
+.bar-label,
+.bar-caption {
+  height: calc(var(--type-caption-line-height) * 0.7);
+}
+
+.bar-micro {
+  height: calc(var(--type-micro-line-height) * 0.7);
+}
+
+/* A block skeleton (graph, card body): card radius. */
+.block {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-card);
+  background: var(--border-default);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-block);
+  padding: var(--space-section) 0;
+  color: var(--text-primary);
+}

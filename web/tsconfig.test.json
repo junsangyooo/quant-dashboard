@@ -7,5 +7,5 @@
     "types": ["vite/client", "node"],
     "jsx": "react-jsx"
   },
-  "include": ["tests", "src", "scripts/tokens-lib.ts"]
+  "include": ["tests", "src", "scripts/tokens-lib.ts", "vite.config.ts"]
 }

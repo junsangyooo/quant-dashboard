@@ -73,7 +73,6 @@ import {
   paperEvents,
   untouchedDaily3m,
 } from '../fixtures/charts';
-import { shellFixture } from '../fixtures/shell';
 import { formatKrw, formatKrwSigned, formatMonthDay, formatMonthDayWeekday } from '../lib/format';
 import { useDocumentTitle } from '../shell/page';
 import styles from './KitGallery.module.css';
@@ -186,8 +185,7 @@ export function KitGallery() {
           <V name="헤더/390" id="1:4987" width={390}>
             <Header
               mode="paper"
-              status="ok"
-              statusLabel={shellFixture.statusLabel}
+              status={{ status: 'ok', label: copy.headerStatus.ok('08:30') }}
               current={null}
               layout="390"
             />
@@ -197,8 +195,7 @@ export function KitGallery() {
               <V name={`헤더/1440/현재=${copy.nav[key]}`} id={id} width={1440}>
                 <Header
                   mode="paper"
-                  status="ok"
-                  statusLabel={shellFixture.statusLabel}
+                  status={{ status: 'ok', label: copy.headerStatus.ok('08:30') }}
                   current={key}
                   layout="1440"
                 />
@@ -239,7 +236,7 @@ export function KitGallery() {
 
         <Section name="칩/헤더 상태" id="1:4758">
           <V name="상태=정상" id="1:4752">
-            <HeaderStatusChip status="ok">{shellFixture.statusLabel}</HeaderStatusChip>
+            <HeaderStatusChip status="ok">{copy.headerStatus.ok('08:30')}</HeaderStatusChip>
           </V>
           <V name="상태=점검" id="1:4755">
             <HeaderStatusChip status="check">{copy.headerStatus.check(2)}</HeaderStatusChip>
