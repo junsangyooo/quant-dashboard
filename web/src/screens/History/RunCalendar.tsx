@@ -21,6 +21,7 @@ import { CalendarCell, type CalendarState as CellState } from '../../components/
 import { copy } from '../../copy';
 import { historyCopy as hc } from '../../copy/history';
 import { formatMonthDay, formatMonthDayWeekday } from '../../lib/format';
+import { recordWeeks } from './historyModel';
 import styles from './History.module.css';
 
 const LEGEND: readonly CellState[] = [
@@ -112,7 +113,8 @@ export interface RunCalendarProps {
   hrefFor: (date: string) => string;
 }
 
-export function RunCalendar({ calendar, checks, offPeriods, hrefFor }: RunCalendarProps) {
+export function RunCalendar({ calendar: year, checks, offPeriods, hrefFor }: RunCalendarProps) {
+  const calendar = useMemo(() => recordWeeks(year), [year]);
   const states = useMemo(() => new Map(calendar.map((c) => [c.date, c.state])), [calendar]);
   const first = calendar[0]?.date;
   const last = calendar.at(-1)?.date;

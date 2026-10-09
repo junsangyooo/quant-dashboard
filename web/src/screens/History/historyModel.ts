@@ -258,3 +258,28 @@ export function rebalanceFees(data: Pick<HistoryResponse, 'months'>): number[] {
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     .map((e) => e.fees ?? 0);
 }
+
+// ── 매일 확인 달력 ───────────────────────────────────────────────────────────
+
+/** Friday of the KST week of `date` (YYYY-MM-DD). */
+function fridayOf(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const dow = d.getUTCDay(); // 1 = Mon … 5 = Fri for the weekdays the calendar holds
+  d.setUTCDate(d.getUTCDate() + (5 - dow));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The weeks the calendar draws: from the record's first day to the end of the current week. The
+ * API sends the whole year's weekdays (before-record before the start, future after today); the
+ * drawing starts at the record ('가로로 밀면 7/1~7/10') with the newest week at the right edge.
+ */
+export function recordWeeks(calendar: HistoryResponse['calendar']): HistoryResponse['calendar'] {
+  const first = calendar.findIndex((c) => c.state !== 'before-record');
+  if (first === -1) return calendar;
+  const lastDone = calendar.findLastIndex((c) => c.state !== 'future');
+  const anchor = calendar[Math.max(first, lastDone)];
+  if (!anchor) return calendar;
+  const end = fridayOf(anchor.date);
+  return calendar.slice(first).filter((c) => c.date <= end);
+}

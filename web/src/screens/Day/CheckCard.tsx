@@ -81,7 +81,9 @@ export function CheckCard({
           <span className={clsx('t-label', styles.warningText)}>
             {dc.check.deviation(formatPpMagnitude(band.before))}
           </span>
-          {check.over !== undefined ? (
+          {/* A rebalance the band did not trigger (new cash such as a dividend) has over 0:
+              no '0.0%p 넘음' line then. */}
+          {check.over !== undefined && check.over >= 0.05 ? (
             <span className={clsx('t-caption', styles.muted)}>
               {dc.check.over(formatPpMagnitude(check.over))}
             </span>

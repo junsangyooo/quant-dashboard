@@ -389,23 +389,29 @@ export function NowRows({
           return;
         }
         if (row.weight === undefined && row.ret === undefined) {
-          if (node.type === 'start') {
-            // A start card names its one company (실적 공시: whose filing came in).
-            out.push(
-              <NodeRow key={key}>
-                <InitialLogo
-                  initials={row.instrument.initials}
-                  size={20}
-                  tone={logoTone(colorIndex, i)}
-                />
-                <Text variant="caption" grow>
-                  {row.instrument.name}
-                </Text>
-              </NodeRow>,
-            );
+          // An AI card's instruments are its picks (logos, '3종목 고름'); any other card names
+          // each one: the 실적 start card's company, or a held pick not bought yet (no weight).
+          if (node.type === 'ai') {
+            bare.push(row.instrument);
             return;
           }
-          bare.push(row.instrument);
+          out.push(
+            <NodeRow key={key}>
+              <InitialLogo
+                initials={row.instrument.initials}
+                size={20}
+                tone={logoTone(colorIndex, i)}
+              />
+              <Text variant="caption" grow className={styles.ellipsis}>
+                {row.instrument.name}
+              </Text>
+              {node.type === 'stock' ? (
+                <Text variant="label" tone="muted">
+                  {rc.now.none}
+                </Text>
+              ) : null}
+            </NodeRow>,
+          );
           return;
         }
         out.push(
@@ -535,6 +541,15 @@ export function NowRows({
     }
   });
   flushBare('end-logos');
+
+  // A block with nothing in it yet (no discovery so far, no candidate near its price): '—'.
+  if (out.length === 0) {
+    out.push(
+      <Text key="none" variant="caption" tone="muted" as="p">
+        {rc.now.none}
+      </Text>,
+    );
+  }
 
   return <>{out}</>;
 }

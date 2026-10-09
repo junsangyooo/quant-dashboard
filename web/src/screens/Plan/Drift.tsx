@@ -162,8 +162,13 @@ export function VsIndexChart({
   });
   const d = g.paths[0]?.d ?? '';
   const last = g.ends[0];
-  // Month starts and the last day, as Figma 17:7108 labels it (7/1 · 8/1 · 9/1 · 10/7).
-  const ticks = [...monthStartTicks(since, end).filter((d) => daysBetween(d, end) > 10), end];
+  // The start, the month starts and the last day, as Figma 17:7108 labels it (7/1 · 8/1 · 9/1 ·
+  // 10/7). Real picks start mid-month (10/6): the start keeps its label, and a month start within
+  // 10 days of either end gives way.
+  const middle = monthStartTicks(since, end).filter(
+    (d) => daysBetween(since, d) > 10 && daysBetween(d, end) > 10,
+  );
+  const ticks = since === end ? [end] : [since, ...middle, end];
   const dates = placeDateLabels(ticks, g.x, g.plotW);
   const events: ChartEvent[] = [{ date: since, kind: 'start', label: eventLabel(since, 'start') }];
   return (

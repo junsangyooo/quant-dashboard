@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "gen:tokens": "node scripts/gen-tokens.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:full": "npm run build && playwright test -c playwright.full.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.1",

@@ -10,6 +10,8 @@ const OUT = process.env.E2E_OUT ?? 'dist-e2e';
 
 export default defineConfig({
   testDir: './e2e',
+  // e2e/full runs against the real engine API (playwright.full.config.ts, npm run e2e:full).
+  testIgnore: ['full/**'],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? 'github' : 'list',

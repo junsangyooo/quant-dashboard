@@ -6,7 +6,7 @@ import { useId, useState } from 'react';
 import { ChevronRight, ChevronUp } from 'lucide-react';
 import { markerKind } from '../../api/adapters';
 import { useBreakdown } from '../../api/queries';
-import type { Breakdown, HomePeriod, HomeResponse } from '../../api/types';
+import type { Breakdown, EventKind, HomePeriod, HomeResponse } from '../../api/types';
 import { ChartTable } from '../../charts/ChartTable';
 import { LineChart } from '../../charts/LineChart';
 import {
@@ -38,6 +38,23 @@ import styles from './Home.module.css';
 type Mode = 'amount' | 'rate';
 
 /**
+ * What the 사건 띠 shows (기획 §5 SCR-HOME 자산 변동 and its ⓘ legend): 시작 · 리밸런싱 · 일부
+ * 실패 · 진행 중 · 배당 · 입금 · 출금 · 실전 켬/끔. A failed check is not one of them (기록 and 작동
+ * show it), so a day that only had one draws no marker.
+ */
+const BAND_KINDS: ReadonlySet<EventKind> = new Set([
+  'start',
+  'rebalance',
+  'partial-failed',
+  'in-progress',
+  'dividend',
+  'deposit',
+  'withdrawal',
+  'live-on',
+  'live-off',
+]);
+
+/**
  * Trend events as band markers. A day's `kinds` lists every event of that day (CONTRACT Trend):
  * two or more become a grouped '[n]' marker whose list names each one.
  */
@@ -45,7 +62,7 @@ export function trendEvents(events: HomeResponse['trend']['events']): ChartEvent
   return events.flatMap((e) => {
     const kinds = e.kinds.length > 0 ? e.kinds : [e.kind];
     return kinds.flatMap((k) => {
-      const kind = markerKind(k);
+      const kind = BAND_KINDS.has(k) ? markerKind(k) : null;
       return kind === null ? [] : [{ date: e.date, kind, label: eventLabel(e.date, kind) }];
     });
   });

@@ -129,9 +129,10 @@ export function RuleCard({ card, plan, now, tones, wide, onShowNow, onGroup }: R
               );
               second = row.margin ? planCopy.row.margin(marginText(row.margin)) : null;
             } else {
+              // Equal AI weights are not whole numbers (1/15 = 6.7%): no rounding to '7%'.
               first = planCopy.row.weight(
                 row.weight === null ? planCopy.row.dash : formatPercent(row.weight),
-                `${formatNumber(row.target)}%`,
+                `${formatNumber(row.target, Number.isInteger(row.target) ? 0 : 1)}%`,
               );
               if (row.toThreshold !== null) second = toRebalanceText(row.toThreshold);
               else if (quoteWait) second = chip.label;

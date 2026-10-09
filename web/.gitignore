@@ -1,1 +1,3 @@
 dist-e2e*/
+# e2e:full seeds its engine databases here (never under data/)
+build/
