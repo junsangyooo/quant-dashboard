@@ -1,0 +1,54 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+
+
+# ── Runtime data (Oracle 단방향, NEVER git add) ─────────────────────
+data/portfolio.db
+data/portfolio.db-*
+data/quant.db
+data/quant.db-*
+data/quant/
+data/universe/
+data/market.db
+data/market.db-*
+data/news.db
+data/news.db-*
+data/market/
+data/analysis/
+data/logs/
+data/backup/
+data/listings/
+models/
+docs_cache/
+
+# ── Catch-all by extension (defense in depth) ───────────────────────
+*.parquet
+*.csv
+*.log
+*.pid
+*.png
+!src/dashboard_web/static/icons/*.png
+
+# ── Docs symlinked to Obsidian Vault (local-only, breaks on Oracle) ──
+docs/
+
+# session signing secret (Oracle-generated, never commit)
+data/.session_secret
+
+# deprecated per-theme jsonl (migrated into news.db)
+
+# local research caches (large, never committed)
+tmp/
+
+# ── 새 quant (autotrade/ + web/) ───────────────────────────────
+data/autotrade.db
+data/autotrade.db-*
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+web/coverage/
+!web/public/**/*.png

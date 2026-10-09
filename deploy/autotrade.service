@@ -1,0 +1,25 @@
+[Unit]
+Description=autotrade — quant.jsyoo.dev engine API and web (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/portfolio-dashboard
+EnvironmentFile=/home/ubuntu/dotclaude/secrets/.env
+# Same reasoning as dashboard.service: UnsetEnvironment= is the only directive
+# applied after EnvironmentFile=. ANTHROPIC_API_KEY would route the Claude CLI to
+# paid billing; KRX_ID/KRX_PW make pykrx log in at import time.
+UnsetEnvironment=ANTHROPIC_API_KEY KRX_ID KRX_PW
+# Live orders stay off until phase 3 is reviewed and the owner turns them on.
+# The Toss executor refuses unless this is "1" AND the stored mode is live.
+Environment=AUTOTRADE_LIVE_ORDERS=0
+ExecStart=/home/ubuntu/portfolio-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
+StandardError=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,93 @@
+# Tool settings for the new quant engine (autotrade/) and its tests (tests/autotrade/).
+#
+# Scope: only autotrade/ and tests/autotrade/. The old code (src/, tests/test_*.py) is never
+# linted or type-checked by these settings. There is deliberately no [project] table: this file
+# configures tools, it does not make autotrade/ an installable package of its own.
+#
+# Run everything from the repository root (Python 3.10, the server's version):
+#
+#   uv run --no-project --python 3.10 --with pytest --with pytest-cov \
+#       --with pandas==2.3.3 --with numpy==2.2.6 \
+#       pytest tests/autotrade --cov=autotrade --cov-config=autotrade/pyproject.toml
+#
+#   uv run --no-project --python 3.10 --with mypy --with pytest \
+#       mypy --config-file autotrade/pyproject.toml autotrade tests/autotrade
+#
+#   uv run --no-project --python 3.10 --with ruff \
+#       ruff check --config autotrade/pyproject.toml autotrade tests/autotrade
+#   uv run --no-project --python 3.10 --with ruff \
+#       ruff format --config autotrade/pyproject.toml --check autotrade tests/autotrade
+#
+# `pytest tests/autotrade` picks up tests/autotrade/pytest.ini (same options as below), which
+# makes tests/autotrade the rootdir and confcutdir: the old suite's tests/conftest.py (it imports
+# src/) is not loaded. `pytest -c autotrade/pyproject.toml tests/autotrade` uses this file instead;
+# give the path explicitly (pytest only applies testpaths when run from the rootdir).
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # bugbear
+    "UP",   # pyupgrade (py310)
+    "SIM",  # simplify
+    "C4",   # comprehensions
+    "DTZ",  # no naive datetimes
+    "PT",   # pytest style
+    "RUF",  # ruff-specific
+    "N",    # naming
+    "RET",  # returns
+    "PIE",  # misc
+    "T20",  # no print outside the CLI
+]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # Korean text and typographic signs are intentional
+]
+
+[tool.ruff.lint.per-file-ignores]
+"autotrade/jobs/cli.py" = ["T20"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["autotrade"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+# Third-party libraries without type information. They are only touched inside
+# autotrade/market/sources.py (and the tests that stub them).
+module = ["pandas", "pandas.*", "pykrx", "pykrx.*", "yfinance", "yfinance.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# Used with `pytest -c autotrade/pyproject.toml tests/autotrade`, run from the repository root.
+addopts = ["--confcutdir=tests/autotrade", "-p", "no:cacheprovider"]
+xfail_strict = true
+filterwarnings = ["error::DeprecationWarning:autotrade.*"]
+
+[tool.coverage.run]
+branch = true
+source = ["autotrade"]
+# Relative to the working directory (the repository root); ignored by tests/autotrade/.gitignore.
+data_file = "tests/autotrade/.coverage"
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.$",
+]

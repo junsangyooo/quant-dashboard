@@ -1,0 +1,3 @@
+# Coverage data from `pytest --cov-config=autotrade/pyproject.toml`.
+.coverage
+.coverage.*
