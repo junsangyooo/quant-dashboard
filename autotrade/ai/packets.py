@@ -271,6 +271,15 @@ def metric_rows(conn: sqlite3.Connection, instrument_id: str) -> list[str]:
     return lines
 
 
+def recent_filings(
+    conn: sqlite3.Connection, instrument_id: str, today: date
+) -> list[ai_repo.FilingRow]:
+    """The filings a packet shows: the last FILING_DAYS days, regular ones before screening
+    left out, the latest 15."""
+    filings = ai_repo.filings_of(conn, instrument_id, today - timedelta(days=FILING_DAYS))
+    return [f for f in filings if f.kind != "skipped"][-15:]
+
+
 def filing_rows(conn: sqlite3.Connection, instrument_id: str, today: date) -> list[str]:
     lines = [f"## 최근 공시 ({FILING_DAYS}일)"]
     status_ko = {
@@ -282,11 +291,10 @@ def filing_rows(conn: sqlite3.Connection, instrument_id: str, today: date) -> li
         "failed": "읽기 실패",
         "new": "새 공시",
     }
-    filings = ai_repo.filings_of(conn, instrument_id, today - timedelta(days=FILING_DAYS))
-    shown = [f for f in filings if f.kind != "skipped"]
+    shown = recent_filings(conn, instrument_id, today)
     if not shown:
         return [*lines, "- (없음)"]
-    for f in shown[-15:]:
+    for f in shown:
         lines.append(f"- {f.filed_on} · {f.source.upper()} · {f.title} · {status_ko[f.status]}")
     return lines
 
@@ -315,7 +323,11 @@ def trigger_rows(conn: sqlite3.Connection, task: ai_repo.TaskRow) -> list[str]:
         elif t.get("kind") == "filing":
             lines.append(f"- 공시 {t.get('filed_on')}: {t.get('title')} — 가림: {t.get('reason')}")
         elif t.get("kind") == "monthly":
-            lines.append(f"- 월 점검 판정: {t.get('verdict')} ({t.get('month')})")
+            verdict = str(t.get("verdict"))
+            said = VERDICT_KO.get(verdict, verdict)
+            if verdict == "weaken" and t.get("weak_months"):
+                said = f"{said} {t.get('weak_months')}달"
+            lines.append(f"- 월 점검 판정: {said} ({t.get('month')})")
     if len(lines) == 1:
         lines.append(f"- {task.trigger}")
     return lines

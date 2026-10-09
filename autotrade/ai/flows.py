@@ -192,10 +192,12 @@ def _judgment(
     verdict: str,
     action: str,
     instrument_id: str | None,
-    inputs: list[str],
-    outputs: list[str],
+    inputs: list[dict[str, Any]],
+    outputs: list[dict[str, Any]],
     votes: list[str] | None = None,
 ) -> dict[str, Any]:
+    """The event payload of a judgment. `input` and `output` are the card's two lines as data
+    items (CONTRACT.md JudgmentItem: codes, numbers, dates and instrument ids, never words)."""
     out: dict[str, Any] = {
         "task_id": task.task_id,
         "kind": task.kind,
@@ -205,8 +207,8 @@ def _judgment(
         "tokens": sum(r.tokens for r in results),
         "verdict": verdict,
         "action": action,
-        "input_summary": inputs,
-        "output_summary": outputs,
+        "input": inputs,
+        "output": outputs,
         "call_ids": list(call_ids),
     }
     if votes is not None:
@@ -439,23 +441,26 @@ def _pick_packet(
     )
 
 
-def _summary_of_pick(inst: Instrument, task: ai_repo.TaskRow) -> list[str]:
-    out = [inst.name]
+def _pick_input(env: FlowEnv, inst: Instrument, task: ai_repo.TaskRow) -> list[dict[str, Any]]:
+    """The input line of a pick's judgment: the company, what set it off, the filings read."""
+    out: list[dict[str, Any]] = [{"key": "instrument", "instrument_id": inst.instrument_id}]
     for t in task.detail.get("triggers", []):
         if not isinstance(t, dict):
             continue
         if t.get("kind") == "shock":
-            out.append(
-                f"급락 {t.get('on')} 하루 지수 대비 {pk.pct(Decimal(str(t.get('day_rel'))))}%"
-            )
+            day_rel = (Decimal(str(t.get("day_rel"))) * 100).quantize(Decimal("0.1"))
+            out.append({"key": "shock", "date": str(t.get("on")), "value": float(day_rel)})
         elif t.get("kind") == "condition":
-            out.append(
-                f"반증 조건 {int(t.get('index', 0)) + 1} · {t.get('period')} {t.get('value')}"
-            )
+            out.append({"key": "condition", "value": int(t.get("index", 0)) + 1})
         elif t.get("kind") == "filing":
-            out.append(f"공시 {t.get('filed_on')} {t.get('title')}")
+            out.append({"key": "filing", "date": str(t.get("filed_on"))})
         elif t.get("kind") == "monthly":
-            out.append(f"월 점검 {t.get('verdict')}")
+            item: dict[str, Any] = {"key": "review", "value": str(t.get("verdict"))}
+            if t.get("weak_months"):
+                item["months"] = int(t["weak_months"])
+            out.append(item)
+    shown = pk.recent_filings(env.conn, inst.instrument_id, kst_date(env.at))
+    out.append({"key": "filings", "value": len(shown)})
     return out
 
 
@@ -520,27 +525,22 @@ def apply_sell_confirm(
         for r, v in zip(results, votes, strict=True)
     ]
     facts = new_facts(results)
-
-    _event(
-        env,
+    payload = _judgment(
         task,
-        "ai-sell" if sell else "ai-check",
-        _judgment(
-            task,
-            results,
-            call_ids,
-            verdict=combined,
-            action="sell" if sell else "none",
-            instrument_id=inst.instrument_id,
-            inputs=_summary_of_pick(inst, task),
-            outputs=[
-                " · ".join(pk.VERDICT_KO[v] for v in votes),
-                *[r[:120] for r in reasons if r],
-                *[f"{f['source']} {f['date']}" for f in facts[:2]],
-            ],
-            votes=votes,
-        ),
+        results,
+        call_ids,
+        verdict=combined,
+        action="sell" if sell else "none",
+        instrument_id=inst.instrument_id,
+        inputs=_pick_input(env, inst, task),
+        # A shock is checked with the web: how many news items the two answers found.
+        outputs=[{"key": "news", "value": len(facts)}] if prepared.context.get("web") else [],
+        votes=votes,
     )
+    # The model's own words stay in the record (and in ai_calls); the screens get data only.
+    payload["reasons"] = [r[:120] for r in reasons if r]
+    payload["new_facts"] = facts
+    _event(env, task, "ai-sell" if sell else "ai-check", payload)
     return {"votes": votes, "sell": sell, "new_facts": facts}
 
 
@@ -610,7 +610,8 @@ def apply_buy_confirm(
     reason = _text(output.get("reason"), "reason")
     pick, inst = _pick(env, task)
     out: dict[str, Any] = {"decision": decision, "reason": reason}
-    action, notes = "none", [reason[:120]]
+    action = "none"
+    outputs: list[dict[str, Any]] = []
     if decision == "buy":
         if held_count(env.conn, task.ledger_id) < env.cfg.discovery_max_picks:
             ai_repo.update_pick(
@@ -625,25 +626,22 @@ def apply_buy_confirm(
             action = "buy"
         else:
             out["switch_task"] = _switch_task(env, task, pick.pick_id, "buy-price")
-            notes.insert(0, "자리 없음: 바꾸기 확인으로")
-    _event(
-        env,
+            outputs.append({"key": "slot-full"})  # no slot: asked as a switch instead
+    payload = _judgment(
         task,
-        "ai-buy" if action == "buy" else "ai-check",
-        _judgment(
-            task,
-            results,
-            call_ids,
-            verdict="buy" if decision == "buy" else "skip",
-            action=action,
-            instrument_id=inst.instrument_id,
-            inputs=[
-                inst.name,
-                *[f"{c['condition']} {c['verdict']}" for c in task.detail.get("checks", [])],
-            ],
-            outputs=[str(output.get("decision")), *notes],
-        ),
+        results,
+        call_ids,
+        verdict="buy" if decision == "buy" else "skip",
+        action=action,
+        instrument_id=inst.instrument_id,
+        inputs=[
+            {"key": "instrument", "instrument_id": inst.instrument_id},
+            {"key": "checks", "value": len(task.detail.get("checks", []))},  # all of them met
+        ],
+        outputs=outputs,
     )
+    payload["reasons"] = [reason[:120]]
+    _event(env, task, "ai-buy" if action == "buy" else "ai-check", payload)
     return out
 
 
@@ -692,9 +690,11 @@ def _month_event(
     pick_id: int,
     verdict: str,
     changed: bool,
+    rewritten: int,
     tokens: int,
     call_id: int,
 ) -> None:
+    """One event for the month's reviews, rebuilt as each pick's review lands."""
     ref = f"monthly-review:{month}"
     existing = repo.event_by_ref(env.conn, task.ledger_id, ref)
     payload: dict[str, Any] = (
@@ -711,6 +711,7 @@ def _month_event(
         }
     )
     payload["verdicts"][str(pick_id)] = verdict
+    payload.setdefault("rewritten", {})[str(pick_id)] = rewritten
     if changed and pick_id not in payload["changed"]:
         payload["changed"].append(pick_id)
     payload["tokens"] = int(payload.get("tokens", 0)) + tokens
@@ -722,12 +723,14 @@ def _month_event(
     worst = max(payload["verdicts"].values(), key=lambda v: SEVERITY[v])
     payload["verdict"] = worst
     payload["action"] = "none"
-    payload["output_summary"] = [
-        f"유지 {counts['hold']}",
-        f"약화 {counts['weaken']}",
-        f"반증 {counts['invalidated']}",
+    payload["input"] = [
+        {"key": "month", "value": month},
+        {"key": "picks", "value": len(payload["verdicts"])},
     ]
-    payload["input_summary"] = [f"{len(payload['verdicts'])}종목", month]
+    payload["output"] = [
+        *({"key": v, "value": counts[v]} for v in ("hold", "weaken", "invalidated")),
+        {"key": "rewritten", "value": sum(int(n) for n in payload["rewritten"].values())},
+    ]
     _event(env, task, "monthly-review", payload, ref)
 
 
@@ -742,6 +745,8 @@ def apply_monthly_review(
     verdict = _choice(output.get("verdict"), VERDICT, "verdict")
     pick, _ = _pick(env, task)
     good, bad = rewrite(output.get("sell_conditions"))
+    # Sell conditions new or changed against the ones held before ('고쳐 쓴 팔 조건 n').
+    rewritten = sum(1 for c in good if c not in pick.invalidate)
     weak = pick.weak_months + 1 if verdict == "weaken" else 0
     fields: dict[str, Any] = {
         "last_verdict": verdict,
@@ -759,7 +764,9 @@ def apply_monthly_review(
         "refused": bad,
     }
     if verdict == "invalidated" or weak >= 2:
-        reason = "반증" if verdict == "invalidated" else f"약화 {weak}달"
+        trigger: dict[str, Any] = {"kind": "monthly", "verdict": verdict, "month": month}
+        if verdict == "weaken":
+            trigger["weak_months"] = weak
         task_id, _ = ai_repo.enqueue_task(
             env.conn,
             kind="sell-confirm",
@@ -769,7 +776,7 @@ def apply_monthly_review(
             dedup_key=f"sell-confirm:{pick.pick_id}:monthly:{month}",
             at=env.at,
             pick_id=pick.pick_id,
-            detail={"triggers": [{"kind": "monthly", "verdict": reason, "month": month}]},
+            detail={"triggers": [trigger]},
         )
         out["sell_confirm_task"] = task_id
     _month_event(
@@ -779,6 +786,7 @@ def apply_monthly_review(
         pick.pick_id,
         verdict,
         pick.last_verdict not in (None, verdict),
+        rewritten,
         results[0].tokens,
         call_ids[0],
     )
@@ -990,6 +998,8 @@ def apply_discovery(
     if not isinstance(picks, list) or not isinstance(candidates, list):
         raise FlowError("picks and candidates must be lists")
     slots = int(prepared.context.get("slots", 0))
+    held_before = held_count(env.conn, task.ledger_id)
+    waiting_before = len(ai_repo.picks_of(env.conn, task.ledger_id, RULE_ID, ("candidate",)))
     added: list[str] = []
     waiting: list[str] = []
     refused: list[str] = []
@@ -1038,11 +1048,15 @@ def apply_discovery(
             action="buy" if added else "none",
             instrument_id=None,
             inputs=[
-                month,
-                f"보유 {held_count(env.conn, task.ledger_id) - len(added)}",
-                f"후보 {len(candidates)}",
+                {"key": "month", "value": month},
+                {"key": "held", "value": held_before},
+                {"key": "candidates", "value": waiting_before},
             ],
-            outputs=[f"새 종목 {len(added)}", f"후보 {len(waiting)}", f"만료 {len(expired)}"],
+            outputs=[
+                {"key": "new-picks", "value": len(added)},
+                {"key": "candidates", "value": len(waiting)},
+                {"key": "expired", "value": len(expired)},
+            ],
         ),
         f"discovery:{month}",
     )
@@ -1220,8 +1234,7 @@ def apply_switch(
             costs=prepared.context["costs"],
             at=env.at,
         )
-    sold_name = repo.get_instrument(env.conn, sold.instrument_id).name
-    bought_name = repo.get_instrument(env.conn, candidate.instrument_id).name
+    cost = Decimal(str(prepared.context["costs"]["total_pct"])).quantize(Decimal("0.01"))
     _event(
         env,
         task,
@@ -1234,11 +1247,12 @@ def apply_switch(
             action="switch" if switch else "none",
             instrument_id=candidate.instrument_id,
             inputs=[
-                f"판 종목 {sold_name}",
-                f"살 종목 {bought_name}",
-                f"비용 {prepared.context['costs']['total_pct']}%",
+                {"key": "sold", "instrument_id": sold.instrument_id},
+                {"key": "bought", "instrument_id": candidate.instrument_id},
+                {"key": "cost", "value": float(cost)},
             ],
-            outputs=[" · ".join("바꾼다" if v == "switch" else "안 바꾼다" for v in votes)],
+            outputs=[],
+            votes=votes,  # 'switch' | 'keep', twice
         ),
     )
     return out

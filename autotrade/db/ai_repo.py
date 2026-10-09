@@ -1041,6 +1041,12 @@ def last_calls(conn: sqlite3.Connection, limit: int = 1) -> list[CallRow]:
     ]
 
 
+def first_call_at(conn: sqlite3.Connection) -> datetime | None:
+    """When the first AI call was made (an AI CLI that never answered is dead since then)."""
+    row = _one(conn, "SELECT MIN(started_at) AS at FROM ai_calls")
+    return None if row is None or row["at"] is None else from_iso(str(row["at"]))
+
+
 def last_ok_call(conn: sqlite3.Connection) -> CallRow | None:
     row = _one(
         conn,
@@ -1320,6 +1326,16 @@ def job_runs_of(
         (job, ledger_id, limit),
     )
     return [JobRunRow.from_row(r) for r in reversed(rows)]
+
+
+def first_job_run_at(conn: sqlite3.Connection, job: str, ledger_id: str | None) -> datetime | None:
+    """When a job first ran for the ledger (a source that never answered is dead since then)."""
+    row = _one(
+        conn,
+        "SELECT MIN(started_at) AS at FROM job_runs WHERE job = ? AND ledger_id IS ?",
+        (job, ledger_id),
+    )
+    return None if row is None or row["at"] is None else from_iso(str(row["at"]))
 
 
 def last_job_run(conn: sqlite3.Connection, job: str) -> JobRunRow | None:

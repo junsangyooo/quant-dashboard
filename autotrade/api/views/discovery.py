@@ -10,8 +10,10 @@
 - AiJudgment: built from the event the AI runner recorded (autotrade/ai/flows.py).
 - Health: the rows filings, ai-cli and metric-table, and their 'to do' items.
 
-Numbers, dates and enums only; the screen writes the words (CONTRACT.md 원칙). marginText is the
-one compact number the gauge row prints ('2.3%p', '3.1조', '$350M', '2분기').
+Numbers, dates and enums only; the screen writes the words (CONTRACT.md 원칙). What is left
+before a line is a number and its unit (`margin`); a metric is its dictionary key and the company's
+own parameter word (`metric`). The screen phrases both ('2.3%p', '3.1조', '$350M', '2분기',
+'AI 매출').
 """
 
 from __future__ import annotations
@@ -29,7 +31,6 @@ from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.refs import rule_ref
 from autotrade.db import ai_repo, repo
 from autotrade.db.models import EventRow, PlanRow
-from autotrade.domain import metrics
 from autotrade.domain.conditions import (
     Check,
     ConditionError,
@@ -39,11 +40,12 @@ from autotrade.domain.conditions import (
     distance,
     parse_condition,
 )
-from autotrade.domain.instruments import Instrument
+from autotrade.domain.instruments import Instrument, Market
 from autotrade.domain.money import ZERO
 from autotrade.domain.periods import PeriodError, parse_period
 from autotrade.engine import metric_table
 from autotrade.engine.reviews import DISCOVERY_MONTHS, rule_active
+from autotrade.market.calendar import CalendarRangeError, ExchangeCalendar, calendar_for
 from autotrade.rules.discovery import RULE_ID
 from autotrade.rules.model import RuleDef
 from autotrade.timeutil import at_kst, kst_date
@@ -53,28 +55,51 @@ if TYPE_CHECKING:
 
 COLOR = 1  # the second rule's colour
 AI_EVENT_KINDS = ("discovery", "ai-buy", "ai-sell", "ai-check", "monthly-review")
-PERIOD_WORD = {"quarter": "분기", "fquarter": "분기", "month": "달", "year": "년"}
+PERIOD_UNIT = {"quarter": "quarter", "fquarter": "quarter", "month": "month", "year": "year"}
 HUNDRED = Decimal(100)
+# Trading days an AI-rule source may stay dead before the header counts it: the 작동 screen shows
+# it from the first miss, but the nightly DART maintenance must not flip the header.
+HEADER_GRACE = 1
+FILING_SOURCES = (("dart", Market.KR), ("edgar", Market.US))
 
 
-def margin_text(d: Distance, cond_metric: str | None, periods_kind: str | None) -> str:
-    """What is left before the line, compactly: '2.3%p', '3.1조', '$350M', '0.12x', '2분기'."""
+def trading_days_since(cal: ExchangeCalendar, since: datetime, now: datetime) -> int:
+    """Trading days of the market after the day of `since` up to the day of `now`, in its own
+    dates (a Friday success is one trading day old on Monday; 한글날 does not count)."""
+    start = since.astimezone(cal.tz).date()
+    end = now.astimezone(cal.tz).date()
+    try:
+        return len(cal.trading_days(start, end))
+    except CalendarRangeError:  # outside the holiday table: weekdays
+        return sum(
+            1 for i in range(1, (end - start).days + 1) if (start + timedelta(i)).weekday() < 5
+        )
+
+
+def margin(d: Distance, periods_kind: str | None) -> dict[str, Any]:
+    """What is left before the line, as a number and its unit (CONTRACT.md Margin): pp1 for a
+    percentage, won or dollars for money, the ratio, or the periods left."""
     if d.periods_left is not None:
-        return f"{d.periods_left}{PERIOD_WORD.get(periods_kind or 'quarter', '분기')}"
+        return {
+            "unit": PERIOD_UNIT.get(periods_kind or "quarter", "quarter"),
+            "value": d.periods_left,
+        }
     m = abs(d.margin or ZERO)
     if d.unit == "%":
-        return f"{fmt.pp1(m / HUNDRED):.1f}%p"
+        return {"unit": "pp", "value": fmt.pp1(m / HUNDRED)}
     if d.unit == "KRW":
-        if m >= Decimal("1e12"):
-            return f"{(m / Decimal('1e12')).quantize(Decimal('0.1'))}조"
-        return f"{(m / Decimal('1e8')).quantize(Decimal('1'))}억"
+        return {"unit": "KRW", "value": fmt.krw(m)}
     if d.unit == "USD":
-        if m >= Decimal("1e9"):
-            return f"${(m / Decimal('1e9')).quantize(Decimal('0.1'))}B"
-        return f"${(m / Decimal('1e6')).quantize(Decimal('1'))}M"
+        return {"unit": "USD", "value": fmt.usd(m)}
     if d.unit == "x":
-        return f"{m.quantize(Decimal('0.01'))}x"
-    return str(m.normalize())
+        return {"unit": "x", "value": float(m.quantize(Decimal("0.01")))}
+    return {"unit": "count", "value": float(m.normalize())}
+
+
+def metric_ref(key: str) -> dict[str, Any]:
+    """A metric as its dictionary key and the company's own word ('segment_backlog', '지상방산')."""
+    base, _, param = key.partition(":")
+    return {"key": base, "param": param} if param else {"key": base}
 
 
 def _baseline(chk: Check, observations: list[Observation]) -> Decimal | None:
@@ -195,9 +220,11 @@ class AiRule:
 
     # ── the sell-condition gauge ─────────────────────────────────────────────────────────
 
-    def nearest(self, pick: ai_repo.PickRow) -> tuple[Distance, str, str] | None:
-        """(distance, metric label, margin text) of the pick's sell condition nearest its line."""
-        best: tuple[Distance, str, str] | None = None
+    def nearest(
+        self, pick: ai_repo.PickRow
+    ) -> tuple[Distance, dict[str, Any], dict[str, Any]] | None:
+        """(distance, metric, margin) of the pick's sell condition nearest its line."""
+        best: tuple[Distance, dict[str, Any], dict[str, Any]] | None = None
         for data in pick.invalidate:
             try:
                 cond = parse_condition(data)
@@ -216,14 +243,13 @@ class AiRule:
                     kind = parse_period(chk.period).kind
                 except PeriodError:
                     kind = None
-            text = margin_text(d, cond.metric, kind)
             if best is None or d.progress > best[0].progress:
-                best = (d, metrics.label(cond.metric), text)
+                best = (d, metric_ref(cond.metric), margin(d, kind))
         return best
 
     @cached_property
-    def distances(self) -> dict[int, tuple[Distance, str, str]]:
-        out: dict[int, tuple[Distance, str, str]] = {}
+    def distances(self) -> dict[int, tuple[Distance, dict[str, Any], dict[str, Any]]]:
+        out: dict[int, tuple[Distance, dict[str, Any], dict[str, Any]]] = {}
         for pick in self.held:
             found = self.nearest(pick)
             if found is not None:
@@ -233,15 +259,15 @@ class AiRule:
     def gauge(self) -> dict[str, Any]:
         needle = None
         if self.distances:
-            pick_id, (d, label, text) = max(
+            pick_id, (d, metric, left) = max(
                 self.distances.items(), key=lambda kv: kv[1][0].progress
             )
             pick = next(p for p in self.held if p.pick_id == pick_id)
             needle = {
                 "instrument": instrument_json(self.instrument(pick.instrument_id)),
                 "progress": float(d.progress.quantize(Decimal(1))),
-                "metric": label,
-                "marginText": text,
+                "metric": metric,
+                "margin": left,
             }
         return {"kind": "sell-condition", "needle": needle}
 
@@ -265,12 +291,12 @@ class AiRule:
             }
             found = self.distances.get(pick.pick_id)
             if found is not None:
-                d, label, text = found
+                d, metric, left = found
                 row.update(
                     {
                         "progress": float(d.progress.quantize(Decimal(1))),
-                        "metric": label,
-                        "marginText": text,
+                        "metric": metric,
+                        "margin": left,
                     }
                 )
             out.append(row)
@@ -510,7 +536,7 @@ class AiRule:
             hits = [t for t in tasks if t.get("kind") in ("sell-confirm", "buy-confirm")]
             rows = [self._instrument_row(str(t["pick"])) for t in hits[: self.SHOW]]
             if not rows and self.distances:
-                pick_id, (d, _label, text) = max(
+                pick_id, (d, _metric, left) = max(
                     self.distances.items(), key=lambda kv: kv[1][0].progress
                 )
                 pick = next(p for p in self.held if p.pick_id == pick_id)
@@ -518,7 +544,7 @@ class AiRule:
                     self._instrument_row(
                         pick.instrument_id,
                         progress=float(d.progress.quantize(Decimal(1))),
-                        marginText=text,
+                        margin=left,
                     )
                 ]
             return self._block("now-check", [*rows, self._kv("hits", len(hits))], watched)
@@ -584,7 +610,7 @@ class AiRule:
             rows: list[dict[str, Any]] = []
             if stored:
                 periods = sorted({r.period for r in stored})
-                rows.append(self._instrument_row(stored[0].instrument_id, marginText=periods[-1]))
+                rows.append(self._instrument_row(stored[0].instrument_id, period=periods[-1]))
             rows += [self._kv("metrics", len(stored)), self._kv("tokens", call.tokens)]
             return self._block("now-last", rows, kst_date(call.started_at))
         if nid == "data":
@@ -593,8 +619,7 @@ class AiRule:
                 latest[r.instrument_id] = r
             recent = sorted(latest.values(), key=lambda r: r.extracted_at, reverse=True)
             rows = [
-                self._instrument_row(r.instrument_id, marginText=r.period)
-                for r in recent[: self.SHOW]
+                self._instrument_row(r.instrument_id, period=r.period) for r in recent[: self.SHOW]
             ]
             return self._block("now", [*rows, self._kv("companies", len(latest))])
         at = filings[0].filed_on if filings else None
@@ -664,7 +689,7 @@ class AiRule:
                 self._instrument_row(
                     p.instrument_id,
                     progress=float(Decimal(g["progress"])),
-                    marginText=f"{g['gap_pct']}%",
+                    margin={"unit": "pct", "value": float(Decimal(g["gap_pct"]))},
                 )
                 for p, g in near[: self.SHOW]
             ]
@@ -784,6 +809,38 @@ class AiRule:
 
     # ── health ───────────────────────────────────────────────────────────────────────────
 
+    def _dead(self, since: datetime | None, market: Market) -> bool:
+        """No success for more than HEADER_GRACE trading days of the market."""
+        if since is None:
+            return False
+        return trading_days_since(calendar_for(market), since, self.ctx.now) > HEADER_GRACE
+
+    def header_causes(self) -> int:
+        """The AI-rule sources dead for more than a trading day, as causes of the header's
+        '점검 n' (CONTRACT.md ShellResponse): each filings source (DART, EDGAR) and the AI CLI.
+        A source that never answered is dead since its first attempt."""
+        if not self.shown:
+            return 0
+        count = 0
+        first_watch = ai_repo.first_job_run_at(self.conn, "watch", self.ctx.ledger_id)
+        for source, market in FILING_SOURCES:
+            row = ai_repo.source_state(self.conn, source)
+            if (
+                row is not None
+                and row.state != "ok"
+                and self._dead(row.ok_at or first_watch, market)
+            ):
+                count += 1
+        last = ai_repo.last_calls(self.conn, 1)
+        if last and not last[0].ok:
+            good = ai_repo.last_ok_call(self.conn)
+            since = (
+                (good.finished_at or good.started_at) if good else ai_repo.first_call_at(self.conn)
+            )
+            if self._dead(since, Market.KR):
+                count += 1
+        return count
+
     def sources(self) -> list[dict[str, Any]]:
         if not self.shown:
             return []
@@ -891,10 +948,14 @@ class AiRule:
                     "effect": "other",
                 }
             )
-        for source, market in (("dart", "KR"), ("edgar", "US")):
+        for source, market in FILING_SOURCES:
             row = ai_repo.source_state(self.conn, source)
             if row is not None and row.state != "ok":
-                facts: dict[str, Any] = {"source": source, "market": market, "state": row.state}
+                facts: dict[str, Any] = {
+                    "source": source,
+                    "market": market.value,
+                    "state": row.state,
+                }
                 if row.ok_at is not None:  # facts hold values only: no key when never received
                     facts["since"] = fmt.iso(row.ok_at)
                 out.append(
@@ -910,18 +971,73 @@ class AiRule:
         return out
 
 
+# JudgmentItem keys whose value is a count (CONTRACT.md); the others carry a date, a code or an
+# instrument. Anything else in a payload is not served.
+COUNT_KEYS = frozenset(
+    {
+        "filings",
+        "news",
+        "picks",
+        "held",
+        "candidates",
+        "checks",
+        "hold",
+        "weaken",
+        "invalidated",
+        "rewritten",
+        "new-picks",
+        "expired",
+    }
+)
+
+
+def judgment_item(conn: sqlite3.Connection, item: Any) -> dict[str, Any] | None:
+    """One item of a judgment's input or output line, as data (CONTRACT.md JudgmentItem)."""
+    if not isinstance(item, dict) or not isinstance(item.get("key"), str):
+        return None
+    key = item["key"]
+    if key in ("instrument", "sold", "bought") and item.get("instrument_id"):
+        inst = repo.get_instrument(conn, str(item["instrument_id"]))
+        return {"key": key, "instrument": instrument_json(inst)}
+    if key in COUNT_KEYS:
+        return {"key": key, "value": int(item.get("value") or 0)}
+    if key == "shock":
+        return {"key": key, "date": str(item.get("date")), "value": float(item.get("value") or 0)}
+    if key == "filing":
+        return {"key": key, "date": str(item.get("date"))}
+    if key == "condition":
+        return {"key": key, "value": int(item.get("value") or 0)}
+    if key == "month":
+        return {"key": key, "value": str(item.get("value"))}
+    if key == "review":
+        out: dict[str, Any] = {"key": key, "value": str(item.get("value"))}
+        if item.get("months"):
+            out["months"] = int(item["months"])
+        return out
+    if key == "cost":
+        return {"key": key, "value": float(item.get("value") or 0)}
+    if key == "slot-full":
+        return {"key": key}
+    return None
+
+
 def judgment(conn: sqlite3.Connection, ev: EventRow) -> dict[str, Any]:
-    """CONTRACT.md AiJudgment from the event the AI runner recorded."""
+    """CONTRACT.md AiJudgment from the event the AI runner recorded: codes, numbers, dates and
+    instruments only. The model's own words stay in the record (and in ai_calls)."""
     p = ev.payload
+    lines = {
+        side: [x for x in (judgment_item(conn, i) for i in p.get(side) or []) if x is not None]
+        for side in ("input", "output")
+    }
     out: dict[str, Any] = {
         "at": fmt.iso(ev.occurred_at),
         "trigger": p.get("trigger") or ("monthly" if ev.kind == "monthly-review" else "discovery"),
         "model": p.get("model") or ("opus" if ev.kind == "discovery" else "sonnet"),
         "tokens": int(p.get("tokens") or 0),
         "verdict": p.get("verdict") or "hold",
-        "inputSummary": [str(x) for x in p.get("input_summary", [])],
-        "outputSummary": [str(x) for x in p.get("output_summary", [])],
         "action": p.get("action") or "none",
+        "input": lines["input"],
+        "output": lines["output"],
     }
     if p.get("instrument_id"):
         out["instrument"] = instrument_json(repo.get_instrument(conn, str(p["instrument_id"])))

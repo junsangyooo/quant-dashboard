@@ -102,8 +102,9 @@ def test_the_plan_tab_shows_two_cards_and_the_sell_condition_gauge(
                 "initials": "한",
             },
             "progress": 64.0,
-            "metric": "지상방산 수주잔고",
-            "marginText": "3.0조",
+            # '지상방산 수주잔고 · 3.0조': the dictionary key, the company's word, won left.
+            "metric": {"key": "segment_backlog", "param": "지상방산"},
+            "margin": {"unit": "KRW", "value": 3000000000000},
         },
     }
     rows = {r["instrument"]["id"]: r for r in ai["rows"]}
@@ -221,7 +222,15 @@ def test_the_day_shows_the_ai_judgment(lived: None, logged_in: TestClient) -> No
         "sell",
     )
     assert j["instrument"]["id"] == OCEAN
-    assert j["inputSummary"][0] == "한화오션"
+    # '입력 한화오션 · 10/13 하루 −10.0% · 최근 공시 0건', '출력 뉴스 0건': the screen's words.
+    assert j["input"] == [
+        {"key": "instrument", "instrument": j["instrument"]},
+        {"key": "shock", "date": "2026-10-13", "value": -10.0},
+        {"key": "filings", "value": 0},
+    ]
+    assert j["output"] == [{"key": "news", "value": 0}]
+    assert "inputSummary" not in j
+    assert "outputSummary" not in j
     plans = [
         e for e in day["events"] if e["kind"] in ("rebalance", "in-progress", "partial-failed")
     ]
@@ -284,28 +293,27 @@ def test_the_other_lanes_show_their_last_run(lived: None, logged_in: TestClient)
     assert logged_in.get("/api/rules/discovery_3y?lane=nope").json()["display"]["lane"] == "daily"
 
 
-def test_margin_texts() -> None:
-    from autotrade.api.views.discovery import margin_text
+def test_margins_are_numbers_and_units() -> None:
+    """The screen phrases them ('2.3%p', '3.1조', '$350M', '0.12x', '2분기'): no words here."""
+    from autotrade.api.views.discovery import margin, metric_ref
     from autotrade.domain.conditions import Distance
 
-    def text(
-        margin: str | None, unit: str | None, left: int | None = None, kind: str = "quarter"
-    ) -> str:
-        return margin_text(
-            Distance(Decimal(50), None if margin is None else Decimal(margin), unit, left),
-            None,
-            kind,
-        )
+    def left(
+        value: str | None, unit: str | None, periods: int | None = None, kind: str = "quarter"
+    ) -> dict[str, Any]:
+        d = Distance(Decimal(50), None if value is None else Decimal(value), unit, periods)
+        return margin(d, kind)
 
-    assert text("2.34", "%") == "2.3%p"
-    assert text("-3100000000000", "KRW") == "3.1조"
-    assert text("45000000000", "KRW") == "450억"
-    assert text("1240000000", "USD") == "$1.2B"
-    assert text("350000000", "USD") == "$350M"
-    assert text("0.123", "x") == "0.12x"
-    assert text("3", "count") == "3"
-    assert text(None, None, 2) == "2분기"
-    assert text(None, None, 1, "month") == "1달"
+    assert left("2.34", "%") == {"unit": "pp", "value": 2.3}
+    assert left("-3100000000000", "KRW") == {"unit": "KRW", "value": 3100000000000}
+    assert left("350000000", "USD") == {"unit": "USD", "value": 350000000.0}
+    assert left("0.123", "x") == {"unit": "x", "value": 0.12}
+    assert left("3", "count") == {"unit": "count", "value": 3.0}
+    assert left(None, None, 2) == {"unit": "quarter", "value": 2}
+    assert left(None, None, 2, "fquarter") == {"unit": "quarter", "value": 2}
+    assert left(None, None, 1, "month") == {"unit": "month", "value": 1}
+    assert metric_ref("op_margin") == {"key": "op_margin"}
+    assert metric_ref("segment_backlog:지상방산") == {"key": "segment_backlog", "param": "지상방산"}
 
 
 def test_initials_follow_figma_for_every_name() -> None:
@@ -460,7 +468,7 @@ def test_candidates_near_their_buy_price(
                 "initials": "NV",
             },
             "progress": 60.0,
-            "marginText": "2.1%",
+            "margin": {"unit": "pct", "value": 2.1},
         }
     ]
     result = next(n for n in flow["nodes"] if n["id"] == "result")
@@ -564,8 +572,16 @@ def test_the_monthly_and_quarterly_lanes_after_their_runs(
         "model": "opus",
         "verdict": "buy",
         "action": "buy",
-        "input_summary": [],
-        "output_summary": [],
+        "input": [
+            {"key": "month", "value": "2026-10"},
+            {"key": "held", "value": 10},
+            {"key": "candidates", "value": 2},
+        ],
+        "output": [
+            {"key": "new-picks", "value": 4},
+            {"key": "candidates", "value": 0},
+            {"key": "expired", "value": 2},
+        ],
         "call_ids": [],
     }
     with transaction(db):
@@ -600,6 +616,14 @@ def test_the_monthly_and_quarterly_lanes_after_their_runs(
                 "action": "none",
                 "tokens": 9000,
                 "counts": {"hold": 12, "weaken": 1, "invalidated": 1},
+                "input": [{"key": "month", "value": "2026-10"}, {"key": "picks", "value": 14}],
+                "output": [
+                    {"key": "hold", "value": 12},
+                    {"key": "weaken", "value": 1},
+                    {"key": "invalidated", "value": 1},
+                    {"key": "rewritten", "value": 3},
+                    {"key": "unknown-key", "value": "말"},  # not in the contract: not served
+                ],
             },
             ref="monthly-review:2026-10",
         )
@@ -634,6 +658,26 @@ def test_the_monthly_and_quarterly_lanes_after_their_runs(
         "rows": [{"kind": "status", "status": "hold"}],
         "at": "2026-10-14",
     }
+    # The day screen serves the two judgments' lines as data.
+    events = {e["kind"]: e for e in logged_in.get("/api/day/2026-10-14").json()["events"]}
+    found = events["discovery"]["judgment"]
+    assert (found["model"], found["tokens"], found["verdict"], found["action"]) == (
+        "opus",
+        12000,
+        "buy",
+        "buy",
+    )
+    assert found["output"] == [
+        {"key": "new-picks", "value": 4},
+        {"key": "candidates", "value": 0},
+        {"key": "expired", "value": 2},
+    ]
+    review_j = events["monthly-review"]["judgment"]
+    assert review_j["input"] == [
+        {"key": "month", "value": "2026-10"},
+        {"key": "picks", "value": 14},
+    ]
+    assert review_j["output"][-1] == {"key": "rewritten", "value": 3}
 
 
 def test_the_earnings_lane_after_a_report_was_read(
@@ -710,12 +754,181 @@ def test_the_earnings_lane_after_a_report_was_read(
     assert ai == {
         "headKey": "now-last",
         "rows": [
-            {"kind": "instrument", "instrument": hanwha, "marginText": "2026Q3"},
+            {"kind": "instrument", "instrument": hanwha, "period": "2026Q3"},
             {"kind": "kv", "key": "metrics", "value": "2"},
             {"kind": "kv", "key": "tokens", "value": "3100"},
         ],
         "at": "2026-10-14",
     }
     data = nodes["data"]["now"]
-    assert data["rows"][0] == {"kind": "instrument", "instrument": hanwha, "marginText": "2026Q3"}
+    assert data["rows"][0] == {"kind": "instrument", "instrument": hanwha, "period": "2026Q3"}
     assert data["rows"][-1] == {"kind": "kv", "key": "companies", "value": "1"}
+
+
+def test_the_header_waits_a_trading_day_for_ai_rule_sources(
+    lived: None, logged_in: TestClient, db: sqlite3.Connection
+) -> None:
+    """작동 shows a dead source from the first miss; the header counts it after more than one
+    trading day, so DART's nightly maintenance never flips it (now: Wed 10/14 16:30)."""
+    from autotrade.timeutil import to_iso
+
+    def header() -> dict[str, Any]:
+        return dict(logged_in.get("/api/shell").json()["status"])
+
+    def dart(state: str, ok_at: str) -> None:
+        with transaction(db):
+            db.execute(
+                "UPDATE source_states SET state = ?, ok_at = ? WHERE source_id = 'dart'",
+                (state, to_iso(kst(ok_at))),
+            )
+
+    assert header()["kind"] == "ok"
+    # Last success Tue 10/13 18:00, maintenance since: one trading day (10/14) -> quiet.
+    dart("maintenance", "2026-10-13 18:00")
+    assert header()["kind"] == "ok"
+    health = logged_in.get("/api/health").json()
+    assert [t["id"] for t in health["todos"]] == ["filings:dart"]  # from the first miss
+    assert health["summary"]["kind"] == "check"
+    # Last success Mon 10/12 18:00: two trading days (10/13, 10/14) -> '점검 1'.
+    dart("maintenance", "2026-10-12 18:00")
+    assert header() == {"kind": "check", "count": 1}
+    dart("ok", "2026-10-14 08:20")
+    assert header()["kind"] == "ok"
+    # A source that never answered is dead since the first watch (Tue 10/13 08:40 KST, Monday
+    # evening in New York): EDGAR has missed two US trading days, so it is counted.
+    with transaction(db):
+        ai_repo.set_source_state(db, "edgar", "failed", "EDGAR 503", kst("2026-10-14 09:00"))
+        db.execute("UPDATE source_states SET ok_at = NULL WHERE source_id = 'edgar'")
+    assert header() == {"kind": "check", "count": 1}
+    with transaction(db):
+        ai_repo.set_source_state(db, "edgar", "ok", None, kst("2026-10-14 09:05"))
+    assert header()["kind"] == "ok"
+    # The AI CLI: a failed call after this morning's answers is quiet; with the last answer on
+    # Monday evening it is counted.
+    with transaction(db):
+        ai_repo.insert_call(
+            db,
+            task_id=None,
+            purpose="sell-confirm#1",
+            caller="test",
+            model="sonnet",
+            effort="low",
+            web=False,
+            prompt="sell_confirm",
+            input_text="",
+            output=None,
+            usage=None,
+            tokens=0,
+            cost_usd=None,
+            duration_ms=300,
+            exit_code=1,
+            error="not logged in",
+            started_at=kst("2026-10-14 09:00"),
+            finished_at=kst("2026-10-14 09:00"),
+        )
+    assert header()["kind"] == "ok"
+    with transaction(db):
+        db.execute(
+            "UPDATE ai_calls SET finished_at = ? WHERE exit_code = 0",
+            (to_iso(kst("2026-10-12 18:00")),),
+        )
+    assert header() == {"kind": "check", "count": 1}
+
+
+def test_trading_days_since_counts_the_market_s_own_days() -> None:
+    from autotrade.api.views.discovery import trading_days_since
+    from autotrade.domain.instruments import Market
+    from autotrade.market.calendar import calendar_for
+
+    krx, nyse = calendar_for(Market.KR), calendar_for(Market.US)
+    # Thu 10/8 18:00 -> Mon 10/12 09:00 KST: 한글날 (10/9) and the weekend do not count in Seoul;
+    # in New York it is still Sunday evening, and Friday 10/9 traded.
+    assert trading_days_since(krx, kst("2026-10-08 18:00"), kst("2026-10-12 09:00")) == 1
+    assert trading_days_since(nyse, kst("2026-10-08 18:00"), kst("2026-10-12 09:00")) == 1
+    assert trading_days_since(nyse, kst("2026-10-08 18:00"), kst("2026-10-13 09:00")) == 2
+    assert trading_days_since(krx, kst("2026-10-14 08:00"), kst("2026-10-14 23:00")) == 0
+    # Outside the holiday table: weekdays.
+    assert trading_days_since(krx, kst("2040-01-06 12:00"), kst("2040-01-09 12:00")) == 1
+
+
+def test_only_names_are_korean(lived: None, logged_in: TestClient) -> None:
+    """CONTRACT.md 원칙: the server sends numbers, dates and codes; Korean only in data names
+    (instrument and rule names, the company's own words, the rule definition's labels)."""
+    import re
+
+    han = re.compile(r"[\uac00-\ud7a3]")
+    found: list[str] = []
+
+    def walk(node: Any, path: str) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, f"{path}[]")
+        elif isinstance(node, str) and han.search(node):
+            leaf = path.rsplit(".", 1)[-1]
+            names = leaf in ("name", "initials", "param")
+            rule_text = ".display.nodes[]" in path and leaf in (
+                "title",
+                "subtitle",
+                "value",
+                "text",
+            )
+            if not (names or rule_text):
+                found.append(f"{path} = {node!r}")
+
+    urls = [
+        "/api/shell",
+        "/api/home",
+        "/api/home/breakdown",
+        "/api/plan",
+        "/api/history",
+        "/api/day/2026-10-13",
+        "/api/day/2026-10-14",
+        "/api/rules",
+        "/api/rules/index_half",
+        "/api/health",
+        "/api/mode",
+        "/api/account",
+        *(
+            f"/api/rules/discovery_3y?lane={lane}"
+            for lane in ("daily", "earnings", "monthly", "quarterly")
+        ),
+    ]
+    for url in urls:
+        walk(logged_in.get(url).json(), url)
+    assert found == []
+
+
+def test_judgment_items_are_served_as_data(lived: None, db: sqlite3.Connection) -> None:
+    from autotrade.api.views.discovery import judgment_item
+
+    stored: list[Any] = [
+        {"key": "sold", "instrument_id": HANWHA},
+        {"key": "condition", "value": 2},
+        {"key": "filing", "date": "2026-10-14"},
+        {"key": "review", "value": "weaken", "months": 2},
+        {"key": "review", "value": "invalidated"},
+        {"key": "month", "value": "2026-11"},
+        {"key": "cost", "value": 0.35},
+        {"key": "slot-full"},
+        {"key": "checks", "value": "3"},
+        {"key": "said", "value": "근거가 깨졌다"},  # anything else is not served
+        "a sentence",
+    ]
+    served = [judgment_item(db, item) for item in stored]
+    assert served[0] is not None
+    assert (served[0]["key"], served[0]["instrument"]["id"]) == ("sold", HANWHA)
+    assert served[1:] == [
+        {"key": "condition", "value": 2},
+        {"key": "filing", "date": "2026-10-14"},
+        {"key": "review", "value": "weaken", "months": 2},
+        {"key": "review", "value": "invalidated"},
+        {"key": "month", "value": "2026-11"},
+        {"key": "cost", "value": 0.35},
+        {"key": "slot-full"},
+        {"key": "checks", "value": 3},
+        None,
+        None,
+    ]

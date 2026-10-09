@@ -69,6 +69,8 @@ def shell(ctx: LedgerContext, mode_changed_at: datetime | None) -> dict[str, Any
     todo_count = len(todo) + (1 if failure is not None and failure[1] is None else 0)
     stale = ctx.stale_source() if ctx.status.value == "quote-wait" else None
     retries = _retry_orders(ctx)
+    # AI-rule sources (filings, the AI CLI) count once dead for more than a trading day.
+    ai_dead = ctx.ai_rule.header_causes()
     status: dict[str, Any]
     if ctx.last_check is None:
         status = {"kind": "before-first", "firstCheckAt": fmt.iso(ctx.first_check_at)}
@@ -76,8 +78,9 @@ def shell(ctx: LedgerContext, mode_changed_at: datetime | None) -> dict[str, Any
         status = {"kind": "todo", "count": todo_count}
     elif failure is not None:
         status = {"kind": "check-failed", "at": fmt.iso(failure[0].started_at)}
-    elif stale is not None or retries:
-        status = {"kind": "check", "count": (1 if stale is not None else 0) + len(retries)}
+    elif stale is not None or retries or ai_dead:
+        causes = (1 if stale is not None else 0) + len(retries) + ai_dead
+        status = {"kind": "check", "count": causes}
     else:
         last = _last_success(ctx)
         status = {"kind": "ok", "lastCheckAt": fmt.iso((last or ctx.last_check).started_at)}

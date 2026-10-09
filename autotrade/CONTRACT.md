@@ -3,7 +3,7 @@
 엔진(`autotrade/api`)과 화면(`web/src/api/types.ts`)이 같이 지키는 약속이다. 바꿀 때는 이 문서를 먼저 고치고, 맨 아래 '바뀐 것'에 한 줄을 남긴다.
 
 ## 원칙
-- **서버는 숫자·날짜·enum을 준다. 문구는 화면이 만든다**(`web/src/copy.ts`). 서버 응답에는 사람이 읽는 문장을 넣지 않는다. 예외는 종목·규칙 이름처럼 데이터 자체가 이름인 경우다.
+- **서버는 숫자·날짜·enum을 준다. 문구는 화면이 만든다**(`web/src/copy.ts`). 서버 응답에는 사람이 읽는 문장을 넣지 않는다. 예외는 데이터 자체가 이름인 경우뿐이다: 종목·규칙 이름(과 이니셜), 회사가 쓰는 부문·항목 이름(`MetricRef.param`), 규칙 정의가 가진 흐름 카드 글(`FlowDisplay` 노드의 title·subtitle·fields). 단위·낱말·판정 이름은 보내지 않는다.
 - **표시 반올림은 서버가 맞춰서 준다.** 명세에 '합이 맞아야 한다'는 완료 조건이 많아서다. 예: 묶음 % = 행 %의 합, 월 변동의 합 = 손익.
   - `krw`: 원 단위 정수
   - `usd`: 센트까지 소수 2자리 숫자
@@ -119,6 +119,9 @@ interface ShellResponse {
     | { kind: 'ok'; lastCheckAt: string }
     | { kind: 'before-first'; firstCheckAt: string }
     | { kind: 'check'; count: number }          // 원인 단위로 센다
+    // AI 규칙의 자료(공시 DART·EDGAR 하나씩, AI 호출)는 마지막 성공 뒤로 그 시장의 거래일이 하루를 넘게 지나야
+    // 원인으로 센다(밤사이 DART 점검으로 헤더가 바뀌지 않게). 작동 화면은 첫 실패부터 보인다. 한 번도 성공하지 못한
+    // 자료는 첫 시도(감시 작업·첫 AI 호출)부터 센다
     | { kind: 'check-failed'; at: string }
     | { kind: 'todo'; count: number }
     | { kind: 'cancel-failed'; count: number }
@@ -178,7 +181,18 @@ type Gauge =
   | { kind: 'drift'; threshold: number; needle: null | {      // null = 바늘 숨김(시세 대기·첫 확인 전)
       instrument: Instrument; deviation: number; toThreshold: number } }   // pp1
   | { kind: 'sell-condition'; needle: null | {                // AI 규칙(D34)
-      instrument: Instrument; progress: number; metric: string; marginText: string } }
+      instrument: Instrument; progress: number; metric: MetricRef; margin: Margin } }
+
+interface MetricRef {               // 지표 사전(autotrade/domain/metrics.py)의 키와 회사가 쓰는 말. 이름은 화면이 짓는다
+  key: 'revenue' | 'operating_income' | 'net_income' | 'op_margin' | 'eps' | 'fcf' | 'ebitda_margin'
+     | 'net_debt_to_ebitda' | 'backlog' | 'new_orders' | 'book_to_bill' | 'monthly_revenue_yoy'
+     | 'segment_revenue' | 'segment_operating_income' | 'segment_op_margin' | 'segment_backlog' | 'guidance'
+  param?: string                    // segment_*·guidance만: 회사의 부문·항목 이름('지상방산' → '지상방산 수주잔고')
+}
+interface Margin {                  // 선까지 남은 것. 화면이 단위에 맞춰 쓴다('2.3%p', '3.1조', '$350M', '0.12x', '2분기', '2.1%')
+  unit: 'pp' | 'pct' | 'KRW' | 'USD' | 'x' | 'count' | 'quarter' | 'month' | 'year'
+  value: number                     // pp는 pp1, pct는 소수 1자리, KRW는 원, USD는 달러, 기간은 남은 수
+}
 
 interface Composition {
   groupBy: Array<'instrument' | 'kind' | 'country' | 'currency' | 'rule'>   // 묶음이 2개 이상 생기는 기준만
@@ -253,7 +267,7 @@ interface RuleCard {
     target: number                   // pct1
     toThreshold: number | null       // pp1
     // AI 규칙(sell-condition 게이지): 팔 조건까지
-    progress?: number; metric?: string; marginText?: string
+    progress?: number; metric?: MetricRef; margin?: Margin
   }>
   basisLine: {
     pendingBuyIncluded: boolean      // '매수 대기 달러 포함'
@@ -354,17 +368,34 @@ type DayEvent =
   | { kind: 'ai-check' | 'ai-sell' | 'ai-buy' | 'monthly-review' | 'discovery'; rule: RuleRef; judgment: AiJudgment }   // 2단계
 interface AiJudgment {
   at: string; trigger: 'shock' | 'filing' | 'condition' | 'monthly' | 'discovery' | 'buy-price'
-  instrument?: Instrument
+  instrument?: Instrument            // 판단한 종목(바꾸기는 살 종목)
   model: 'haiku' | 'sonnet' | 'opus'; tokens: number
   verdict: 'hold' | 'weaken' | 'invalidated' | 'buy' | 'skip'
-  votes?: Array<'hold' | 'weaken' | 'invalidated'>   // 두 번 확인
-  inputSummary: string[]; outputSummary: string[]    // 데이터 그대로(종목명·지표), 문장 아님. 급락 확인은 웹에서 찾은 뉴스의 출처·날짜(최대 2개)를 더한다
+  votes?: Array<'hold' | 'weaken' | 'invalidated' | 'switch' | 'keep'>   // 두 번 묻는 판단의 두 답(팔기 확인, 바꾸기)
   action: 'none' | 'sell' | 'buy' | 'switch'
+  input: JudgmentItem[]              // '입력' 줄: 화면이 항목마다 말을 짓고 순서대로 ' · '로 잇는다
+  output: JudgmentItem[]             // '출력' 줄. verdict·votes·action은 위 칸에 있어 되풀이하지 않는다(비면 줄을 숨긴다)
 }
-// 2단계 구현: 사건 하나에 판단 하나. ai-sell(두 번 다 '반증', action 'sell'), ai-buy(사기 확인 '근거 있음' 또는 바꾸기,
-// action 'buy'·'switch'), ai-check(확인했지만 그대로, action 'none'), monthly-review(그달 점검 전체: verdict는 가장 나쁜 판정,
-// outputSummary는 유지·약화·반증 수), discovery(분기 발굴: 새 종목·후보·만료 수). trigger는 일감에서 온다(지난 실적 공시를
-// 처음 읽는 'backfill'은 'filing'). tokens는 그 판단의 호출들을 더한 값이다
+type JudgmentItem =
+  | { key: 'instrument' | 'sold' | 'bought'; instrument: Instrument }   // 판단한 종목 · 바꾸기의 팔 종목 · 살 종목
+  | { key: 'shock'; date: string; value: number }    // 급락한 날, 그날 지수 대비 수익률(%, 소수 1자리)
+  | { key: 'condition'; value: number }              // 걸린 반증 조건 번호(1부터)
+  | { key: 'filing'; date: string }                  // 걸린 공시의 접수일
+  | { key: 'review'; value: 'weaken' | 'invalidated'; months?: number }   // 월 점검이 넘긴 판정(약화면 몇 달째)
+  | { key: 'month'; value: string }                  // 'YYYY-MM'
+  | { key: 'cost'; value: number }                   // 바꾸기 비용(바꾸는 금액 대비 %, 소수 2자리)
+  | { key: 'filings' | 'news' | 'picks' | 'held' | 'candidates' | 'checks' | 'hold' | 'weaken' | 'invalidated'
+        | 'rewritten' | 'new-picks' | 'expired'; value: number }   // 수
+  | { key: 'slot-full' }                             // 사기 확인: 자리가 없어 바꾸기 확인으로 넘김
+// 2단계 구현: 사건 하나에 판단 하나. 문장은 보내지 않는다(모델이 쓴 근거와 찾은 뉴스는 기록에만 남는다).
+// - 팔기 확인(ai-sell: 두 번 다 '반증', action 'sell' / ai-check: 그대로): input = instrument, 계기(shock·condition·filing·review),
+//   filings(꾸러미에 넣은 최근 공시 수). output = news(급락이라 웹을 켰을 때 찾은 뉴스 수), 웹이 꺼져 있으면 빈 줄
+// - 사기 확인(ai-buy 'buy' / ai-check 'skip'): input = instrument, checks(충족한 살 조건 수). output = slot-full(자리 없음)이거나 빈 줄
+// - 바꾸기(ai-buy 'switch' / ai-check): input = sold, bought, cost. votes = 'switch' | 'keep' 두 번
+// - monthly-review(그달 점검 전체, verdict는 가장 나쁜 판정): input = month, picks. output = hold·weaken·invalidated 수,
+//   rewritten(새로 쓰거나 바꾼 팔 조건 수)
+// - discovery(분기 발굴): input = month, held(발굴 전 보유 수), candidates(발굴 전 후보 수). output = new-picks, candidates(새 후보 수), expired
+// trigger는 일감에서 온다(지난 실적 공시를 처음 읽는 'backfill'은 'filing'). tokens는 그 판단의 호출들을 더한 값이다
 ```
 
 ### `GET /api/rules` · `GET /api/rules/{id}?lane=` — SCR-RULES
@@ -416,8 +447,9 @@ interface NowBlock {
   until?: string          // 'now-last'가 여러 날에 걸치면 끝 날('마지막 9/14~9/15', at = 첫날)
   // 머리 메모(자유 문장)는 없다. '8종목 중 상위 3', '15종목' 같은 말은 kv 행의 수로 주고 화면이 문장을 만든다
   rows: Array<
-    | { kind: 'instrument'; instrument: Instrument; weight?: number; ret?: number; progress?: number; marginText?: string }
-    // progress 0~100: 보유는 팔 조건까지, 후보는 살 값까지(고른 날 가격 0 → 살 값 100). marginText는 데이터(살 값까지 '2.1%', 실적 기간 '2026Q3')
+    | { kind: 'instrument'; instrument: Instrument; weight?: number; ret?: number; progress?: number; margin?: Margin; period?: string }
+    // progress 0~100: 보유는 팔 조건까지(margin = 팔 조건까지 남은 것), 후보는 살 값까지(고른 날 가격 0 → 살 값 100,
+    // margin { unit: 'pct' } = 살 값보다 몇 % 위). period = 실적 기간('2026Q3')
     | { kind: 'rank'; rank: number; instrument: Instrument; ret: number }
     | { kind: 'band'; value: number; threshold: number; instrument?: Instrument }
     | { kind: 'order'; side: Side; text: string; status?: 'filled' | 'pending' | 'failed'; at?: string; retried?: boolean }
@@ -615,3 +647,4 @@ type NotifyEvent =
 - 2026-10-09: 계약 공백 정리 · 자산·계획(API 세션). 자산 그래프 표식에 `kinds`(그날 사건 전부)를 더했다. 첫 확인 전에도 `planCard`를 준다(바늘·단계 없음, `others.status` 'before-first'). 현금 행에 `cash.country`, 벗어남 사건의 `ruleId` null(시작·실전 켬·끔), 다음 할 일 `next-check.reviewAt`(다음 월 점검), 예정 항목 `retry`의 `ruleId`를 더했다. 월 점검·분기 발굴의 예정 시각은 1일 08:30, `metricTableAt`은 날짜다. `vsIndex`는 2단계에서 받은 그대로다.
 - 2026-10-09: 계약 공백 정리 · 작동·모드·설정·입장(API 세션). 할 일과 켜기 전 점검의 `facts` 키를 고정했다(낡음 `missingDates`, ai-cli 빨강 `since`, filings `market`, filings는 빨강). `summary.todoCount`는 직접 할 일 카드(action 'manual') 수이고, 노란 카드만 있으면 `summary.kind`는 'ok'다. `recent14[].run.reason`·`lastRun.reason`은 코드다. `/api/health`에 `devices`를 더했고, 토스 연결 `age`는 지난 날 ÷ 90일이다. `/api/mode`에 `offPreview`(취소될 주문·남는 현금), 두 장부 분해에 `valuedAt`(3단계)을 더했다. `notifications.available`(1·2단계 false), `vapidPublicKey`(3단계), `DELETE /api/account/push`(지금은 501)를 더하고 기기 이름 형식을 적었다.
 - 2026-10-09: 계약 공백 정리 · 기록·그날·규칙(API 세션). 기록 사건에 `pending`(기다리는 단계·시각)과 `weightsMini.target`, 주문에 `retried`(다시 낸 결과, 실패한 주문은 실패한 날의 기록으로 남음)와 환전 `direction`, 그날 확인에 `failure`(코드·회복한 날)와 `rule`을 더했다. 규칙 목록 `example`, 규칙 상세 `stale`, 조건 타일 `deviation`, 흐름 카드 `more`·`targets`, '지금' 칸 `until`·kv `note`(데이터만)·주문 행 `retried`를 더하고, 주문 행 `text`(종목 이름 또는 환전 방향 코드)와 AI 규칙 kv 키 목록을 다시 정했다. '대기 6'은 상태가 아니라 kv `candidates`이고, 살 값까지 막대는 종목 줄의 `progress`·`marginText`다. 급락 확인 판단의 `outputSummary`에 뉴스 출처·날짜가 붙는다.
+- 2026-10-09: 서버 문구 걷어냄(API 세션). AI 판단의 `inputSummary`·`outputSummary`를 `input`·`output`(JudgmentItem: 코드·수·날짜·종목)으로 바꿨고, 모델이 쓴 근거와 뉴스는 기록에만 남긴다. `votes`에 바꾸기의 'switch'·'keep'을 더했다. 게이지·종목 줄의 `metric`은 지표 사전 키와 회사의 말(`MetricRef`), `marginText`는 수와 단위(`Margin`)로 바꿨고, '지금' 종목 행은 `margin`·`period`를 쓴다. 응답의 한국어는 이제 데이터 이름(종목·규칙 이름, 회사의 부문 이름, 규칙 정의의 흐름 카드 글)뿐이다. 헤더 '점검 n'은 1거래일 넘게 멈춘 AI 규칙 자료(공시 DART·EDGAR, AI 호출)를 원인으로 센다.

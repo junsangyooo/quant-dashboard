@@ -355,7 +355,14 @@ def test_two_invalidations_sell(
         8800,
         "sonnet",
     )
-    assert j["input_summary"][0] == "한화오션"
+    # The card's lines are data, never words: the company, the shock, the filings read; the web
+    # was on for a shock and found nothing.
+    assert j["input"] == [
+        {"key": "instrument", "instrument_id": OCEAN},
+        {"key": "shock", "date": "2026-10-12", "value": -10.0},
+        {"key": "filings", "value": 0},
+    ]
+    assert j["output"] == [{"key": "news", "value": 0}]
     assert [c.purpose for c in ai_repo.calls_of_task(p2conn, tid)] == [
         "sell-confirm#1",
         "sell-confirm#2",
@@ -392,7 +399,10 @@ def test_news_found_on_a_shock_is_kept_and_other_triggers_stay_web_free(
     assert result["new_facts"] == [news[0]]  # the malformed one is left out
     event = repo.event_by_ref(p2conn, "paper", f"ai:{tid}")
     assert event is not None
-    assert "yna.co.kr 2026-10-12" in event.payload["output_summary"]
+    assert event.payload["output"] == [{"key": "news", "value": 1}]
+    # The news itself and the model's reasons stay in the record, not on the screens.
+    assert event.payload["new_facts"] == [news[0]]
+    assert len(event.payload["reasons"]) == 2
     # A sell condition (not a shock) is confirmed from the packet only.
     put_trigger = {"kind": "condition", "index": 1, "digest": "x", "period": "2026Q2", "value": "5"}
     cond = task(
@@ -620,6 +630,14 @@ def test_a_confirmed_buy_takes_a_slot_or_asks_to_switch(
     run(p2ctx, runner, AT + timedelta(minutes=10), max_tasks=1)
     last = repo.events_of_ledger(p2conn, "paper", ["ai-check"])[-1]
     assert (last.payload["verdict"], last.payload["action"]) == ("skip", "none")
+    bought, full, _ = (
+        e.payload for e in repo.events_of_ledger(p2conn, "paper", ["ai-check", "ai-buy"])
+    )
+    assert bought["input"] == [
+        {"key": "instrument", "instrument_id": "US:NVDA"},
+        {"key": "checks", "value": 1},  # every buy condition met
+    ]
+    assert full["output"] == [{"key": "slot-full"}]  # no slot: a switch question instead
 
 
 def answer_by_name(name: str, special: dict[str, Any], default: dict[str, Any]) -> Any:
@@ -666,6 +684,17 @@ def test_the_monthly_review_rewrites_conditions_and_escalates(
     assert month is not None
     assert month.kind == "monthly-review"
     assert month.payload["counts"] == {"hold": 14, "weaken": 1, "invalidated": 0}
+    assert month.payload["input"] == [
+        {"key": "month", "value": "2026-11"},
+        {"key": "picks", "value": 15},
+    ]
+    # Every pick got one sell condition it did not have (the answers all say op_margin < 6%).
+    assert month.payload["output"] == [
+        {"key": "hold", "value": 14},
+        {"key": "weaken", "value": 1},
+        {"key": "invalidated", "value": 0},
+        {"key": "rewritten", "value": 15},
+    ]
     assert month.payload["tokens"] == 15 * 4400
     assert ai_repo.tasks_of(p2conn, kind="sell-confirm") == []
     prompt = runner.prompts("review")[0]
@@ -687,7 +716,15 @@ def test_the_monthly_review_rewrites_conditions_and_escalates(
     run(p2ctx, runner, kst("2026-11-30 22:05"), max_tasks=17)  # December's discovery waits
     confirms = {t.pick_id: t for t in ai_repo.tasks_of(p2conn, kind="sell-confirm")}
     assert set(confirms) == {pick_of(p2conn, OCEAN).pick_id, pick_of(p2conn, HANWHA).pick_id}
-    assert confirms[pick_of(p2conn, OCEAN).pick_id].detail["triggers"][0]["verdict"] == "약화 2달"
+    assert confirms[pick_of(p2conn, OCEAN).pick_id].detail["triggers"][0] == {
+        "kind": "monthly",
+        "verdict": "weaken",
+        "weak_months": 2,  # '약화 2달' in the packet, codes in the record
+        "month": "2026-12",
+    }
+    said = "\n".join(runner.prompts("sell"))
+    assert "월 점검 판정: 약화 2달 (2026-12)" in said
+    assert "월 점검 판정: 반증 (2026-12)" in said
     kept = pick_of(p2conn, HANWHA)
     assert kept.invalidate == hanwha.invalidate
     result = [
@@ -814,7 +851,16 @@ def test_the_quarterly_discovery_adds_picks_and_candidates(
     assert "slots_left 5" in runner.prompts("discovery")[0]
     event = repo.event_by_ref(p2conn, "paper", "discovery:2026-12")
     assert event is not None
-    assert event.payload["output_summary"] == ["새 종목 2", "후보 1", "만료 1"]
+    assert event.payload["input"] == [
+        {"key": "month", "value": "2026-12"},
+        {"key": "held", "value": 15},
+        {"key": "candidates", "value": 1},
+    ]
+    assert event.payload["output"] == [
+        {"key": "new-picks", "value": 2},
+        {"key": "candidates", "value": 1},
+        {"key": "expired", "value": 1},
+    ]
 
 
 def test_a_switch_needs_two_yes_and_beating_the_costs(
@@ -865,6 +911,12 @@ def test_a_switch_needs_two_yes_and_beating_the_costs(
     event = repo.event_by_ref(p2conn, "paper", f"ai:{tid}")
     assert event is not None
     assert (event.kind, event.payload["action"]) == ("ai-buy", "switch")
+    assert event.payload["input"] == [
+        {"key": "sold", "instrument_id": HANWHA},
+        {"key": "bought", "instrument_id": "US:NVDA"},
+        {"key": "cost", "value": 0.35},
+    ]
+    assert (event.payload["output"], event.payload["votes"]) == ([], ["switch", "switch"])
     # One 'no', or a 'yes' that does not beat the costs: nothing moves.
     amd = candidate(p2conn, "AMD")
     prices(world, "AMD")
