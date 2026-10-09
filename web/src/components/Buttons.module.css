@@ -1,0 +1,68 @@
+/* 버튼 (종류 × 상태), 버튼/아이콘, 버튼/링크, 버튼/펼침, 버튼/접기 */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-inline);
+  padding: var(--button-padding-y) var(--button-padding-x);
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+}
+
+.default {
+  background: var(--bg-default);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+}
+
+.primary {
+  background: var(--accent-default);
+  color: var(--text-inverse);
+}
+
+.danger {
+  background: var(--status-error);
+  color: var(--text-inverse);
+}
+
+/* 상태 = 비활성: same fill for every kind, no border (Figma 58×46 for 기본). */
+.button:disabled {
+  border: 0;
+  background: var(--border-default);
+  color: var(--text-muted);
+}
+
+.block {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  flex: none;
+}
+
+.iconButton:hover {
+  background: var(--bg-subtle);
+}
+
+/* 버튼/링크 · 버튼/펼침 · 버튼/접기: accent label + 16px chevron, 26px tall. */
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) 0;
+  color: var(--accent-default);
+  white-space: nowrap;
+}
+
+.link:hover .linkLabel {
+  text-decoration: underline;
+}

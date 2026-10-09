@@ -1,0 +1,68 @@
+/* 내비/항목 (1440 header tab) and 내비/하단 탭 (390 bottom bar). */
+
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-inline);
+  padding-top: var(--space-inline);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.navItem[aria-current] {
+  color: var(--text-primary);
+}
+
+.underline {
+  align-self: stretch;
+  height: 2px;
+  background: var(--accent-default);
+  opacity: 0;
+}
+
+.navItem[aria-current] .underline {
+  opacity: 1;
+}
+
+/* Bottom bar: 64 tall (1 border + 8 top padding + 55), tabs centred, home-bar safe area below. */
+.tabbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: var(--bg-default);
+  border-top: 1px solid var(--border-default);
+  padding-top: var(--space-inline);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tabList {
+  display: flex;
+  height: 55px;
+}
+
+.tabItem {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tab {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-tight);
+  color: var(--text-muted);
+}
+
+.tab[aria-current] {
+  color: var(--accent-default);
+}
+
+@media (min-width: 900px) {
+  .auto {
+    display: none;
+  }
+}

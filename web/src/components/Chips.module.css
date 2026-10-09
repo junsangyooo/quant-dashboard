@@ -1,0 +1,211 @@
+/* 칩/* — geometry from Figma (strokes are included in layout, so CSS borders add size). */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+  flex: none;
+}
+
+a.chip,
+button.chip {
+  cursor: pointer;
+}
+
+.pill {
+  border-radius: var(--radius-pill);
+}
+
+.outlined {
+  background: var(--bg-default);
+  border: 1px solid var(--border-default);
+}
+
+/* Status dot: 8px; filled or a 1.5px ring in the dot color. */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip-dot);
+  flex: none;
+}
+
+/* 1.5px ring as an inset shadow (border widths are floored to whole px). */
+.ring {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--chip-dot);
+}
+
+/* 칩/헤더 상태 */
+.header {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.header-ok {
+  --chip-dot: var(--status-success);
+}
+
+.header-check {
+  --chip-dot: var(--status-warning);
+}
+
+.header-error {
+  --chip-dot: var(--status-error);
+}
+
+.header-unknown {
+  --chip-dot: var(--text-muted);
+}
+
+/* 칩/리밸런싱 상태 — dot and text share one color. */
+.rebalance {
+  color: var(--chip-dot);
+}
+
+.rb-inRange {
+  --chip-dot: var(--status-success);
+}
+
+.rb-scheduled,
+.rb-inProgress {
+  --chip-dot: var(--accent-default);
+}
+
+.rb-partialFail {
+  --chip-dot: var(--status-error);
+}
+
+.rb-holiday,
+.rb-withdrawPending {
+  --chip-dot: var(--text-muted);
+}
+
+.rb-awaitingQuote {
+  --chip-dot: var(--status-warning);
+}
+
+/* 칩/기간 — selected is filled without a border (Figma: 26px vs 28px tall). */
+.period {
+  padding: var(--space-tight) var(--chip-padding-x);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.period[aria-pressed='true'],
+.period[aria-checked='true'] {
+  border: 0;
+  background: var(--accent-default);
+  color: var(--text-inverse);
+}
+
+/* 칩/범례 */
+.legend {
+  background: var(--bg-default);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+  --legend-line: var(--text-muted);
+}
+
+.legend[aria-pressed='true'] {
+  background: var(--mode-paper-bg);
+  border-color: var(--chart-paper);
+  color: var(--mode-paper-text);
+  --legend-line: var(--chart-paper);
+}
+
+.legendSwatch {
+  width: 16px;
+  height: 8px;
+  overflow: visible;
+}
+
+.legendSwatch line {
+  stroke: var(--legend-line);
+}
+
+/* 칩/신호 */
+.signal {
+  color: var(--chip-dot);
+}
+
+.sig-ok {
+  background: var(--status-success-subtle);
+  --chip-dot: var(--status-success);
+}
+
+.sig-warn {
+  background: var(--status-warning-subtle);
+  --chip-dot: var(--status-warning);
+}
+
+.sig-error {
+  background: var(--status-error-subtle);
+  --chip-dot: var(--status-error);
+}
+
+.sig-unknown {
+  background: var(--bg-subtle);
+  --chip-dot: var(--text-muted);
+}
+
+/* 칩/예외 */
+.exception {
+  color: var(--text-muted);
+}
+
+/* 칩/정보 */
+.info {
+  color: var(--text-muted);
+}
+
+/* 칩/AI 개입 */
+.ai {
+  background: var(--bg-default);
+  color: var(--text-primary);
+}
+
+.ai-none {
+  border: 1px solid var(--border-default);
+}
+
+.ai-none .aiIcon {
+  color: var(--text-muted);
+}
+
+.ai-included {
+  border: 1px dashed var(--border-strong);
+}
+
+/* 칩/규칙 선택 */
+.ruleSelect {
+  padding: var(--space-inline) var(--chip-padding-x);
+  background: var(--bg-default);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+}
+
+.ruleSelect .ruleWeight {
+  color: var(--text-muted);
+}
+
+.ruleSelect .ruleAi {
+  color: var(--node-ai-fg);
+}
+
+.ruleSelect[aria-pressed='true'],
+.ruleSelect[aria-checked='true'] {
+  border: 0;
+  background: var(--accent-default);
+  color: var(--text-inverse);
+}
+
+.ruleSelect[aria-pressed='true'] .ruleWeight,
+.ruleSelect[aria-pressed='true'] .ruleAi,
+.ruleSelect[aria-checked='true'] .ruleWeight,
+.ruleSelect[aria-checked='true'] .ruleAi {
+  color: var(--text-inverse);
+}

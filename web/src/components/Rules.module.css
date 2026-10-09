@@ -1,0 +1,114 @@
+/* 규칙/블록, 규칙/목표 칸, 규칙 카드/머리 */
+
+.block {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-inline);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex: none;
+}
+
+.b-time {
+  border: 1px solid var(--border-default);
+}
+
+.b-ai {
+  border: 1px dashed var(--border-strong);
+}
+
+.b-condition {
+  padding: var(--space-inline) var(--space-block);
+  border-radius: var(--radius-pill);
+  background: var(--chart-target);
+  color: var(--text-inverse);
+}
+
+.b-hold {
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+}
+
+/* 1.5px accent edge as an inset shadow (border widths are floored to whole px). */
+.b-sell,
+.b-exchange,
+.b-buy {
+  --edge: 1.5px;
+  padding: calc(var(--space-inline) + var(--edge));
+  box-shadow: inset 0 0 0 var(--edge) var(--accent-default);
+}
+
+.b-sell .blockIcon,
+.b-exchange .blockIcon,
+.b-buy .blockIcon {
+  color: var(--accent-default);
+}
+
+.target {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) var(--space-inline) var(--space-tight) var(--space-tight);
+  border: 1px solid var(--chart-target);
+  border-radius: var(--radius-pill);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex: none;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.share {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-tight);
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.bar {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--chart-track);
+  overflow: hidden;
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--radius-pill);
+}
+
+.strategy-1 {
+  background: var(--chart-strategy-1);
+}
+
+.strategy-2 {
+  background: var(--chart-strategy-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-inline);
+}

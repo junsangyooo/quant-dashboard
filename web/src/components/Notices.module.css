@@ -1,0 +1,54 @@
+/* 배너/이상, 띠/모드, 표시/낡음 */
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+  padding: var(--space-block) var(--space-section);
+  background: var(--status-warning-subtle);
+  color: var(--text-primary);
+}
+
+.bannerIcon {
+  color: var(--status-warning);
+}
+
+.bannerBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-tight);
+  width: 100%;
+  padding: var(--space-inline) var(--space-section);
+}
+
+.strip-paper {
+  background: var(--mode-paper-bg);
+  color: var(--mode-paper-text);
+}
+
+.strip-live {
+  background: var(--mode-live-bg);
+  color: var(--mode-live-text);
+}
+
+.stale {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: 0 var(--space-inline);
+  border-radius: var(--radius-control);
+  background: var(--status-warning-subtle);
+  color: var(--status-warning);
+  white-space: nowrap;
+  flex: none;
+}

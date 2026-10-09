@@ -1,0 +1,86 @@
+/* 상태 줄, 줄/점검, 주문 행, 행/펼침 */
+
+.statusLine {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+}
+
+.statusIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  flex: none;
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tone-ok {
+  color: var(--status-success);
+}
+
+.tone-warn {
+  color: var(--status-warning);
+}
+
+.tone-error {
+  color: var(--status-error);
+}
+
+.tone-wait {
+  color: var(--text-muted);
+}
+
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+  padding: var(--space-inline) 0;
+  color: var(--text-primary);
+}
+
+a.checkRow:hover .checkName {
+  text-decoration: underline;
+}
+
+.checkText {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.orderRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.expandRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  width: 100%;
+  padding: var(--space-row) 0;
+  text-align: start;
+  color: var(--text-primary);
+}
+
+.expandText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+}

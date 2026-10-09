@@ -1,0 +1,92 @@
+/* DEV-only gallery. Each variant box wraps exactly one component so it can be screenshot
+   and compared with the Figma export of the same node id (data-figma-id). */
+
+.kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-grid);
+  padding: var(--space-grid);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  padding-bottom: var(--space-grid);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-inline);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.variants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-section);
+}
+
+.variant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  max-width: 100%;
+}
+
+.box {
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* ?only=<figma id>: one box alone at the page origin, for pixel comparison. */
+.isolated {
+  padding: 0;
+  gap: 0;
+}
+
+.isolated .section {
+  padding: 0;
+  border: 0;
+}
+
+.scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: var(--space-row);
+}
+
+.pinRow {
+  display: flex;
+  gap: var(--space-inline);
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+}

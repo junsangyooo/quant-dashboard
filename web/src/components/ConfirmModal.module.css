@@ -1,0 +1,41 @@
+/* 모달/확인: 350 wide, card padding, 16px gaps, scrim behind. */
+
+.modal {
+  width: min(350px, 100% - 2 * var(--space-section));
+  max-width: none;
+  margin: auto;
+  padding: var(--card-padding);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--bg-default);
+  color: var(--text-primary);
+}
+
+.modal[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.modal::backdrop {
+  background: var(--bg-scrim);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.buttons {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+}
+
+.inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  margin: 0;
+}

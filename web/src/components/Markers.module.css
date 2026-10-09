@@ -1,0 +1,129 @@
+/* 표식/사건, 표식/실행 실패, 칸/실행 달력 — drawn in SVG so dash patterns match Figma. */
+
+.marker {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-control);
+  color: var(--marker-color);
+  flex: none;
+}
+
+.marker svg {
+  overflow: visible;
+}
+
+.surface {
+  fill: var(--bg-default);
+}
+
+.edge {
+  fill: none;
+  stroke: var(--marker-color);
+}
+
+.half {
+  fill: var(--chart-band);
+}
+
+.m-accent {
+  --marker-color: var(--accent-default);
+}
+
+.m-error {
+  --marker-color: var(--status-error);
+}
+
+.m-primary {
+  --marker-color: var(--text-primary);
+}
+
+.groupCount {
+  fill: var(--text-primary);
+  font-size: var(--type-micro-size);
+  font-weight: var(--type-micro-weight);
+}
+
+/* 칸/실행 달력 */
+.cell {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-mark);
+  flex: none;
+}
+
+.cell svg {
+  overflow: visible;
+}
+
+.c-fill-ok {
+  fill: var(--calendar-ok);
+}
+
+.c-edge-ok {
+  fill: none;
+  stroke: var(--calendar-ok-edge);
+}
+
+.c-fill-rebalance {
+  fill: var(--calendar-rebalance);
+}
+
+.c-fill-default {
+  fill: var(--bg-default);
+}
+
+.c-edge-rebalance {
+  fill: none;
+  stroke: var(--calendar-rebalance);
+}
+
+.c-fill-failTint {
+  fill: var(--calendar-fail-tint);
+}
+
+.c-edge-fail {
+  fill: none;
+  stroke: var(--calendar-fail);
+}
+
+.c-edge-mark {
+  fill: none;
+  stroke: var(--calendar-mark);
+}
+
+.c-edge-empty {
+  fill: none;
+  stroke: var(--calendar-empty);
+}
+
+.c-fill-mark {
+  fill: var(--calendar-mark);
+}
+
+.c-fill-warnTint {
+  fill: var(--status-warning-subtle);
+}
+
+.c-edge-warn {
+  fill: none;
+  stroke: var(--status-warning);
+}
+
+.c-icon-inverse {
+  color: var(--text-inverse);
+}
+
+.c-icon-rebalance {
+  color: var(--calendar-rebalance);
+}
+
+.c-icon-fail {
+  color: var(--calendar-fail);
+}
+
+.c-icon-warn {
+  color: var(--status-warning);
+}

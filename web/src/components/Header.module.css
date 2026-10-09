@@ -1,0 +1,71 @@
+/* 헤더/390 (fixed, 56) and 헤더/1440 (64, 1200 column, centred tabs). */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg-default);
+  border-bottom: 1px solid var(--border-default);
+  padding-top: env(safe-area-inset-top);
+}
+
+/* 390: wordmark · badge · chip on the left, gear on the right. */
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  height: 55px;
+  padding: 0 var(--space-tight) 0 var(--space-block);
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tabs {
+  display: none;
+}
+
+.tabList {
+  display: flex;
+  gap: var(--space-section);
+}
+
+/* 1440 layout — forced (gallery) or from 900px up (auto). */
+.desktop .inner {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  height: 63px;
+  max-width: calc(var(--layout-content-max) + 2 * var(--space-grid));
+  margin: 0 auto;
+  padding: 0 var(--space-grid);
+}
+
+.desktop .tabs {
+  display: flex;
+}
+
+@media (min-width: 900px) {
+  .auto .inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    height: 63px;
+    max-width: calc(var(--layout-content-max) + 2 * var(--space-grid));
+    margin: 0 auto;
+    padding: 0 var(--space-grid);
+  }
+
+  .auto .tabs {
+    display: flex;
+  }
+}

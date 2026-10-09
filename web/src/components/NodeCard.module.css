@@ -1,0 +1,134 @@
+/* 노드/D 지금 값 카드 — kind stripe, head, content, '지금' box. */
+
+.card {
+  display: flex;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* AI 판단: 1.5px dashed [4 3] edge. CSS cannot set a dash pattern and floors 1.5px borders,
+   so the edge is an SVG rect stroked 3px and clipped to its inner half. */
+.card-ai {
+  --edge: 1.5px;
+  position: relative;
+  border: 0;
+  padding: var(--edge);
+}
+
+.aiEdge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.aiEdge rect {
+  fill: none;
+  stroke: var(--node-ai-fg);
+}
+
+.k-start {
+  --node-fg: var(--node-start-fg);
+}
+
+.k-asset {
+  --node-fg: var(--node-asset-fg);
+}
+
+.k-data {
+  --node-fg: var(--node-data-fg);
+}
+
+.k-ai {
+  --node-fg: var(--node-ai-fg);
+}
+
+.k-weight {
+  --node-fg: var(--node-weight-fg);
+}
+
+.k-condition {
+  --node-fg: var(--node-condition-fg);
+}
+
+.k-action {
+  --node-fg: var(--node-action-fg);
+}
+
+.k-exception {
+  --node-fg: var(--node-exception-fg);
+}
+
+.k-result {
+  --node-fg: var(--node-result-fg);
+}
+
+.stripe {
+  width: 4px;
+  flex: none;
+  background: var(--node-fg);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-row);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  color: var(--node-fg);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: var(--space-inline);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.nowHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  color: var(--text-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.rowTight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.icon {
+  color: var(--node-fg);
+}
+
+.rowLabel {
+  width: 40px;
+  flex: none;
+  color: var(--text-muted);
+}

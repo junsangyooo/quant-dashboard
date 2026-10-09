@@ -1,0 +1,352 @@
+/* Chart primitives. Geometry comes from charts/geometry; only colors and text live here. */
+
+.frame {
+  position: relative;
+  width: 100%;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+/* ── shared strokes and fills ── */
+.grid {
+  stroke: var(--chart-grid);
+  fill: none;
+}
+
+.axisLine {
+  stroke: var(--border-default);
+  fill: none;
+}
+
+.track {
+  fill: var(--chart-track);
+}
+
+.band {
+  fill: var(--chart-band);
+}
+
+.bandEdge {
+  fill: none;
+  stroke: var(--border-strong);
+}
+
+.target {
+  fill: var(--chart-target);
+}
+
+.needle {
+  stroke: var(--chart-target);
+  fill: none;
+}
+
+.hub {
+  fill: var(--text-primary);
+}
+
+.hubEmpty {
+  fill: none;
+  stroke: var(--text-muted);
+}
+
+.series1 {
+  stroke: var(--chart-series-1);
+  fill: none;
+}
+
+.series2 {
+  stroke: var(--chart-series-2);
+  fill: none;
+}
+
+.strategy1 {
+  stroke: var(--chart-strategy-1);
+  fill: none;
+}
+
+.strategy2 {
+  stroke: var(--chart-strategy-2);
+  fill: none;
+}
+
+.dotSeries1 {
+  fill: var(--chart-series-1);
+}
+
+.dotStrategy1 {
+  fill: var(--chart-strategy-1);
+}
+
+.dotStrategy2 {
+  fill: var(--chart-strategy-2);
+}
+
+.halo {
+  fill: none;
+  stroke: var(--bg-default);
+}
+
+.eventDot {
+  fill: var(--bg-default);
+  stroke: var(--chart-series-1);
+}
+
+.eventDotError {
+  fill: var(--bg-default);
+  stroke: var(--status-error);
+}
+
+.stem {
+  stroke: var(--chart-grid);
+  fill: none;
+}
+
+.cursor {
+  stroke: var(--accent-default);
+  fill: none;
+}
+
+.drift {
+  fill: var(--chart-drift);
+}
+
+.afterPoint {
+  fill: var(--bg-default);
+}
+
+.afterEdge {
+  fill: none;
+  stroke: var(--accent-default);
+}
+
+.connector {
+  stroke: var(--text-muted);
+  fill: none;
+}
+
+/* ── text ── */
+.tick,
+.dateLabel,
+.endLabel {
+  fill: var(--text-muted);
+}
+
+.caption {
+  font-size: var(--type-caption-size);
+  font-weight: var(--type-caption-weight);
+}
+
+.micro {
+  font-size: var(--type-micro-size);
+  font-weight: var(--type-micro-weight);
+}
+
+.beforeLabel {
+  fill: var(--chart-drift);
+}
+
+.afterLabel {
+  fill: var(--accent-default);
+}
+
+.staleLabel {
+  fill: var(--status-warning);
+}
+
+/* ── event band (HTML overlay so markers are real buttons) ── */
+.eventBand {
+  position: relative;
+  height: 28px;
+}
+
+.eventBand > svg {
+  position: absolute;
+  inset: 0;
+}
+
+.marker {
+  position: absolute;
+}
+
+.info {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted);
+}
+
+.dates {
+  position: relative;
+  height: 18px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dateText {
+  position: absolute;
+  top: 0;
+}
+
+.anchor-middle {
+  transform: translateX(-50%);
+}
+
+.anchor-end {
+  transform: translateX(-100%);
+}
+
+/* ── composition ── */
+.seg-strategy-1 {
+  fill: var(--chart-strategy-1);
+}
+
+.seg-strategy-2 {
+  fill: var(--chart-strategy-2);
+}
+
+.seg-cash {
+  fill: var(--chart-cash);
+}
+
+.seg-cat-1 {
+  fill: var(--chart-cat-1);
+}
+
+.seg-cat-2 {
+  fill: var(--chart-cat-2);
+}
+
+.seg-cat-3 {
+  fill: var(--chart-cat-3);
+}
+
+.seg-cat-4 {
+  fill: var(--chart-cat-4);
+}
+
+.seg-cat-5 {
+  fill: var(--chart-cat-5);
+}
+
+.outline-strategy-1 {
+  fill: none;
+  stroke: var(--chart-strategy-1);
+}
+
+.outline-strategy-2 {
+  fill: none;
+  stroke: var(--chart-strategy-2);
+}
+
+.pending {
+  fill: none;
+  stroke: var(--chart-pending);
+}
+
+/* ── waterfall ── */
+.wf-anchor {
+  fill: var(--chart-target);
+}
+
+.wf-cash {
+  fill: var(--chart-cash);
+}
+
+.wf-gain {
+  fill: var(--pnl-gain);
+}
+
+.wf-loss {
+  fill: var(--pnl-loss);
+}
+
+.wf-flat {
+  fill: var(--pnl-flat);
+}
+
+.wfLabel {
+  fill: var(--text-primary);
+}
+
+.wfValue {
+  fill: var(--text-primary);
+}
+
+.wfValueMuted {
+  fill: var(--text-muted);
+}
+
+/* ── calendar ── */
+.calendarScroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.calendar {
+  position: relative;
+}
+
+.calendarText {
+  position: absolute;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.calendarCell {
+  position: absolute;
+}
+
+/* ── table view ── */
+.table {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.table caption {
+  text-align: start;
+  padding-bottom: var(--space-inline);
+}
+
+.table th,
+.table td {
+  padding: var(--space-tight) var(--space-inline);
+  border-bottom: 1px solid var(--border-default);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.table th:first-child,
+.table td:first-child {
+  text-align: start;
+  padding-left: 0;
+}
+
+.table thead th {
+  color: var(--text-muted);
+}
+
+.segLabel {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+
+.segLabelInverse {
+  fill: var(--text-inverse);
+}
+
+.segLabelPrimary {
+  fill: var(--text-primary);
+}

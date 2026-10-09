@@ -1,0 +1,113 @@
+/* 배지/모드, 배지/종류, 국기, 로고/이니셜 */
+
+.mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* 모의투자: 1.5px outline (29px tall); 실전: filled (26px tall).
+   1.5px edges are inset shadows: browsers floor border widths to whole px. */
+.mode-paper {
+  --edge: 1.5px;
+  padding: calc(var(--space-tight) + var(--edge)) calc(var(--space-inline) + var(--edge));
+  box-shadow: inset 0 0 0 var(--edge) var(--mode-paper-text);
+  color: var(--mode-paper-text);
+}
+
+.mode-live {
+  background: var(--mode-live-bg);
+  color: var(--mode-live-text);
+}
+
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: 0 var(--space-tight);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-mark);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* 국기: 20×15, 2px radius, 1px border/default drawn over the image. */
+.flag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 15px;
+  border-radius: var(--radius-mark);
+  overflow: hidden;
+  flex: none;
+}
+
+.flagFramed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-mark);
+  pointer-events: none;
+}
+
+.flagImage {
+  width: 20px;
+  height: 15px;
+}
+
+.coin {
+  color: var(--text-muted);
+}
+
+/* 로고/이니셜: circle, chart/cat-n ring. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-card);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 var(--logo-edge) var(--logo-tone);
+  white-space: nowrap;
+  flex: none;
+}
+
+.logo-32 {
+  --logo-edge: 2px;
+  width: 32px;
+  height: 32px;
+}
+
+.logo-20 {
+  --logo-edge: 1.5px;
+  width: 20px;
+  height: 20px;
+}
+
+.tone-1 {
+  --logo-tone: var(--chart-cat-1);
+}
+
+.tone-2 {
+  --logo-tone: var(--chart-cat-2);
+}
+
+.tone-3 {
+  --logo-tone: var(--chart-cat-3);
+}
+
+.tone-4 {
+  --logo-tone: var(--chart-cat-4);
+}
+
+.tone-5 {
+  --logo-tone: var(--chart-cat-5);
+}

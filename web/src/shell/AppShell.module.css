@@ -1,0 +1,61 @@
+/* Page frame: sticky header, body column, sticky bottom tabs (390 only). */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.main {
+  flex: 1 0 auto;
+  width: 100%;
+  padding: var(--space-section);
+}
+
+.main:focus {
+  outline: none;
+}
+
+/* 작동·모드·설정 and the day sheet: 16 above the page title (Figma 1:62685). */
+.sub {
+  padding-top: var(--space-block);
+}
+
+@media (min-width: 900px) {
+  .main {
+    max-width: calc(var(--layout-content-max) + 2 * var(--space-grid));
+    margin-inline: auto;
+    padding: var(--space-grid);
+  }
+}
+
+.skip {
+  position: absolute;
+  top: var(--space-inline);
+  left: var(--space-block);
+  z-index: 50;
+  padding: var(--space-inline) var(--space-block);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--accent-default);
+  transform: translateY(-200%);
+}
+
+.skip:focus {
+  transform: none;
+}
+
+.pageTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-primary);
+}

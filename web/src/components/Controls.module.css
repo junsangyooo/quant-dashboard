@@ -1,0 +1,158 @@
+/* 입력/PIN 칸, 키/숫자, 토글, 체크, 스위치/모드 */
+
+.pinCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 52px;
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  border: 1px solid var(--border-strong);
+  flex: none;
+}
+
+.pin-focus {
+  border: 2px solid var(--focus-ring);
+}
+
+.pin-error {
+  border: 2px solid var(--status-error);
+}
+
+.pin-disabled {
+  background: var(--bg-subtle);
+  border-color: var(--border-default);
+}
+
+.pinDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+}
+
+.key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 56px;
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  flex: none;
+}
+
+.key-digit {
+  background: var(--bg-subtle);
+}
+
+.key:disabled {
+  color: var(--text-muted);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  width: 48px;
+  height: 28px;
+  padding: var(--space-tight);
+  border-radius: var(--toggle-radius);
+  background: var(--border-strong);
+  flex: none;
+}
+
+.toggle[aria-checked='true'] {
+  background: var(--accent-default);
+}
+
+.knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-default);
+  transition: transform 150ms ease;
+}
+
+.toggle[aria-checked='true'] .knob {
+  transform: translateX(20px);
+}
+
+.checkLabel {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+  cursor: pointer;
+}
+
+/* The native input stays focusable and clickable, on top of the drawn box. */
+.checkInput {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  /* Figma 체크 radius is an unbound 6px — no token exists for it. */
+  border-radius: 6px;
+  background: var(--bg-default);
+  border: 2px solid var(--border-strong);
+  color: var(--text-inverse);
+  flex: none;
+}
+
+.checkBoxOn {
+  background: var(--accent-default);
+  border: 0;
+}
+
+.checkInput:focus-visible + .checkBox {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.modeSwitch {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-tight);
+  padding: var(--space-tight);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.modeCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-row);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+}
+
+/* 1.5px accent edge as an inset shadow (border widths are floored to whole px). */
+.modeCell-paper[aria-checked='true'] {
+  --edge: 1.5px;
+  padding: calc(var(--space-row) + var(--edge));
+  background: var(--bg-default);
+  box-shadow: inset 0 0 0 var(--edge) var(--accent-default);
+  color: var(--mode-paper-text);
+}
+
+.modeCell-live[aria-checked='true'] {
+  background: var(--mode-live-bg);
+  color: var(--mode-live-text);
+}

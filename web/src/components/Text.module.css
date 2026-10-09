@@ -1,0 +1,56 @@
+.primary {
+  color: var(--text-primary);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.inverse {
+  color: var(--text-inverse);
+}
+
+.accent {
+  color: var(--accent-default);
+}
+
+.gain {
+  color: var(--pnl-gain);
+}
+
+.loss {
+  color: var(--pnl-loss);
+}
+
+.flat {
+  color: var(--pnl-flat);
+}
+
+.success {
+  color: var(--status-success);
+}
+
+.warning {
+  color: var(--status-warning);
+}
+
+.error {
+  color: var(--status-error);
+}
+
+.ai {
+  color: var(--node-ai-fg);
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-end {
+  text-align: end;
+}
