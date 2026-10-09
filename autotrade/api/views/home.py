@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from autotrade.api.views import fmt
-from autotrade.api.views.context import CompRow, LedgerContext
+from autotrade.api.views.context import CompRow, LedgerContext, event_krw
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import (
     contributions_by_date,
@@ -225,7 +225,7 @@ def breakdown(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
         elif ev.kind == "withdrawal":
             withdrawal -= ev.amount
         elif ev.kind == "dividend":
-            dividend += ev.amount
+            dividend += event_krw(ev)
     fees = -sum(
         (
             f.fee_krw

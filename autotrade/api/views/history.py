@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from autotrade.api.views import fmt
-from autotrade.api.views.context import LedgerContext, event_kind
+from autotrade.api.views.context import LedgerContext, event_kind, event_krw
 from autotrade.api.views.orders import plan_stages, stages_mini
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import (
@@ -93,7 +93,10 @@ class DayData:
             states.append("failed")
         plan = self.plans.get(d)
         if plan is not None:
-            if plan.status in ("partial-failed", "todo") or plan.plan_id in self.retried:
+            if (
+                plan.status in ("partial-failed", "todo", "resolved")
+                or plan.plan_id in self.retried
+            ):
                 states.append("partial-failed")
             elif plan.status == "in-progress":
                 states.append("in-progress")
@@ -201,11 +204,17 @@ def history_event(data: DayData, ev: EventRow) -> dict[str, Any]:
         if recovered is not None:
             out["recoveredOn"] = recovered
     elif ev.kind in ("deposit", "withdrawal", "dividend"):
-        out["amount"] = fmt.krw(ev.amount or ZERO)
+        out["amount"] = fmt.krw(event_krw(ev))
         out["treatment"] = "income" if ev.kind == "dividend" else "pnl-excluded"
         iid = ev.payload.get("instrument_id")
         if isinstance(iid, str) and iid in ctx.instruments:
             out["instrument"] = instrument_json(ctx.instruments[iid])
+        if ev.kind == "dividend" and ev.rule_id == ctx.rule.rule_id:
+            out["rule"] = ctx.rule_json()  # '지수 반반 (KOSPI200 ETF)'
+    resolved = ev.payload.get("resolved_at")
+    if ev.status == "resolved" and resolved:
+        # The owner closed the manual action ('직접 할 일', python -m autotrade.jobs resolve).
+        out["resolvedOn"] = fmt.day(kst_date(from_iso(str(resolved))))
     return out
 
 
@@ -219,6 +228,9 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
     ) or [ctx.today.year]
     year_events = [e for e in ctx.events if e.event_date.year == chosen]
     rebalances = [e for e in year_events if e.kind == "rebalance"]
+    rule_dividends = [
+        e for e in year_events if e.kind == "dividend" and e.rule_id == ctx.rule.rule_id
+    ]
     plan_kinds = [event_kind(e) for e in rebalances]
     check_days = [d for d in data.runs if d.year == chosen]
     fees = sum(
@@ -297,7 +309,8 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
         ],
         "filters": {
             "total": len(year_events),
-            "rules": [{"rule": ctx.rule_json(), "count": len(rebalances)}],
+            # The rule chip counts its rebalances and dividends (§1.4: '지수 반반 3').
+            "rules": [{"rule": ctx.rule_json(), "count": len(rebalances) + len(rule_dividends)}],
             "kinds": [{"kind": k, "count": n} for k, n in kinds_count.items()],
         },
         "months": months,
@@ -399,7 +412,7 @@ def day_events(ctx: LedgerContext, data: DayData, d: date) -> list[dict[str, Any
         elif ev.kind in ("start", "deposit", "withdrawal", "dividend"):
             item: dict[str, Any] = {
                 "kind": ev.kind,
-                "krw": fmt.krw(ev.amount or ZERO),
+                "krw": fmt.krw(event_krw(ev)),
                 "treatment": "income" if ev.kind == "dividend" else "pnl-excluded",
             }
             iid = ev.payload.get("instrument_id")

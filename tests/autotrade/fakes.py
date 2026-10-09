@@ -1,4 +1,4 @@
-"""Fake market sources: a scripted world of daily bars and rate quotes (no network)."""
+"""Fake market sources: a scripted world of daily bars, rate quotes and dividends (no network)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from decimal import Decimal
 from autotrade.domain.instruments import Instrument
 from autotrade.market.service import MarketSources
 from autotrade.market.sources import SourceError
-from autotrade.market.types import Bar, FxQuote
+from autotrade.market.types import Bar, DividendInfo, FxQuote
 
 KR = "KR:069500"
 US = "US:SPYM"
@@ -24,6 +24,8 @@ class World:
     fail_bars: set[str] = field(default_factory=set)  # instrument ids whose source errors
     fail_fx: bool = False
     calls: list[str] = field(default_factory=list)
+    dividends: list[DividendInfo] = field(default_factory=list)
+    fail_dividends: bool = False
 
     def bar(
         self,
@@ -44,9 +46,25 @@ class World:
         self.rates.append((at, Decimal(rate)))
         self.rates.sort()
 
+    def dividend(
+        self, instrument_id: str, ex_date: str, per_share: str, pay_date: str | None = None
+    ) -> None:
+        self.dividends.append(
+            DividendInfo(
+                instrument_id=instrument_id,
+                ex_date=date.fromisoformat(ex_date),
+                per_share=Decimal(per_share),
+                pay_date=None if pay_date is None else date.fromisoformat(pay_date),
+                source="fake-div",
+            )
+        )
+
     def sources(self) -> MarketSources:
         return MarketSources(
-            kr=FakeBars(self, "fake-kr"), us=FakeBars(self, "fake-us"), fx=FakeFx(self)
+            kr=FakeBars(self, "fake-kr"),
+            us=FakeBars(self, "fake-us"),
+            fx=FakeFx(self),
+            dividends=FakeDividends(self),
         )
 
 
@@ -84,3 +102,20 @@ class FakeFx:
             raise SourceError("no quote yet")
         t, r = best[-1]
         return FxQuote(r, t, self.name)
+
+
+class FakeDividends:
+    name = "fake-div"
+
+    def __init__(self, world: World) -> None:
+        self.world = world
+
+    def fetch_dividends(self, instrument: Instrument, start: date, end: date) -> list[DividendInfo]:
+        self.world.calls.append(f"dividends:{instrument.instrument_id}:{start}:{end}")
+        if self.world.fail_dividends:
+            raise SourceError("dividends: no response")
+        return [
+            d
+            for d in self.world.dividends
+            if d.instrument_id == instrument.instrument_id and start <= d.ex_date <= end
+        ]

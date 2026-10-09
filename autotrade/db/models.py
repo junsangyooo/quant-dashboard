@@ -305,6 +305,7 @@ class EventRow:
     amount: Decimal | None
     currency: Currency | None
     payload: dict[str, Any]
+    ref: str | None = None  # natural key, unique per ledger ('dividend:KR:069500:2026-09-23')
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> EventRow:
@@ -321,6 +322,7 @@ class EventRow:
             amount=_dec(row["amount"]),
             currency=None if row["currency"] is None else Currency(str(row["currency"])),
             payload=payload if isinstance(payload, dict) else {},
+            ref=_str(row["ref"]),
         )
 
 
@@ -363,6 +365,7 @@ class SnapshotRow:
     baseline_krw: Decimal | None
     baseline_units: dict[str, str] | None
     stale: list[str]
+    baseline_cash_krw: Decimal | None = None  # dividends the baseline's units earned, kept as cash
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> SnapshotRow:
@@ -384,6 +387,32 @@ class SnapshotRow:
             baseline_krw=_dec(row["baseline_krw"]),
             baseline_units=loads(_str(row["baseline_units"])),
             stale=loads(str(row["stale"])) or [],
+            baseline_cash_krw=_dec(row["baseline_cash_krw"]),
+        )
+
+
+@dataclass(frozen=True)
+class DividendRow:
+    """A cash dividend announced for an instrument (market data, not a booking)."""
+
+    instrument_id: str
+    ex_date: _Date  # exchange-local date (ET for US)
+    pay_date: _Date  # exchange-local date
+    pay_estimated: bool  # True when the source gave no pay date and it was estimated
+    per_share: Decimal  # before tax, in the instrument's currency
+    currency: Currency
+    source: str
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> DividendRow:
+        return cls(
+            instrument_id=str(row["instrument_id"]),
+            ex_date=date.fromisoformat(str(row["ex_date"])),
+            pay_date=date.fromisoformat(str(row["pay_date"])),
+            pay_estimated=bool(row["pay_estimated"]),
+            per_share=_req_dec(row["per_share"]),
+            currency=Currency(str(row["currency"])),
+            source=str(row["source"]),
         )
 
 

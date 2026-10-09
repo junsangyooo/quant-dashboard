@@ -24,6 +24,7 @@ from autotrade.api.security import (
 from autotrade.api.settings import ApiSettings
 from autotrade.config import Config
 from autotrade.db import auth_repo
+from autotrade.db.migrations import MIGRATIONS
 from autotrade.jobs.cli import main as jobs_main
 
 from .support import PIN, Clock, owner_pin
@@ -33,7 +34,7 @@ PROXY = ("127.0.0.1", 40000)
 
 def login(client: TestClient, pin: str = PIN, ip: str | None = None) -> int:
     headers = {"x-forwarded-for": ip} if ip else {}
-    return client.post("/api/auth/pin", json={"pin": pin}, headers=headers).status_code
+    return int(client.post("/api/auth/pin", json={"pin": pin}, headers=headers).status_code)
 
 
 def test_login_sets_a_host_only_strict_secure_cookie(
@@ -249,7 +250,8 @@ def run_cli(args: list[str], db_path: Path, stdin: str = "") -> tuple[int, dict[
 
 def test_cli_migrate_and_set_pin(tmp_path: Path) -> None:
     db_path = tmp_path / "data" / "autotrade.db"
-    assert run_cli(["migrate"], db_path) == (0, {"job": "migrate", "result": "ok", "schema": 2})
+    expected = {"job": "migrate", "result": "ok", "schema": len(MIGRATIONS)}
+    assert run_cli(["migrate"], db_path) == (0, expected)
     code, out = run_cli(["set-pin"], db_path, "123456\n654321\n")
     assert (code, out["error"]) == (1, "pin-mismatch")
     code, out = run_cli(["set-pin"], db_path, "12ab56\n12ab56\n")

@@ -15,7 +15,7 @@ UnsetEnvironment=ANTHROPIC_API_KEY KRX_ID KRX_PW
 # Live orders stay off until phase 3 is reviewed and the owner turns them on.
 # The Toss executor refuses unless this is "1" AND the stored mode is live.
 Environment=AUTOTRADE_LIVE_ORDERS=0
-ExecStart=/home/ubuntu/portfolio-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890
+ExecStart=/home/ubuntu/portfolio-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890 --no-proxy-headers
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log

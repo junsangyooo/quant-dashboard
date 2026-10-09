@@ -71,15 +71,33 @@ class Composition:
         return sum((r.krw for r in self.rows if r.group == group), ZERO)
 
 
+# Event kinds the engine records for itself and the screens do not list (CONTRACT.md EventKind):
+# 'todo-resolved' notes that the owner closed a manual action (engine/todos.py); the screens
+# show it on the rebalance row instead ('resolvedOn').
+INTERNAL_EVENT_KINDS = ("todo-resolved",)
+
+
 def event_kind(ev: EventRow) -> str:
     """CONTRACT.md EventKind of an event row (a rebalance shows its state)."""
     if ev.kind != "rebalance":
         return ev.kind
     if ev.status == "in-progress":
         return "in-progress"
-    if ev.status in ("partial-failed", "todo") or ev.payload.get("retried"):
+    if ev.status in ("partial-failed", "todo", "resolved") or ev.payload.get("retried"):
         return "partial-failed"
     return "rebalance"
+
+
+def event_krw(ev: EventRow) -> Decimal:
+    """Won amount of a cash event. A dollar dividend carries the won value of its booking."""
+    amount = ev.amount or ZERO
+    if ev.currency is not Currency.USD:
+        return amount
+    krw = ev.payload.get("amount_krw")
+    if krw is not None:
+        return Decimal(str(krw))
+    rate = ev.payload.get("krw_rate")
+    return ZERO if rate is None else usd_in_krw(amount, Decimal(str(rate)))
 
 
 class LedgerContext:
@@ -162,7 +180,9 @@ class LedgerContext:
     @cached_property
     def events(self) -> list[EventRow]:
         return [
-            e for e in repo.events_of_ledger(self.conn, self.ledger_id) if e.occurred_at <= self.now
+            e
+            for e in repo.events_of_ledger(self.conn, self.ledger_id)
+            if e.occurred_at <= self.now and e.kind not in INTERNAL_EVENT_KINDS
         ]
 
     @cached_property

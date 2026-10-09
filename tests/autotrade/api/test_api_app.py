@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from autotrade.api.app import CSP, create_app
 from autotrade.api.settings import ApiSettings
 from autotrade.config import Config
+from autotrade.db.migrations import MIGRATIONS
 
 # Reachable without a session (CONTRACT.md: '/api/auth/* 제외', plus the deploy health check).
 OPEN_PATHS = {"/api/healthz", "/api/auth/pin", "/api/auth/logout"}
@@ -37,7 +38,7 @@ def test_security_headers_on_every_kind_of_response(client: TestClient) -> None:
 def test_healthz_needs_no_session(client: TestClient) -> None:
     response = client.get("/api/healthz")
     assert response.status_code == 200
-    assert response.json() == {"ok": True, "schema": 2}
+    assert response.json() == {"ok": True, "schema": len(MIGRATIONS)}
     assert response.headers["cache-control"] == "no-store"
 
 

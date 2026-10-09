@@ -95,3 +95,30 @@ def test_clock_defaults_to_now(tmp_path: Path, world: World) -> None:
 def test_parser_rejects_unknown_commands() -> None:
     with pytest.raises(SystemExit):
         build_parser().parse_args(["trade"])
+
+
+def test_ops_commands(tmp_path: Path, world: World) -> None:
+    first_day(world)
+    db = tmp_path / "data" / "autotrade.db"
+    run(["check", "--at", "2026-07-01T08:30"], world, db)
+    code, out = run(["dividends", "--at", "2026-07-01T08:35"], world, db)
+    assert (code, out["job"], out["result"]) == (0, "dividends", "nothing-due")
+    code, out = run(["backup", "--at", "2026-07-01T16:00"], world, db)
+    assert (code, out["result"]) == (0, "ok")
+    assert out["path"].endswith("data/backup/autotrade/autotrade-2026-07-01.db")
+    code, out = run(["todos", "--at", "2026-07-01T16:01"], world, db)
+    assert (code, out["todos"]) == (0, [])
+    code, out = run(["resolve", "--at", "2026-07-01T16:02"], world, db)
+    assert (code, out["result"]) == (1, "bad-id")
+    code, out = run(
+        ["resolve", "order-failed:1", "--note", "x", "--at", "2026-07-01T16:03"], world, db
+    )
+    assert (code, out["result"]) == (1, "not-a-todo")
+    # The morning's stages never ran: the next tick catches them up (filled at 7/1's open).
+    code, out = run(["tick", "--at", "2026-07-01T16:05"], world, db)
+    assert (code, out["task"], out["why"], out["result"]) == (0, "stages", "2 due", "done")
+
+
+def test_only_resolve_takes_an_argument(tmp_path: Path, world: World) -> None:
+    with pytest.raises(SystemExit):
+        run(["check", "extra", "--at", "2026-07-01T08:30"], world, tmp_path / "x.db")

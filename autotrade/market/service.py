@@ -18,6 +18,8 @@ from decimal import Decimal
 from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.db.connection import transaction
+from autotrade.db.models import DividendRow
+from autotrade.domain.dividends import estimated_pay_date
 from autotrade.domain.instruments import Instrument, Market
 from autotrade.market.calendar import calendar_for
 from autotrade.market.freshness import (
@@ -29,18 +31,24 @@ from autotrade.market.freshness import (
 )
 from autotrade.market.sources import (
     BarSource,
+    DividendSource,
     FallbackBarSource,
     FxSource,
     PykrxBarSource,
     RetryingBarSource,
+    RetryingDividendSource,
     RetryingFxSource,
     YahooBarSource,
+    YahooDividendSource,
     YahooFxSource,
 )
 from autotrade.market.types import Bar, FxQuote
 from autotrade.timeutil import require_aware
 
 SERIES_OF_MARKET = {Market.KR: Series.KR_QUOTES, Market.US: Series.US_QUOTES}
+# data_freshness row of the daily dividend fetch. Not a screen source (CONTRACT.md lists
+# kr-quotes, us-quotes and fx in phase 1); the tick reads it to fetch once a day.
+DIVIDENDS_SERIES = "dividends"
 
 
 @dataclass(frozen=True)
@@ -48,6 +56,7 @@ class MarketSources:
     kr: BarSource
     us: BarSource
     fx: FxSource
+    dividends: DividendSource | None = None  # None: dividends are not fetched
 
 
 def default_sources() -> MarketSources:
@@ -62,6 +71,7 @@ def default_sources() -> MarketSources:
         ),
         us=RetryingBarSource(YahooBarSource()),
         fx=RetryingFxSource(YahooFxSource()),
+        dividends=RetryingDividendSource(YahooDividendSource()),
     )
 
 
@@ -135,6 +145,60 @@ def prefetch_fx(conn: sqlite3.Connection, sources: MarketSources, at: datetime) 
             error=error,
         )
     return error
+
+
+def pay_lag(cfg: Config, market: Market) -> int:
+    return cfg.kr_dividend_pay_lag if market is Market.KR else cfg.us_dividend_pay_lag
+
+
+def prefetch_dividends(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    sources: MarketSources,
+    instruments: Iterable[Instrument],
+    start: date,
+    end: date,
+    at: datetime,
+) -> dict[str, str]:
+    """Download the cash dividends with an ex-date in [start, end] and store them, with the pay
+    date estimated when the source has none. Returns errors by instrument id."""
+    errors: dict[str, str] = {}
+    if sources.dividends is None:
+        return errors
+    for inst in instruments:
+        rows: list[DividendRow] = []
+        try:
+            for info in sources.dividends.fetch_dividends(inst, start, end):
+                pay = info.pay_date
+                if pay is None:
+                    pay = estimated_pay_date(
+                        info.ex_date, calendar_for(inst.market), pay_lag(cfg, inst.market)
+                    )
+                rows.append(
+                    DividendRow(
+                        instrument_id=inst.instrument_id,
+                        ex_date=info.ex_date,
+                        pay_date=pay,
+                        pay_estimated=info.pay_date is None,
+                        per_share=info.per_share,
+                        currency=inst.currency,
+                        source=info.source,
+                    )
+                )
+        except Exception as exc:  # recorded, never raised (CalendarRangeError included)
+            errors[inst.instrument_id] = f"{type(exc).__name__}: {exc}"
+            rows = []
+        with transaction(conn):
+            repo.upsert_dividends(conn, rows, at)
+    with transaction(conn):
+        repo.record_fetch(
+            conn,
+            DIVIDENDS_SERIES,
+            attempted_at=at,
+            source=sources.dividends.name,
+            error="; ".join(f"{k}: {v}" for k, v in sorted(errors.items())) or None,
+        )
+    return errors
 
 
 @dataclass(frozen=True)

@@ -4,6 +4,8 @@
   lookup needs a KRX login since 1.2.8, so it rarely answers; see service.default_sources).
 - US daily bars: Yahoo via yfinance.
 - KRW per USD: Yahoo 'KRW=X' (phase 1 source).
+- Cash dividends: Yahoo's dividend column (per share by ex-date; Yahoo has no pay dates, so the
+  service estimates them, autotrade/domain/dividends.py).
 
 All network access in the engine lives in this module. Tests replace these classes with fakes
 (tests/autotrade/fakes.py); the engine only sees the BarSource / FxSource protocols.
@@ -25,7 +27,7 @@ from typing import Any, Protocol, TypeVar
 
 from autotrade.domain.instruments import Instrument, Kind
 from autotrade.domain.money import dec, normalize_price, round_rate
-from autotrade.market.types import Bar, FxQuote
+from autotrade.market.types import Bar, DividendInfo, FxQuote
 from autotrade.timeutil import UTC, require_aware
 
 T = TypeVar("T")
@@ -45,6 +47,14 @@ class FxSource(Protocol):
     name: str
 
     def fetch_quote(self, at: datetime) -> FxQuote: ...
+
+
+class DividendSource(Protocol):
+    name: str
+
+    def fetch_dividends(
+        self, instrument: Instrument, start: date, end: date
+    ) -> list[DividendInfo]: ...
 
 
 def with_retries(
@@ -223,6 +233,52 @@ class FallbackBarSource:
         return [merged[d] for d in sorted(merged)]
 
 
+class YahooDividendSource:
+    """Cash dividends from Yahoo's daily history ('Dividends' column, by ex-date).
+
+    Measured 2026-10-09 (yfinance 1.3): 069500.KS lists the KODEX 200 distributions on their
+    ex-dates (2026-04-29 446, 2026-07-30 183 won), SPYM its quarterly dividends (2026-09-11
+    $0.239). Neither has a pay date ('calendar' is empty for both ETFs).
+    """
+
+    name = "yfinance"
+
+    def __init__(self, yf_module: Any | None = None) -> None:
+        self._yf = yf_module
+
+    def _module(self) -> Any:
+        if self._yf is None:
+            self._yf = import_yfinance()
+        return self._yf
+
+    def fetch_dividends(self, instrument: Instrument, start: date, end: date) -> list[DividendInfo]:
+        ticker = self._module().Ticker(instrument.yahoo_symbol)
+        frame = ticker.history(
+            start=start.isoformat(),
+            end=(end + timedelta(days=1)).isoformat(),
+            interval="1d",
+            auto_adjust=False,
+            actions=True,
+        )
+        if frame is None or len(frame) == 0 or "Dividends" not in frame.columns:
+            return []
+        out: list[DividendInfo] = []
+        for idx, row in frame.iterrows():
+            amount = _number(row["Dividends"])
+            if amount is None or amount <= 0:
+                continue
+            out.append(
+                DividendInfo(
+                    instrument_id=instrument.instrument_id,
+                    ex_date=idx.date(),  # exchange time zone, like the bars
+                    per_share=amount,
+                    pay_date=None,
+                    source=self.name,
+                )
+            )
+        return out
+
+
 class YahooFxSource:
     """KRW per USD from Yahoo 'KRW=X': the last 1-minute bar at or before `at`."""
 
@@ -279,3 +335,16 @@ class RetryingFxSource:
 
     def fetch_quote(self, at: datetime) -> FxQuote:
         return with_retries(lambda: self.inner.fetch_quote(at), self.attempts, self.delay_s)
+
+
+class RetryingDividendSource:
+    def __init__(self, inner: DividendSource, attempts: int = 2, delay_s: float = 2.0) -> None:
+        self.inner = inner
+        self.name = inner.name
+        self.attempts = attempts
+        self.delay_s = delay_s
+
+    def fetch_dividends(self, instrument: Instrument, start: date, end: date) -> list[DividendInfo]:
+        return with_retries(
+            lambda: self.inner.fetch_dividends(instrument, start, end), self.attempts, self.delay_s
+        )

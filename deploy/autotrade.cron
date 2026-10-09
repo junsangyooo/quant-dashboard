@@ -1,0 +1,23 @@
+# autotrade (quant.jsyoo.dev) — the crontab block for user ubuntu on the Oracle server.
+# NOT installed. Installing it needs the owner's go (ops notes 안전), then:
+#   crontab -l > ~/crontab.bak.$(date +\%F)        (keep the old table)
+#   (crontab -l; cat deploy/autotrade.cron) | crontab -
+# Remove: delete the block from `crontab -e`. Nothing else is installed by it.
+#
+# Times: the server's clock and cron run in UTC. This block has no time of day in it on
+# purpose: cron wakes the tick every 5 minutes and `python -m autotrade.jobs tick` decides in KST
+# (and in New York time for the US session, daylight saving included) what is due — the dividend
+# download 08:00, the check 08:30, the retry 09:30, each stage at its own time (KR 09:05, FX 09:10,
+# US open 22:30 or 23:30), the snapshot 16:00, then the backup — and how late each may still run
+# (autotrade/jobs/schedule.py). Never translate those times into cron fields here.
+#
+# - flock -n: when the previous tick is still running the new one exits at once. The tick also
+#   holds its own lock (data/autotrade.db-jobs.lock), which manual commands respect.
+# - timeout 10m: a tick stuck on a network call is stopped; each step is one database
+#   transaction, so the next tick picks up where it stopped.
+# - No secrets are loaded: the tick uses public sources only, and without KRX_ID/KRX_PW pykrx
+#   cannot log in. AUTOTRADE_LIVE_ORDERS stays unset, so no live order can be sent.
+# - One JSON line per task that ran goes to data/logs/autotrade-jobs.log (rotated daily with the
+#   other data/logs/*.log by deploy/logrotate-dashboard). A tick with nothing due writes nothing.
+# - The line has no % (crontab would cut it there; ops notes §8).
+*/5 * * * * cd /home/ubuntu/portfolio-dashboard && flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1

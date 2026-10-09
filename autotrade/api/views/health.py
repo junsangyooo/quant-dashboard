@@ -51,6 +51,9 @@ def _today_check_failure(ctx: LedgerContext) -> tuple[RunRow, datetime | None] |
     runs = [r for r in runs if r.started_at <= ctx.now]
     if not runs or any(r.result in OK_RESULTS for r in runs):
         return None
+    failure = repo.check_failure_event(ctx.conn, ctx.ledger_id, ctx.today)
+    if failure is not None and failure.status == "resolved":
+        return None  # the owner closed it (python -m autotrade.jobs resolve check-failed:<date>)
     last = runs[-1]
     retry = last.details.get("retry_at")
     return last, None if not retry else from_iso(str(retry))

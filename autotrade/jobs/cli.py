@@ -1,19 +1,28 @@
-"""python -m autotrade.jobs {check,stage,retry,snapshot,status,migrate,set-pin} [options]
+"""python -m autotrade.jobs <command> [options]
 
-Options: --ledger paper, --dry-run, --at ISO, --db PATH.
+Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve).
 
-  check     08:30 weekdays: data, weights, plan (sell -> FX -> buy)
-  retry     09:30: runs the check again only if today's check failed or did not run
-  stage     run the stages that are due (KR 09:05, FX 09:10, US open); safe to run often
-  snapshot  16:00 valuation and the untouched baseline
-  status    read-only summary
-  migrate   create or upgrade data/autotrade.db (deploy.sh runs it)
-  set-pin   set the owner PIN (first time or reset). Reads it twice from standard input,
-            never from the command line, and closes every open session.
+  tick       what cron runs every 5 minutes: decides what is due now and runs it (see
+             autotrade/jobs/schedule.py for the times and how late each may still run).
+             One JSON line per task that ran; nothing when nothing is due.
+  check      08:30 weekdays: data, weights, plan (sell -> FX -> buy)
+  retry      09:30: runs the check again only if today's check failed or did not run
+  stage      run the stages that are due (KR 09:05, FX 09:10, US open); safe to run often
+  snapshot   16:00 valuation and the untouched baseline
+  dividends  download recent dividends of what the ledger holds and book those paid by today
+  backup     copy the database to data/backup/autotrade/autotrade-<date>.db (7 kept)
+  todos      list the open '직접 할 일' (manual actions) with their ids
+  resolve    resolve <todo-id> [--note TEXT]: close a manual action after handling it (e.g. in
+             the Toss app); the rule plans again at the next check
+  status     read-only summary
+  migrate    create or upgrade data/autotrade.db (deploy.sh runs it)
+  set-pin    set the owner PIN (first time or reset). Reads it twice from standard input,
+             never from the command line, and closes every open session.
 
 --at sets the clock for testing (ISO 8601; without an offset it is KST). Output is JSON.
-Exit code 1 when the job failed or needs a manual action, 2 when the ledger cannot run.
-No cron or systemd is installed by this package.
+Jobs that write take a lock (data/autotrade.db-jobs.lock): tick skips its turn when another job
+holds it; the other commands wait for it up to 2 minutes and exit with 3 if it stays busy.
+Exit code 1 when a job failed or needs a manual action, 2 when the ledger cannot run.
 """
 
 from __future__ import annotations
@@ -34,18 +43,41 @@ from autotrade.config import Config, load_config
 from autotrade.db.connection import connect, json_default
 from autotrade.db.migrations import current_version
 from autotrade.engine.bootstrap import bootstrap
+from autotrade.jobs.backup import backup_dir_for
+from autotrade.jobs.lock import job_lock, lock_path
 from autotrade.jobs.tasks import (
     FAILING_RESULTS,
     JobContext,
+    backup_job,
     check_job,
+    dividend_job,
+    resolve_job,
     snapshot_job,
     stage_job,
     status_job,
+    todos_job,
 )
+from autotrade.jobs.tick import run_tick
 from autotrade.market.service import MarketSources, default_sources
 from autotrade.timeutil import KST, UTC, parse_cli_time
 
-COMMANDS = ("check", "stage", "retry", "snapshot", "status", "migrate", "set-pin")
+COMMANDS = (
+    "tick",
+    "check",
+    "retry",
+    "stage",
+    "snapshot",
+    "dividends",
+    "backup",
+    "todos",
+    "resolve",
+    "status",
+    "migrate",
+    "set-pin",
+)
+LOCKED = ("tick", "check", "retry", "stage", "snapshot", "dividends", "backup", "resolve")
+LOCK_WAIT_S = 120.0
+EXIT_BUSY = 3
 
 
 def _cli_default(value: object) -> Any:
@@ -60,10 +92,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m autotrade.jobs", description=__doc__.split("\n")[0]
     )
     parser.add_argument("command", choices=COMMANDS)
+    parser.add_argument("todo_id", nargs="?", help="resolve: the id that 'todos' lists")
     parser.add_argument("--ledger", default="paper", choices=("paper", "live"))
     parser.add_argument("--dry-run", action="store_true", help="roll back every ledger change")
     parser.add_argument("--at", help="clock for testing, ISO 8601 (KST when no offset)")
     parser.add_argument("--db", help="database path (default: AUTOTRADE_DB or data/autotrade.db)")
+    parser.add_argument("--note", help="resolve: what the owner did (kept in the event)")
     return parser
 
 
@@ -91,6 +125,85 @@ def _set_pin(conn: sqlite3.Connection, cfg: Config, at: datetime, stdin: TextIO)
     return {"job": "set-pin", "result": "ok", "revokedSessions": revoked}
 
 
+def _dump(report: dict[str, Any], *, line: bool = False) -> str:
+    if line:
+        return json.dumps(report, default=_cli_default, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(report, default=_cli_default, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+def _dispatch(
+    args: argparse.Namespace,
+    ctx: JobContext,
+    clock: Callable[[], datetime],
+    stdin: TextIO,
+) -> dict[str, Any]:
+    at = clock()
+    ledger, dry = args.ledger, args.dry_run
+    if args.command == "migrate":
+        return {"job": "migrate", "result": "ok", "schema": current_version(ctx.conn)}
+    if args.command == "set-pin":
+        return _set_pin(ctx.conn, ctx.cfg, at, stdin)
+    if args.command == "check":
+        return check_job(ctx, ledger, at, dry_run=dry)
+    if args.command == "retry":
+        return check_job(ctx, ledger, at, dry_run=dry, retry=True)
+    if args.command == "stage":
+        return stage_job(ctx, ledger, at, dry_run=dry)
+    if args.command == "snapshot":
+        return snapshot_job(ctx, ledger, at, dry_run=dry)
+    if args.command == "dividends":
+        return dividend_job(ctx, ledger, at, dry_run=dry)
+    if args.command == "backup":
+        return backup_job(ctx, at)
+    if args.command == "todos":
+        return todos_job(ctx, ledger, at)
+    if args.command == "resolve":
+        if not args.todo_id:
+            return {"job": "resolve", "result": "bad-id", "error": "give the todo id: resolve <id>"}
+        return resolve_job(ctx, ledger, args.todo_id, at, note=args.note, dry_run=dry)
+    return status_job(ctx, ledger, at)
+
+
+def _tick(
+    args: argparse.Namespace,
+    ctx: JobContext,
+    clock: Callable[[], datetime],
+    out: Callable[[str], Any],
+) -> int:
+    ctx.executor(args.ledger)  # a ledger without an executor cannot tick (exit 2)
+
+    def emit(line: dict[str, Any]) -> None:
+        out(_dump(line, line=True))
+        sys.stdout.flush()  # each line reaches the log even if the tick is killed later
+
+    lines = run_tick(ctx, args.ledger, clock, backup_dir_for(ctx.cfg.db_path), emit)
+    return 1 if any(line.get("result") in FAILING_RESULTS for line in lines) else 0
+
+
+def _run(
+    args: argparse.Namespace,
+    cfg: Config,
+    sources: MarketSources | None,
+    clock: Callable[[], datetime],
+    out: Callable[[str], Any],
+    stdin: TextIO,
+) -> int:
+    conn = connect(cfg.db_path)
+    try:
+        bootstrap(conn, cfg, clock())
+        ctx = JobContext(conn, cfg, sources or default_sources())
+        if args.command == "tick":
+            return _tick(args, ctx, clock, out)
+        report = _dispatch(args, ctx, clock, stdin)
+    except LiveOrdersBlockedError as exc:
+        print(json.dumps({"error": "ledger-blocked", "detail": str(exc)}), file=sys.stderr)
+        return 2
+    finally:
+        conn.close()
+    out(_dump(report))
+    return 1 if report.get("result") in FAILING_RESULTS else 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -100,34 +213,26 @@ def main(
     out: Callable[[str], Any] = print,
     stdin: TextIO | None = None,
 ) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.todo_id is not None and args.command != "resolve":
+        # Only 'resolve' takes a value; above all, a PIN is never a command-line argument.
+        parser.error(f"{args.command} takes no argument")
     cfg = load_config(env)
     if args.db:
         cfg = replace(cfg, db_path=Path(args.db))
-    db_path = cfg.db_path
-    at = parse_cli_time(args.at) if args.at else (now or (lambda: datetime.now(UTC)))()
-    conn = connect(db_path)
-    try:
-        bootstrap(conn, cfg, at)
-        ctx = JobContext(conn, cfg, sources or default_sources())
-        if args.command == "migrate":
-            report = {"job": "migrate", "result": "ok", "schema": current_version(conn)}
-        elif args.command == "set-pin":
-            report = _set_pin(conn, cfg, at, stdin or sys.stdin)
-        elif args.command == "check":
-            report = check_job(ctx, args.ledger, at, dry_run=args.dry_run)
-        elif args.command == "retry":
-            report = check_job(ctx, args.ledger, at, dry_run=args.dry_run, retry=True)
-        elif args.command == "stage":
-            report = stage_job(ctx, args.ledger, at, dry_run=args.dry_run)
-        elif args.command == "snapshot":
-            report = snapshot_job(ctx, args.ledger, at, dry_run=args.dry_run)
-        else:
-            report = status_job(ctx, args.ledger, at)
-    except LiveOrdersBlockedError as exc:
-        print(json.dumps({"error": "ledger-blocked", "detail": str(exc)}), file=sys.stderr)
-        return 2
-    finally:
-        conn.close()
-    out(json.dumps(report, default=_cli_default, ensure_ascii=False, indent=2, sort_keys=True))
-    return 1 if report.get("result") in FAILING_RESULTS else 0
+    fixed = parse_cli_time(args.at) if args.at else None
+
+    def clock() -> datetime:
+        if fixed is not None:
+            return fixed
+        return (now or (lambda: datetime.now(UTC)))()
+
+    if args.command not in LOCKED:
+        return _run(args, cfg, sources, clock, out, stdin or sys.stdin)
+    tick = args.command == "tick"
+    with job_lock(lock_path(cfg.db_path), 0.0 if tick else LOCK_WAIT_S) as locked:
+        if not locked:
+            out(_dump({"job": args.command, "result": "busy", "at": clock()}, line=tick))
+            return 0 if tick else EXIT_BUSY
+        return _run(args, cfg, sources, clock, out, stdin or sys.stdin)

@@ -7,7 +7,8 @@
 # Run everything from the repository root (Python 3.10, the server's version):
 #
 #   API=(--with fastapi==0.136.1 --with starlette==1.0.0 --with pydantic==2.13.4 \
-#        --with httpx==0.28.1 --with anyio==4.13.0)    # the web API and its TestClient
+#        --with httpx==0.28.1 --with anyio==4.13.0 --with uvicorn==0.46.0)
+#   # the web API, its TestClient, and uvicorn's proxy-header middleware (test_api_proxy.py)
 #
 #   uv run --no-project --python 3.10 --with pytest --with pytest-cov \
 #       --with pandas==2.3.3 --with numpy==2.2.6 "${API[@]}" \

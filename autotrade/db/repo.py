@@ -14,6 +14,7 @@ from typing import Any
 
 from autotrade.db.connection import dumps
 from autotrade.db.models import (
+    DividendRow,
     EventRow,
     FillRow,
     FreshnessRow,
@@ -460,14 +461,25 @@ def open_plans(
     conn: sqlite3.Connection, ledger_id: str, rule_id: str | None = None
 ) -> list[PlanRow]:
     sql = (
-        "SELECT * FROM plans WHERE ledger_id = ? AND status IN ('in-progress', 'partial-failed',"
-        " 'todo')"
+        "SELECT * FROM plans WHERE ledger_id = ?"
+        f" AND status IN ({','.join('?' * len(OPEN_PLAN_STATUSES))})"
     )
-    params: list[Any] = [ledger_id]
+    params: list[Any] = [ledger_id, *OPEN_PLAN_STATUSES]
     if rule_id is not None:
         sql += " AND rule_id = ?"
         params.append(rule_id)
     return [PlanRow.from_row(r) for r in _all(conn, sql + " ORDER BY plan_id", params)]
+
+
+def plans_with_status(conn: sqlite3.Connection, ledger_id: str, status: str) -> list[PlanRow]:
+    return [
+        PlanRow.from_row(r)
+        for r in _all(
+            conn,
+            "SELECT * FROM plans WHERE ledger_id = ? AND status = ? ORDER BY plan_id",
+            (ledger_id, status),
+        )
+    ]
 
 
 def set_plan_status(
@@ -550,8 +562,9 @@ def pending_stages(conn: sqlite3.Connection, ledger_id: str) -> list[StageRow]:
             conn,
             "SELECT s.* FROM stages s JOIN plans p ON p.plan_id = s.plan_id"
             " WHERE p.ledger_id = ? AND s.status IN ('pending', 'failed')"
+            f" AND p.status IN ({','.join('?' * len(OPEN_PLAN_STATUSES))})"
             " ORDER BY s.due_at, s.plan_id, s.seq",
-            (ledger_id,),
+            (ledger_id, *OPEN_PLAN_STATUSES),
         )
     ]
 
@@ -734,6 +747,24 @@ def cancel_orders_of_stage(conn: sqlite3.Connection, stage_id: int) -> None:
     )
 
 
+def cancel_pending_orders_of_plan(conn: sqlite3.Connection, plan_id: int) -> list[int]:
+    """Cancel what a plan still has to send. Returns the cancelled order ids."""
+    ids = [
+        int(r["order_id"])
+        for r in _all(
+            conn,
+            "SELECT order_id FROM orders WHERE plan_id = ? AND status = 'pending'"
+            " ORDER BY order_id",
+            (plan_id,),
+        )
+    ]
+    conn.execute(
+        "UPDATE orders SET status = 'cancelled' WHERE plan_id = ? AND status = 'pending'",
+        (plan_id,),
+    )
+    return ids
+
+
 # ── fills ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -825,11 +856,12 @@ def insert_event(
     amount: Decimal | None = None,
     currency: Currency | None = None,
     payload: Mapping[str, Any] | None = None,
+    ref: str | None = None,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO events (ledger_id, kind, event_date, occurred_at, rule_id, plan_id, status,"
-        " amount, currency, payload, created_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " amount, currency, ref, payload, created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             ledger_id,
             kind,
@@ -840,12 +872,18 @@ def insert_event(
             status,
             None if amount is None else str(amount),
             None if currency is None else currency.value,
+            ref,
             dumps(dict(payload or {})),
             to_iso(occurred_at),
             to_iso(occurred_at),
         ),
     )
     return _lastrowid(cur)
+
+
+def event_by_ref(conn: sqlite3.Connection, ledger_id: str, ref: str) -> EventRow | None:
+    row = _one(conn, "SELECT * FROM events WHERE ledger_id = ? AND ref = ?", (ledger_id, ref))
+    return None if row is None else EventRow.from_row(row)
 
 
 def update_event(
@@ -932,8 +970,8 @@ def upsert_snapshot(conn: sqlite3.Connection, snap: SnapshotRow, at: datetime) -
     conn.execute(
         "INSERT INTO snapshots (ledger_id, date, valued_at, total_krw, positions, cash_krw,"
         " cash_usd, cash_parts, fx_rate, fx_at, kr_close_date, us_close_date, contributions,"
-        " pnl_krw, baseline_krw, baseline_units, stale, created_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " pnl_krw, baseline_krw, baseline_units, stale, created_at, baseline_cash_krw)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(ledger_id, date) DO UPDATE SET valued_at = excluded.valued_at,"
         " total_krw = excluded.total_krw, positions = excluded.positions,"
         " cash_krw = excluded.cash_krw, cash_usd = excluded.cash_usd,"
@@ -941,7 +979,8 @@ def upsert_snapshot(conn: sqlite3.Connection, snap: SnapshotRow, at: datetime) -
         " kr_close_date = excluded.kr_close_date, us_close_date = excluded.us_close_date,"
         " contributions = excluded.contributions, pnl_krw = excluded.pnl_krw,"
         " baseline_krw = excluded.baseline_krw, baseline_units = excluded.baseline_units,"
-        " stale = excluded.stale, created_at = excluded.created_at",
+        " stale = excluded.stale, created_at = excluded.created_at,"
+        " baseline_cash_krw = excluded.baseline_cash_krw",
         (
             snap.ledger_id,
             snap.date.isoformat(),
@@ -961,6 +1000,7 @@ def upsert_snapshot(conn: sqlite3.Connection, snap: SnapshotRow, at: datetime) -
             None if snap.baseline_units is None else dumps(snap.baseline_units),
             dumps(snap.stale),
             to_iso(at),
+            None if snap.baseline_cash_krw is None else str(snap.baseline_cash_krw),
         ),
     )
 
@@ -1044,6 +1084,59 @@ def fx_at(conn: sqlite3.Connection, at: datetime) -> FxQuote | None:
         (PAIR_USDKRW, to_iso(at)),
     )
     return None if row is None else fx_from_row(row)
+
+
+def upsert_dividends(
+    conn: sqlite3.Connection, rows: Iterable[DividendRow], fetched_at: datetime
+) -> int:
+    """Store announced dividends. A pay date the source gave wins over an estimated one."""
+    count = 0
+    for d in rows:
+        conn.execute(
+            "INSERT INTO dividends (instrument_id, ex_date, pay_date, pay_estimated, per_share,"
+            " currency, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(instrument_id, ex_date) DO UPDATE SET"
+            " pay_date = CASE WHEN excluded.pay_estimated = 0 OR dividends.pay_estimated = 1"
+            " THEN excluded.pay_date ELSE dividends.pay_date END,"
+            " pay_estimated = MIN(dividends.pay_estimated, excluded.pay_estimated),"
+            " per_share = excluded.per_share, currency = excluded.currency,"
+            " source = excluded.source, fetched_at = excluded.fetched_at",
+            (
+                d.instrument_id,
+                d.ex_date.isoformat(),
+                d.pay_date.isoformat(),
+                1 if d.pay_estimated else 0,
+                str(d.per_share),
+                d.currency.value,
+                d.source,
+                to_iso(fetched_at),
+            ),
+        )
+        count += 1
+    return count
+
+
+def dividends_paid(
+    conn: sqlite3.Connection,
+    instrument_ids: Sequence[str],
+    after: date | None,
+    through: date,
+) -> list[DividendRow]:
+    """Dividends of these instruments with after < pay date <= through, oldest first."""
+    if not instrument_ids:
+        return []
+    sql = (
+        "SELECT * FROM dividends"
+        f" WHERE instrument_id IN ({','.join('?' * len(instrument_ids))}) AND pay_date <= ?"
+    )
+    params: list[Any] = [*instrument_ids, through.isoformat()]
+    if after is not None:
+        sql += " AND pay_date > ?"
+        params.append(after.isoformat())
+    return [
+        DividendRow.from_row(r)
+        for r in _all(conn, sql + " ORDER BY pay_date, instrument_id, ex_date", params)
+    ]
 
 
 def _ensure_freshness_row(conn: sqlite3.Connection, series: str, at: datetime) -> None:

@@ -319,9 +319,67 @@ CREATE TABLE notification_prefs (
 )
 """
 
+# V3: events get a natural key ('ref', unique per ledger: one booking per dividend, one
+# resolution per manual action) and the kind 'todo-resolved'. SQLite cannot change a CHECK, so
+# the table is rebuilt; nothing references events, so the drop is safe with foreign keys on.
+# Dividends announced by the source are market data, like market_prices. The untouched baseline
+# keeps the dividends its units earned as cash ('손대지 않았을 때' gets the same dividends).
+V3 = """
+CREATE TABLE events_v3 (
+    event_id     INTEGER PRIMARY KEY,
+    ledger_id    TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    kind         TEXT NOT NULL CHECK (kind IN ('start', 'rebalance', 'check-failed', 'dividend',
+                                                'deposit', 'withdrawal', 'live-on', 'live-off',
+                                                'todo-resolved')),
+    event_date   TEXT NOT NULL,
+    occurred_at  TEXT NOT NULL,
+    rule_id      TEXT REFERENCES rules(rule_id),
+    plan_id      INTEGER UNIQUE REFERENCES plans(plan_id),
+    status       TEXT,
+    amount       TEXT,
+    currency     TEXT,
+    ref          TEXT,
+    payload      TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+
+INSERT INTO events_v3 (event_id, ledger_id, kind, event_date, occurred_at, rule_id, plan_id,
+                       status, amount, currency, payload, created_at, updated_at)
+    SELECT event_id, ledger_id, kind, event_date, occurred_at, rule_id, plan_id, status, amount,
+           currency, payload, created_at, updated_at
+    FROM events;
+
+DROP TABLE events;
+
+ALTER TABLE events_v3 RENAME TO events;
+
+CREATE INDEX events_ledger ON events(ledger_id, event_date);
+CREATE UNIQUE INDEX events_one_start ON events(ledger_id) WHERE kind = 'start';
+CREATE UNIQUE INDEX events_one_check_failure ON events(ledger_id, event_date)
+    WHERE kind = 'check-failed';
+CREATE UNIQUE INDEX events_ref ON events(ledger_id, ref) WHERE ref IS NOT NULL;
+
+CREATE TABLE dividends (
+    instrument_id  TEXT NOT NULL REFERENCES instruments(instrument_id),
+    ex_date        TEXT NOT NULL,
+    pay_date       TEXT NOT NULL,
+    pay_estimated  INTEGER NOT NULL DEFAULT 1,
+    per_share      TEXT NOT NULL,
+    currency       TEXT NOT NULL CHECK (currency IN ('KRW', 'USD')),
+    source         TEXT NOT NULL,
+    fetched_at     TEXT NOT NULL,
+    PRIMARY KEY (instrument_id, ex_date)
+);
+CREATE INDEX dividends_paid ON dividends(pay_date);
+
+ALTER TABLE snapshots ADD COLUMN baseline_cash_krw TEXT
+"""
+
 MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (1, "initial schema", V1),
     (2, "pin, sessions, lockout, notification preferences", V2),
+    (3, "event refs, todo resolutions, dividends, baseline dividend cash", V3),
 )
 
 

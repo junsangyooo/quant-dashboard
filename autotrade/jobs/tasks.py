@@ -1,4 +1,4 @@
-"""Job entry points used by the CLI (and later by cron).
+"""Job entry points used by the CLI and by the 5-minute tick (autotrade/jobs/tick.py).
 
 Each job first downloads what it needs (network, outside any transaction; each download is
 committed to the market cache on its own), then runs the engine in one write transaction.
@@ -20,13 +20,22 @@ from autotrade.broker.paper import DbMarketReader, PaperExecutor
 from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.db.connection import transaction
-from autotrade.domain.instruments import Instrument, Market
+from autotrade.domain.instruments import Currency, Instrument, Market
 from autotrade.engine.check import FAILED, TODO, needs_retry, run_check
 from autotrade.engine.common import load_rule
+from autotrade.engine.dividends import book_dividends, watched_instruments
 from autotrade.engine.runner import run_due_stages
 from autotrade.engine.snapshot import SnapshotError, take_snapshot
-from autotrade.engine.status import ledger_status
-from autotrade.market.service import FetchErrors, MarketSources, prefetch_bars, prefetch_fx
+from autotrade.engine.status import ledger_status, next_check_at
+from autotrade.engine.todos import TodoError, open_todos, resolve
+from autotrade.jobs.backup import BackupError, backup_dir_for, run_backup
+from autotrade.market.service import (
+    FetchErrors,
+    MarketSources,
+    prefetch_bars,
+    prefetch_dividends,
+    prefetch_fx,
+)
 from autotrade.rules.index_half import RULE_ID
 from autotrade.timeutil import et_date, is_weekday, kst_date, require_aware
 
@@ -265,4 +274,92 @@ def status_job(ctx: JobContext, ledger_id: str, at: datetime) -> dict[str, Any]:
     return {"job": "status", **ledger_status(ctx.conn, ctx.cfg, ledger_id, at)}
 
 
-FAILING_RESULTS = (FAILED, TODO)
+def dividend_job(
+    ctx: JobContext, ledger_id: str, at: datetime, *, dry_run: bool = False
+) -> dict[str, Any]:
+    """Download the recent dividends of what the ledger holds, then book those paid by today."""
+    require_aware(at)
+    ctx.executor(ledger_id)  # the paper ledger only: live dividends will come from the broker
+    base: dict[str, Any] = {"job": "dividends", "ledger": ledger_id, "at": at, "dry_run": dry_run}
+    d = kst_date(at)
+    instruments = watched_instruments(ctx.conn, ledger_id)
+    errors = prefetch_dividends(
+        ctx.conn,
+        ctx.cfg,
+        ctx.sources,
+        instruments,
+        d - timedelta(days=ctx.cfg.dividend_lookback_days),
+        d,
+        at,
+    )
+    if any(i.currency is Currency.USD for i in instruments):
+        prefetch_fx(ctx.conn, ctx.sources, at)  # a dollar dividend is valued at today's rate
+    try:
+        with transaction(ctx.conn, rollback=dry_run):
+            booked = book_dividends(ctx.conn, ctx.cfg, ledger_id, at)
+    except Exception as exc:
+        if dry_run:
+            raise
+        return {**base, "result": FAILED, "error": f"{type(exc).__name__}: {exc}"}
+    done = [b for b in booked if "event_id" in b]
+    waiting = [b for b in booked if "event_id" not in b]
+    if done:
+        result = "booked"
+    elif errors and len(errors) == len(instruments):
+        result = FAILED
+    else:
+        result = "nothing-due"
+    out: dict[str, Any] = {**base, "result": result, "booked": done, "waiting": waiting}
+    if errors:
+        out["fetch_errors"] = errors
+    return out
+
+
+def backup_job(ctx: JobContext, at: datetime) -> dict[str, Any]:
+    """Today's copy of the whole database (every ledger) under data/backup/autotrade/."""
+    require_aware(at)
+    base: dict[str, Any] = {"job": "backup", "at": at}
+    try:
+        report = run_backup(ctx.conn, backup_dir_for(ctx.cfg.db_path), kst_date(at))
+    except (BackupError, sqlite3.Error, OSError) as exc:
+        return {**base, "result": FAILED, "error": f"{type(exc).__name__}: {exc}"}
+    return {**base, **report}
+
+
+def todos_job(ctx: JobContext, ledger_id: str, at: datetime) -> dict[str, Any]:
+    require_aware(at)
+    todos = [
+        {"id": t.todo_id, "kind": t.kind, "date": t.day, "plan_id": t.plan_id, **t.facts}
+        for t in open_todos(ctx.conn, ledger_id)
+    ]
+    return {"job": "todos", "ledger": ledger_id, "at": at, "result": "ok", "todos": todos}
+
+
+def resolve_job(
+    ctx: JobContext,
+    ledger_id: str,
+    todo_id: str,
+    at: datetime,
+    *,
+    note: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Close a '직접 할 일' after the owner handled it; the rule plans again at the next check."""
+    require_aware(at)
+    base: dict[str, Any] = {
+        "job": "resolve",
+        "ledger": ledger_id,
+        "todo_id": todo_id,
+        "at": at,
+        "dry_run": dry_run,
+    }
+    try:
+        with transaction(ctx.conn, rollback=dry_run):
+            outcome = resolve(ctx.conn, ledger_id, todo_id, at, note)
+    except TodoError as exc:
+        return {**base, "result": exc.code, "error": str(exc)}
+    return {**base, **outcome, "next_check_at": next_check_at(ctx.cfg, at)}
+
+
+# Results that make the CLI exit with 1 ('failed', a manual action, a todo that cannot be closed).
+FAILING_RESULTS = (FAILED, TODO, "bad-id", "not-found", "not-a-todo")

@@ -165,7 +165,13 @@ def month_changes(ctx: LedgerContext, total: Decimal) -> dict[str, int]:
         month_end[month_key(snap.date)] = snap.total_krw
     current = month_key(ctx.today)
     month_end[current] = total
-    months = sorted(set(month_end) | {month_key(d) for d in flows})
+    # Every month with a value, money in or out, or an event gets a row (a month with events but
+    # no snapshot keeps the previous value: its change is 0 and the sum still equals the P&L).
+    months = sorted(
+        set(month_end)
+        | {month_key(d) for d in flows}
+        | {month_key(e.event_date) for e in ctx.events}
+    )
     out: dict[str, int] = {}
     previous = running = ZERO
     shown = 0

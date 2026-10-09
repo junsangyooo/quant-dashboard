@@ -284,7 +284,7 @@ interface HistoryResponse {
   calendar: Array<{ date: string; state: CalendarState }>   // 평일만
   filters: {
     total: number
-    rules: Array<{ rule: RuleRef; count: number }>
+    rules: Array<{ rule: RuleRef; count: number }>   // 규칙의 리밸런싱 + 그 규칙 종목의 배당
     kinds: Array<{ kind: 'rebalance' | 'deposit' | 'withdrawal' | 'dividend' | 'failed' | 'ai'; count: number }>
   }
   months: Array<{ month: string; change: number; events: HistoryEvent[] }>   // 최신순, 월 변동의 합 = 손익
@@ -293,17 +293,18 @@ interface HistoryResponse {
 interface HistoryEvent {
   date: string
   kind: EventKind
-  rule?: RuleRef
+  rule?: RuleRef                      // 리밸런싱, 그리고 규칙 종목의 배당('지수 반반 (KOSPI200 ETF)')
   stagesMini?: Array<'done' | 'pending' | 'failed'>   // 리밸런싱, 그리고 시작(첫 매수). fill·fees도 같다
   weightsMini?: { before: number[]; after: number[] }
   fill?: 'paper' | 'live'
   deviation?: number                  // '2.3%p 벗어남'
   fees?: number
-  amount?: number                     // 시작·입출금·배당
+  amount?: number                     // 시작·입출금·배당(krw. 달러 배당은 받은 날 환율로 원화)
   instrument?: Instrument             // 배당
   retry?: { date: string; filled: boolean }   // '9/15 다시 · 체결'
   failureReason?: 'no-quote' | 'broker-rejected' | 'other'
   recoveredOn?: string                // 확인 실패 → '9/10 정상'
+  resolvedOn?: string                 // 직접 할 일을 처리했다고 닫은 날(일부 실패·확인 실패) → '10/9 직접 처리'
   treatment?: 'pnl-excluded' | 'income' | 'invest-next-check' | 'withdraw-wait'
   dayChange: number | null
   dayTotal: number
@@ -542,3 +543,4 @@ type NotifyEvent =
 - 2026-10-09: 처음 씀(메인 세션).
 - 2026-10-09: API 구현에 맞춤(API 세션). 오류 코드 표, `/api/healthz`, 1단계 실전 켜기 409 `live-not-available`(+ `canTurnOn.cause`), 푸시 501, partial-todo `retry-failed`, 할 일 `order-failed`, 시세 대기 다음 할 일 `market: 'FX'`, 그날 확인 결과 `in-progress`·`withdraw-wait`·`no-run`, 변동 분해의 부호와 'all' 기준, 시작 사건의 단계·수수료, 환전 주문 `market: 'KR'`, recent14 평일만, 1단계 출처 3개(`extra.market`), 이니셜 규칙, 이 기기 판별, 보안 헤더·`no-store`를 더했다.
 - 2026-10-09: 이니셜 규칙을 Figma에 맞춤(K2·SP·삼·NV·B), 종목 id 예시 SPYM, 고정 자료 위치를 bundles/*.ts로(메인 세션).
+- 2026-10-09: 서버 무인 운영(엔진 세션). HistoryEvent에 `resolvedOn`(직접 할 일을 닫은 날)을 더했다. 배당 줄은 규칙(`rule`)을 싣고 규칙 칩 수에 들어간다(예시 '지수 반반 3'). 달러 배당의 `amount`·`krw`와 변동 분해의 `dividend`는 원화다. 직접 처리로 닫힌 리밸런싱은 `partial-failed`로 남는다. 사건이 있는 달은 스냅숏이 없어도 월 목록에 나온다(변동 0).

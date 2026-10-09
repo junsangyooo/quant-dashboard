@@ -57,6 +57,14 @@ class Config:
     # A paper conversion uses a quote at most this old at the stage time.
     fx_fill_max_age: timedelta = timedelta(minutes=60)
     bar_lookback_days: int = 14
+    # Dividends of the paper ledger (autotrade/domain/dividends.py): tax withheld at the source,
+    # and the trading days from the ex-date to the pay date when the source gives no pay date.
+    kr_dividend_tax: Decimal = Decimal("0.154")
+    us_dividend_tax: Decimal = Decimal("0.15")
+    kr_dividend_pay_lag: int = 3
+    us_dividend_pay_lag: int = 2
+    # How far back the daily dividend job looks for ex-dates (covers a week-long outage).
+    dividend_lookback_days: int = 45
 
 
 def load_config(env: Mapping[str, str] | None = None) -> Config:

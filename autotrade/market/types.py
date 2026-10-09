@@ -21,6 +21,18 @@ class Bar:
 
 
 @dataclass(frozen=True)
+class DividendInfo:
+    """A cash dividend as a source reports it: per share, before tax, in the instrument's
+    currency. ex_date is exchange-local; pay_date is None when the source does not give it."""
+
+    instrument_id: str
+    ex_date: date
+    per_share: Decimal
+    pay_date: date | None
+    source: str
+
+
+@dataclass(frozen=True)
 class FxQuote:
     """KRW per USD at a moment, on the 0.1 won grid."""
 
