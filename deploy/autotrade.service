@@ -1,3 +1,55 @@
+# /etc/systemd/system/autotrade.service — quant.jsyoo.dev: the engine's web API and the web app
+# (FastAPI/uvicorn on 127.0.0.1:8890, behind nginx). The jobs (tick, AI runner) are cron lines
+# (deploy/autotrade.cron), not this unit. Server: Ubuntu 22.04, systemd 249, the venv's python is
+# /usr/bin/python3.10.
+#
+# Install or update (with the owner's go; deploy.sh warns when the installed copy differs):
+#   sudo cp /etc/systemd/system/autotrade.service /etc/systemd/system/autotrade.service.bak  (an update)
+#   sudo cp ~/portfolio-dashboard/deploy/autotrade.service /etc/systemd/system/autotrade.service
+#   sudo systemd-analyze verify /etc/systemd/system/autotrade.service   (no output = fine)
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now autotrade      (first time)  |  sudo systemctl restart autotrade
+#   curl -s http://127.0.0.1:8890/api/healthz  -> {"ok":true,"schema":N}
+#   systemd-analyze security autotrade         (exposure; expect well under 5 "OK")
+# If it does not come up: journalctl -u autotrade -n 50 --no-pager and data/logs/autotrade.log;
+# go back with: sudo cp /etc/systemd/system/autotrade.service.bak /etc/systemd/system/autotrade.service
+#   && sudo systemctl daemon-reload && sudo systemctl restart autotrade
+#
+# Environment — why there is no EnvironmentFile=: the API reads no secret at all (the PIN secret
+# is data/autotrade.secret; DART_API_KEY is the cron tick's, read from the file its own line
+# names). Loading the shared ~/dotclaude/secrets/.env put every key of the owner's accounts into
+# this internet-facing process, and EnvironmentFile= wins over any Environment= line whatever their
+# order (ops notes §9.5): the old `Environment=AUTOTRADE_LIVE_ORDERS=0` was no guard, since a
+# `AUTOTRADE_LIVE_ORDERS=1` (or AUTOTRADE_DEV=1 + AUTOTRADE_FAKE_NOW, which freezes the clock: locks
+# that never end, sessions that never expire) in that file would have won. UnsetEnvironment= is
+# applied last, over every source (the manager's environment, drop-ins, this file), so these
+# variables can never reach the process. The app also ignores AUTOTRADE_DEV for data/autotrade.db.
+#
+# Live orders (phase 3): the switch AUTOTRADE_LIVE_ORDERS=1 belongs to the process that sends
+# orders — the tick's cron line (or a timer unit of its own) — read from a file only that process
+# reads (e.g. /etc/autotrade/live.env, root:ubuntu 0640), never the shared secrets .env and never
+# this unit; the stored mode 'live' is the second key (ops notes 안전). If the web
+# process ever needs the broker (cancelling on 'live off'), give it a file with only the Toss keys
+# via its own EnvironmentFile= line, and keep AUTOTRADE_LIVE_ORDERS in UnsetEnvironment= below.
+#
+# Sandbox — what the process touches: it reads the repository (code, the venv, web/dist and the
+# web/releases it links to) and /usr (python3.10, its libraries); it reads and writes only data/
+# (autotrade.db with its -wal/-shm, autotrade.secret; SQLite's temp files go to the private /tmp).
+# The log file is opened by systemd before the sandbox applies. It listens on 127.0.0.1:8890 and
+# never connects anywhere (no market data, no AI calls: those are the jobs').
+# - ProtectHome=tmpfs + BindReadOnlyPaths= + BindPaths=: /home is empty except the repository
+#   (read-only) and data/ (writable). ~/.claude, ~/dotclaude, ~/.ssh and the rest of the home
+#   directory do not exist for it. Inside data/ the old app's secrets are hidden as well.
+# - RestrictAddressFamilies=AF_INET AF_INET6: no unix sockets. User ubuntu is in the docker group
+#   (the docker socket is root) and sudo: no socket means no docker, LXD, D-Bus or snapd, whatever
+#   the groups; NoNewPrivileges= makes sudo powerless. asyncio's self-pipe is a socketpair(),
+#   which this does not filter.
+# - IPAddressDeny=any + IPAddressAllow=localhost: only nginx and the local health checks.
+# - Considered and left out: MemoryDenyWriteExecute= (libffi/ctypes callbacks need writable code
+#   pages; a crash at runtime is worse than the gain), PrivateUsers= (supplementary groups stay
+#   effective inside it anyway), RemoveIPC= (it would delete the IPC objects of every process of
+#   user ubuntu, the old app's too, whenever this unit stops).
+
 [Unit]
 Description=autotrade — quant.jsyoo.dev engine API and web (FastAPI)
 After=network-online.target
@@ -6,20 +58,45 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=ubuntu
+Group=ubuntu
 WorkingDirectory=/home/ubuntu/portfolio-dashboard
-EnvironmentFile=/home/ubuntu/dotclaude/secrets/.env
-# Same reasoning as dashboard.service: UnsetEnvironment= is the only directive
-# applied after EnvironmentFile=. ANTHROPIC_API_KEY would route the Claude CLI to
-# paid billing; KRX_ID/KRX_PW make pykrx log in at import time.
-UnsetEnvironment=ANTHROPIC_API_KEY KRX_ID KRX_PW
-# Live orders stay off until phase 3 is reviewed and the owner turns them on.
-# The Toss executor refuses unless this is "1" AND the stored mode is live.
-Environment=AUTOTRADE_LIVE_ORDERS=0
-ExecStart=/home/ubuntu/portfolio-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890 --no-proxy-headers
+ExecStart=/home/ubuntu/portfolio-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890 --no-proxy-headers --no-server-header
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
 StandardError=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
+
+Environment=PYTHONDONTWRITEBYTECODE=1
+UnsetEnvironment=AUTOTRADE_LIVE_ORDERS AUTOTRADE_DEV AUTOTRADE_FAKE_NOW AUTOTRADE_DB AUTOTRADE_SECRETS_ENV DART_API_KEY ANTHROPIC_API_KEY KRX_ID KRX_PW
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+UMask=0077
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindReadOnlyPaths=/home/ubuntu/portfolio-dashboard
+BindPaths=/home/ubuntu/portfolio-dashboard/data
+InaccessiblePaths=-/home/ubuntu/portfolio-dashboard/data/quant -/home/ubuntu/portfolio-dashboard/data/.session_secret -/home/ubuntu/portfolio-dashboard/data/backup -/home/ubuntu/portfolio-dashboard/data/portfolio.db -/home/ubuntu/portfolio-dashboard/data/quant.db
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target
