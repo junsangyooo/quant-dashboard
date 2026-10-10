@@ -30,7 +30,9 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, a
              the Toss app); the rule plans again at the next check
   status     read-only summary
   migrate    create or upgrade data/autotrade.db and write its fixed rows (deploy.sh runs it);
-             the only command that changes the schema. The file is made 0600 (and -wal/-shm)
+             the only command that changes the schema. The file is made 0600 (and -wal/-shm).
+             It holds the jobs lock and the AI lock throughout (waits up to 2 and 15 minutes;
+             still busy: changes nothing, exit 3)
   set-pin    set the owner PIN (first time or reset). Reads it twice from standard input,
              never from the command line, closes every open session and clears the lockout
              (as unlock does).
@@ -122,6 +124,7 @@ LOCKED = (
     "ai-retry",
 )
 LOCK_WAIT_S = 120.0
+MIGRATE_AI_WAIT_S = 900.0  # an AI call has no time limit (as the rollback, api/release.py)
 EXIT_BUSY = 3
 EXIT_SCHEMA = 3  # the stored schema is not the code's: `migrate` first (deploy.sh)
 TAKES_ID = ("resolve", "ai-retry")
@@ -339,6 +342,30 @@ def _run(
     return 1 if report.get("result") in FAILING_RESULTS else 0
 
 
+def _migrate_locked(
+    args: argparse.Namespace,
+    cfg: Config,
+    sources: MarketSources | None,
+    clock: Callable[[], datetime],
+    out: Callable[[str], Any],
+    stdin: TextIO,
+) -> int:
+    """migrate holds both job locks, in the rollback's order (jobs, then AI): no tick and no AI
+    run starts, or writes, halfway through a schema change and its fixed rows. It waits for a
+    running tick and for an AI call in flight; if either stays busy it changes nothing and exits
+    EXIT_BUSY, so deploy.sh stops before the restart. Deploy again later; an AI call that never
+    ends is the AI runner's process, to be stopped by hand."""
+    with job_lock(lock_path(cfg.db_path), LOCK_WAIT_S) as locked:
+        if not locked:
+            out(_dump({"job": "migrate", "result": "busy", "lock": "jobs", "at": clock()}))
+            return EXIT_BUSY
+        with job_lock(ai_lock_path(cfg.db_path), MIGRATE_AI_WAIT_S) as ai_locked:
+            if not ai_locked:
+                out(_dump({"job": "migrate", "result": "busy", "lock": "ai", "at": clock()}))
+                return EXIT_BUSY
+            return _run(args, cfg, sources, clock, out, stdin)
+
+
 def _mismatch(command: str, stored: int) -> dict[str, Any]:
     return {"job": command, "result": "schema-mismatch", "stored": stored, "code": LATEST_VERSION}
 
@@ -404,6 +431,8 @@ def main(
                 out(_dump({"job": "ai", "result": "busy", "at": clock()}, line=True))
                 return 0
             return _run(args, cfg, sources, clock, out, stdin or sys.stdin)
+    if args.command == "migrate":
+        return _migrate_locked(args, cfg, sources, clock, out, stdin or sys.stdin)
     if args.command not in LOCKED:
         return _run(args, cfg, sources, clock, out, stdin or sys.stdin)
     tick = args.command == "tick"

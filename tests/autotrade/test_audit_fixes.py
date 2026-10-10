@@ -31,7 +31,7 @@ from autotrade.engine.todos import TodoError, open_todos, resolve, retry_ai
 from autotrade.jobs import cli
 from autotrade.jobs.ai_tasks import watch_job
 from autotrade.jobs.backup import PREDEPLOY_KEEP
-from autotrade.jobs.lock import job_lock, lock_path
+from autotrade.jobs.lock import ai_lock_path, job_lock, lock_path
 from autotrade.jobs.tasks import JobContext
 from autotrade.market import filings as fl
 from autotrade.market.filings import CompanyNotFoundError, DartFilingSource, FilingInfo
@@ -120,6 +120,38 @@ def test_every_job_but_migrate_refuses_another_schema(tmp_path: Path) -> None:
         "code": LATEST_VERSION,
     }
     assert code == cli.EXIT_SCHEMA
+
+
+def test_migrate_waits_for_the_tick_and_the_ai_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No tick or AI run may write halfway through a schema change: migrate holds both locks,
+    and when either stays busy it changes nothing (deploy.sh stops before the restart)."""
+    monkeypatch.setattr(cli, "LOCK_WAIT_S", 0.3)
+    monkeypatch.setattr(cli, "MIGRATE_AI_WAIT_S", 0.3)
+    db = tmp_path / "autotrade.db"
+    _at_version(db, 4)
+    for held, name in ((lock_path(db), "jobs"), (ai_lock_path(db), "ai")):
+        with job_lock(held) as got:
+            assert got
+            code, lines = _cli(["migrate"], db)
+        assert code == cli.EXIT_BUSY
+        assert (json.loads(lines[0])["result"], json.loads(lines[0])["lock"]) == ("busy", name)
+        conn = connect(db)
+        try:
+            assert stored_version(conn) == 4  # untouched
+        finally:
+            conn.close()
+    code, lines = _cli(["migrate"], db)
+    assert (code, json.loads(lines[0])["result"]) == (0, "ok")
+    conn = connect(db)
+    try:
+        assert stored_version(conn) == LATEST_VERSION
+    finally:
+        conn.close()
+    # A tick that comes while migrate runs skips its turn (the tick never waits for the lock).
+    with job_lock(lock_path(db)):
+        assert json.loads(_cli(["tick"], db)[1][0])["result"] == "busy"
 
 
 def test_the_database_files_are_private(tmp_path: Path) -> None:
