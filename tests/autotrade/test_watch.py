@@ -373,7 +373,13 @@ def test_a_candidate_at_its_buy_price_asks_once_a_month(
             buy=[{"type": "price", "op": "<=", "value": 96}],
         )
     flat_world(p2conn, world, "2026-10-16", overrides={"NVDA": lambda i, d: "94"})
-    assert len(watch_job(p2ctx, "paper", kst("2026-10-16 08:40"))["tasks"]) == 1
+    # The first question has not been asked yet: it reads the new conditions when it is, so no
+    # second one is queued beside it.
+    assert watch_job(p2ctx, "paper", kst("2026-10-16 08:40"))["tasks"] == []
+    with transaction(p2conn):
+        ai_repo.finish_task(p2conn, task.task_id, kst("2026-10-16 09:00"), status="done")
+    flat_world(p2conn, world, "2026-10-19", overrides={"NVDA": lambda i, d: "94"})
+    assert len(watch_job(p2ctx, "paper", kst("2026-10-19 08:40"))["tasks"]) == 1
     assert "valuation:NVDA" in world.calls
 
 

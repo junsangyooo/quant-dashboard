@@ -5,15 +5,23 @@
   screen          haiku            1      'relevant' -> a sell confirmation (filing)
   sell-confirm    sonnet (low)     2      both '반증' -> sell (D27); else hold, recorded. A shock
                                           is checked against the news with the web (D31)
-  buy-confirm     sonnet (low)     1      '근거 있음' -> buy, or a switch question when no slot
+  buy-confirm     sonnet (low)     2      both '근거 있음' -> buy, or a switch question when no
+                                          slot; else no buy, recorded (audit 2026-10-10, E5)
   monthly-review  sonnet (low)     1      verdict, sell conditions rewritten; '반증' or two months
                                           of '약화' -> a sell confirmation
-  discovery       opus + web       1      new picks (same amount), candidates with buy conditions
+  discovery       opus + web       1      new picks (each asked as a buy confirmation before any
+                                          money moves), candidates with buy conditions
   switch          sonnet (low)     2      both '바꾼다' and beating the code's costs -> switch (D37)
 
+A buy rests on two independent answers, like a sale: the quarterly discovery reads the web (open
+to what a fetched page says), so its new picks are candidates until two web-free calls on a
+packet the code built (filings, metric table, prices, the pick's conditions; not the discovery's
+own words) both say '근거 있음'. A new pick that is not confirmed stays a candidate with the
+reason in its note; the next discovery asks again if it lists it again, or lets it expire.
+
 A flow prepares (database reads and downloads: no transaction), the runner makes the calls, an
-optional `after` step downloads what the answer needs (discovery prices), and `apply` writes the
-effects in one transaction. Decisions only mark picks; the discovery planner
+optional `after` step downloads what the answer needs (discovery prices and kinds), and `apply`
+writes the effects in one transaction. Decisions only mark picks; the discovery planner
 (autotrade/engine/discovery_plan.py) turns them into orders at the next stage time.
 """
 
@@ -27,7 +35,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from autotrade.ai import packets as pk
-from autotrade.ai.cli import CliCall, CliResult
+from autotrade.ai.cli import MAX_PROMPT_BYTES, CliCall, CliResult
 from autotrade.ai.prompts import Prompt, load
 from autotrade.ai.text import TEXT_LIMIT, focus, keywords
 from autotrade.config import Config
@@ -37,10 +45,19 @@ from autotrade.domain.conditions import ConditionError, condition_json, parse_co
 from autotrade.domain.instruments import MARKET_CURRENCY, Currency, Instrument, Kind, Market
 from autotrade.domain.money import ZERO, round_half_up, round_won, trade_fee, usd_in_krw
 from autotrade.domain.periods import PeriodError, parse_period
+from autotrade.engine.common import load_rule
 from autotrade.engine.tax import us_tax
-from autotrade.market.filings import FilingInfo, FilingSourceError
+from autotrade.engine.watch import FILINGS_SEEN
+from autotrade.market.filings import (
+    FilingInfo,
+    FilingSourceError,
+    SourceMaintenanceError,
+    SourceNoKeyError,
+    SourceUnreachableError,
+)
 from autotrade.market.service import MarketSources
 from autotrade.rules.discovery import RULE_ID, SCORE_BENCHMARK
+from autotrade.rules.index_half import RULE_ID as INDEX_RULE
 from autotrade.timeutil import kst_date
 
 VERDICT = {"유지": "hold", "약화": "weaken", "반증": "invalidated"}
@@ -63,7 +80,14 @@ class FlowError(Exception):
 
 
 class RetryLaterError(Exception):
-    """A source is down: wait, without counting an attempt."""
+    """A source is down, a key is missing, or the evidence is not in yet: wait, without counting
+    an attempt."""
+
+
+class SourceAnswerError(RetryLaterError):
+    """A source answered with something that cannot be used (a corrupt download, a refusal, an
+    empty text): wait without counting an attempt; the runner gives the task up after
+    MAX_SOURCE_TRIES such answers (autotrade/ai/runner.py)."""
 
 
 class SkipTaskError(Exception):
@@ -152,10 +176,12 @@ def _filing_text(env: FlowEnv, filing: ai_repo.FilingRow) -> str:
     )
     try:
         text: str = _source(env, filing.source).fetch_text(info)
-    except FilingSourceError as exc:
-        raise RetryLaterError(f"{filing.source}: {exc}") from exc
+    except (SourceUnreachableError, SourceMaintenanceError, SourceNoKeyError) as exc:
+        raise RetryLaterError(f"{filing.source}: {exc}") from exc  # down, or no key here
+    except FilingSourceError as exc:  # a refusal or a download we cannot read
+        raise SourceAnswerError(f"{filing.source}: {exc}") from exc
     if not text.strip():
-        raise FlowError(f"filing {filing.source_ref} has no text")
+        raise SourceAnswerError(f"filing {filing.source_ref} has no text")
     return text
 
 
@@ -253,6 +279,19 @@ def wanted_metrics(conn: sqlite3.Connection, instrument_id: str) -> list[str]:
     return sorted(keys)
 
 
+def fit_text(
+    text: str, words: Sequence[str], limit: int, steps: str, build: Callable[[str], str]
+) -> str:
+    """The packet with as much of the filing as fits one command-line argument: the text is
+    focused at `limit` characters and cut further while the prompt is over MAX_PROMPT_BYTES (a
+    Korean report is 3 bytes a character; a long dictionary or title list adds to it)."""
+    while True:
+        packet = build(focus(text, words, limit))
+        if len(f"{steps}\n\n{packet}".encode()) <= MAX_PROMPT_BYTES or limit <= 1000:
+            return packet
+        limit = int(limit * 0.8)
+
+
 def prepare_extract(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     if task.filing_id is None:
         raise SkipTaskError("no filing")
@@ -260,19 +299,22 @@ def prepare_extract(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     inst = repo.get_instrument(env.conn, filing.instrument_id)
     wanted = wanted_metrics(env.conn, inst.instrument_id)
     text = _filing_text(env, filing)
-    body = focus(text, keywords(wanted))
-    cut = " (길어서 뽑을 지표가 나오는 부분만 옮김)" if len(body) < len(text) else ""
-    packet = pk.join(
-        [
-            "## 공시",
-            f"- 회사: {inst.name} ({inst.instrument_id}) · 통화 {inst.currency.value}",
-            f"- 공시: {filing.title} · {filing.filed_on} · {filing.source.upper()}",
-        ],
-        ["## 뽑을 지표"]
-        + [f"- {k}: {metrics.label(k)} — {metrics.resolve(k)[0].description}" for k in wanted],
-        [f"## 원문{cut}", body],
-    )
+
+    def build(body: str) -> str:
+        cut = " (길어서 뽑을 지표가 나오는 부분만 옮김)" if len(body) < len(text) else ""
+        return pk.join(
+            [
+                "## 공시",
+                f"- 회사: {inst.name} ({inst.instrument_id}) · 통화 {inst.currency.value}",
+                f"- 공시: {filing.title} · {filing.filed_on} · {filing.source.upper()}",
+            ],
+            ["## 뽑을 지표"]
+            + [f"- {k}: {metrics.label(k)} — {metrics.resolve(k)[0].description}" for k in wanted],
+            [f"## 원문{cut}", body],
+        )
+
     prompt = load("extract")
+    packet = fit_text(text, keywords(wanted), TEXT_LIMIT, prompt.steps, build)
     call = _call(prompt, "extract", packet, "haiku", schema=prompt.with_metrics(wanted))
     return Prepared([call], packet, {"wanted": wanted, "instrument_id": inst.instrument_id})
 
@@ -356,14 +398,18 @@ def prepare_screen(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
         raise SkipTaskError("no filing")
     filing = ai_repo.get_filing(env.conn, task.filing_id)
     text = _filing_text(env, filing)
-    body = focus(text, _sell_words(pick), TEXT_LIMIT // 2)
-    packet = pk.join(
-        pk.header(pick, inst),
-        pk.conditions(env.conn, pick, "invalidate"),
-        ["## 새 공시", f"- {filing.title} · {filing.filed_on} · {filing.source.upper()}"],
-        ["## 원문" + (" (일부)" if len(body) < len(text) else ""), body],
-    )
-    return Prepared([_call(load("screen"), "screen", packet, "haiku")], packet)
+
+    def build(body: str) -> str:
+        return pk.join(
+            pk.header(pick, inst),
+            pk.conditions(env.conn, pick, "invalidate"),
+            ["## 새 공시", f"- {filing.title} · {filing.filed_on} · {filing.source.upper()}"],
+            ["## 원문" + (" (일부)" if len(body) < len(text) else ""), body],
+        )
+
+    prompt = load("screen")
+    packet = fit_text(text, _sell_words(pick), TEXT_LIMIT // 2, prompt.steps, build)
+    return Prepared([_call(prompt, "screen", packet, "haiku")], packet)
 
 
 def apply_screen(
@@ -415,24 +461,18 @@ def apply_screen(
 
 def _pick_packet(
     env: FlowEnv,
-    task: ai_repo.TaskRow | None,
+    task: ai_repo.TaskRow,
     pick: ai_repo.PickRow,
     inst: Instrument,
     quotes: pk.Quotes,
-    *,
-    buy: bool = False,
 ) -> str:
+    """A held pick's packet for the sell confirmation (with the rationale it was bought on)."""
     today = kst_date(env.at)
-    last = quotes.last(inst.yahoo_symbol)
-    ratios = quotes.ratios.get(inst.yahoo_symbol, {})
     return pk.join(
         pk.today_rows(env.at),
         pk.header(pick, inst),
         pk.price_rows(pick, inst, quotes),
-        pk.trigger_rows(env.conn, task) if task is not None and not buy else [],
-        pk.conditions(env.conn, pick, "buy", None if last is None else last[1], ratios)
-        if buy
-        else [],
+        pk.trigger_rows(env.conn, task),
         pk.conditions(env.conn, pick, "invalidate"),
         pk.conditions(env.conn, pick, "confirm"),
         pk.metric_rows(env.conn, pick.instrument_id),
@@ -569,13 +609,73 @@ def held_count(conn: sqlite3.Connection, ledger_id: str) -> int:
     return len(ai_repo.picks_of(conn, ledger_id, RULE_ID, ("held",)))
 
 
+BUY_DECISION = {"근거 있음": "buy", "근거 없음": "skip"}
+# A buy confirmation waits for the company's filings to be read (the watch lists them, the
+# runner extracts the latest earnings) so that its two answers stand on the metric table, not on
+# prices alone; after EVIDENCE_WAIT it goes on with what there is.
+EVIDENCE_WAIT = timedelta(days=5)
+
+
+def evidence_pending(env: FlowEnv, pick: ai_repo.PickRow, task: ai_repo.TaskRow) -> str | None:
+    """Why the buy confirmation should wait for the company's filings (None: ask now)."""
+    if env.at - task.created_at > EVIDENCE_WAIT:
+        return None
+    if repo.get_setting(env.conn, FILINGS_SEEN.format(pick.instrument_id)) is None:
+        return "waiting for the daily watch to list the company's filings"
+    reading = [
+        t
+        for t in ai_repo.extract_tasks_of_instrument(env.conn, pick.instrument_id)
+        if t.is_open(env.cfg.ai_max_attempts)
+    ]
+    if reading:
+        return f"waiting for {len(reading)} earnings filing(s) of the company to be read"
+    return None
+
+
+def buy_packet(
+    env: FlowEnv,
+    task: ai_repo.TaskRow,
+    pick: ai_repo.PickRow,
+    inst: Instrument,
+    quotes: pk.Quotes,
+) -> str:
+    """What a buy is judged on, all of it built by code: the filings, the metric table, prices,
+    the pick's conditions with the code's checks. The discovery's own words (its rationale,
+    priced-in and risk notes, sources) stay out: they come from fetched web pages."""
+    today = kst_date(env.at)
+    last = quotes.last(inst.yahoo_symbol)
+    ratios = quotes.ratios.get(inst.yahoo_symbol, {})
+    return pk.join(
+        pk.today_rows(env.at),
+        [pk.DATA_NOT_ORDERS],
+        pk.code_header(pick, inst),
+        pk.buy_trigger_rows(task),
+        pk.price_rows(pick, inst, quotes),
+        pk.conditions(env.conn, pick, "buy", None if last is None else last[1], ratios, words=False)
+        if pick.buy
+        else [],
+        pk.conditions(env.conn, pick, "invalidate", words=False),
+        pk.conditions(env.conn, pick, "confirm", words=False),
+        pk.metric_rows(env.conn, pick.instrument_id),
+        pk.filing_rows(env.conn, pick.instrument_id, today),
+        pk.tax_rows(env.conn, env.cfg, pick, inst, quotes, env.at),
+    )
+
+
 def prepare_buy_confirm(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
+    """Two independent web-free calls (E5): a buy needs two '근거 있음', like a sale needs two
+    '반증'."""
     pick, inst = _pick(env, task)
     if pick.status != "candidate" or pick.decision is not None:
         raise SkipTaskError(f"the pick is {pick.status}")
+    waiting = evidence_pending(env, pick, task)
+    if waiting is not None:
+        raise RetryLaterError(waiting)
     quotes = pk.quotes_for_pick(env.sources, pick, inst, kst_date(env.at))
-    packet = _pick_packet(env, task, pick, inst, quotes, buy=True)
-    return Prepared([_call(load("buy_confirm"), "buy-confirm", packet, "sonnet", "low")], packet)
+    packet = buy_packet(env, task, pick, inst, quotes)
+    prompt = load("buy_confirm")
+    calls = [_call(prompt, f"buy-confirm#{i}", packet, "sonnet", "low") for i in (1, 2)]
+    return Prepared(calls, packet, {"instrument": inst.instrument_id})
 
 
 def _switch_task(env: FlowEnv, task: ai_repo.TaskRow, candidate: int, origin: str) -> int | None:
@@ -596,6 +696,10 @@ def _switch_task(env: FlowEnv, task: ai_repo.TaskRow, candidate: int, origin: st
     return task_id
 
 
+def _add_note(note: str | None, line: str) -> str:
+    return line if not note else f"{note}\n{line}"
+
+
 def apply_buy_confirm(
     env: FlowEnv,
     task: ai_repo.TaskRow,
@@ -603,16 +707,14 @@ def apply_buy_confirm(
     results: list[CliResult],
     call_ids: list[int],
 ) -> dict[str, Any]:
-    output = results[0].output
-    decision = _choice(
-        output.get("decision"), {"근거 있음": "buy", "근거 없음": "skip"}, "decision"
-    )
-    reason = _text(output.get("reason"), "reason")
+    votes = [_choice(r.output.get("decision"), BUY_DECISION, "decision") for r in results]
+    reasons = [_text(r.output.get("reason"), "reason") for r in results]
     pick, inst = _pick(env, task)
-    out: dict[str, Any] = {"decision": decision, "reason": reason}
+    buy = len(votes) == 2 and all(v == "buy" for v in votes)
+    out: dict[str, Any] = {"votes": votes, "buy": buy, "reasons": reasons}
     action = "none"
     outputs: list[dict[str, Any]] = []
-    if decision == "buy":
+    if buy:
         if held_count(env.conn, task.ledger_id) < env.cfg.discovery_max_picks:
             ai_repo.update_pick(
                 env.conn,
@@ -625,22 +727,40 @@ def apply_buy_confirm(
             )
             action = "buy"
         else:
-            out["switch_task"] = _switch_task(env, task, pick.pick_id, "buy-price")
+            out["switch_task"] = _switch_task(env, task, pick.pick_id, task.trigger)
             outputs.append({"key": "slot-full"})  # no slot: asked as a switch instead
+    elif task.trigger == "discovery":
+        # A new pick the two answers did not confirm stays a candidate (no buy condition, so
+        # the daily watch never asks for it); the next discovery asks again if it lists it again,
+        # or lets it expire.
+        said = (
+            f"{kst_date(env.at)} 사기 확인: '근거 있음' {votes.count('buy')}/2 · 다음 발굴까지 후보"
+        )
+        ai_repo.update_pick(env.conn, pick.pick_id, env.at, note=_add_note(pick.note, said))
+        out["kept_as_candidate"] = True
+    inputs: list[dict[str, Any]] = [{"key": "instrument", "instrument_id": inst.instrument_id}]
+    if task.trigger == "discovery":
+        inputs.append({"key": "month", "value": str(task.detail.get("month", ""))})
+    else:
+        inputs.append({"key": "checks", "value": len(task.detail.get("checks", []))})
+    inputs.append(
+        {
+            "key": "filings",
+            "value": len(pk.recent_filings(env.conn, inst.instrument_id, kst_date(env.at))),
+        }
+    )
     payload = _judgment(
         task,
         results,
         call_ids,
-        verdict="buy" if decision == "buy" else "skip",
+        verdict="buy" if buy else "skip",
         action=action,
         instrument_id=inst.instrument_id,
-        inputs=[
-            {"key": "instrument", "instrument_id": inst.instrument_id},
-            {"key": "checks", "value": len(task.detail.get("checks", []))},  # all of them met
-        ],
+        inputs=inputs,
         outputs=outputs,
+        votes=votes,  # 'buy' | 'skip', twice
     )
-    payload["reasons"] = [reason[:120]]
+    payload["reasons"] = [r[:120] for r in reasons if r]
     _event(env, task, "ai-buy" if action == "buy" else "ai-check", payload)
     return out
 
@@ -790,14 +910,14 @@ def apply_monthly_review(
         results[0].tokens,
         call_ids[0],
     )
+    # The month's last review asks the switch question. A review that failed for good waits for
+    # a person and does not hold the others up (it is a red 'to do' of its own).
     left = [
         t
-        for t in ai_repo.tasks_of(
-            env.conn, kind="monthly-review", statuses=("pending", "running", "failed")
+        for t in ai_repo.open_tasks(
+            env.conn, env.cfg.ai_max_attempts, kind="monthly-review", ledger_id=task.ledger_id
         )
-        if t.detail.get("month") == month
-        and t.task_id != task.task_id
-        and t.ledger_id == task.ledger_id
+        if t.detail.get("month") == month and t.task_id != task.task_id
     ]
     if not left:
         out["switch_task"] = _monthly_switch(env, task, month)
@@ -840,10 +960,15 @@ def prepare_discovery(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
                 prev_lines.append(f"- 흐름 {flow.get('name')}: {str(flow.get('why', ''))[:200]}")
     else:
         prev_lines.append("- T24(2026-10-07) 첫 발굴: 보유 종목의 흐름 칸을 본다.")
-    cand_lines = ["## 지금 후보 (살 조건을 기다림)"]
+    cand_lines = ["## 지금 후보 (살 조건이나 사기 확인을 기다림)"]
     for p in candidates:
         inst = repo.get_instrument(conn, p.instrument_id)
-        cand_lines.append(f"- {inst.name} ({inst.instrument_id}) · {p.theme} · 살 조건 {p.buy}")
+        waits = (
+            f"살 조건 {p.buy}"
+            if p.buy
+            else "살 조건 없음 (지난 발굴의 새 종목, 사기 확인 전·안 됨)"
+        )
+        cand_lines.append(f"- {inst.name} ({inst.instrument_id}) · {p.theme} · {waits}")
     if len(cand_lines) == 1:
         cand_lines.append("- (없음)")
     packet = pk.join(
@@ -884,23 +1009,29 @@ def _symbol_options(entry: Mapping[str, Any]) -> list[str]:
 def after_discovery(
     env: FlowEnv, task: ai_repo.TaskRow, prepared: Prepared, results: list[CliResult]
 ) -> None:
-    """Network: the latest close of each new company and of the indexes (the pick price)."""
+    """Network: the latest close of each new company and of the indexes (the pick price), and
+    what each one is (Yahoo's quote type: the rule buys companies, not funds)."""
     output = results[0].output
     entries = [*output.get("picks", []), *output.get("candidates", [])]
     today = kst_date(env.at)
     start = today - timedelta(days=14)
     prices: dict[str, tuple[str, str, str]] = {}  # ticker key -> (symbol, date, close)
+    kinds: dict[str, str] = {}  # ticker key -> Yahoo quote type ('EQUITY', 'ETF' ...)
     bench = pk.fetch_quotes(env.sources, SCORE_BENCHMARK.values(), start, today)
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        key = f"{entry.get('market')}:{entry.get('ticker')}"
+        key = f"{entry.get('market')}:{str(entry.get('ticker', '')).strip().upper()}"
         for symbol in _symbol_options(entry):
             last = pk.fetch_quotes(env.sources, [symbol], start, today).last(symbol)
             if last is not None:
                 prices[key] = (symbol, last[0].isoformat(), str(last[1]))
+                kind = pk.fetch_quote_type(env.sources, symbol)
+                if kind is not None:
+                    kinds[key] = kind
                 break
     prepared.context["prices"] = prices
+    prepared.context["kinds"] = kinds
     marks: dict[str, tuple[str, str]] = {}
     for symbol in SCORE_BENCHMARK.values():
         last = bench.last(symbol)
@@ -909,61 +1040,115 @@ def after_discovery(
     prepared.context["bench"] = marks
 
 
+def protected_instruments(conn: sqlite3.Connection) -> set[str]:
+    """What the rule may never pick: the long-term rule's instruments, which are also the index
+    ETFs that hold this rule's idle money (a 'pick' of one would sell the parked shares)."""
+    rule, _ = load_rule(conn, INDEX_RULE)
+    return set(rule.instrument_ids)
+
+
+def _one_line(value: Any, limit: int) -> str:
+    """A model-written label as one plain line (no line breaks, no runs of spaces)."""
+    return " ".join(str(value or "").split())[:limit]
+
+
+def _ask_to_buy(
+    env: FlowEnv, task: ai_repo.TaskRow, pick_id: int, instrument_id: str, month: str
+) -> int:
+    """A new pick is bought only after two '근거 있음' (E5): queue its buy confirmation."""
+    task_id, _ = ai_repo.enqueue_task(
+        env.conn,
+        kind="buy-confirm",
+        ledger_id=task.ledger_id,
+        rule_id=task.rule_id,
+        trigger="discovery",
+        dedup_key=f"buy-confirm:{pick_id}:discovery:{month}",
+        at=env.at,
+        pick_id=pick_id,
+        detail={"month": month, "instrument_id": instrument_id},
+    )
+    return task_id
+
+
 def _new_pick(
     env: FlowEnv,
     task: ai_repo.TaskRow,
     entry: Mapping[str, Any],
-    status: str,
+    new: bool,
     prepared: Prepared,
 ) -> tuple[str | None, str | None]:
-    """Insert one company of the answer. Returns (instrument id, refusal)."""
+    """Record one company of the answer as a candidate: a new pick (`new`) gets its buy
+    confirmation queued, a candidate waits for its buy condition. Returns (instrument id,
+    refusal)."""
     market = entry.get("market")
     if market not in ("KR", "US"):
         return None, f"market {market!r}"
     ticker = str(entry.get("ticker", "")).strip().upper()
     key = f"{market}:{ticker}"
-    if ai_repo.open_pick(env.conn, task.ledger_id, RULE_ID, key) is not None:
+    month = str(prepared.context.get("month") or f"{kst_date(env.at):%Y-%m}")
+    if key in protected_instruments(env.conn):
+        return None, f"{key}: an index ETF of the long-term rule (it holds the idle money)"
+    known = ai_repo.open_pick(env.conn, task.ledger_id, RULE_ID, key)
+    if known is not None:
+        if new and known.status == "candidate":  # picked again: ask again whether to buy now
+            _ask_to_buy(env, task, known.pick_id, key, month)
+            return key, None
         return None, f"{key} is already open"
+    try:
+        stored: Instrument | None = repo.get_instrument(env.conn, key)
+    except repo.NotFoundError:
+        stored = None
+    if stored is not None and stored.kind is not Kind.STOCK:
+        return None, f"{key}: not a company ({stored.kind.value})"
     price = prepared.context.get("prices", {}).get(key)
     benchmark = SCORE_BENCHMARK[str(market)]
     bench = prepared.context.get("bench", {}).get(benchmark)
     if price is None or bench is None:
         return None, f"{key}: no close"
+    if stored is None:
+        kind = prepared.context.get("kinds", {}).get(key)
+        if kind is None:
+            return None, f"{key}: what it is is unknown (no quote type)"
+        if kind != "EQUITY":
+            return None, f"{key}: not a company ({kind})"
     invalidate, bad_inv = rewrite(entry.get("invalidate"))
     confirm, _ = rewrite(entry.get("confirm"))
     buy, bad_buy = rewrite(entry.get("buy"))
     if not invalidate:
         return None, f"{key}: no sell condition the code can read ({'; '.join(bad_inv)})"
-    if status == "candidate" and not buy:
+    if not new and not buy:
         return None, f"{key}: a candidate needs a buy condition ({'; '.join(bad_buy)})"
-    m = Market(str(market))
-    inst = Instrument(
-        instrument_id=key,
-        market=m,
-        currency=MARKET_CURRENCY[m],
-        kind=Kind.STOCK,
-        ticker=ticker,
-        name=str(entry.get("name", ticker))[:60],
-        yahoo_symbol=price[0],
-    )
-    repo.upsert_instrument(env.conn, inst, env.at)
-    month = str(prepared.context.get("month") or f"{kst_date(env.at):%Y-%m}")
+    if stored is None:
+        m = Market(str(market))
+        repo.insert_instrument(
+            env.conn,
+            Instrument(
+                instrument_id=key,
+                market=m,
+                currency=MARKET_CURRENCY[m],
+                kind=Kind.STOCK,
+                ticker=ticker,
+                name=_one_line(entry.get("name") or ticker, 60),
+                yahoo_symbol=price[0],
+            ),
+            env.at,
+        )
     pick_id = ai_repo.insert_pick(
         env.conn,
         ai_repo.NewPick(
             ledger_id=task.ledger_id,
             rule_id=RULE_ID,
             instrument_id=key,
-            status=status,
+            status="candidate",
             picked_on=date.fromisoformat(price[1]),
             picked_price=Decimal(price[2]),
             benchmark=benchmark,
             benchmark_price=Decimal(bench[1]),
-            theme=str(entry.get("theme", ""))[:60],
+            theme=_one_line(entry.get("theme"), 60),
             rationale=str(entry.get("rationale", ""))[:600],
             confirm=confirm,
             invalidate=invalidate,
-            buy=buy if status == "candidate" else [],
+            buy=[] if new else buy,
             confidence=str(entry.get("confidence")) if entry.get("confidence") else None,
             source=f"discovery:{month}",
             texts={
@@ -974,15 +1159,8 @@ def _new_pick(
         ),
         env.at,
     )
-    if status == "held":
-        ai_repo.update_pick(
-            env.conn,
-            pick_id,
-            env.at,
-            decision="buy",
-            decided_at=env.at,
-            decision_task_id=task.task_id,
-        )
+    if new:
+        _ask_to_buy(env, task, pick_id, key, month)
     return key, None
 
 
@@ -997,24 +1175,31 @@ def apply_discovery(
     picks, candidates = output.get("picks"), output.get("candidates")
     if not isinstance(picks, list) or not isinstance(candidates, list):
         raise FlowError("picks and candidates must be lists")
-    slots = int(prepared.context.get("slots", 0))
+    # Slots as they are now (a kept answer may be applied later than it was asked).
+    slots = max(0, env.cfg.discovery_max_picks - held_count(env.conn, task.ledger_id))
     held_before = held_count(env.conn, task.ledger_id)
     waiting_before = len(ai_repo.picks_of(env.conn, task.ledger_id, RULE_ID, ("candidate",)))
     added: list[str] = []
     waiting: list[str] = []
     refused: list[str] = []
     for entry in picks:
+        if not isinstance(entry, dict):
+            refused.append("not an object")
+            continue
         if len(added) >= slots:
             refused.append(f"{entry.get('ticker')}: no slot left")
             continue
-        key, why = _new_pick(env, task, entry, "held", prepared)
+        key, why = _new_pick(env, task, entry, True, prepared)
         if key:
             added.append(key)
         else:
             refused.append(why or "?")
-    new_candidates: set[str] = set()
+    new_candidates: set[str] = set(added)
     for entry in candidates:
-        key, why = _new_pick(env, task, entry, "candidate", prepared)
+        if not isinstance(entry, dict):
+            refused.append("not an object")
+            continue
+        key, why = _new_pick(env, task, entry, False, prepared)
         if key:
             waiting.append(key)
             new_candidates.add(key)
@@ -1045,7 +1230,8 @@ def apply_discovery(
             results,
             call_ids,
             verdict="buy" if added else "skip",
-            action="buy" if added else "none",
+            # Nothing is bought on this answer: each new pick waits for two '근거 있음' (E5).
+            action="none",
             instrument_id=None,
             inputs=[
                 {"key": "month", "value": month},
@@ -1112,11 +1298,19 @@ def switch_costs(
     rate: Decimal | None,
 ) -> SwitchCosts:
     """D37: fees and taxes of selling the weakest holding and buying the candidate with the
-    money, and the round trip through the index ETF that holds sold money until the buy."""
+    money, and the round trip through the index ETF that holds sold money until the buy.
+
+    A holding without shares costs nothing to give up (all zero, a fact). Shares without a
+    price, or dollars without a rate, cannot be costed: the question waits (RetryLaterError)
+    rather than show the AI zeros as the code's numbers."""
     fees = env.cfg.fees
     held = pk.holding(env.conn, sold)
-    if held is None or sold_price is None or (sold_inst.currency is Currency.USD and rate is None):
+    if held is None:
         return SwitchCosts(ZERO, ZERO, ZERO, ZERO, ZERO)
+    if sold_price is None:
+        raise RetryLaterError(f"switch costs: no price of {sold_inst.instrument_id}")
+    if sold_inst.currency is Currency.USD and rate is None:
+        raise RetryLaterError("switch costs: no KRW/USD rate")
     gross = sold_price * held.qty
     to_krw: Callable[[Decimal], Decimal] = (
         (lambda v: v)
@@ -1168,19 +1362,24 @@ def prepare_switch(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     cost_rows = ["## 바꾸는 비용 (코드 계산, 원)", "| 칸 키 | 값 |", "|---|---|"] + [
         f"| cost.{k} | {v} |" for k, v in costs.as_json().items()
     ]
+    # A switch buys: like a buy confirmation it reads what the code built, not the discovery's
+    # own words (E5).
     packet = pk.join(
         pk.today_rows(env.at),
+        [pk.DATA_NOT_ORDERS],
         ["# 판 종목 (가장 약한 보유)"],
-        pk.header(sold, s_inst),
+        pk.code_header(sold, s_inst),
         pk.price_rows(sold, s_inst, s_quotes),
-        pk.conditions(conn, sold, "invalidate"),
+        pk.conditions(conn, sold, "invalidate", words=False),
         pk.metric_rows(conn, sold.instrument_id),
         pk.tax_rows(conn, env.cfg, sold, s_inst, s_quotes, env.at),
         ["# 살 종목 (후보)"],
-        pk.header(candidate, c_inst),
+        pk.code_header(candidate, c_inst),
         pk.price_rows(candidate, c_inst, c_quotes),
-        pk.conditions(conn, candidate, "buy"),
-        pk.conditions(conn, candidate, "invalidate"),
+        pk.conditions(conn, candidate, "buy", words=False),
+        pk.conditions(conn, candidate, "invalidate", words=False),
+        pk.metric_rows(conn, candidate.instrument_id),
+        pk.filing_rows(conn, candidate.instrument_id, today),
         cost_rows,
     )
     prompt = load("switch")

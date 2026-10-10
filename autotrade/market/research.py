@@ -7,6 +7,9 @@
 - Valuation ratios from Yahoo's quote summary: forward PER, trailing PER, PBR. T24 flagged a
   doubtful forward PER for a Korean stock, so the buy confirmation sees the number with its
   source, and the AI decides.
+- What a symbol is (Yahoo's quoteType: 'EQUITY', 'ETF', 'MUTUALFUND' ...): the quarterly
+  discovery only adds companies (a Korean ETF would be charged the stock sale tax, and an index
+  ETF is where the rule parks its money).
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ class ValuationSource(Protocol):
     name: str
 
     def fetch_valuation(self, symbol: str) -> dict[str, Decimal]: ...
+
+    def fetch_quote_type(self, symbol: str) -> str: ...
 
 
 def _number(value: Any) -> Decimal | None:
@@ -105,5 +110,14 @@ class YahooValuationSource:
                 if value is not None:
                     out[key] = value
             return out
+
+        return with_retries(fetch, self.attempts)
+
+    def fetch_quote_type(self, symbol: str) -> str:
+        def fetch() -> str:
+            kind = (self._module().Ticker(symbol).info or {}).get("quoteType")
+            if not isinstance(kind, str) or not kind:
+                raise ValueError(f"{symbol}: no quoteType")
+            return kind.upper()
 
         return with_retries(fetch, self.attempts)

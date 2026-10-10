@@ -205,6 +205,26 @@ def upsert_instrument(conn: sqlite3.Connection, inst: Instrument, at: datetime) 
     )
 
 
+def insert_instrument(conn: sqlite3.Connection, inst: Instrument, at: datetime) -> bool:
+    """Add an instrument unless one with the id exists: an AI answer never rewrites a stored
+    identity (its name, Yahoo symbol or kind). Returns whether it was added."""
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO instruments (instrument_id, market, currency, kind, ticker, name,"
+        " yahoo_symbol, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            inst.instrument_id,
+            inst.market.value,
+            inst.currency.value,
+            inst.kind.value,
+            inst.ticker,
+            inst.name,
+            inst.yahoo_symbol,
+            to_iso(at),
+        ),
+    )
+    return cur.rowcount == 1
+
+
 def get_instrument(conn: sqlite3.Connection, instrument_id: str) -> Instrument:
     row = _one(conn, "SELECT * FROM instruments WHERE instrument_id = ?", (instrument_id,))
     if row is None:

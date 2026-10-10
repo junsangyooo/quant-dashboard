@@ -323,8 +323,10 @@ def _sell_checks(
 ) -> None:
     if pick.decision is not None:
         return  # a decision waits for its plan
-    open_confirms = ai_repo.tasks_of(
-        conn, kind="sell-confirm", statuses=("pending", "running", "failed"), pick_id=pick.pick_id
+    # A confirmation that failed for good waits for a person and blocks nothing: a new hit
+    # asks again (audit E4).
+    open_confirms = ai_repo.open_tasks(
+        conn, cfg.ai_max_attempts, kind="sell-confirm", pick_id=pick.pick_id
     )
     seen = _seen_triggers(conn, pick.pick_id)
     triggers = [t for t in condition_hits(conn, pick) if (t["digest"], t["period"]) not in seen]
@@ -404,6 +406,7 @@ def buy_gap(pick: ai_repo.PickRow, price: Decimal) -> dict[str, str] | None:
 
 def _buy_check(
     conn: sqlite3.Connection,
+    cfg: Config,
     pick: ai_repo.PickRow,
     inst: Instrument,
     data: WatchInput,
@@ -423,6 +426,8 @@ def _buy_check(
     )
     if not buy_met(checks):
         return
+    if ai_repo.open_tasks(conn, cfg.ai_max_attempts, kind="buy-confirm", pick_id=pick.pick_id):
+        return  # a confirmation is already on its way (a new pick's, or last month's)
     today = kst_date(at)
     task_id, created = ai_repo.enqueue_task(
         conn,
@@ -517,7 +522,7 @@ def run_watch(
         if pick.status == "held":
             _sell_checks(conn, cfg, pick, inst, data, checked, at, tasks)
         else:
-            _buy_check(conn, pick, inst, data, at, tasks, gaps)
+            _buy_check(conn, cfg, pick, inst, data, at, tasks, gaps)
     through = dict(checked)
     for market in (Market.KR, Market.US):
         bench = data.adjusted.get(SCORE_BENCHMARK[market.value])

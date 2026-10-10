@@ -42,6 +42,10 @@ class World:
     filings: dict[str, list[FilingInfo]] = field(default_factory=dict)
     filing_errors: dict[str, Exception] = field(default_factory=dict)
     texts: dict[str, str] = field(default_factory=dict)
+    # Errors to raise for one filing's text (by receipt/accession number), and what a symbol is
+    # (Yahoo's quoteType; a symbol not listed is a company, 'EQUITY'; None: the source fails).
+    text_errors: dict[str, Exception] = field(default_factory=dict)
+    quote_types: dict[str, str | None] = field(default_factory=dict)
 
     def bar(
         self,
@@ -218,6 +222,13 @@ class FakeValuation:
             raise SourceError(f"{symbol}: no ratios")
         return dict(self.world.valuations[symbol])
 
+    def fetch_quote_type(self, symbol: str) -> str:
+        self.world.calls.append(f"quote-type:{symbol}")
+        kind = self.world.quote_types.get(symbol, "EQUITY")
+        if kind is None:
+            raise SourceError(f"{symbol}: no quote type")
+        return kind
+
 
 class FakeFilings:
     def __init__(self, world: World, name: str) -> None:
@@ -237,7 +248,9 @@ class FakeFilings:
 
     def fetch_text(self, filing: FilingInfo) -> str:
         self.world.calls.append(f"text:{self.name}:{filing.source_ref}")
-        error = self.world.filing_errors.get(self.name)
+        error = self.world.filing_errors.get(self.name) or self.world.text_errors.get(
+            filing.source_ref
+        )
         if error is not None:
             raise error
         if filing.source_ref not in self.world.texts:
