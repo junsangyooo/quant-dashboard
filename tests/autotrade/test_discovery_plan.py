@@ -5,11 +5,13 @@ window in the tick."""
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
 from autotrade.db import ai_repo, repo
 from autotrade.db.connection import transaction
+from autotrade.db.models import FillRow
 from autotrade.domain.discovery_plan import DiscoveryInput, Holding, plan_discovery
 from autotrade.domain.instruments import Currency, Instrument, Kind, Market, kr_etf, us_etf
 from autotrade.domain.money import FeeRates
@@ -271,14 +273,14 @@ def test_the_planner_window(p2ctx: JobContext, p2conn: sqlite3.Connection, world
 def test_the_monthly_equal_weight_waits_for_the_reviews(
     p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
 ) -> None:
-    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3)) is None  # not queued
+    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3), 3) is None  # not queued
     with transaction(p2conn):
         reviews.queue_reviews(p2conn, "paper", kst("2026-07-31 22:00"))
-    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3)) is None  # reviews pending
+    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3), 3) is None  # reviews pending
     with transaction(p2conn):
         for t in ai_repo.tasks_of(p2conn, kind="monthly-review"):
             ai_repo.finish_task(p2conn, t.task_id, kst("2026-08-01 01:00"), status="done")
-    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3)) == "2026-08"
+    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3), 3) == "2026-08"
 
 
 def test_without_the_start_plan_the_planner_waits(
@@ -298,3 +300,237 @@ def test_selling_the_index_etf_pays_no_transaction_tax() -> None:
     assert sell_net(Holding(KR_ETF, 10, D(33000)), 10, FEES) == D(330000) - D(49)
     assert sell_net(Holding(A, 10, D(33000)), 10, FEES) == D(330000) - D(49) - D(660)
     assert sell_net(Holding(C, 10, D(100)), 10, FEES) == D(1000) - D("1.00")
+
+
+# ── audit 2026-10-10 ─────────────────────────────────────────────────────────────────────────
+
+
+def _ai_sale(conn: sqlite3.Connection, instrument_id: str, qty: int, day: str) -> None:
+    """An AI-rule plan that sells `qty` of what it parked, due at the day's Korean order time."""
+    at = kst(f"{day} 08:40")
+    with transaction(conn):
+        plan_id = repo.insert_plan(
+            conn,
+            ledger_id="paper",
+            rule_id=RULE_ID,
+            plan_date=date.fromisoformat(day),
+            run_id=None,
+            reason="ai",
+            basis={},
+            weights_before={},
+            weights_after_est={},
+            created_at=at,
+        )
+        stage_id = repo.insert_stage(
+            conn,
+            plan_id=plan_id,
+            seq=1,
+            kind="sell",
+            market="KR",
+            due_at=kst(f"{day} 09:05"),
+            depends_on=[],
+        )
+        repo.insert_order(
+            conn,
+            repo.NewOrder(
+                idem_key=f"test-sale-{day}",
+                ledger_id="paper",
+                plan_id=plan_id,
+                stage_id=stage_id,
+                stage="sell",
+                market="KR",
+                instrument_id=instrument_id,
+                side="sell",
+                fx_direction=None,
+                currency=Currency.KRW,
+                qty=qty,
+                est_price=D(11000),
+                est_amount=D(11000) * qty,
+                est_fee=D(0),
+                est_rate=None,
+                est_received=None,
+            ),
+            at,
+        )
+
+
+def test_each_rule_keeps_its_own_cost_basis(
+    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
+) -> None:
+    """E8: '지수 반반' bought KOSPI200 at 32,000; the AI rule parks money in it at 10,000 and
+    sells that later. The long-term rule's cost and realized gains do not move."""
+    for t in ("09:05", "09:10", "22:30"):
+        stage_job(p2ctx, "paper", kst(f"2026-07-01 {t}"))  # '지수 반반' buys at the 7/1 open
+    kr = KR_ETF.instrument_id
+    before = sleeves.base_view(p2conn, "paper")
+    own_cost = before.positions[kr].cost_krw
+    assert before.positions[kr].cost_native / before.qty_of(kr) > D(32000)  # its open plus fee
+    world.rate(kst("2026-07-02 08:25"), "1400.0")
+    world.rate(kst("2026-07-02 09:10"), "1400.0")
+    seed_prices(p2conn, world, ["2026-07-02", "2026-07-03"], "10000")
+    plan_job(p2ctx, "paper", kst("2026-07-02 08:40"))
+    for t in ("09:05", "09:10", "22:30"):
+        stage_job(p2ctx, "paper", kst(f"2026-07-02 {t}"))
+    parked = ai_repo.load_sleeve(p2conn, "paper", RULE_ID).qty_of(kr)
+    assert parked > 0
+    assert sleeves.base_view(p2conn, "paper").positions[kr].cost_krw == own_cost
+    _ai_sale(p2conn, kr, parked, "2026-07-03")
+    stage_job(p2ctx, "paper", kst("2026-07-03 09:05"))
+    assert ai_repo.load_sleeve(p2conn, "paper", RULE_ID).qty_of(kr) == 0
+    after = sleeves.base_view(p2conn, "paper")
+    assert (after.qty_of(kr), after.positions[kr].cost_krw) == (before.qty_of(kr), own_cost)
+    assert after.realized_krw == before.realized_krw == D(0)  # it never sold
+    # Ledger minus sleeve (the pooled average) would have moved it.
+    pooled = sleeves.subtract(
+        repo.load_state(p2conn, "paper"), ai_repo.load_sleeve(p2conn, "paper", RULE_ID)
+    )
+    assert pooled.positions[kr].cost_krw != own_cost
+    assert pooled.realized_krw != D(0)
+    assert sleeves.verify_sleeves(p2conn, "paper") == []
+    assert verify_ledger(p2conn, "paper") == []
+
+
+def test_own_costs_fall_back_where_the_fills_do_not_cover_the_shares() -> None:
+    """A ledger seeded mid-way has shares no fill bought: the subtraction stays for them."""
+    from autotrade.domain.ledger import LedgerState, Position
+
+    rest = LedgerState(
+        positions={
+            "KR:069500": Position("KR:069500", Currency.KRW, 10, D(320000), D(320000)),
+            "US:SPYM": Position("US:SPYM", Currency.USD, 5, D(330), D(462000)),
+        }
+    )
+    gap = sleeves.OwnBook({}, D(5), frozenset({"KR:069500"}))
+    assert sleeves.with_own_costs(rest, gap) == rest  # realized and costs from the ledger
+    mine = sleeves.OwnBook(
+        {"KR:069500": Position("KR:069500", Currency.KRW, 10, D(300000), D(300000))},
+        D(7),
+        frozenset(),
+    )
+    mixed = sleeves.with_own_costs(rest, mine)
+    assert mixed.positions["KR:069500"].cost_krw == D(300000)
+    assert mixed.positions["US:SPYM"] == rest.positions["US:SPYM"]  # no fill of it: as it was
+    assert mixed.realized_krw == rest.realized_krw  # not every share is accounted for
+
+
+def test_a_pending_withdrawal_plans_nothing(
+    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
+) -> None:
+    """E13: like the long-term rule, the AI rule sends 0 orders while a withdrawal waits."""
+    world.rate(kst("2026-07-02 08:25"), "1400.0")
+    seed_prices(p2conn, world, ["2026-07-01", "2026-07-02"], "10000")
+    with transaction(p2conn):
+        repo.add_withdraw_wait(
+            p2conn, "paper", Currency.KRW, D(500000), date(2026, 7, 6), kst("2026-07-01 18:00")
+        )
+    report = plan_job(p2ctx, "paper", kst("2026-07-02 08:40"))
+    assert (report["result"], report["plan_id"]) == ("waiting", None)
+    assert repo.plan_on(p2conn, "paper", RULE_ID, date(2026, 7, 2)) is None
+    run = discovery_plan.last_run(p2conn, "paper", date(2026, 7, 2))
+    assert run is not None
+    assert run.details["withdraw_wait_until"] == "2026-07-06"
+    assert ai_plan_due(p2conn, p2ctx.cfg, "paper", kst("2026-07-02 08:50")) is None  # once a day
+
+
+def test_the_equal_weight_waits_for_reviews_with_attempts_left_only(
+    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
+) -> None:
+    """E9: a review failed with attempts left holds the equal weight; one that failed for good
+    (a red 'to do') does not, and its pick is left out of it."""
+    world.rate(kst("2026-07-02 08:25"), "1400.0")
+    seed_prices(p2conn, world, ["2026-07-01", "2026-07-02"], "10000")
+    plan_job(p2ctx, "paper", kst("2026-07-02 08:40"))
+    for hhmm in ("09:05", "09:10", "22:30"):
+        stage_job(p2ctx, "paper", kst(f"2026-07-02 {hhmm}"))
+    with transaction(p2conn):
+        reviews.queue_reviews(p2conn, "paper", kst("2026-07-31 22:00"))
+    month = ai_repo.tasks_of(p2conn, kind="monthly-review")
+    ocean = pick_of(p2conn, "KR:042660")
+    with transaction(p2conn):
+        for review in month:
+            status = "failed" if review.pick_id == ocean.pick_id else "done"
+            ai_repo.finish_task(p2conn, review.task_id, kst("2026-08-01 01:00"), status=status)
+    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3), 3) is None  # 2 attempts left
+    [stuck] = [r for r in month if r.pick_id == ocean.pick_id]
+    with transaction(p2conn):
+        for _ in range(2):
+            ai_repo.finish_task(p2conn, stuck.task_id, kst("2026-08-01 02:00"), status="failed")
+    assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3), 3) == "2026-08"
+    assert discovery_plan.unreviewed(p2conn, "paper", "2026-08", 3) == {ocean.pick_id}
+    # The plan of that day leaves the unreviewed pick out of the equal weight.
+    world.rate(kst("2026-08-03 08:25"), "1400.0")
+    seed_prices(p2conn, world, ["2026-07-31", "2026-08-03"], "10000")
+    world.bar("KR:012450", "2026-07-31", close="20000", open_="20000")  # one pick doubled
+    report = plan_job(p2ctx, "paper", kst("2026-08-03 08:40"))
+    assert report["result"] == "planned"
+    plan = repo.get_plan(p2conn, report["plan_id"])
+    assert plan.basis["equalize"] == "2026-08"
+    assert plan.basis["equalize_skipped"] == ["KR:042660"]
+    traded = {i for i, _ in (*report["sell"], *report["buy"])}
+    assert "KR:012450" in traded  # the others are equalized
+    assert "KR:042660" not in traded
+
+
+def _fill(n: int, side: str, qty: int, price: str, kind: str = "trade") -> FillRow:
+    return FillRow(
+        fill_id=n,
+        order_id=n,
+        ledger_id="paper",
+        kind=kind,
+        instrument_id=None if kind == "fx" else KR_ETF.instrument_id,
+        side="fx" if kind == "fx" else side,
+        fx_direction="krw_to_usd" if kind == "fx" else None,
+        currency=Currency.KRW,
+        qty=None if kind == "fx" else qty,
+        price=None if kind == "fx" else D(price),
+        gross=D(price) * max(qty, 1),
+        fee=D(0),
+        fee_krw=D(0),
+        krw_rate=D("1400") if kind == "fx" else None,
+        received=D(1) if kind == "fx" else None,
+        filled_at=kst(f"2026-07-0{n} 09:05"),
+        price_source="test",
+        executor="paper",
+    )
+
+
+def test_own_book_folds_a_rule_s_trades_and_marks_gaps() -> None:
+    book = sleeves.own_book(
+        [
+            _fill(1, "buy", 10, "30000"),
+            _fill(2, "fx", 0, "1000000", kind="fx"),  # a conversion moves no share
+            _fill(3, "sell", 4, "33000"),
+        ]
+    )
+    pos = book.positions[KR_ETF.instrument_id]
+    assert (pos.qty, pos.cost_krw, book.realized_krw, book.gaps) == (
+        6,
+        D(180000),
+        D(12000),
+        frozenset(),
+    )
+    # A sale of shares no fill bought (a ledger seeded mid-way): the instrument is a gap, and
+    # its later fills are not folded either.
+    seeded = sleeves.own_book([_fill(1, "sell", 4, "33000"), _fill(2, "buy", 1, "30000")])
+    assert (seeded.positions, seeded.gaps) == ({}, frozenset({KR_ETF.instrument_id}))
+
+
+def test_verify_sleeves_checks_the_base_rule_s_own_shares(
+    p2ctx: JobContext, p2conn: sqlite3.Connection
+) -> None:
+    for t in ("09:05", "09:10", "22:30"):
+        stage_job(p2ctx, "paper", kst(f"2026-07-01 {t}"))
+    assert sleeves.verify_sleeves(p2conn, "paper") == []
+    # Shares the ledger has that no fill of '지수 반반' bought: reported, never silently costed.
+    with transaction(p2conn):
+        state = repo.load_state(p2conn, "paper")
+        kr = state.positions[KR_ETF.instrument_id]
+        more = replace(kr, qty=kr.qty + 5, cost_native=kr.cost_native + 5, cost_krw=kr.cost_krw + 5)
+        positions = {**state.positions, KR_ETF.instrument_id: more}
+        repo.save_state(
+            p2conn, "paper", replace(state, positions=positions), kst("2026-07-02 08:00")
+        )
+    [problem] = sleeves.verify_sleeves(p2conn, "paper")
+    assert problem.startswith("index_half KR:069500: own fills hold ")
+    base = sleeves.base_view(p2conn, "paper")
+    assert base.positions[KR_ETF.instrument_id] == more  # the subtraction stays for it

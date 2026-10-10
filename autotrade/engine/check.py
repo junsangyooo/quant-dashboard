@@ -153,7 +153,16 @@ def _report_json(
     return out
 
 
-def _record_check_failure(
+def retry_time(cfg: Config, d: date, at: datetime, final_attempt: bool) -> datetime | None:
+    """When a check that failed at `at` is tried again: 09:30 the same day, unless this was the
+    final attempt or 09:30 has passed (then it is '직접 할 일')."""
+    if final_attempt:
+        return None
+    retry_at = at_kst(d, cfg.retry_time)
+    return retry_at if retry_at > at else None
+
+
+def record_check_failure(
     conn: sqlite3.Connection,
     ledger_id: str,
     d: date,
@@ -161,6 +170,8 @@ def _record_check_failure(
     error: str,
     retry_at: datetime | None,
 ) -> None:
+    """The day's 'check-failed' event: status 'retry' while a retry is due, 'todo' after the
+    last attempt (the '직접 할 일' that `todos` lists and `resolve check-failed:<date>` closes)."""
     status = "retry" if retry_at is not None else "todo"
     existing = repo.check_failure_event(conn, ledger_id, d)
     payload: dict[str, Any] = {"error": error, "retry_at": retry_at}
@@ -510,11 +521,9 @@ def run_check(
         )
     except CheckFailedError as exc:
         result, error = FAILED, str(exc)
-        retry_at = None if final_attempt else at_kst(d, cfg.retry_time)
-        if retry_at is not None and retry_at <= at:
-            retry_at = None
+        retry_at = retry_time(cfg, d, at, final_attempt)
         details["retry_at"] = retry_at
-        _record_check_failure(conn, ledger_id, d, at, error, retry_at)
+        record_check_failure(conn, ledger_id, d, at, error, retry_at)
         if retry_at is None:
             result = TODO
     elapsed_ms = int((clock() - started) * 1000)

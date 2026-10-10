@@ -235,7 +235,7 @@ def ai_plan_due(conn: sqlite3.Connection, cfg: Config, ledger_id: str, now: date
         return None
     if repo.open_plans(conn, ledger_id, DISCOVERY):
         return None
-    if not discovery_plan.has_work(conn, ledger_id, now):
+    if not discovery_plan.has_work(conn, ledger_id, now, cfg.ai_max_attempts):
         return None
     prior = discovery_plan.last_run(conn, ledger_id, d)
     return Due("ai-plan", "new-decision" if prior is not None else _timing(now, start))

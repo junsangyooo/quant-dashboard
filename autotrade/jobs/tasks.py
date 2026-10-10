@@ -22,13 +22,20 @@ from autotrade.db import repo
 from autotrade.db.connection import transaction
 from autotrade.domain.instruments import Currency, Instrument, Market
 from autotrade.engine import discovery_plan
-from autotrade.engine.check import FAILED, TODO, needs_retry, run_check
+from autotrade.engine.check import (
+    FAILED,
+    TODO,
+    needs_retry,
+    record_check_failure,
+    retry_time,
+    run_check,
+)
 from autotrade.engine.common import load_rule
 from autotrade.engine.dividends import book_dividends, watched_instruments
 from autotrade.engine.runner import run_due_stages
 from autotrade.engine.snapshot import SnapshotError, take_snapshot
 from autotrade.engine.status import ledger_status, next_check_at
-from autotrade.engine.todos import TodoError, open_todos, resolve
+from autotrade.engine.todos import TodoError, open_todos, resolve, retry_ai
 from autotrade.jobs.backup import BackupError, backup_dir_for, run_backup
 from autotrade.market.service import (
     FetchErrors,
@@ -93,6 +100,36 @@ def _record_crash(
     return error
 
 
+def _record_check_crash(
+    ctx: JobContext,
+    ledger_id: str,
+    d: date,
+    at: datetime,
+    exc: BaseException,
+    attempt: int,
+    final_attempt: bool,
+) -> tuple[str, str]:
+    """A check that crashed counts like one that failed (audit E10): the same run row with its
+    retry time, the same 'check-failed' event, so the 09:30 retry runs and a final crash is the
+    same '직접 할 일' as a final failure. Returns (result, error)."""
+    error = f"{type(exc).__name__}: {exc}"
+    retry_at = retry_time(ctx.cfg, d, at, final_attempt)
+    result = FAILED if retry_at is not None else TODO
+    with transaction(ctx.conn):
+        run_id = repo.insert_run(ctx.conn, ledger_id, "check", d, at, attempt)
+        repo.finish_run(
+            ctx.conn,
+            run_id,
+            ended_at=at,
+            duration_ms=0,
+            result=result,
+            error=error,
+            details={"crash": True, "attempt": attempt, "retry_at": retry_at},
+        )
+        record_check_failure(ctx.conn, ledger_id, d, at, error, retry_at)
+    return result, error
+
+
 def check_job(
     ctx: JobContext, ledger_id: str, at: datetime, *, dry_run: bool = False, retry: bool = False
 ) -> dict[str, Any]:
@@ -109,8 +146,8 @@ def check_job(
             return {**base, "result": "not-needed"}
     else:
         attempt = len(repo.runs_on(ctx.conn, ledger_id, "check", d)) + 1
-    errors = _prefetch_window(ctx, _rule_instruments(ctx.conn), d, at)
     try:
+        errors = _prefetch_window(ctx, _rule_instruments(ctx.conn), d, at)
         with transaction(ctx.conn, rollback=dry_run):
             outcome = run_check(
                 ctx.conn,
@@ -125,11 +162,8 @@ def check_job(
     except Exception as exc:
         if dry_run:
             raise
-        return {
-            **base,
-            "result": FAILED,
-            "error": _record_crash(ctx, ledger_id, "check", d, at, exc, attempt),
-        }
+        result, error = _record_check_crash(ctx, ledger_id, d, at, exc, attempt, retry)
+        return {**base, "result": result, "error": error}
     return {
         **base,
         "result": outcome.result,
@@ -333,7 +367,7 @@ def todos_job(ctx: JobContext, ledger_id: str, at: datetime) -> dict[str, Any]:
     require_aware(at)
     todos = [
         {"id": t.todo_id, "kind": t.kind, "date": t.day, "plan_id": t.plan_id, **t.facts}
-        for t in open_todos(ctx.conn, ledger_id)
+        for t in open_todos(ctx.conn, ledger_id, ctx.cfg.ai_max_attempts)
     ]
     return {"job": "todos", "ledger": ledger_id, "at": at, "result": "ok", "todos": todos}
 
@@ -358,10 +392,36 @@ def resolve_job(
     }
     try:
         with transaction(ctx.conn, rollback=dry_run):
-            outcome = resolve(ctx.conn, ledger_id, todo_id, at, note)
+            outcome = resolve(ctx.conn, ledger_id, todo_id, at, note, ctx.cfg.ai_max_attempts)
     except TodoError as exc:
         return {**base, "result": exc.code, "error": str(exc)}
     return {**base, **outcome, "next_check_at": next_check_at(ctx.cfg, at)}
+
+
+def ai_retry_job(
+    ctx: JobContext,
+    ledger_id: str,
+    todo_id: str,
+    at: datetime,
+    *,
+    note: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Ask a failed AI task again (attempts back to 0); the AI runner takes it on its next run."""
+    require_aware(at)
+    base: dict[str, Any] = {
+        "job": "ai-retry",
+        "ledger": ledger_id,
+        "todo_id": todo_id,
+        "at": at,
+        "dry_run": dry_run,
+    }
+    try:
+        with transaction(ctx.conn, rollback=dry_run):
+            outcome = retry_ai(ctx.conn, ledger_id, todo_id, at, note, ctx.cfg.ai_max_attempts)
+    except TodoError as exc:
+        return {**base, "result": exc.code, "error": str(exc)}
+    return {**base, **outcome}
 
 
 # Results that make the CLI exit with 1 ('failed', a manual action, a todo that cannot be closed).

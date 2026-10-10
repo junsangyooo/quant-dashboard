@@ -31,6 +31,7 @@ from autotrade.domain.ledger import LedgerState
 from autotrade.domain.money import ZERO, round_won, usd_in_krw
 from autotrade.domain.status import RuleStatus, StatusFlags, rule_status
 from autotrade.domain.weights import DriftReport, drift_report
+from autotrade.engine import sleeves
 from autotrade.engine.bootstrap import MODE, start_amount_key, start_date_key
 from autotrade.engine.common import buy_wait_krw, load_rule
 from autotrade.engine.status import next_check_at
@@ -294,7 +295,9 @@ class LedgerContext:
         else:
             val = self.valuation
             sleeve = self.ai_sleeve
-            ledger = repo.load_state(self.conn, self.ledger_id)
+            # '지수 반반''s own cost basis (engine/sleeves.py base_view): the AI rule's trades in
+            # the same ETF do not move it.
+            base = sleeves.base_view(self.conn, self.ledger_id)
             if val is not None:
                 for p in sorted(val.positions, key=lambda p: p.value_krw, reverse=True):
                     iid = p.instrument.instrument_id
@@ -303,8 +306,7 @@ class LedgerContext:
                     ai_krw = round_won(p.value_krw * ai_qty / p.qty) if ai_qty else ZERO
                     base_qty = p.qty - ai_qty
                     if base_qty > 0:
-                        total_native = ledger.positions[iid].cost_native
-                        native = total_native - (ZERO if mine is None else mine.cost_native)
+                        own = base.positions[iid]
                         group = self.rule.rule_id if iid in rule_ids else "outside"
                         comp.rows.append(
                             CompRow(
@@ -314,8 +316,8 @@ class LedgerContext:
                                 instrument=p.instrument,
                                 currency=p.instrument.currency,
                                 qty=base_qty,
-                                avg_price=native / base_qty,
-                                cost_krw=p.cost_krw - (ZERO if mine is None else mine.cost_krw),
+                                avg_price=own.cost_native / base_qty,
+                                cost_krw=own.cost_krw,
                             )
                         )
                     if mine is not None and ai_qty > 0:

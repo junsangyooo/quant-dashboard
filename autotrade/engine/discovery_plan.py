@@ -8,9 +8,15 @@ at that morning's price. One plan per rule per day (UNIQUE); none while an earli
 still runs, and none before the ledger's first plan (that one belongs to the 'start' event).
 
 What it plans (autotrade/domain/discovery_plan.py): the sales of picks decided to sell, the
-same amount for held picks the rule does not own yet (new picks, the seed, a confirmed candidate),
-the Korean equal weight on the month's first planning day once that month's reviews are done
-(D35), and idle money into the index ETF of its currency.
+same amount for held picks the rule does not own yet (the seed, a confirmed new pick or
+candidate), the Korean equal weight on the month's first planning day once that month's reviews
+are done (D35), and idle money into the index ETF of its currency.
+
+- The equal weight waits while a review of the month is pending, being asked, or failed with
+  attempts left. A review that failed for good waits for a person (a red 'to do'); the equal
+  weight then goes on without that pick (its shares stay as they are: it is not traded on a
+  month nobody judged it), and the plan says which picks it left out.
+- A pending withdrawal plans nothing (0 orders), as for the long-term rule (ops notes 매일 확인 3).
 
 Before planning it closes picks whose sale has filled ('sold', the sale's day) and clears the
 'buy' decisions that have their shares.
@@ -65,17 +71,18 @@ def parking_ids(conn: sqlite3.Connection) -> dict[Currency, Instrument]:
     return {instruments[i].currency: instruments[i] for i in rule.instrument_ids}
 
 
-def ew_month(conn: sqlite3.Connection, ledger_id: str, d: date) -> str | None:
+def ew_month(conn: sqlite3.Connection, ledger_id: str, d: date, max_attempts: int) -> str | None:
     """The month whose Korean equal weight is due today, if any: its reviews were queued and
-    are done, and no discovery plan of the month has equalized yet."""
+    none is still to be asked (pending, running, or failed with attempts left), and no discovery
+    plan of the month has equalized yet."""
     month = d.replace(day=1)
     key = f"{month:%Y-%m}"
     if not reviews.queued_for(conn, ledger_id, month):
         return None
     open_reviews = [
         t
-        for t in ai_repo.tasks_of(conn, kind="monthly-review", statuses=("pending", "running"))
-        if t.detail.get("month") == key and t.ledger_id == ledger_id
+        for t in ai_repo.open_tasks(conn, max_attempts, kind="monthly-review", ledger_id=ledger_id)
+        if t.detail.get("month") == key
     ]
     if open_reviews:
         return None
@@ -83,6 +90,19 @@ def ew_month(conn: sqlite3.Connection, ledger_id: str, d: date) -> str | None:
         if plan.rule_id == RULE_ID and plan.basis.get("equalize") == key:
             return None
     return key
+
+
+def unreviewed(conn: sqlite3.Connection, ledger_id: str, key: str, max_attempts: int) -> set[int]:
+    """Picks the month's review did not judge: it failed for good, or it was cancelled (by the
+    owner, or because the pick had a decision). The equal weight leaves them out."""
+    return {
+        t.pick_id
+        for t in ai_repo.tasks_of(conn, kind="monthly-review", statuses=("failed", "cancelled"))
+        if t.ledger_id == ledger_id
+        and t.detail.get("month") == key
+        and t.pick_id is not None
+        and (t.status == "cancelled" or t.is_stuck(max_attempts))
+    }
 
 
 def reconcile(conn: sqlite3.Connection, ledger_id: str, at: datetime) -> dict[str, list[str]]:
@@ -128,7 +148,7 @@ def last_run(conn: sqlite3.Connection, ledger_id: str, d: date) -> ai_repo.JobRu
     return runs[-1] if runs else None
 
 
-def has_work(conn: sqlite3.Connection, ledger_id: str, at: datetime) -> bool:
+def has_work(conn: sqlite3.Connection, ledger_id: str, at: datetime, max_attempts: int) -> bool:
     """Something to plan (database only, for the schedule): a decision since the last run
     today, or on the day's first run any held pick without shares, the monthly equal weight or
     sleeve cash."""
@@ -140,7 +160,7 @@ def has_work(conn: sqlite3.Connection, ledger_id: str, at: datetime) -> bool:
         state = ai_repo.load_sleeve(conn, ledger_id, RULE_ID)
         missing = [p for p in held if p.instrument_id not in state.positions]
         cash = any(v > 0 for v in state.cash.values())
-        return bool(decided or missing or cash or ew_month(conn, ledger_id, d))
+        return bool(decided or missing or cash or ew_month(conn, ledger_id, d, max_attempts))
     return any(p.decided_at is not None and p.decided_at > prior.started_at for p in decided)
 
 
@@ -148,6 +168,10 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
     """Reconcile, then plan in the caller's transaction (the job downloaded the closes)."""
     d = kst_date(at)
     details: dict[str, Any] = {"reconciled": reconcile(conn, ledger_id, at)}
+    waits = repo.withdraw_waits(conn, ledger_id)
+    if waits:  # a withdrawal is pending: 0 orders (the long-term rule does the same)
+        details["withdraw_wait_until"] = max(w.until for w in waits)
+        return PlanOutcome("waiting", None, details)
     state = sleeves.view(conn, ledger_id, RULE_ID)
     held = ai_repo.picks_of(conn, ledger_id, RULE_ID, ("held",))
     parking = parking_ids(conn)
@@ -164,7 +188,8 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
     details["waiting"] = waiting
     if rate is None:
         details["fx"] = "stale"
-    month = ew_month(conn, ledger_id, d)
+    month = ew_month(conn, ledger_id, d, cfg.ai_max_attempts)
+    left_out = set() if month is None else unreviewed(conn, ledger_id, month, cfg.ai_max_attempts)
     sell = [p.instrument_id for p in held if p.decision == "sell" and p.instrument_id in holdings]
     keep = [p for p in held if p.decision != "sell"]
     buy = [
@@ -176,10 +201,12 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
         p.instrument_id
         for p in keep
         if month is not None
+        and p.pick_id not in left_out
         and p.instrument_id in holdings
         and holdings[p.instrument_id].instrument.market is Market.KR
         and holdings[p.instrument_id].qty > 0
     ]
+    skipped = sorted(p.instrument_id for p in keep if p.pick_id in left_out)
     value = sum(
         (
             h.price * h.qty
@@ -217,19 +244,23 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
             "equalize": month if equalize else None,
         }
     )
+    if skipped:
+        details["equalize_skipped"] = skipped  # their review failed for good
     if not plan.has_orders:
         return PlanOutcome("nothing", None, details)
     due = schedule(stage_specs(plan), at, slotter_for(cfg))
     if kst_date(min(due.values())) != d:
         details["deferred"] = True  # nothing could start today (holidays): plan tomorrow
         return PlanOutcome("waiting", None, details)
-    basis = {
+    basis: dict[str, Any] = {
         "reason": "ai",
         "equalize": month if equalize else None,
         "decisions": {p.instrument_id: p.decision for p in held if p.decision},
         "per_pick_krw": per_pick,
         "fx_rate": rate,
     }
+    if skipped:
+        basis["equalize_skipped"] = skipped
     plan_id = repo.insert_plan(
         conn,
         ledger_id=ledger_id,

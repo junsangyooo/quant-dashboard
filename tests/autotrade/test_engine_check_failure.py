@@ -11,9 +11,11 @@ import pytest
 
 from autotrade.db import repo
 from autotrade.engine import check as engine_check
+from autotrade.engine.todos import open_todos
 from autotrade.jobs import tasks
+from autotrade.jobs.schedule import retry_due
 from autotrade.jobs.tasks import JobContext, check_job, snapshot_job, stage_job
-from autotrade.timeutil import KST
+from autotrade.timeutil import KST, UTC
 
 from .fakes import KR, US, World
 from .helpers import kst, seed_ledger
@@ -142,13 +144,30 @@ def test_an_unexpected_error_is_recorded(
     assert report["result"] == "failed"
     assert report["error"] == "RuntimeError: disk full"
     [run] = repo.runs_on(conn, "paper", "check", date(2026, 10, 7))
+    retry_at = kst("2026-10-07 09:30")
     assert (run.result, run.error, run.details) == (
         "failed",
         "RuntimeError: disk full",
-        {"crash": True},
+        {"crash": True, "attempt": 1, "retry_at": retry_at.astimezone(UTC).isoformat()},
     )
+    # A crash is a failed check like any other (audit E10): the 09:30 retry is due, and the
+    # day's 'check-failed' event waits for it.
+    failure = repo.check_failure_event(conn, "paper", date(2026, 10, 7))
+    assert failure is not None
+    assert (failure.status, failure.payload["attempts"]) == ("retry", 1)
+    assert retry_due(conn, ctx.cfg, "paper", kst("2026-10-07 09:30")) is not None
+    assert open_todos(conn, "paper") == []
     with pytest.raises(RuntimeError):
         check_job(ctx, "paper", kst("2026-10-07 08:30"), dry_run=True)
+    # The 09:30 retry crashes too: the same '직접 할 일' as a final failure, in the CLI and the API.
+    crashed = check_job(ctx, "paper", retry_at, retry=True)
+    assert (crashed["result"], crashed["error"]) == ("todo", "RuntimeError: disk full")
+    failure = repo.check_failure_event(conn, "paper", date(2026, 10, 7))
+    assert failure is not None
+    assert (failure.status, failure.payload["attempts"]) == ("todo", 2)
+    [todo] = open_todos(conn, "paper")
+    assert (todo.todo_id, todo.facts["attempts"]) == ("check-failed:2026-10-07", 2)
+    assert retry_due(conn, ctx.cfg, "paper", kst("2026-10-07 09:35")) is None  # it was the last
 
     # run_check works again (monkeypatch.undo() would also lift the network block); now the
     # stage runner breaks.

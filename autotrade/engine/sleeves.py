@@ -11,11 +11,19 @@ Money moves between rules only as it comes in, by the target shares of that day:
 - a dividend goes to the rules that held the shares before the ex-date, in proportion.
 Nothing moves automatically afterwards: the parts may drift from their targets (taxes and costs;
 an open question in PHASE2.md). A rule's orders only spend and sell what its own part holds.
+
+Each rule keeps its own cost basis (audit E8). Quantities, cash and the money totals add up, so
+the base rule's are the ledger's minus the sleeves'. Average costs do not: the ledger pools one
+average over both rules' shares of the same ETF (as a broker shows it), so the base rule's cost
+and realized gains come from its own fills (own_book), the same arithmetic a sleeve uses. When
+the AI rule sells shares it parked in KOSPI200, '지수 반반''s cost and realized gains do not move.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import ROUND_FLOOR, Decimal
 
@@ -82,12 +90,71 @@ def subtract(a: LedgerState, b: LedgerState) -> LedgerState:
     )
 
 
+@dataclass(frozen=True)
+class OwnBook:
+    """A rule's positions and realized gains from its own trade fills (its own average cost)."""
+
+    positions: dict[str, Position]
+    realized_krw: Decimal
+    gaps: frozenset[str]  # instruments whose history the fills do not cover
+
+
+def own_book(fills: Iterable[FillRow]) -> OwnBook:
+    """Fold trade fills with the ledger's own arithmetic (cash is not the point here). A sale of
+    shares the fills never bought (a ledger seeded mid-way) marks that instrument a gap."""
+    state = LedgerState(cash=dict.fromkeys(Currency, Decimal("1e18")))
+    gaps: set[str] = set()
+    for fill in fills:
+        if fill.kind != "trade" or fill.instrument_id is None or fill.qty is None:
+            continue
+        if fill.price is None or fill.instrument_id in gaps:
+            continue
+        trade = TradeFill(
+            fill.instrument_id,
+            fill.currency,
+            Side(fill.side),
+            fill.qty,
+            fill.price,
+            fill.fee,
+            fill.krw_rate,
+        )
+        try:
+            state = apply_trade(state, trade)
+        except LedgerError:
+            gaps.add(fill.instrument_id)
+    return OwnBook(dict(state.positions), state.realized_krw, frozenset(gaps))
+
+
+def with_own_costs(rest: LedgerState, book: OwnBook) -> LedgerState:
+    """The ledger-minus-sleeves state with the rule's own cost basis and realized gains. Where
+    the fills do not account for every share (a ledger seeded mid-way), the subtraction stays."""
+    positions: dict[str, Position] = {}
+    whole = not book.gaps
+    for iid, pos in rest.positions.items():
+        mine = book.positions.get(iid)
+        if iid in book.gaps or mine is None or mine.qty != pos.qty:
+            positions[iid] = pos
+            whole = False
+            continue
+        positions[iid] = Position(iid, pos.currency, pos.qty, mine.cost_native, mine.cost_krw)
+    if any(iid not in rest.positions for iid in book.positions):
+        whole = False
+    return replace(
+        rest,
+        positions=positions,
+        realized_krw=book.realized_krw if whole else rest.realized_krw,
+    )
+
+
 def base_view(conn: sqlite3.Connection, ledger_id: str) -> LedgerState:
-    """The base rule's part: the ledger minus every sleeve."""
+    """The base rule's part: the ledger minus every sleeve, with its own cost basis."""
     state = repo.load_state(conn, ledger_id)
-    for rule_id in sleeve_rule_ids(conn, ledger_id):
+    rules = sleeve_rule_ids(conn, ledger_id)
+    if not rules:
+        return state  # the ledger is the base rule's alone
+    for rule_id in rules:
         state = subtract(state, ai_repo.load_sleeve(conn, ledger_id, rule_id))
-    return state
+    return with_own_costs(state, own_book(repo.fills_of_rule(conn, ledger_id, BASE_RULE)))
 
 
 def view(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> LedgerState:
@@ -262,9 +329,11 @@ def rebuild_sleeve(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> Le
 
 
 def verify_sleeves(conn: sqlite3.Connection, ledger_id: str) -> list[str]:
-    """Differences between rebuilt and stored sleeves (empty = identical to the won)."""
+    """Differences between rebuilt and stored sleeves (empty = identical to the won), and
+    between the base rule's own fills and the ledger minus the sleeves (share counts)."""
     problems: list[str] = []
-    for rule_id in ai_repo.sleeve_rules(conn, ledger_id):
+    rules = ai_repo.sleeve_rules(conn, ledger_id)
+    for rule_id in rules:
         rebuilt = rebuild_sleeve(conn, ledger_id, rule_id)
         stored = ai_repo.load_sleeve(conn, ledger_id, rule_id)
         problems += [f"{rule_id}: {p}" for p in same_to_the_won(rebuilt, stored)]
@@ -272,4 +341,16 @@ def verify_sleeves(conn: sqlite3.Connection, ledger_id: str) -> list[str]:
             a, b = getattr(rebuilt, name), getattr(stored, name)
             if a != b:
                 problems.append(f"{rule_id} {name}: {a} != {b}")
+    if rules:
+        rest = repo.load_state(conn, ledger_id)
+        for rule_id in rules:
+            rest = subtract(rest, ai_repo.load_sleeve(conn, ledger_id, rule_id))
+        book = own_book(repo.fills_of_rule(conn, ledger_id, BASE_RULE))
+        for iid in sorted(set(rest.positions) | set(book.positions) | book.gaps):
+            own = book.positions[iid].qty if iid in book.positions else 0
+            if iid in book.gaps or own != rest.qty_of(iid):
+                problems.append(
+                    f"{BASE_RULE} {iid}: own fills hold {own}, the ledger minus the sleeves"
+                    f" {rest.qty_of(iid)}"
+                )
     return problems

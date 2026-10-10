@@ -1,19 +1,24 @@
 """'직접 할 일' (manual actions): list them, and close one after the owner has handled it.
 
-Two kinds, with the ids the web API shows (autotrade/api/views/health.py):
+Three kinds, with the ids the web API shows (autotrade/api/views/health.py, discovery.py):
 
 - 'order-failed:<order id>': an order of a plan in 'todo' status. It failed again on its retry,
   the broker rejected it (인계 11), or it waited on a stage that did (it was cancelled). The id is
   the order's first attempt. While such a plan is open the rule makes no new plan (engine/check).
-- 'check-failed:<YYYY-MM-DD>': the day's check failed on its last attempt and no check has
-  succeeded since.
+- 'check-failed:<YYYY-MM-DD>': the day's check failed (or crashed) on its last attempt and no
+  check has succeeded since.
+- 'ai-cli:failed:<task id>': an AI task that failed Config.ai_max_attempts times (or gave up at
+  once on a fault that would only repeat). It waits for a person and blocks nothing meanwhile:
+  a new hit asks a new confirmation (engine/watch.py).
 
 resolve() closes one after the owner has dealt with it (in the Toss app, for a live order):
 
 - an order todo closes its whole plan: what the plan still had to send is cancelled, its stages
   stop, the plan and its event become 'resolved', and the next check plans again from the ledger
   as it is (fills that happened stay; nothing is invented for the order that did not fill);
-- a check todo marks that day's failure as handled.
+- a check todo marks that day's failure as handled;
+- an AI todo cancels the task (`python -m autotrade.jobs ai-retry <id>` asks it again instead:
+  retry_ai, attempts back to 0; a complete answer it already got is applied, not asked again).
 
 Either way an event 'todo-resolved' records it (with the owner's note), under a natural key so
 that resolving twice changes nothing.
@@ -26,14 +31,20 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
-from autotrade.db import repo
+from autotrade.config import Config
+from autotrade.db import ai_repo, repo
 from autotrade.db.models import OrderRow, PlanRow
 from autotrade.engine.common import refresh_cash_parts
 from autotrade.timeutil import kst_date, require_aware
 
 ORDER_TODO = "order-failed"
 CHECK_TODO = "check-failed"
+AI_TODO = "ai-cli:failed"
 FAILED_RESULTS = ("failed", "todo")
+
+
+def _max(max_attempts: int | None) -> int:
+    return Config().ai_max_attempts if max_attempts is None else max_attempts
 
 
 class TodoError(ValueError):
@@ -47,7 +58,7 @@ class TodoError(ValueError):
 @dataclass(frozen=True)
 class Todo:
     todo_id: str
-    kind: str  # ORDER_TODO | CHECK_TODO
+    kind: str  # ORDER_TODO | CHECK_TODO | AI_TODO
     day: date  # the plan's date, or the failed check's date
     plan_id: int | None = None
     facts: dict[str, Any] = field(default_factory=dict)
@@ -121,34 +132,181 @@ def _check_todo(conn: sqlite3.Connection, ledger_id: str) -> Todo | None:
     )
 
 
-def open_todos(conn: sqlite3.Connection, ledger_id: str) -> list[Todo]:
+def _ai_todos(conn: sqlite3.Connection, ledger_id: str, max_attempts: int) -> list[Todo]:
+    """One per AI task that waits for a person."""
+    out: list[Todo] = []
+    for t in ai_repo.stuck_tasks(conn, max_attempts, ledger_id):
+        facts: dict[str, Any] = {
+            "task_kind": t.kind,
+            "trigger": t.trigger,
+            "attempts": t.attempts,
+            "error": t.last_error,
+            "created_at": t.created_at,
+            "kept_answer": bool(t.answer_calls),
+        }
+        if t.pick_id is not None:
+            facts["instrument_id"] = ai_repo.get_pick(conn, t.pick_id).instrument_id
+        out.append(
+            Todo(
+                todo_id=f"{AI_TODO}:{t.task_id}",
+                kind=AI_TODO,
+                day=kst_date(t.finished_at or t.created_at),
+                facts=facts,
+            )
+        )
+    return out
+
+
+def open_todos(
+    conn: sqlite3.Connection, ledger_id: str, max_attempts: int | None = None
+) -> list[Todo]:
     out: list[Todo] = []
     for plan in repo.plans_with_status(conn, ledger_id, "todo"):
         out.extend(_order_todos(conn, plan))
     check = _check_todo(conn, ledger_id)
     if check is not None:
         out.append(check)
+    out.extend(_ai_todos(conn, ledger_id, _max(max_attempts)))
     return out
 
 
 def _parse(todo_id: str) -> tuple[str, str]:
+    if todo_id.startswith(f"{AI_TODO}:"):
+        value = todo_id[len(AI_TODO) + 1 :]
+        if not value.isdigit():
+            raise TodoError("bad-id", f"not a task id: {value!r}")
+        return AI_TODO, value
     kind, sep, value = todo_id.partition(":")
     if not sep or kind not in (ORDER_TODO, CHECK_TODO) or not value:
         raise TodoError(
-            "bad-id", f"not a todo id: {todo_id!r} (order-failed:<id>, check-failed:<date>)"
+            "bad-id",
+            f"not a todo id: {todo_id!r} (order-failed:<id>, check-failed:<date>,"
+            " ai-cli:failed:<task id>)",
         )
     return kind, value
 
 
 def resolve(
-    conn: sqlite3.Connection, ledger_id: str, todo_id: str, at: datetime, note: str | None = None
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    todo_id: str,
+    at: datetime,
+    note: str | None = None,
+    max_attempts: int | None = None,
 ) -> dict[str, Any]:
     """Close one manual action. The caller owns the transaction. Raises TodoError."""
     require_aware(at)
     kind, value = _parse(todo_id)
     if kind == ORDER_TODO:
         return _resolve_plan(conn, ledger_id, todo_id, value, at, note)
+    if kind == AI_TODO:
+        return _cancel_ai(conn, ledger_id, todo_id, int(value), at, note, _max(max_attempts))
     return _resolve_check(conn, ledger_id, todo_id, value, at, note)
+
+
+def _ai_task(conn: sqlite3.Connection, ledger_id: str, task_id: int) -> ai_repo.TaskRow:
+    try:
+        task = ai_repo.get_task(conn, task_id)
+    except repo.NotFoundError as exc:
+        raise TodoError("not-found", f"no AI task {task_id}") from exc
+    if task.ledger_id != ledger_id:
+        raise TodoError("not-found", f"AI task {task_id} is not in the {ledger_id} ledger")
+    return task
+
+
+def _cancel_ai(
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    todo_id: str,
+    task_id: int,
+    at: datetime,
+    note: str | None,
+    max_attempts: int,
+) -> dict[str, Any]:
+    """The owner gives an AI task up: cancelled, its kept answer dropped, an event records it."""
+    ref = f"todo-resolved:ai-task:{task_id}"
+    done = repo.event_by_ref(conn, ledger_id, ref)
+    if done is not None:
+        return {"result": "already-resolved", "task_id": task_id, "event_id": done.event_id}
+    task = _ai_task(conn, ledger_id, task_id)
+    if not task.is_stuck(max_attempts):
+        raise TodoError(
+            "not-a-todo", f"{todo_id} is not an open manual action (task {task.status})"
+        )
+    ai_repo.keep_answer(conn, task_id, None)
+    ai_repo.finish_task(
+        conn,
+        task_id,
+        at,
+        status="cancelled",
+        result={"cancelled_by": "owner", "note": note},
+        error=task.last_error,
+    )
+    event_id = repo.insert_event(
+        conn,
+        ledger_id=ledger_id,
+        kind="todo-resolved",
+        event_date=kst_date(at),
+        occurred_at=at,
+        rule_id=task.rule_id,
+        ref=ref,
+        payload={
+            "todo_id": todo_id,
+            "task_id": task_id,
+            "task_kind": task.kind,
+            "pick_id": task.pick_id,
+            "error": task.last_error,
+            "closed": [todo_id],
+            "note": note,
+        },
+    )
+    return {"result": "resolved", "task_id": task_id, "closed": [todo_id], "event_id": event_id}
+
+
+def retry_ai(
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    todo_id: str,
+    at: datetime,
+    note: str | None = None,
+    max_attempts: int | None = None,
+) -> dict[str, Any]:
+    """Ask a failed AI task again: attempts and source tries back to 0, due now. An answer it
+    already got (kept_answer) is applied, not asked again. `todo_id` is 'ai-cli:failed:<id>' or
+    the task id. The caller owns the transaction. Raises TodoError."""
+    require_aware(at)
+    value = todo_id[len(AI_TODO) + 1 :] if todo_id.startswith(f"{AI_TODO}:") else todo_id
+    if not value.isdigit():
+        raise TodoError("bad-id", f"not an AI task: {todo_id!r} (ai-cli:failed:<id> or <id>)")
+    task = _ai_task(conn, ledger_id, int(value))
+    if task.status != "failed":
+        raise TodoError("not-a-todo", f"AI task {value} is {task.status}, not failed")
+    stuck = task.is_stuck(_max(max_attempts))
+    ai_repo.reset_task(conn, task.task_id, at)
+    event_id = repo.insert_event(
+        conn,
+        ledger_id=ledger_id,
+        kind="todo-resolved",
+        event_date=kst_date(at),
+        occurred_at=at,
+        rule_id=task.rule_id,
+        payload={
+            "todo_id": f"{AI_TODO}:{task.task_id}",
+            "task_id": task.task_id,
+            "task_kind": task.kind,
+            "action": "retry",
+            "attempts_before": task.attempts,
+            "error": task.last_error,
+            "closed": [f"{AI_TODO}:{task.task_id}"] if stuck else [],
+            "note": note,
+        },
+    )
+    return {
+        "result": "retried",
+        "task_id": task.task_id,
+        "kept_answer": bool(task.answer_calls),
+        "event_id": event_id,
+    }
 
 
 def _resolve_plan(
