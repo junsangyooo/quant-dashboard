@@ -96,6 +96,10 @@ type NextAction =
   | { kind: 'quote-wait'; market: Market | 'FX'; basisDate: string }   // 'FX' = 환율이 낡음
   | { kind: 'next-check'; at: string; reviewAt?: string }   // AI 규칙: '다음 확인 10/8 08:30 · 점검 11/1'(다음 월 점검, 1일 08:30)
 
+type RebalanceCause = 'band' | 'new-cash' | 'withdraw-expired'
+// 지수 반반이 계획을 세운 까닭: band = 비중이 띠를 벗어남('2.3%p 벗어남'), new-cash = 새 현금(시작·입금·배당)을
+// 산다('새 현금 투자', 벗어남은 띠 안일 수 있다), withdraw-expired = 출금 대기로 묶였던 현금이 기한이 지나 풀려서 산다(인계 14)
+
 type EventKind =
   | 'start' | 'rebalance' | 'partial-failed' | 'in-progress' | 'check-failed'
   | 'dividend' | 'deposit' | 'withdrawal' | 'live-on' | 'live-off'
@@ -160,7 +164,8 @@ interface Trend {
   periodPnl: { amount: number; pct: number } | null    // '전체'거나 기록이 짧으면 null
   series: Array<{ date: string; value: number; ret: number; baseline: number | null; baselineRet: number | null }>
   events: Array<{ date: string; kind: EventKind; kinds: EventKind[]; count?: number }>
-  // 하루에 표식 하나. kind는 그날 첫 사건, kinds는 그날 사건 전부(순서대로), 둘 이상이면 count(묶음 표식)
+  // 하루에 표식 하나. kind는 그날 첫 사건, kinds는 그날 사건 전부(순서대로), 둘 이상이면 count(묶음 표식).
+  // check-failed는 넣지 않는다(홈 표식 범례에 없다). 기록 화면의 사건 목록에는 그대로 있다('✕ 확인 실패')
   empty: null | 'before-first-check' | 'before-first-fill' | 'first-day'
 }
 
@@ -324,6 +329,7 @@ interface HistoryEvent {
   pending?: { side: Side; at: string }   // 리밸런싱 중: 기다리는 단계와 그 시각('매수 22:30')
   fill?: 'paper' | 'live'
   deviation?: number                  // '2.3%p 벗어남'
+  cause?: RebalanceCause              // 지수 반반의 리밸런싱 사건만(AI 규칙의 계획은 없음)
   fees?: number
   amount?: number                     // 시작·입출금·배당(krw. 달러 배당은 받은 날 환율로 원화)
   instrument?: Instrument             // 배당
@@ -355,8 +361,9 @@ interface DayResponse {
     ruleId?: string; rule?: RuleRef                 // 확인한 규칙(이름은 rule)
     instrument?: Instrument; weight?: number; toThreshold?: number; over?: number
     failure?: { reason: 'no-quote' | 'other'; recoveredOn?: string }   // result 'failed': 코드와 날짜('시세 응답 없음 · 9/10 정상')
+    cause?: RebalanceCause                          // 그날 확인이 계획을 세웠으면 그 까닭
   }
-  basis: Basis
+  basis: Basis   // total과 같은 값의 기준: 그날 16:00 평가. 평가가 없는 날(주말·놓친 날)은 그 전 마지막 평가, 오늘 16:00 전은 지금 값
 }
 type DayEvent =
   | { kind: 'rebalance' | 'partial-failed' | 'in-progress'; rule: RuleRef; stagesMini: Array<'done' | 'pending' | 'failed'>;
@@ -648,3 +655,4 @@ type NotifyEvent =
 - 2026-10-09: 계약 공백 정리 · 작동·모드·설정·입장(API 세션). 할 일과 켜기 전 점검의 `facts` 키를 고정했다(낡음 `missingDates`, ai-cli 빨강 `since`, filings `market`, filings는 빨강). `summary.todoCount`는 직접 할 일 카드(action 'manual') 수이고, 노란 카드만 있으면 `summary.kind`는 'ok'다. `recent14[].run.reason`·`lastRun.reason`은 코드다. `/api/health`에 `devices`를 더했고, 토스 연결 `age`는 지난 날 ÷ 90일이다. `/api/mode`에 `offPreview`(취소될 주문·남는 현금), 두 장부 분해에 `valuedAt`(3단계)을 더했다. `notifications.available`(1·2단계 false), `vapidPublicKey`(3단계), `DELETE /api/account/push`(지금은 501)를 더하고 기기 이름 형식을 적었다.
 - 2026-10-09: 계약 공백 정리 · 기록·그날·규칙(API 세션). 기록 사건에 `pending`(기다리는 단계·시각)과 `weightsMini.target`, 주문에 `retried`(다시 낸 결과, 실패한 주문은 실패한 날의 기록으로 남음)와 환전 `direction`, 그날 확인에 `failure`(코드·회복한 날)와 `rule`을 더했다. 규칙 목록 `example`, 규칙 상세 `stale`, 조건 타일 `deviation`, 흐름 카드 `more`·`targets`, '지금' 칸 `until`·kv `note`(데이터만)·주문 행 `retried`를 더하고, 주문 행 `text`(종목 이름 또는 환전 방향 코드)와 AI 규칙 kv 키 목록을 다시 정했다. '대기 6'은 상태가 아니라 kv `candidates`이고, 살 값까지 막대는 종목 줄의 `progress`·`marginText`다. 급락 확인 판단의 `outputSummary`에 뉴스 출처·날짜가 붙는다.
 - 2026-10-09: 서버 문구 걷어냄(API 세션). AI 판단의 `inputSummary`·`outputSummary`를 `input`·`output`(JudgmentItem: 코드·수·날짜·종목)으로 바꿨고, 모델이 쓴 근거와 뉴스는 기록에만 남긴다. `votes`에 바꾸기의 'switch'·'keep'을 더했다. 게이지·종목 줄의 `metric`은 지표 사전 키와 회사의 말(`MetricRef`), `marginText`는 수와 단위(`Margin`)로 바꿨고, '지금' 종목 행은 `margin`·`period`를 쓴다. 응답의 한국어는 이제 데이터 이름(종목·규칙 이름, 회사의 부문 이름, 규칙 정의의 흐름 카드 글)뿐이다. 헤더 '점검 n'은 1거래일 넘게 멈춘 AI 규칙 자료(공시 DART·EDGAR, AI 호출)를 원인으로 센다.
+- 2026-10-09: 웹 통합 실행에서 나온 것(API 세션). 그날 화면의 `basis`는 `total`과 같은 평가의 기준이다(주말·평가 없는 날은 그 전 마지막 평가, 휴장일은 그날 16:00 평가). 그날 확인과 기록의 리밸런싱 사건에 `cause`(`RebalanceCause`: band·new-cash·withdraw-expired)를 더했다. 홈 자산 그래프 표식(`Trend.events`)에서 check-failed를 뺐다(기록에는 남는다).

@@ -59,6 +59,7 @@ def test_the_first_day_reads_like_section_4(tmp_path: Path, reader: Any) -> None
     client = reader(report, "654321")
     assert client.get("/api/shell").json()["now"] == "2026-07-01T16:10:00+09:00"  # its clock
     home = client.get("/api/home").json()
+    assert client.get("/api/day/2026-07-01").json()["check"]["cause"] == "new-cash"  # first buy
     # 예시-값표 §4: 10,005,258 = 156 KOSPI200 ETF at 32,050 + $3,568.24 waiting + 40,252 won.
     assert (home["total"], home["pnl"]) == (10005258, {"amount": 5258, "pct": 0.05})
     assert home["planChip"]["next"]["qty"] == 54  # the US buy of 22:30
@@ -88,6 +89,40 @@ def test_the_paper_world_runs_from_7_1_to_10_7(tmp_path: Path, reader: Any) -> N
     assert client.get("/api/health").json()["summary"]["kind"] == "ok"  # 9/9 was closed
     day = client.get("/api/day/2026-09-09").json()
     assert day["check"]["failure"] == {"reason": "no-quote", "recoveredOn": "2026-09-10"}
+    # Why each rebalance happened: 8/21 left the band (2.3%p, as in §1.4), 10/6 invests the
+    # 9/30 dividend although nothing left the band (1.9%p), 10/7 left it again.
+    causes = {
+        e["date"]: (e["kind"], e.get("cause"), e.get("deviation"))
+        for m in history["months"]
+        for e in m["events"]
+        if e["kind"] in ("rebalance", "in-progress")
+    }
+    assert causes == {
+        "2026-08-21": ("rebalance", "band", 2.3),
+        "2026-10-06": ("rebalance", "new-cash", 1.9),
+        "2026-10-07": ("in-progress", "band", 2.6),
+    }
+    for d, cause in (("2026-08-21", "band"), ("2026-10-06", "new-cash"), ("2026-10-07", "band")):
+        assert client.get(f"/api/day/{d}").json()["check"]["cause"] == cause
+    assert "cause" not in client.get("/api/day/2026-10-02").json()["check"]  # no plan that day
+    # A day without its own value (a weekend) reads the last value before it: total and basis.
+    for weekend, friday in (("2026-08-22", "2026-08-21"), ("2026-10-03", "2026-10-02")):
+        a, b = (client.get(f"/api/day/{d}").json() for d in (weekend, friday))
+        assert (a["total"], a["basis"]) == (b["total"], b["basis"])
+    # A holiday keeps its own 16:00 value; Korea's last close is the Friday's (개천절 대체 10/5).
+    holiday = client.get("/api/day/2026-10-05").json()
+    assert (holiday["check"]["result"], holiday["basis"]["valuedAt"]) == (
+        "holiday",
+        "2026-10-05T16:00:00+09:00",
+    )
+    assert (holiday["basis"]["krClose"], holiday["basis"]["usClose"]) == (
+        "2026-10-02",
+        "2026-10-02",
+    )
+    # The home trend has no failed-check marker (its legend has none); the history keeps it.
+    markers = client.get("/api/home?period=all").json()["trend"]["events"]
+    assert all("check-failed" not in m["kinds"] for m in markers)
+    assert ("2026-09-09", "check-failed") in events
 
 
 def test_the_discovery_world_has_every_3y_screen_element(tmp_path: Path, reader: Any) -> None:
@@ -121,7 +156,16 @@ def test_the_discovery_world_has_every_3y_screen_element(tmp_path: Path, reader:
         "weaken",
         ["invalidated", "hold"],
     )
-    review = client.get("/api/day/2026-10-31").json()["events"][0]["judgment"]
+    saturday = client.get("/api/day/2026-10-31").json()
+    assert saturday["basis"] == client.get("/api/day/2026-10-30").json()["basis"]
+    assert saturday["basis"] == {
+        "valuedAt": "2026-10-30T16:00:00+09:00",
+        "krClose": "2026-10-30",
+        "usClose": "2026-10-29",
+        "fxRate": 1409.5,
+        "fxAt": "2026-10-30T16:00:00+09:00",
+    }
+    review = saturday["events"][0]["judgment"]
     assert review["output"][:3] == [
         {"key": "hold", "value": 14},
         {"key": "weaken", "value": 1},

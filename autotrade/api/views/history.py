@@ -59,6 +59,18 @@ CALENDAR_PRIORITY = (
 )
 
 
+def rebalance_cause(reason: object, released: object) -> str | None:
+    """Why '지수 반반' planned (CONTRACT.md RebalanceCause): 'band' when a weight left the band,
+    'new-cash' when free cash is invested (the start, a deposit, a dividend), 'withdraw-expired'
+    when that cash had been held for a withdrawal that did not come (인계 14). None otherwise
+    (the AI rule's plans)."""
+    if reason == "drift":
+        return "band"
+    if reason in ("new_cash", "start"):
+        return "withdraw-expired" if released else "new-cash"
+    return None
+
+
 def failure_reason(run: RunRow) -> str:
     """A failed check's reason as a code (CONTRACT.md: codes, never sentences)."""
     return "no-quote" if (run.error or "").startswith("no-quote") else "other"
@@ -226,6 +238,9 @@ def history_event(data: DayData, ev: EventRow) -> dict[str, Any]:
         max_drift = ev.payload.get("max_drift")
         if max_drift is not None:
             out["deviation"] = fmt.pp1(abs(Decimal(str(max_drift))))
+        cause = rebalance_cause(ev.payload.get("reason"), ev.payload.get("withdraw_released"))
+        if cause is not None:  # the screen says why: a band breach or new cash invested
+            out["cause"] = cause
         out["fees"] = fmt.krw(
             sum((f.fee_krw for f in repo.fills_of_plan(ctx.conn, plan.plan_id)), ZERO)
         )
@@ -414,6 +429,13 @@ def _check_json(ctx: LedgerContext, data: DayData, d: date) -> dict[str, Any]:
         "at": fmt.iso(run.started_at),
         "result": DAY_RESULT.get(run.result or "", "failed"),
     }
+    planned = next(
+        (r.details for r in runs if r.details.get("plan_id") and r.details.get("planned")), None
+    )
+    if planned is not None:  # the check that planned the day's rebalance: why it did
+        cause = rebalance_cause(planned["planned"].get("reason"), planned.get("withdraw_released"))
+        if cause is not None:
+            out["cause"] = cause
     if out["result"] == "failed":  # '시세 응답 없음 · 9/10 정상' (codes and a date)
         failure: dict[str, Any] = {"reason": failure_reason(run)}
         recovered = data.recovered_on(d)
@@ -518,9 +540,17 @@ def day(ctx: LedgerContext, d: date) -> dict[str, Any]:
             "amount": fmt.krw(change),
             "pct": fmt.ret2(change / base) if base > 0 else 0.0,
         }
+    # The basis of the day's value, from the same source as its total (DayData.day_change): the
+    # day's own 16:00 value; on a day without one (a weekend, a missed value) the last value
+    # before it; today before 16:00 the value now.
     snap = data.snaps.get(d)
+    earlier = [s for s in ctx.snapshots if s.date < d]
     if snap is not None:
         basis = _snapshot_basis(snap)
+    elif d != ctx.today and earlier:
+        basis = _snapshot_basis(earlier[-1])
+    elif d == ctx.today:
+        basis = ctx.basis()
     else:
         runs = data.runs.get(d, [])
         basis = _check_basis(runs[-1]) if runs else ctx.basis()

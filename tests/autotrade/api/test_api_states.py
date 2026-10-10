@@ -406,3 +406,36 @@ def test_parameters(logged_in: TestClient) -> None:
     assert logged_in.get("/api/day/2026-13-01").status_code == 400
     assert logged_in.get("/api/history?year=1999").status_code == 400
     assert logged_in.get("/api/history?year=2026").json()["year"] == 2026
+
+
+def test_cash_a_withdrawal_did_not_take_is_invested(
+    logged_in: TestClient, db: sqlite3.Connection, world: World, jobs: JobContext, clock: Clock
+) -> None:
+    """인계 14: 300,000 won held for a withdrawal until 10/12; nothing trades while it waits,
+    and on 10/13 the check invests it although no weight left the band ('withdraw-expired')."""
+    seed_ledger(
+        db,
+        start=date(2026, 7, 1),
+        start_amount=D("10000000"),
+        krw=D("300000"),
+        usd=D("0"),
+        positions={KR: (150, D("5400000"), D("5400000")), US: (63, D("3931.20"), D("5425056"))},
+    )
+    with transaction(db):
+        repo.add_withdraw_wait(
+            db, "paper", Currency.KRW, D("300000"), date(2026, 10, 12), kst("2026-10-02 10:00")
+        )
+    for d in ("2026-10-06", "2026-10-12"):
+        world.bar(KR, d, close="36000", open_="36000")
+        world.bar(US, d, close="62.40", open_="62.40")
+    for t in ("2026-10-07 08:25", "2026-10-13 08:25"):
+        world.rate(kst(t), "1380.0")
+    assert check_job(jobs, "paper", kst("2026-10-07 08:30"))["result"] == "withdraw-wait"
+    assert check_job(jobs, "paper", kst("2026-10-13 08:30"))["result"] == "rebalance"
+    move_clock(logged_in, clock, "2026-10-13 09:00")
+    check = logged_in.get("/api/day/2026-10-13").json()["check"]
+    assert (check["result"], check["cause"]) == ("rebalance", "withdraw-expired")
+    assert abs(check["band"]["before"]) < 2.0  # nothing left the band
+    history = logged_in.get("/api/history").json()
+    [event] = [e for m in history["months"] for e in m["events"] if e["date"] == "2026-10-13"]
+    assert (event["kind"], event["cause"]) == ("in-progress", "withdraw-expired")

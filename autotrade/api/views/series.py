@@ -15,12 +15,13 @@ from autotrade.domain.money import ZERO, usd_in_krw
 from autotrade.domain.weights import drift_report
 
 MIN_RECORD_DAYS = 30  # '기록 30거래일 미만이면 기간 칩 숨김'
+# The home trend's markers (SCR-HOME legend). A failed check has none there: the history band
+# shows it ('✕ 확인 실패').
 MARKER_KINDS = (
     "start",
     "rebalance",
     "partial-failed",
     "in-progress",
-    "check-failed",
     "dividend",
     "deposit",
     "withdrawal",

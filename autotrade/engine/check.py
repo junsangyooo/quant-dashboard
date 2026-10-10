@@ -199,6 +199,8 @@ def _persist_plan(
     at: datetime,
     run_id: int,
     basis: dict[str, Any],
+    *,
+    released: bool = False,
 ) -> int:
     start = repo.start_event(conn, ledger_id)
     # The first plan after the start buys the start amount; it belongs to the 'start' event.
@@ -222,7 +224,7 @@ def _persist_plan(
         created_at=at,
     )
     insert_stages_and_orders(conn, cfg, ledger_id, rule.rule_id, plan, plan_id, d, at)
-    payload = {
+    payload: dict[str, Any] = {
         "reason": reason,
         "max_instrument": plan.report.max_instrument,
         "max_drift": plan.report.max_drift,
@@ -232,6 +234,8 @@ def _persist_plan(
         "weights_after_est": plan.weights_after,
         "basis": basis,
     }
+    if released:  # the cash a withdraw wait held came back today (인계 14)
+        payload["withdraw_released"] = True
     if is_first and start is not None:
         repo.update_event(conn, start.event_id, at, status="in-progress", plan_id=plan_id)
     else:
@@ -392,7 +396,9 @@ def _check_body(
         return QUOTE_WAIT, None
 
     # 2-4. Weights on what the rule holds, cash waiting to buy included.
-    repo.expire_withdraw_waits(conn, ledger_id, d)
+    released = repo.expire_withdraw_waits(conn, ledger_id, d)
+    if released:  # a withdrawal that did not come: its cash is free again
+        details["withdraw_released"] = released
     waits = repo.withdraw_waits(conn, ledger_id)
     state = sleeves.base_view(conn, ledger_id)  # what '지수 반반' holds of the shared ledger
     parts = refresh_cash_parts(conn, ledger_id, at)
@@ -467,7 +473,9 @@ def _check_body(
         details["deferred"] = True
         return HOLIDAY, None
 
-    plan_id = _persist_plan(conn, cfg, ledger_id, rule, plan, d, at, run_id, basis)
+    plan_id = _persist_plan(
+        conn, cfg, ledger_id, rule, plan, d, at, run_id, basis, released=released > 0
+    )
     details["drift"] = _report_json(plan.report, plan.weights_after)
     details["plan_id"] = plan_id
     return REBALANCE, plan_id
