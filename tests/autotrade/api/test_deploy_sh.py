@@ -1,8 +1,8 @@
 """deploy/deploy.sh against a simulated Oracle under pytest's temporary folder: an origin
 repository, the laptop's clone (with this checkout's deploy.sh and release.py) and the server's
 clone, with fake ssh (runs the command locally with HOME = the fake server's home), sudo,
-systemctl, npm and curl on PATH. The engine's commands (`autotrade.jobs backup --predeploy`,
-`migrate`) are played by the fake server Python. Nothing leaves the temporary folder."""
+systemctl, npm and curl on PATH. The engine's commands (`autotrade.jobs migrate --predeploy`,
+`backup`) are played by the fake server Python. Nothing leaves the temporary folder."""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ if [ "$1" = "-m" ]; then
   case "$2 $3" in
     "src.core.backup "*) exit 0 ;;
     "autotrade.jobs backup") exec "$REAL_PYTHON" "$SIM_TOOLS/engine.py" backup ;;
-    "autotrade.jobs migrate") exec "$REAL_PYTHON" "$SIM_TOOLS/engine.py" migrate ;;
+    "autotrade.jobs migrate") exec "$REAL_PYTHON" "$SIM_TOOLS/engine.py" migrate "${@:4}" ;;
   esac
   exit 2
 fi
@@ -88,10 +88,10 @@ from pathlib import Path
 sys.path.insert(0, os.getcwd())  # the server's checkout, as `python -m` would have it
 from autotrade.db.migrations import MIGRATIONS
 db = Path("data/autotrade.db")
-if sys.argv[1] == "backup":
+def backup():
     if not db.exists():
         print(json.dumps({"job": "backup", "result": "no-database"}))
-        sys.exit(0)
+        return
     folder = Path("data/backup/autotrade")
     folder.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S%f")[:15]
@@ -100,7 +100,14 @@ if sys.argv[1] == "backup":
     conn.execute("VACUUM INTO ?", (str(target),))
     conn.close()
     print(json.dumps({"job": "backup", "result": "ok", "path": str(target)}))
+if sys.argv[1] == "backup":
+    backup()
+elif os.path.exists(os.path.join(os.environ["SIM_STATE"], "migrate-busy")):
+    print(json.dumps({"job": "migrate", "result": "busy", "lock": "ai", "at": "now"}))
+    sys.exit(3)
 else:
+    if "--predeploy" in sys.argv:  # migrate --predeploy: the copy first, as the real command
+        backup()
     db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db)
     conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)")
@@ -262,8 +269,7 @@ def test_deploy_then_roll_back_then_deploy_again(sim: Sim) -> None:
     ]
     assert order == [
         "npm run build",
-        "python -m autotrade.jobs backup --predeploy",
-        "python -m autotrade.jobs migrate",
+        "python -m autotrade.jobs migrate --predeploy",
         "systemctl restart autotrade.service",
     ]
     assert "npm ci --ignore-scripts --no-audit --no-fund" in calls
@@ -314,6 +320,25 @@ def test_a_failed_build_changes_nothing(sim: Sim) -> None:
     assert "web build failed" in done.stderr
     assert "nothing changed on the server" in done.stderr
     assert (sim.head(), sim.live(), sim.schema()) == before
+
+
+def test_a_busy_migrate_says_to_deploy_again(sim: Sim) -> None:
+    """migrate waits for the tick's and the AI runner's locks; when one stays busy nothing is
+    copied or migrated, the service is not restarted, and the message says what to do."""
+    assert sim.deploy("autotrade").returncode == 0
+    sim.commit({"autotrade/db/migrations.py": migrations(3)}, "a migration")
+    (sim.state / "migrate-busy").touch()
+    restarts = sim.calls().count("systemctl restart autotrade.service")
+    done = sim.deploy("autotrade")
+    assert done.returncode != 0
+    assert "the ai lock stayed busy" in done.stderr
+    assert "./deploy/deploy.sh autotrade" in done.stderr
+    assert sim.schema() == 2  # nothing migrated
+    assert sim.calls().count("systemctl restart autotrade.service") == restarts
+    (sim.state / "migrate-busy").unlink()
+    again = sim.deploy("autotrade")
+    assert again.returncode == 0, again.stdout + again.stderr
+    assert sim.schema() == 3
 
 
 def test_a_pull_only_deploy_warns_about_a_pending_schema(sim: Sim) -> None:

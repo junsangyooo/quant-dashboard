@@ -110,6 +110,13 @@ def _utc(at: datetime) -> str:
     return at.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _db_time(at: datetime) -> str:
+    """A timestamp written into the app's database: its own storage format (autotrade/timeutil.py
+    to_iso, '+00:00'). Python 3.10's datetime.fromisoformat refuses a trailing 'Z', and the code a
+    rollback returns to reads these columns that way."""
+    return at.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
 # ── git ────────────────────────────────────────────────────────────────────────────────────
 
 
@@ -321,9 +328,19 @@ def npm(args: Sequence[str], cwd: Path) -> None:
         raise ReleaseError(f"npm {' '.join(args)} failed (exit {done.returncode})")
 
 
-def web_build(paths: Paths, commit: str, now: datetime, run: Runner = npm) -> dict[str, Any]:
-    """Build web/ of <commit> outside the live tree into a new release."""
+def web_build(
+    paths: Paths, commit: str, now: datetime, run: Runner = npm, reuse: bool = True
+) -> dict[str, Any]:
+    """Build web/ of <commit> outside the live tree into a new release.
+
+    A complete release of the same commit is used again (reuse): a deploy run again after a later
+    step failed (a busy lock at migrate, say) needs no second build, and the same second's id
+    would collide. The build is the same either way (byte-identical from one commit), and the
+    carrying of older assets happens at the switch, not here."""
     sha = commit_of(paths.root, commit)
+    existing = find_release(paths, sha) if reuse else None
+    if existing is not None:
+        return {"result": "ok", "release": existing, "commit": sha, "reused": True}
     with tempfile.TemporaryDirectory(prefix="autotrade-web-") as tmp:
         if not export(paths.root, sha, "web", Path(tmp)):
             raise ReleaseError(f"{sha[:12]} has no web/")
@@ -455,7 +472,7 @@ def restore_db(paths: Paths, backup: Path, now: datetime) -> dict[str, Any]:
             closed = conn.execute(
                 "UPDATE sessions SET revoked_at = ?, revoked_why = 'rollback'"
                 " WHERE revoked_at IS NULL",
-                (_utc(now),),
+                (_db_time(now),),
             ).rowcount
         conn.commit()
     finally:
@@ -668,9 +685,18 @@ def http_status(path: str, method: str = "GET", origin: str | None = None) -> in
         return 0
 
 
-def health(fetch: Fetch = http_status, tries: int = 10, pause_s: float = 2.0) -> dict[str, Any]:
+def health(
+    fetch: Fetch = http_status,
+    tries: int = 10,
+    pause_s: float = 2.0,
+    origin_optional: bool = False,
+) -> dict[str, Any]:
     """After a restart: /api/healthz and / answer 200 (healthz is 503 unless the schema fits),
-    a same-site POST passes and a sibling site's is refused (the origin rule)."""
+    a same-site POST passes and a sibling site's is refused (the origin rule).
+
+    origin_optional (rollbacks): the code rolled back to may predate the origin rule (1587962),
+    where both POSTs pass (204, 204); that is reported as originRule 'absent', not a failure.
+    Anything else still fails."""
 
     def code(path: str, method: str = "GET", origin: str | None = None) -> int:
         return fetch(path, method, origin)
@@ -686,9 +712,12 @@ def health(fetch: Fetch = http_status, tries: int = 10, pause_s: float = 2.0) ->
         raise ReleaseError(f"health check failed: {last}")
     last["sameSite"] = code("/api/auth/logout", "POST", HEALTH_BASE)
     last["sibling"] = code("/api/auth/logout", "POST", "https://portfolio.jsyoo.dev")
-    if (last["sameSite"], last["sibling"]) != (204, 403):
-        raise ReleaseError(f"the origin rule misbehaves: {last}")
-    return {"result": "ok", **last}
+    pair = (last["sameSite"], last["sibling"])
+    if pair == (204, 403):
+        return {"result": "ok", **last}
+    if origin_optional and pair == (204, 204):
+        return {"result": "ok", "originRule": "absent", **last}
+    raise ReleaseError(f"the origin rule misbehaves: {last}")
 
 
 def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
@@ -704,7 +733,7 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
     apply.add_argument("--restore")
     apply.add_argument("--release")
     sub.add_parser("record").add_argument("entry", help="a JSON object")
-    sub.add_parser("health")
+    sub.add_parser("health").add_argument("--origin-optional", action="store_true")
     args = parser.parse_args(argv)
     paths = Paths(root or Path.cwd())
     now = datetime.now(timezone.utc)
@@ -727,7 +756,7 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
         elif args.command == "record":
             out = record(paths, dict(json.loads(args.entry)), now)
         else:
-            out = health()
+            out = health(origin_optional=args.origin_optional)
     except (ReleaseError, OSError, sqlite3.Error, ValueError) as exc:
         sys.stdout.write(json.dumps({"result": "failed", "error": str(exc)}) + "\n")
         return 1

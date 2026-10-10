@@ -27,7 +27,11 @@ def to_iso(dt: datetime) -> str:
 
 
 def from_iso(text: str) -> datetime:
-    """Parse a stored ISO timestamp (must carry an offset)."""
+    """Parse a stored ISO timestamp (must carry an offset). A trailing 'Z' is read as UTC: this
+    code writes '+00:00', but Python 3.10's fromisoformat refuses 'Z' outright, and one stray
+    writer would otherwise turn every read of that row into a crash."""
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
     return require_aware(datetime.fromisoformat(text))
 
 

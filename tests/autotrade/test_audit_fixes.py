@@ -154,6 +154,57 @@ def test_migrate_waits_for_the_tick_and_the_ai_runner(
         assert json.loads(_cli(["tick"], db)[1][0])["result"] == "busy"
 
 
+def test_migrate_predeploy_copies_first_under_the_same_locks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """deploy.sh's one step: the predeploy copy, then the migration, both inside migrate's locks,
+    so nothing a tick or an AI run writes can fall between the copy and the schema change."""
+    db = tmp_path / "autotrade.db"
+    # A fresh server: no database to copy, then the migration creates it.
+    code, lines = _cli(["migrate", "--predeploy"], db)
+    assert code == 0
+    assert [json.loads(x)["result"] for x in lines] == ["no-database", "ok"]
+    assert all("\n" not in x for x in lines)  # one line each: deploy.sh reads the last
+    # An older database: the copy keeps the old schema, then the database moves on.
+    old = tmp_path / "old.db"
+    _at_version(old, 4)
+    code, lines = _cli(["migrate", "--predeploy", "--at", "2026-10-10T15:04:05+00:00"], old)
+    assert code == 0
+    copy = Path(json.loads(lines[0])["path"])
+    conn = sqlite3.connect(copy)
+    try:
+        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 4
+    finally:
+        conn.close()
+    assert json.loads(lines[1])["schema"] == LATEST_VERSION
+    # No copy, no migration.
+    other = tmp_path / "other.db"
+    _at_version(other, 4)
+    monkeypatch.setattr(cli, "run_predeploy_backup", _disk_full)
+    code, lines = _cli(["migrate", "--predeploy"], other)
+    assert (code, json.loads(lines[-1])["result"]) == (1, "failed")
+    conn = connect(other)
+    try:
+        assert stored_version(conn) == 4
+    finally:
+        conn.close()
+    # Busy: neither the copy nor the migration happens.
+    monkeypatch.setattr(cli, "LOCK_WAIT_S", 0.2)
+    with job_lock(lock_path(other)):
+        code, lines = _cli(["migrate", "--predeploy"], other)
+    assert (code, len(lines), json.loads(lines[0])["result"]) == (cli.EXIT_BUSY, 1, "busy")
+    with pytest.raises(SystemExit):
+        cli.main(["tick", "--predeploy", "--db", str(other)], env={})
+
+
+def test_a_stored_time_with_a_trailing_z_still_reads() -> None:
+    """The app writes '+00:00'; a 'Z' from any other writer (the rollback helper once did) must
+    not turn every read of that row into a crash on Python 3.10."""
+    from autotrade.timeutil import from_iso
+
+    assert from_iso("2026-10-10T09:05:49Z") == from_iso("2026-10-10T09:05:49+00:00")
+
+
 def test_the_database_files_are_private(tmp_path: Path) -> None:
     previous = os.umask(0o002)  # the server's
     try:

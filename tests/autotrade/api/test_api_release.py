@@ -222,6 +222,11 @@ def test_build_switch_carry_and_prune(repo: Path, two_commits: tuple[str, str]) 
     assert (paths.dist / "index.html").read_text() == "<title>build 1</title>"
     assert rel.live_release(paths) == first["release"]
 
+    # The same commit again (a deploy run again after a later step failed): no second build.
+    again = rel.web_build(paths, a, T0, npm)
+    assert again == {**first, "reused": True}
+    assert len(npm.calls) == 2
+
     second = rel.web_build(paths, b, T0 + timedelta(minutes=1), npm)["release"]
     switched = rel.web_switch(paths, second, T0)
     assert (switched["previous"], switched["carried"]) == (first["release"], 1)
@@ -239,7 +244,9 @@ def test_build_switch_carry_and_prune(repo: Path, two_commits: tuple[str, str]) 
 
     built = [second]
     for i in range(2, 9):
-        built.append(rel.web_build(paths, b, T0 + timedelta(minutes=i), npm)["release"])
+        built.append(
+            rel.web_build(paths, b, T0 + timedelta(minutes=i), npm, reuse=False)["release"]
+        )
     (paths.releases / ".20261010T000000Z-0123456789ab.partial").mkdir()
     (paths.releases / "20261009T000000Z-0123456789ab.json").write_text("{}")  # orphan
     (paths.releases / "notes.txt").write_text("not ours")
@@ -279,8 +286,9 @@ def test_a_build_needs_web_and_an_index(repo: Path, two_commits: tuple[str, str]
     with pytest.raises(rel.ReleaseError, match=r"no index\.html"):
         rel.web_build(paths, two_commits[0], T0, lambda args, cwd: None)
     first = rel.web_build(paths, two_commits[0], T0, FakeNpm())["release"]
-    with pytest.raises(rel.ReleaseError, match="exists already"):
-        rel.web_build(paths, two_commits[0], T0, FakeNpm())
+    assert rel.web_build(paths, two_commits[0], T0, FakeNpm())["release"] == first  # reused
+    with pytest.raises(rel.ReleaseError, match="exists already"):  # a forced rebuild, same second
+        rel.web_build(paths, two_commits[0], T0, FakeNpm(), reuse=False)
     assert rel.releases(paths)[0].id == first
 
 
@@ -317,6 +325,15 @@ def test_restore_db_sets_the_live_database_aside(tmp_path: Path) -> None:
     finally:
         conn.close()
     assert why == {"rollback"}  # no session ended after the backup comes back
+    conn = sqlite3.connect(paths.db)
+    try:
+        stamps = {r[0] for r in conn.execute("SELECT revoked_at FROM sessions")}
+    finally:
+        conn.close()
+    # The app's storage format: the code a rollback returns to (Python 3.10) reads it with
+    # datetime.fromisoformat, which refuses a trailing 'Z' (a 500 for every logged-in browser).
+    assert stamps == {"2026-10-10T09:00:00+00:00"}
+    assert {datetime.fromisoformat(t) for t in stamps} == {T0}
     assert (paths.db.stat().st_mode & 0o777) == 0o600
     assert not paths.db.with_name("autotrade.db.restore").exists()
     assert notes(backup) == ["before the deploy"]  # the backup itself is untouched
@@ -530,6 +547,19 @@ def test_health_needs_the_api_the_page_and_the_origin_rule() -> None:
         rel.health(lambda path, method, origin: 503, tries=2, pause_s=0)
     with pytest.raises(rel.ReleaseError, match="origin rule misbehaves"):
         rel.health(lambda path, method, origin: 200 if method == "GET" else 204, pause_s=0)
+    # A rollback may return to code from before the origin rule: both POSTs pass there.
+    before_rule = rel.health(
+        lambda path, method, origin: 200 if method == "GET" else 204,
+        pause_s=0,
+        origin_optional=True,
+    )
+    assert (before_rule["result"], before_rule["originRule"]) == ("ok", "absent")
+    with pytest.raises(rel.ReleaseError, match="origin rule misbehaves"):
+        rel.health(
+            lambda path, method, origin: 200 if method == "GET" else 500,
+            pause_s=0,
+            origin_optional=True,
+        )
 
 
 def test_http_status(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,7 @@
 """python -m autotrade.jobs <command> [options]
 
 Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, ai-retry),
---predeploy (backup).
+--predeploy (backup, migrate).
 
   tick       what cron runs every 5 minutes: decides what is due now and runs it (see
              autotrade/jobs/schedule.py for the times and how late each may still run).
@@ -32,7 +32,9 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, a
   migrate    create or upgrade data/autotrade.db and write its fixed rows (deploy.sh runs it);
              the only command that changes the schema. The file is made 0600 (and -wal/-shm).
              It holds the jobs lock and the AI lock throughout (waits up to 2 and 15 minutes;
-             still busy: changes nothing, exit 3)
+             still busy: changes nothing, exit 3). --predeploy (deploy.sh) first makes the
+             predeploy copy under the same locks (see backup); if that fails, nothing migrates.
+             One JSON line per step.
   set-pin    set the owner PIN (first time or reset). Reads it twice from standard input,
              never from the command line, closes every open session and clears the lockout
              (as unlock does).
@@ -149,7 +151,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", help="database path (default: AUTOTRADE_DB or data/autotrade.db)")
     parser.add_argument("--note", help="resolve, ai-retry: what the owner did (kept in the event)")
     parser.add_argument(
-        "--predeploy", action="store_true", help="backup: the copy deploy.sh makes before migrate"
+        "--predeploy",
+        action="store_true",
+        help="backup: the copy deploy.sh makes before migrate; migrate: make it first, under the"
+        " same locks",
     )
     parser.add_argument(
         "--ask-again", action="store_true", help="ai-retry: drop a kept answer, ask the model"
@@ -338,7 +343,8 @@ def _run(
         conn.close()
     if args.command == "ai" and _quiet(report):
         return 0
-    out(_dump(report, line=args.command == "ai"))  # the AI log gets one line per run
+    # The AI log gets one line per run; deploy.sh reads migrate's last line.
+    out(_dump(report, line=args.command in ("ai", "migrate")))
     return 1 if report.get("result") in FAILING_RESULTS else 0
 
 
@@ -357,12 +363,18 @@ def _migrate_locked(
     ends is the AI runner's process, to be stopped by hand."""
     with job_lock(lock_path(cfg.db_path), LOCK_WAIT_S) as locked:
         if not locked:
-            out(_dump({"job": "migrate", "result": "busy", "lock": "jobs", "at": clock()}))
+            busy = {"job": "migrate", "result": "busy", "lock": "jobs", "at": clock()}
+            out(_dump(busy, line=True))
             return EXIT_BUSY
         with job_lock(ai_lock_path(cfg.db_path), MIGRATE_AI_WAIT_S) as ai_locked:
             if not ai_locked:
-                out(_dump({"job": "migrate", "result": "busy", "lock": "ai", "at": clock()}))
+                busy = {"job": "migrate", "result": "busy", "lock": "ai", "at": clock()}
+                out(_dump(busy, line=True))
                 return EXIT_BUSY
+            if args.predeploy:  # the copy deploy.sh keeps for a rollback, before anything changes
+                code = _predeploy(cfg, clock, out)
+                if code != 0:
+                    return code  # no copy, no migration
             return _run(args, cfg, sources, clock, out, stdin)
 
 
@@ -402,8 +414,8 @@ def main(
     if args.todo_id is not None and args.command not in TAKES_ID:
         # Only 'resolve' and 'ai-retry' take a value; above all, a PIN is never an argument.
         parser.error(f"{args.command} takes no argument")
-    if args.predeploy and args.command != "backup":
-        parser.error("--predeploy is only for backup")
+    if args.predeploy and args.command not in ("backup", "migrate"):
+        parser.error("--predeploy is only for backup and migrate")
     if args.ask_again and args.command != "ai-retry":
         parser.error("--ask-again is only for ai-retry")
     if args.command != "dev-seed" and (args.pin is not None or args.world is not None):

@@ -104,8 +104,8 @@ def test_deploy_sh_order_and_syntax() -> None:
         "helper web-build",  # 1. build outside the live tree
         "git pull --ff-only",  # 2. move the tree
         "src.core.backup",  # 3. the old app's books
-        "autotrade.jobs backup --predeploy",  # 4. a fresh copy before …
-        "autotrade.jobs migrate",  # 5. … the only migration
+        "autotrade.jobs migrate --predeploy",  # 4.-5. a fresh copy, then the only migration,
+        # under the tick's and the AI runner's locks (one command: nothing falls between)
         "helper web-switch",  # 6. then the web
         "sudo systemctl restart autotrade.service",  # 7. then the API
     ]
