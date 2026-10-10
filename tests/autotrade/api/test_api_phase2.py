@@ -68,7 +68,8 @@ def lived(world: World, jobs: JobContext, db: sqlite3.Connection, clock: Clock) 
     runner.add("sell", sell("반증"), sell("반증"))
     at = kst("2026-10-14 08:35")
     cli = ClaudeCli("claude", jobs.cfg.db_path.parent / "ai-cwd", runner=runner, now=lambda: at)
-    run_ai(db, replace(jobs.cfg, ai_calls_enabled=True), jobs.sources, cli, lambda: at)
+    runner_cfg = replace(jobs.cfg, ai_calls_enabled=True, dart_api_key="key")  # its cron line
+    run_ai(db, runner_cfg, jobs.sources, cli, lambda: at)
     tick(jobs, "2026-10-14 08:45")
     tick(jobs, "2026-10-14 09:05")
     tick(jobs, "2026-10-14 16:05")  # the snapshot
@@ -259,7 +260,14 @@ def test_health_lists_filings_ai_cli_and_the_metric_table(
     assert sources["filings"]["extra"] == {"dart": "ok", "edgar": "ok"}
     assert sources["ai-cli"]["state"] == "fresh"
     assert sources["ai-cli"]["basis"] == "sonnet"
-    assert sources["ai-cli"]["extra"]["monthTokens"] == 8800
+    assert sources["ai-cli"]["extra"] == {
+        "monthTokens": 8800,
+        "budget": 600000,
+        "enabled": 1,  # the runner's own gate, from its heartbeat (not this process's env)
+        "due": 0,
+        "cli": "ok",
+        "lastRunAt": "2026-10-14T08:35:00+09:00",
+    }
     assert sources["metric-table"]["basis"] == "2026-10-12"
     assert health["summary"]["sourcesTotal"] == 6
 
@@ -388,9 +396,11 @@ def test_a_yellow_card_alone_keeps_the_summary_ok(
                 dedup_key=f"stuck:{i}",
                 at=kst(made),
             )
-            for _ in range(3):
+            for _ in range(3):  # attempts count the failures
                 ai_repo.start_task(db, task_id, kst("2026-10-14 06:10"))
-            ai_repo.finish_task(db, task_id, kst("2026-10-14 06:11"), status="failed", error="x")
+                ai_repo.finish_task(
+                    db, task_id, kst("2026-10-14 06:11"), status="failed", error="x"
+                )
     health = logged_in.get("/api/health").json()
     edgar = next(t for t in health["todos"] if t["id"] == "filings:edgar")
     assert edgar["facts"] == {"source": "edgar", "market": "US", "state": "failed"}  # no since
@@ -932,3 +942,131 @@ def test_judgment_items_are_served_as_data(lived: None, db: sqlite3.Connection) 
         None,
         None,
     ]
+
+
+def test_the_runner_s_heartbeat_on_the_health_screen(
+    lived: None, logged_in: TestClient, db: sqlite3.Connection, clock: Clock
+) -> None:
+    """E1 E3 E10: what the AI runner is (its gate, its CLI, its DART key, the call it is making)
+    comes from its heartbeat; a long call and a waiting queue are yellow, no CLI is red. Now:
+    Wed 10/14 16:30; the world's runner last ran at 08:35 with everything in place."""
+
+    def health() -> dict[str, Any]:
+        return dict(logged_in.get("/api/health").json())
+
+    def ai_cards(h: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        return {t["id"]: t for t in h["todos"] if t["kind"] == "ai-cli"}
+
+    def cli_row(h: dict[str, Any]) -> dict[str, Any]:
+        return dict(next(s for s in h["sources"] if s["id"] == "ai-cli"))
+
+    assert ai_cards(health()) == {}
+    # A discovery call has been running since 14:05: yellow, and nothing stops it.
+    with transaction(db):
+        ai_repo.runner_begin(
+            db,
+            kst("2026-10-14 14:00"),
+            enabled=True,
+            cli="/usr/local/bin/claude",
+            cli_error=None,
+            dart_key=True,
+        )
+        ai_repo.runner_task(db, kst("2026-10-14 14:05"), 7, "discovery")
+        ai_repo.enqueue_task(
+            db,
+            kind="extract",
+            ledger_id="paper",
+            rule_id="discovery_3y",
+            trigger="filing",
+            dedup_key="behind-the-long-call",
+            at=kst("2026-10-14 12:00"),
+        )
+    h = health()
+    cards = ai_cards(h)
+    assert cards["ai-cli:running:7"] == {
+        "id": "ai-cli:running:7",
+        "severity": "yellow",
+        "kind": "ai-cli",
+        "facts": {
+            "reason": "call-running",
+            "taskKind": "discovery",
+            "since": "2026-10-14T14:05:00+09:00",
+        },
+        "action": {"kind": "manual"},
+        "effect": "other",
+    }
+    assert cards["ai-cli:queue"]["facts"] == {
+        "reason": "queue-waiting",
+        "count": 1,
+        "since": "2026-10-14T12:00:00+09:00",
+        "cause": "busy",  # the long call holds the runner
+    }
+    row = cli_row(h)
+    assert (row["extra"]["running"], row["extra"]["runningSince"]) == (
+        "discovery",
+        "2026-10-14T14:05:00+09:00",
+    )
+    assert h["summary"]["kind"] == "ok"  # yellow cards only: '정상 · 할 일 2'
+    assert h["summary"]["todoCount"] == 2
+    # The run ended at 14:10 and none came since: the runner does not run (cron).
+    with transaction(db):
+        ai_repo.runner_end(db, kst("2026-10-14 14:10"), "ok")
+    cards = ai_cards(health())
+    assert set(cards) == {"ai-cli:queue"}
+    assert cards["ai-cli:queue"]["facts"]["cause"] == "stopped"
+    # It runs, with its gate off (AUTOTRADE_AI_CALLS not on its cron line).
+    with transaction(db):
+        ai_repo.runner_begin(
+            db,
+            kst("2026-10-14 16:25"),
+            enabled=False,
+            cli="/usr/local/bin/claude",
+            cli_error=None,
+            dart_key=True,
+        )
+    h = health()
+    assert ai_cards(h)["ai-cli:queue"]["facts"]["cause"] == "off"
+    assert cli_row(h)["extra"]["enabled"] == 0
+    # On, but no CLI anywhere: red and a person's, the row is stale. The queue says why too.
+    with transaction(db):
+        ai_repo.runner_begin(
+            db,
+            kst("2026-10-14 16:25"),
+            enabled=True,
+            cli=None,
+            cli_error="claude CLI not found (tried PATH, /usr/local/bin/claude)",
+            dart_key=True,
+        )
+    h = health()
+    cards = ai_cards(h)
+    assert cards["ai-cli:missing"]["severity"] == "red"
+    assert cards["ai-cli:missing"]["facts"] == {
+        "reason": "cli-missing",
+        "since": "2026-10-14T16:25:00+09:00",
+    }
+    assert cards["ai-cli:queue"]["facts"]["cause"] == "cli-missing"
+    row = cli_row(h)
+    assert (row["state"], row["extra"]["cli"], row["extra"]["enabled"]) == ("stale", "missing", 1)
+    assert h["summary"]["kind"] == "check"
+    # The header counts it once it has been missing for more than a trading day.
+    assert logged_in.get("/api/shell").json()["status"]["kind"] != "check"
+    with transaction(db):
+        db.execute("UPDATE ai_runner SET cli_missing_since = '2026-10-12T00:00:00+00:00'")
+    assert logged_in.get("/api/shell").json()["status"] == {"kind": "check", "count": 1}
+    # Found again, but the runner has no DART key (its cron line lacks AUTOTRADE_SECRETS_ENV):
+    # Korean filing texts cannot be read, whatever the tick's watch says.
+    with transaction(db):
+        ai_repo.runner_begin(
+            db,
+            kst("2026-10-14 16:25"),
+            enabled=True,
+            cli="/usr/local/bin/claude",
+            cli_error=None,
+            dart_key=False,
+        )
+    h = health()
+    filings = next(s for s in h["sources"] if s["id"] == "filings")
+    assert (filings["state"], filings["extra"]) == ("stale", {"dart": "no-key", "edgar": "ok"})
+    dart = next(t for t in h["todos"] if t["id"] == "filings:dart")
+    assert (dart["facts"]["state"], dart["action"]) == ("no-key", {"kind": "manual"})
+    assert "ai-cli:missing" not in ai_cards(h)

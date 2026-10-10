@@ -378,7 +378,7 @@ interface AiJudgment {
   instrument?: Instrument            // 판단한 종목(바꾸기는 살 종목)
   model: 'haiku' | 'sonnet' | 'opus'; tokens: number
   verdict: 'hold' | 'weaken' | 'invalidated' | 'buy' | 'skip'
-  votes?: Array<'hold' | 'weaken' | 'invalidated' | 'switch' | 'keep'>   // 두 번 묻는 판단의 두 답(팔기 확인, 바꾸기)
+  votes?: Array<'hold' | 'weaken' | 'invalidated' | 'buy' | 'skip' | 'switch' | 'keep'>   // 두 번 묻는 판단의 두 답(팔기 확인, 사기 확인, 바꾸기)
   action: 'none' | 'sell' | 'buy' | 'switch'
   input: JudgmentItem[]              // '입력' 줄: 화면이 항목마다 말을 짓고 순서대로 ' · '로 잇는다
   output: JudgmentItem[]             // '출력' 줄. verdict·votes·action은 위 칸에 있어 되풀이하지 않는다(비면 줄을 숨긴다)
@@ -397,11 +397,14 @@ type JudgmentItem =
 // 2단계 구현: 사건 하나에 판단 하나. 문장은 보내지 않는다(모델이 쓴 근거와 찾은 뉴스는 기록에만 남는다).
 // - 팔기 확인(ai-sell: 두 번 다 '반증', action 'sell' / ai-check: 그대로): input = instrument, 계기(shock·condition·filing·review),
 //   filings(꾸러미에 넣은 최근 공시 수). output = news(급락이라 웹을 켰을 때 찾은 뉴스 수), 웹이 꺼져 있으면 빈 줄
-// - 사기 확인(ai-buy 'buy' / ai-check 'skip'): input = instrument, checks(충족한 살 조건 수). output = slot-full(자리 없음)이거나 빈 줄
+// - 사기 확인(ai-buy 'buy' / ai-check 'skip', 두 번 다 '근거 있음'이어야 산다): input = instrument, checks(충족한 살 조건 수)
+//   또는 month(분기 발굴이 새로 고른 종목, trigger 'discovery'), filings(꾸러미의 최근 공시 수). votes = 'buy' | 'skip' 두 번.
+//   output = slot-full(자리 없음)이거나 빈 줄
 // - 바꾸기(ai-buy 'switch' / ai-check): input = sold, bought, cost. votes = 'switch' | 'keep' 두 번
 // - monthly-review(그달 점검 전체, verdict는 가장 나쁜 판정): input = month, picks. output = hold·weaken·invalidated 수,
 //   rewritten(새로 쓰거나 바꾼 팔 조건 수)
-// - discovery(분기 발굴): input = month, held(발굴 전 보유 수), candidates(발굴 전 후보 수). output = new-picks, candidates(새 후보 수), expired
+// - discovery(분기 발굴): input = month, held(발굴 전 보유 수), candidates(발굴 전 후보 수). output = new-picks(사기 확인으로 보낸 새 종목 수),
+//   candidates(새 후보 수), expired. action은 늘 'none'이다: 새 종목은 사기 확인 두 번을 거쳐서만 산다
 // trigger는 일감에서 온다(지난 실적 공시를 처음 읽는 'backfill'은 'filing'). tokens는 그 판단의 호출들을 더한 값이다
 ```
 
@@ -499,8 +502,10 @@ interface HealthResponse {
     // 2단계: 3년 발굴의 몫이 0보다 크면 filings·ai-cli·metric-table을 더한다.
     //  filings: state는 DART·EDGAR 중 나쁜 쪽(점검 중이면 'maintenance', 응답 없음·키 없음·실패면 'stale'),
     //           basis는 마지막으로 둘이 받은 날, extra { dart, edgar }: 'ok' | 'maintenance' | 'stale' | 'failed' | 'no-key' | 'unknown'
-    //  ai-cli: state는 마지막 호출의 성공 여부, basis는 마지막 성공 호출의 모델, cadence 'event',
-    //          extra { monthTokens, budget, enabled(0·1, AUTOTRADE_AI_CALLS), due(기다리는 일감 수) }
+    //  ai-cli: state는 마지막 호출의 성공 여부(실행기가 CLI를 못 찾으면 'stale'), basis는 마지막 성공 호출의 모델, cadence 'event',
+    //          extra { monthTokens, budget, enabled(0·1, 실행기가 마지막에 본 AUTOTRADE_AI_CALLS), due(기다리는 일감 수),
+    //                  cli('ok' | 'missing' | 'unknown'), lastRunAt?(실행기가 마지막으로 돈 시각), running?·runningSince?(지금 묻는 일감 종류와 시작 시각) }
+    //          실행기는 따로 도는 cron 줄이라 웹 서비스의 환경으로는 알 수 없다: 실행기가 남긴 심장 박동(ai_runner)을 읽는다
     //  metric-table: basis는 마지막으로 뽑은 날, cadence 'event'
     //  summary.staleCount는 'maintenance'도 센다
     id: 'kr-quotes' | 'us-quotes' | 'fx' | 'toss-link' | 'toss-balance' | 'push-devices' | 'filings' | 'ai-cli' | 'metric-table'
@@ -522,7 +527,12 @@ interface HealthResponse {
 //   toss-expiring(3단계): expiresAt, daysLeft
 //   ai-cli: 노랑 { reason: 'over-budget', tokens, budget }(한 달 토큰이 예산을 넘음, 멈추지는 않음)
 //           빨강 { reason: 'task-failed', count, taskKind, since }(세 번 실패한 일감이 사람을 기다림, since = 그중 가장 오래된 일감이 생긴 시각)
+//           빨강 { reason: 'cli-missing', since? }(AI 실행기가 Claude CLI를 찾지 못함: 일감은 시도로 세지 않고 기다림, since = 처음 못 찾은 시각)
+//           노랑 { reason: 'call-running', taskKind, since }(호출 하나가 1시간 넘게 이어짐. 시간 상한은 없어서 멈추지 않음)
+//           노랑 { reason: 'queue-waiting', count, since, cause }(일감이 2시간 넘게 차례를 못 받거나 3일 넘게 열려 있음, since = 가장 오래된 일감이 생긴 시각.
+//                 cause 'off'(AUTOTRADE_AI_CALLS 꺼짐) | 'stopped'(실행기가 돌지 않음) | 'busy'(긴 호출이 실행기를 잡음) | 'cli-missing' | 'deferred'(출처·키·자료를 기다림))
 //   filings: 빨강 { source: 'dart' | 'edgar', market: 'KR' | 'US', state, since? }(공시 감시가 멈춤, 다음 확인 때 다시. since = 마지막으로 받은 시각)
+//            state 'no-key'는 AI 실행기에 DART 키가 없음(action 'manual': 서버 cron 줄을 고쳐야 함)
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 ```
 
@@ -656,3 +666,4 @@ type NotifyEvent =
 - 2026-10-09: 계약 공백 정리 · 기록·그날·규칙(API 세션). 기록 사건에 `pending`(기다리는 단계·시각)과 `weightsMini.target`, 주문에 `retried`(다시 낸 결과, 실패한 주문은 실패한 날의 기록으로 남음)와 환전 `direction`, 그날 확인에 `failure`(코드·회복한 날)와 `rule`을 더했다. 규칙 목록 `example`, 규칙 상세 `stale`, 조건 타일 `deviation`, 흐름 카드 `more`·`targets`, '지금' 칸 `until`·kv `note`(데이터만)·주문 행 `retried`를 더하고, 주문 행 `text`(종목 이름 또는 환전 방향 코드)와 AI 규칙 kv 키 목록을 다시 정했다. '대기 6'은 상태가 아니라 kv `candidates`이고, 살 값까지 막대는 종목 줄의 `progress`·`marginText`다. 급락 확인 판단의 `outputSummary`에 뉴스 출처·날짜가 붙는다.
 - 2026-10-09: 서버 문구 걷어냄(API 세션). AI 판단의 `inputSummary`·`outputSummary`를 `input`·`output`(JudgmentItem: 코드·수·날짜·종목)으로 바꿨고, 모델이 쓴 근거와 뉴스는 기록에만 남긴다. `votes`에 바꾸기의 'switch'·'keep'을 더했다. 게이지·종목 줄의 `metric`은 지표 사전 키와 회사의 말(`MetricRef`), `marginText`는 수와 단위(`Margin`)로 바꿨고, '지금' 종목 행은 `margin`·`period`를 쓴다. 응답의 한국어는 이제 데이터 이름(종목·규칙 이름, 회사의 부문 이름, 규칙 정의의 흐름 카드 글)뿐이다. 헤더 '점검 n'은 1거래일 넘게 멈춘 AI 규칙 자료(공시 DART·EDGAR, AI 호출)를 원인으로 센다.
 - 2026-10-09: 웹 통합 실행에서 나온 것(API 세션). 그날 화면의 `basis`는 `total`과 같은 평가의 기준이다(주말·평가 없는 날은 그 전 마지막 평가, 휴장일은 그날 16:00 평가). 그날 확인과 기록의 리밸런싱 사건에 `cause`(`RebalanceCause`: band·new-cash·withdraw-expired)를 더했다. 홈 자산 그래프 표식(`Trend.events`)에서 check-failed를 뺐다(기록에는 남는다).
+- 2026-10-10: 점검 고침(엔진 세션). 사는 판단도 두 번 묻는다: 사기 확인의 `votes`에 'buy'·'skip'(두 답)을 더했고, 입력 줄에 `filings`(꾸러미의 최근 공시 수)와 분기 발굴이 새로 고른 종목이면 `checks` 대신 `month`가 온다. 분기 발굴 판단의 `action`은 늘 'none'이다(새 종목은 사기 확인 두 번 뒤에 산다). 작동 화면의 ai-cli 줄은 웹 서비스의 환경이 아니라 AI 실행기의 심장 박동을 읽는다: `extra.enabled`는 실행기가 본 값이고 `cli`·`lastRunAt`·`running`·`runningSince`를 더했으며, CLI를 못 찾으면 줄이 'stale'이다. ai-cli 할 일에 빨강 'cli-missing', 노랑 'call-running'·'queue-waiting'(`cause`)을, filings 할 일에 실행기에 DART 키가 없을 때의 state 'no-key'(action 'manual')를 더했다. 헤더 '점검 n'은 실행기가 CLI를 1거래일 넘게 못 찾을 때도 센다.

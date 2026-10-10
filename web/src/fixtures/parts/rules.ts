@@ -461,7 +461,7 @@ function discoveryDaily(): FlowDisplay {
       col: 1,
       row: 1,
       title: "둘 다 '반증'인가요?",
-      subtitle: "사는 쪽은 한 번 '근거 있음'이면 삼",
+      subtitle: "사는 쪽도 둘 다 '근거 있음'이면 삼",
       now: now('now-month', [
         kv('judgments', 1),
         kv('sells', 0),
@@ -603,6 +603,7 @@ function discoveryQuarterly(): FlowDisplay {
       col: 0,
       row: 2,
       title: '새 종목 매수',
+      subtitle: "두 번 확인해 둘 다 '근거 있음'이면",
       now: discoveryAction(),
     },
     {
@@ -612,7 +613,7 @@ function discoveryQuarterly(): FlowDisplay {
       col: 2,
       row: 2,
       title: '후보로 대기',
-      subtitle: '살 값이 오면 매일 확인에서 삼',
+      subtitle: '살 값이 오면 매일 확인에서 두 번 확인',
       now: now('now', [kv('candidates', 6)]),
     },
     {

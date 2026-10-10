@@ -320,8 +320,57 @@ export function todoView(todo: Todo, now: string | null): TodoView {
         result: effectLine(todo.effect),
       };
     case 'ai-cli': {
+      const reason = str(f.reason);
+      // Red: the AI runner found no CLI; its tasks wait without spending attempts.
+      if (reason === 'cli-missing') {
+        const since = str(f.since);
+        return {
+          tone,
+          icon: 'ai',
+          title: t.todo.aiCliMissingTitle,
+          chip,
+          lines: since
+            ? [t.todo.aiCliMissingSince(atTime(since, now)), ...t.todo.aiCliMissingLines]
+            : [...t.todo.aiCliMissingLines],
+          result: effectLine(todo.effect),
+        };
+      }
+      // Yellow: one call has run long (no time limit: it is only shown).
+      if (reason === 'call-running') {
+        return {
+          tone,
+          icon: 'ai',
+          title: t.todo.aiCallRunningTitle(
+            aiTaskName(str(f.taskKind)),
+            atTime(str(f.since) ?? '', now),
+          ),
+          chip,
+          lines: [...t.todo.aiCallRunningLines],
+          result: effectLine(todo.effect),
+        };
+      }
+      // Yellow: tasks wait for their turn, with why.
+      if (reason === 'queue-waiting') {
+        const cause = str(f.cause);
+        const since = str(f.since);
+        const causeLine =
+          cause !== undefined && cause in t.todo.aiQueueCause
+            ? t.todo.aiQueueCause[cause as keyof typeof t.todo.aiQueueCause]
+            : null;
+        return {
+          tone,
+          icon: 'ai',
+          title: t.todo.aiQueueTitle(num(f.count) ?? 0),
+          chip,
+          lines: [
+            ...(causeLine ? [causeLine] : []),
+            ...(since ? [t.todo.aiQueueSince(atTime(since, now))] : []),
+          ],
+          result: effectLine(todo.effect),
+        };
+      }
       // Yellow: the month's tokens passed the budget (no time; nothing stops).
-      if (str(f.reason) === 'over-budget') {
+      if (reason === 'over-budget') {
         return {
           tone,
           icon: 'ai',
@@ -352,6 +401,17 @@ export function todoView(todo: Todo, now: string | null): TodoView {
     case 'filings': {
       const m = market(f.market);
       const since = str(f.since);
+      if (str(f.state) === 'no-key') {
+        // The AI runner has no key to read the filing texts with: a person fixes its cron line.
+        return {
+          tone,
+          icon: 'filings',
+          title: t.todo.filingsNoKeyTitle(m),
+          chip,
+          lines: t.todo.filingsNoKeyLines(m),
+          result: effectLine(todo.effect),
+        };
+      }
       const maintenance = str(f.state) === 'maintenance';
       const lines = maintenance ? t.todo.filingsLines(m) : t.todo.filingsStoppedLines(m);
       return {
@@ -493,6 +553,7 @@ export function sourceView(src: Source, now: string | null): SourceView {
       break;
     case 'ai-cli':
       line = join(
+        extra.cli === 'missing' ? t.sources.cliMissing : null,
         src.receivedAt ? t.sources.lastSuccess(atTime(src.receivedAt, now)) : null,
         cadence,
       );

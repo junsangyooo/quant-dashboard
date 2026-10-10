@@ -118,6 +118,36 @@ export const healthCopy = {
     ],
     /** NEW — '324만 토큰'. */
     tokens: (n: string) => `${n} 토큰`,
+    // AI 실행기의 심장 박동에서 오는 카드 (10/10 점검 뒤) — NEW.
+    /** 빨강: 서버에서 Claude CLI를 못 찾음 (facts reason 'cli-missing', since?). */
+    aiCliMissingTitle: 'Claude CLI 없음',
+    aiCliMissingSince: (at: string) => `${at}부터 못 찾았어요`,
+    aiCliMissingLines: [
+      'AI 일감은 시도로 세지 않고 기다려요',
+      '서버의 claude 설치와 cron 줄 확인 요청',
+    ],
+    /** 노랑: 호출 하나가 오래 이어짐 (facts reason 'call-running', taskKind, since). */
+    aiCallRunningTitle: (task: string, at: string) => `${task} 호출이 ${at}부터 이어져요`,
+    aiCallRunningLines: [
+      '시간 상한은 없어서 그대로 기다려요',
+      '너무 길면 서버의 claude 상태 확인 요청',
+    ],
+    /** 노랑: 일감이 차례를 못 받음 (facts reason 'queue-waiting', count, since, cause). */
+    aiQueueTitle: (n: number) => `AI 일감 ${String(n)}건이 기다려요`,
+    aiQueueSince: (at: string) => `가장 오래된 일감 ${at}`,
+    aiQueueCause: {
+      off: 'AI 호출이 꺼져 있어요',
+      stopped: 'AI 실행기가 돌지 않아요 · cron 확인 요청',
+      busy: '긴 호출 하나가 실행기를 잡고 있어요',
+      'cli-missing': 'Claude CLI를 찾지 못했어요',
+      deferred: '출처·키·자료를 기다려요',
+    },
+    /** 공시 빨강, state 'no-key': AI 실행기에 DART 키가 없음 (action 'manual'). */
+    filingsNoKeyTitle: (market: string) => `${market} 공시 키 없음`,
+    filingsNoKeyLines: (market: string) => [
+      `${market} 공시 원문을 읽을 키가 없어요`,
+      '서버 cron 줄의 키 파일 확인 요청',
+    ],
     // 공시 빨강: 공시 감시가 멈춰요, 다음 확인 때 다시 (facts source, market, state, since?).
     filingsTitle: (market: string) => `${market} 공시 수집 점검 중`,
     filingsLines: (market: string) => [
@@ -189,6 +219,8 @@ export const healthCopy = {
     filingsBasis: (date: string) => `${date} 공시까지`,
     metricBasis: (date: string) => `마지막 실적 뽑기 ${date}`,
     maintenanceStop: (market: string) => `${market} 공시 감시 멈춤`,
+    /** NEW — the AI runner found no Claude CLI (extra.cli 'missing'). */
+    cliMissing: 'Claude CLI 없음',
     noValue: '—',
     /** NEW — accessible name of the push row button. */
     devicesToggle: '알림 기기 목록',

@@ -106,6 +106,11 @@ describe('AI judgment items (CONTRACT JudgmentItem)', () => {
     expect(votesLabel(['switch', 'switch'])).toBe("두 번 다 '바꾸기'");
     expect(votesLabel(['switch', 'keep'])).toBe("'바꾸기' · '그대로'");
   });
+
+  it("words the buy check's two answers (asked twice since the audit of 10/10)", () => {
+    expect(votesLabel(['buy', 'buy'])).toBe("두 번 다 '근거 있음'");
+    expect(votesLabel(['buy', 'skip'])).toBe("'근거 있음' · '근거 없음'");
+  });
 });
 
 describe("'지금' kv rows (CONTRACT NowBlock kv keys)", () => {
@@ -193,6 +198,81 @@ describe('작동 cards whose facts changed shape', () => {
       '팔기 확인 2건이 세 번 실패했어요',
       'Claude 구독 로그인 확인 요청',
     ]);
+  });
+
+  it("the AI runner's heartbeat cards: no CLI, a long call, a waiting queue", () => {
+    const missing = todoView(
+      todo({
+        id: 'ai-cli:missing',
+        facts: { reason: 'cli-missing', since: '2026-10-07T06:00:00+09:00' },
+      }),
+      NOW,
+    );
+    expect(missing.title).toBe('Claude CLI 없음');
+    expect(missing.lines).toEqual([
+      '06:00부터 못 찾았어요',
+      'AI 일감은 시도로 세지 않고 기다려요',
+      '서버의 claude 설치와 cron 줄 확인 요청',
+    ]);
+    const running = todoView(
+      todo({
+        severity: 'yellow',
+        facts: {
+          reason: 'call-running',
+          taskKind: 'discovery',
+          since: '2026-10-07T14:05:00+09:00',
+        },
+      }),
+      NOW,
+    );
+    expect(running.title).toBe('분기 발굴 호출이 14:05부터 이어져요');
+    expect(running.lines).toEqual([
+      '시간 상한은 없어서 그대로 기다려요',
+      '너무 길면 서버의 claude 상태 확인 요청',
+    ]);
+    const queue = (cause: string) =>
+      todoView(
+        todo({
+          severity: 'yellow',
+          facts: { reason: 'queue-waiting', count: 3, since: '2026-10-06T22:00:00+09:00', cause },
+        }),
+        NOW,
+      );
+    expect(queue('off').title).toBe('AI 일감 3건이 기다려요');
+    expect(queue('off').lines).toEqual(['AI 호출이 꺼져 있어요', '가장 오래된 일감 10/6 22:00']);
+    expect(queue('stopped').lines[0]).toBe('AI 실행기가 돌지 않아요 · cron 확인 요청');
+    expect(queue('busy').lines[0]).toBe('긴 호출 하나가 실행기를 잡고 있어요');
+    expect(queue('cli-missing').lines[0]).toBe('Claude CLI를 찾지 못했어요');
+    expect(queue('deferred').lines[0]).toBe('출처·키·자료를 기다려요');
+    expect(queue('later').lines).toEqual(['가장 오래된 일감 10/6 22:00']);
+  });
+
+  it("공시 키 없음 is a person's card", () => {
+    const view = todoView(
+      todo({ kind: 'filings', facts: { source: 'dart', market: 'KR', state: 'no-key' } }),
+      NOW,
+    );
+    expect(view.title).toBe('한국 공시 키 없음');
+    expect(view.lines).toEqual([
+      '한국 공시 원문을 읽을 키가 없어요',
+      '서버 cron 줄의 키 파일 확인 요청',
+    ]);
+  });
+
+  it('AI 호출 row says when there is no CLI', () => {
+    const view = sourceView(
+      {
+        id: 'ai-cli',
+        state: 'stale',
+        basis: 'sonnet',
+        receivedAt: '2026-10-07T08:35:00+09:00',
+        cadence: 'event',
+        age: 0,
+        extra: { monthTokens: 8800, budget: 600000, enabled: 1, due: 2, cli: 'missing' },
+      },
+      NOW,
+    );
+    expect(view.line).toBe('Claude CLI 없음 · 마지막 성공 08:35 · 생길 때마다');
   });
 
   it('공시 stopped (not maintenance) and its last receipt', () => {

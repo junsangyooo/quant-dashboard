@@ -494,7 +494,7 @@ export interface AiJudgment {
   model: 'haiku' | 'sonnet' | 'opus';
   tokens: number;
   verdict: 'hold' | 'weaken' | 'invalidated' | 'buy' | 'skip';
-  votes?: Array<'hold' | 'weaken' | 'invalidated' | 'switch' | 'keep'>; // 두 번 묻는 판단의 두 답(팔기 확인, 바꾸기)
+  votes?: Array<'hold' | 'weaken' | 'invalidated' | 'buy' | 'skip' | 'switch' | 'keep'>; // 두 번 묻는 판단의 두 답(팔기 확인, 사기 확인, 바꾸기)
   action: 'none' | 'sell' | 'buy' | 'switch';
   input: JudgmentItem[]; // '입력' 줄: 화면이 항목마다 말을 짓고 순서대로 ' · '로 잇는다
   output: JudgmentItem[]; // '출력' 줄. verdict·votes·action은 위 칸에 있어 되풀이하지 않는다(비면 줄을 숨긴다)
@@ -527,11 +527,14 @@ export type JudgmentItem =
 // 2단계 구현: 사건 하나에 판단 하나. 문장은 보내지 않는다(모델이 쓴 근거와 찾은 뉴스는 기록에만 남는다).
 // - 팔기 확인(ai-sell: 두 번 다 '반증', action 'sell' / ai-check: 그대로): input = instrument, 계기(shock·condition·filing·review),
 //   filings(꾸러미에 넣은 최근 공시 수). output = news(급락이라 웹을 켰을 때 찾은 뉴스 수), 웹이 꺼져 있으면 빈 줄
-// - 사기 확인(ai-buy 'buy' / ai-check 'skip'): input = instrument, checks(충족한 살 조건 수). output = slot-full(자리 없음)이거나 빈 줄
+// - 사기 확인(ai-buy 'buy' / ai-check 'skip', 두 번 다 '근거 있음'이어야 산다): input = instrument, checks(충족한 살 조건 수)
+//   또는 month(분기 발굴이 새로 고른 종목, trigger 'discovery'), filings(꾸러미의 최근 공시 수). votes = 'buy' | 'skip' 두 번.
+//   output = slot-full(자리 없음)이거나 빈 줄
 // - 바꾸기(ai-buy 'switch' / ai-check): input = sold, bought, cost. votes = 'switch' | 'keep' 두 번
 // - monthly-review(그달 점검 전체, verdict는 가장 나쁜 판정): input = month, picks. output = hold·weaken·invalidated 수,
 //   rewritten(새로 쓰거나 바꾼 팔 조건 수)
-// - discovery(분기 발굴): input = month, held(발굴 전 보유 수), candidates(발굴 전 후보 수). output = new-picks, candidates(새 후보 수), expired
+// - discovery(분기 발굴): input = month, held(발굴 전 보유 수), candidates(발굴 전 후보 수). output = new-picks(사기 확인으로 보낸 새 종목 수),
+//   candidates(새 후보 수), expired. action은 늘 'none'이다: 새 종목은 사기 확인 두 번을 거쳐서만 산다
 // trigger는 일감에서 온다(지난 실적 공시를 처음 읽는 'backfill'은 'filing'). tokens는 그 판단의 호출들을 더한 값이다
 
 // ── `GET /api/rules` · `GET /api/rules/{id}?lane=` — SCR-RULES ──
@@ -693,8 +696,9 @@ export interface HealthResponse {
     // 2단계: 3년 발굴의 몫이 0보다 크면 filings·ai-cli·metric-table을 더한다.
     //  filings: state는 DART·EDGAR 중 나쁜 쪽(점검 중이면 'maintenance', 응답 없음·키 없음·실패면 'stale'),
     //           basis는 마지막으로 둘이 받은 날, extra { dart, edgar }: 'ok' | 'maintenance' | 'stale' | 'failed' | 'no-key' | 'unknown'
-    //  ai-cli: state는 마지막 호출의 성공 여부, basis는 마지막 성공 호출의 모델, cadence 'event',
-    //          extra { monthTokens, budget, enabled(0·1, AUTOTRADE_AI_CALLS), due(기다리는 일감 수) }
+    //  ai-cli: state는 마지막 호출의 성공 여부(실행기가 CLI를 못 찾으면 'stale'), basis는 마지막 성공 호출의 모델, cadence 'event',
+    //          extra { monthTokens, budget, enabled(0·1, 실행기가 마지막에 본 AUTOTRADE_AI_CALLS), due(기다리는 일감 수),
+    //                  cli('ok' | 'missing' | 'unknown'), lastRunAt?(실행기가 마지막으로 돈 시각), running?·runningSince?(지금 묻는 일감 종류와 시작 시각) }
     //  metric-table: basis는 마지막으로 뽑은 날, cadence 'event'
     //  summary.staleCount는 'maintenance'도 센다
     id:
@@ -729,7 +733,12 @@ export interface HealthResponse {
 //   toss-expiring(3단계): expiresAt, daysLeft
 //   ai-cli: 노랑 { reason: 'over-budget', tokens, budget }(한 달 토큰이 예산을 넘음, 멈추지는 않음)
 //           빨강 { reason: 'task-failed', count, taskKind, since }(세 번 실패한 일감이 사람을 기다림, since = 그중 가장 오래된 일감이 생긴 시각)
+//           빨강 { reason: 'cli-missing', since? }(AI 실행기가 Claude CLI를 찾지 못함: 일감은 시도로 세지 않고 기다림, since = 처음 못 찾은 시각)
+//           노랑 { reason: 'call-running', taskKind, since }(호출 하나가 1시간 넘게 이어짐. 시간 상한은 없어서 멈추지 않음)
+//           노랑 { reason: 'queue-waiting', count, since, cause }(일감이 2시간 넘게 차례를 못 받거나 3일 넘게 열려 있음, since = 가장 오래된 일감이 생긴 시각.
+//                 cause 'off'(AUTOTRADE_AI_CALLS 꺼짐) | 'stopped'(실행기가 돌지 않음) | 'busy'(긴 호출이 실행기를 잡음) | 'cli-missing' | 'deferred'(출처·키·자료를 기다림))
 //   filings: 빨강 { source: 'dart' | 'edgar', market: 'KR' | 'US', state, since? }(공시 감시가 멈춤, 다음 확인 때 다시. since = 마지막으로 받은 시각)
+//            state 'no-key'는 AI 실행기에 DART 키가 없음(action 'manual': 서버 cron 줄을 고쳐야 함)
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 
 // ── `GET /api/mode` — SCR-MODE ──

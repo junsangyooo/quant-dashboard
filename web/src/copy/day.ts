@@ -112,11 +112,16 @@ export const dayCopy = {
       buy: '매수',
       skip: '사지 않음',
     },
-    /** The two answers of a twice-asked judgment; 'switch' · 'keep' (바꾸기 확인) are NEW. */
+    /**
+     * The two answers of a twice-asked judgment; 'switch' · 'keep' (바꾸기 확인) and 'buy' · 'skip'
+     * (사기 확인, asked twice since the audit of 10/10) are NEW.
+     */
     vote: {
       hold: '유지',
       weaken: '약화',
       invalidated: '반증',
+      buy: '근거 있음',
+      skip: '근거 없음',
       switch: '바꾸기',
       keep: '그대로',
     },

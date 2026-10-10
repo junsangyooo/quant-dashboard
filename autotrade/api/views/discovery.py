@@ -8,7 +8,10 @@
 - FlowDisplay: the four lanes of the rule definition (autotrade/rules/discovery.py) with the
   engine's '지금' values; edges taken today are solid.
 - AiJudgment: built from the event the AI runner recorded (autotrade/ai/flows.py).
-- Health: the rows filings, ai-cli and metric-table, and their 'to do' items.
+- Health: the rows filings, ai-cli and metric-table, and their 'to do' items. The AI runner
+  runs in its own cron line with its own environment, so what it is (its gate, the CLI it found,
+  its DART key, the task it is asking) comes from its heartbeat (ai_runner), never from this
+  process's environment.
 
 Numbers, dates and enums only; the screen writes the words (CONTRACT.md 원칙). What is left
 before a line is a number and its unit (`margin`); a metric is its dictionary key and the company's
@@ -61,6 +64,13 @@ HUNDRED = Decimal(100)
 # it from the first miss, but the nightly DART maintenance must not flip the header.
 HEADER_GRACE = 1
 FILING_SOURCES = (("dart", Market.KR), ("edgar", Market.US))
+# The AI queue on the health screen (audit E10). A call has no time limit (ops notes §7):
+# past CALL_SLOW it shows as a yellow card, nothing stops it. A task due for QUEUE_DUE_LATE and
+# not taken, or open for QUEUE_OPEN_LONG, shows the queue waiting, with why (QueueCause).
+CALL_SLOW = timedelta(hours=1)
+QUEUE_DUE_LATE = timedelta(hours=2)
+QUEUE_OPEN_LONG = timedelta(days=3)
+RUNNER_SILENT = timedelta(minutes=30)  # cron calls the runner every 5 minutes
 
 
 def trading_days_since(cal: ExchangeCalendar, since: datetime, now: datetime) -> int:
@@ -832,7 +842,11 @@ class AiRule:
             ):
                 count += 1
         last = ai_repo.last_calls(self.conn, 1)
-        if last and not last[0].ok:
+        runner = self.runner
+        if runner is not None and runner.enabled and runner.cli is None:
+            if self._dead(runner.cli_missing_since, Market.KR):  # no CLI to call at all
+                count += 1
+        elif last and not last[0].ok:
             good = ai_repo.last_ok_call(self.conn)
             since = (
                 (good.finished_at or good.started_at) if good else ai_repo.first_call_at(self.conn)
@@ -840,6 +854,23 @@ class AiRule:
             if self._dead(since, Market.KR):
                 count += 1
         return count
+
+    @cached_property
+    def runner(self) -> ai_repo.RunnerRow | None:
+        """The AI runner's heartbeat (None: it never ran)."""
+        return ai_repo.runner_state(self.conn)
+
+    def _filing_states(self) -> dict[str, str]:
+        """DART and EDGAR as the watch last found them; DART is 'no-key' when the AI runner has
+        no key to read Korean filing texts with (its cron line, not the tick's)."""
+        states: dict[str, str] = {}
+        for source, _ in FILING_SOURCES:
+            row = ai_repo.source_state(self.conn, source)
+            states[source] = "unknown" if row is None else row.state
+        runner = self.runner
+        if runner is not None and not runner.dart_key:
+            states["dart"] = "no-key"
+        return states
 
     def sources(self) -> list[dict[str, Any]]:
         if not self.shown:
@@ -849,11 +880,12 @@ class AiRule:
         states = {s: ai_repo.source_state(self.conn, s) for s in ("dart", "edgar")}
         known = {s: r for s, r in states.items() if r is not None}
         oks = [r.ok_at for r in known.values() if r.ok_at is not None]
-        if not known:
+        shown = self._filing_states()
+        if not known and shown["dart"] != "no-key":
             state = "unknown"
-        elif any(r.state == "maintenance" for r in known.values()):
+        elif "maintenance" in shown.values():
             state = "maintenance"
-        elif any(r.state != "ok" for r in known.values()):
+        elif any(v not in ("ok", "unknown") for v in shown.values()):
             state = "stale"
         else:
             state = "fresh"
@@ -868,12 +900,29 @@ class AiRule:
                 "age": 0.0
                 if last_ok is None
                 else round((now - last_ok).total_seconds() / 86400, 2),
-                "extra": {s: (r.state if r else "unknown") for s, r in states.items()},
+                "extra": shown,
             }
         )
         good = ai_repo.last_ok_call(self.conn)
         last = ai_repo.last_calls(self.conn, 1)
-        cli_state = "unknown" if not last else ("fresh" if last[0].ok else "stale")
+        runner = self.runner
+        if runner is not None and runner.cli is None:
+            cli_state = "stale"  # no CLI to call: a source down (audit E1)
+        else:
+            cli_state = "unknown" if not last else ("fresh" if last[0].ok else "stale")
+        extra: dict[str, Any] = {
+            "monthTokens": month_tokens(self.conn, now),
+            "budget": self.ctx.cfg.ai_monthly_budget,
+            # The runner's own gate (AUTOTRADE_AI_CALLS on its cron line); 0 before it ran.
+            "enabled": int(runner is not None and runner.enabled),
+            "due": len(ai_repo.due_tasks(self.conn, now, self.ctx.cfg.ai_max_attempts)),
+            "cli": "unknown" if runner is None else ("missing" if runner.cli is None else "ok"),
+        }
+        if runner is not None:
+            extra["lastRunAt"] = fmt.iso(runner.started_at)
+            if runner.task_kind is not None and runner.task_started_at is not None:
+                extra["running"] = runner.task_kind
+                extra["runningSince"] = fmt.iso(runner.task_started_at)
         rows.append(
             {
                 "id": "ai-cli",
@@ -884,12 +933,7 @@ class AiRule:
                 else fmt.iso(good.finished_at),
                 "cadence": "event",
                 "age": 0.0,
-                "extra": {
-                    "monthTokens": month_tokens(self.conn, now),
-                    "budget": self.ctx.cfg.ai_monthly_budget,
-                    "enabled": int(self.ctx.cfg.ai_calls_enabled),
-                    "due": len(ai_repo.due_tasks(self.conn, now, self.ctx.cfg.ai_max_attempts)),
-                },
+                "extra": extra,
             }
         )
         table_at = ai_repo.latest_metric_at(self.conn)
@@ -926,11 +970,7 @@ class AiRule:
                     "effect": "other",
                 }
             )
-        stuck = [
-            t
-            for t in ai_repo.tasks_of(self.conn, statuses=("failed",))
-            if t.attempts >= cfg.ai_max_attempts
-        ]
+        stuck = ai_repo.stuck_tasks(self.conn, cfg.ai_max_attempts, self.ctx.ledger_id)
         if stuck:
             out.append(
                 {
@@ -948,27 +988,106 @@ class AiRule:
                     "effect": "other",
                 }
             )
+        out += self._runner_todos()
+        shown = self._filing_states()
         for source, market in FILING_SOURCES:
             row = ai_repo.source_state(self.conn, source)
-            if row is not None and row.state != "ok":
-                facts: dict[str, Any] = {
-                    "source": source,
-                    "market": market.value,
-                    "state": row.state,
+            state = shown[source]
+            if state in ("ok", "unknown"):
+                continue
+            facts: dict[str, Any] = {"source": source, "market": market.value, "state": state}
+            if row is not None and row.ok_at is not None:  # values only: no key when never
+                facts["since"] = fmt.iso(row.ok_at)
+            # A missing key needs a person (the cron line); anything else the watch retries.
+            action: dict[str, Any] = (
+                {"kind": "manual"}
+                if state == "no-key"
+                else {"kind": "auto-retry", "at": fmt.iso(self.ctx.next_check)}
+            )
+            out.append(
+                {
+                    "id": f"filings:{source}",
+                    "severity": "red",  # a fault, like stale quotes
+                    "kind": "filings",
+                    "facts": facts,
+                    "action": action,
+                    "effect": "other",
                 }
-                if row.ok_at is not None:  # facts hold values only: no key when never received
-                    facts["since"] = fmt.iso(row.ok_at)
-                out.append(
-                    {
-                        "id": f"filings:{source}",
-                        "severity": "red",  # a fault the watch retries, like stale quotes
-                        "kind": "filings",
-                        "facts": facts,
-                        "action": {"kind": "auto-retry", "at": fmt.iso(self.ctx.next_check)},
-                        "effect": "other",
-                    }
-                )
+            )
         return out
+
+    def _runner_todos(self) -> list[dict[str, Any]]:
+        """What the AI runner's heartbeat shows: no CLI (red), a call running long, the queue
+        waiting (yellow). A call is never stopped (no time limit): the card only shows it."""
+        out: list[dict[str, Any]] = []
+        now, runner = self.ctx.now, self.runner
+        if runner is not None and runner.enabled and runner.cli is None:
+            facts: dict[str, Any] = {"reason": "cli-missing"}
+            if runner.cli_missing_since is not None:
+                facts["since"] = fmt.iso(runner.cli_missing_since)
+            out.append(self._ai_todo("ai-cli:missing", "red", facts))
+        slow = (
+            runner is not None
+            and runner.ended_at is None
+            and runner.task_started_at is not None
+            and now - runner.task_started_at > CALL_SLOW
+        )
+        if runner is not None and slow and runner.task_started_at is not None:
+            out.append(
+                self._ai_todo(
+                    f"ai-cli:running:{runner.task_id}",
+                    "yellow",
+                    {
+                        "reason": "call-running",
+                        "taskKind": runner.task_kind or "",
+                        "since": fmt.iso(runner.task_started_at),
+                    },
+                )
+            )
+        waiting = [
+            t
+            for t in ai_repo.open_tasks(
+                self.conn, self.ctx.cfg.ai_max_attempts, ledger_id=self.ctx.ledger_id
+            )
+            if t.status != "running"
+            and (now - t.not_before > QUEUE_DUE_LATE or now - t.created_at > QUEUE_OPEN_LONG)
+        ]
+        if waiting:
+            quiet = runner is None or now - runner.started_at > RUNNER_SILENT
+            if runner is not None and runner.ended_at is None and quiet:
+                cause = "busy"  # one run holds the runner's lock (a long or hung call)
+            elif quiet:
+                cause = "stopped"  # the runner does not run (cron, or it fails to start)
+            elif runner is not None and not runner.enabled:
+                cause = "off"  # AUTOTRADE_AI_CALLS is not on
+            elif runner is not None and runner.cli is None:
+                cause = "cli-missing"
+            else:
+                cause = "deferred"  # sources down, a key missing, the evidence not in yet
+            out.append(
+                self._ai_todo(
+                    "ai-cli:queue",
+                    "yellow",
+                    {
+                        "reason": "queue-waiting",
+                        "count": len(waiting),
+                        "since": fmt.iso(min(t.created_at for t in waiting)),
+                        "cause": cause,
+                    },
+                )
+            )
+        return out
+
+    @staticmethod
+    def _ai_todo(todo_id: str, severity: str, facts: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": todo_id,
+            "severity": severity,
+            "kind": "ai-cli",
+            "facts": facts,
+            "action": {"kind": "manual"},
+            "effect": "other",
+        }
 
 
 # JudgmentItem keys whose value is a count (CONTRACT.md); the others carry a date, a code or an

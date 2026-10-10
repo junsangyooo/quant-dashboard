@@ -191,6 +191,10 @@ def test_the_discovery_world_has_every_3y_screen_element(tmp_path: Path, reader:
         "ai-cli": "fresh",
         "metric-table": "fresh",
     }
+    # The world's runner ran with its gate on, a CLI and a DART key: no AI card, nothing waits.
+    cli_row = next(s for s in health["sources"] if s["id"] == "ai-cli")
+    assert (cli_row["extra"]["enabled"], cli_row["extra"]["cli"]) == (1, "ok")
+    assert [t["id"] for t in health["todos"] if t["kind"] in ("ai-cli", "filings")] == []
     # Only data names are Korean in what the screens read (CONTRACT.md 원칙).
     han = re.compile(r"[가-힣]")
     urls = ["/api/home", "/api/plan", "/api/history", "/api/health", "/api/day/2026-10-21"]
