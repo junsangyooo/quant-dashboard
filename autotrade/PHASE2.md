@@ -77,7 +77,7 @@
     - 그 밖의 예외(버그·없는 행·너무 긴 프롬프트): 되풀이될 뿐이라 바로 사람을 기다리고 traceback을 로그에 남긴다.
     - CLI를 못 찾음: 출처가 죽은 것과 같다. 시도로 세지 않고 빨강으로 만들지 않는다. 그 실행은 멈추고 다음 실행이 다시 찾는다.
   - 호출은 끝나자마자(그 뒤 코드가 돌기 전에) `ai_calls`에 남는다. 받은 답은 일감에 남아(`answer_calls`), 그 뒤가 실패해 다시 할 때 모델에게 다시 묻지 않고 그 답을 적용한다(분기 발굴 한 번이 약 72만 토큰이다). 답을 쓸 수 없었을 때만 다시 묻는다.
-  - 사람을 기다리는 일감: `python -m autotrade.jobs ai-retry ai-cli:failed:<id>`(시도 0으로 다시) 또는 `resolve ai-cli:failed:<id> --note …`(접기, 사건 `todo-resolved`).
+  - 사람을 기다리는 일감: `python -m autotrade.jobs ai-retry ai-cli:failed:<id>`(시도 0으로 다시. 받아 둔 답은 다시 적용하고, `--ask-again`이면 버리고 다시 묻는다) 또는 `resolve ai-cli:failed:<id> --note …`(접기, 사건 `todo-resolved`).
   - 심장 박동(`ai_runner`): 실행마다 문·CLI·DART 키·지금 묻는 일감과 시작 시각을 남긴다. 작동 화면은 이것을 읽는다(웹 서비스의 환경으로는 실행기를 알 수 없다). 호출이 1시간 넘게 이어지면, 일감이 2시간 넘게 차례를 못 받거나 3일 넘게 열려 있으면 노랑 할 일이다. 시간 상한은 여전히 없다.
 - **호출**: 구독 CLI다. T26·T27 방식을 따른다.
   - `claude -p <프롬프트> --safe-mode --model <m> --output-format json --json-schema <스키마> --system-prompt <짧게> --no-session-persistence --tools ""`, 필요하면 `--effort low`

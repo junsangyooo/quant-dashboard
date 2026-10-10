@@ -502,3 +502,40 @@ def test_a_broken_cli_wrapper_is_recorded_like_any_fault(
     assert stuck.last_error is not None
     assert stuck.last_error.startswith("call: RuntimeError: the wrapper itself broke")
     assert "Traceback" in capsys.readouterr().err
+
+
+def test_a_kept_answer_can_be_dropped_to_ask_again(
+    p2ctx: JobContext,
+    p2conn: sqlite3.Connection,
+    world: World,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An answer the code can never apply (a shape no check caught): the owner asks afresh."""
+    prices(world, "042660.KS", "069500.KS")
+    tid = shock_task(p2conn)
+    original = flows.FLOWS["sell-confirm"]
+
+    def cannot_apply(*args: Any) -> dict[str, Any]:
+        raise TypeError("unhashable type: 'list'")
+
+    monkeypatch.setitem(flows.FLOWS, "sell-confirm", replace(original, apply=cannot_apply))
+    runner = ScriptedRunner()
+    runner.add("sell", sell("유지"), sell("유지"))
+    _run(p2ctx, ClaudeCli("claude", tmp_path / "cwd", runner=runner))
+    assert ai_repo.get_task(p2conn, tid).answer_calls is not None
+    monkeypatch.setitem(flows.FLOWS, "sell-confirm", original)
+    with transaction(p2conn):
+        out = retry_ai(p2conn, "paper", str(tid), AT + timedelta(hours=1), ask_again=True)
+    assert out["kept_answer"] is False
+    assert ai_repo.get_task(p2conn, tid).answer_calls is None
+    runner.add("sell", sell("반증"), sell("반증"))
+    report = _run(
+        p2ctx, ClaudeCli("claude", tmp_path / "cwd", runner=runner), AT + timedelta(hours=1)
+    )
+    assert [(t["status"], t["calls"], t["reused"]) for t in report["tasks"]] == [("done", 2, False)]
+    assert pick_of(p2conn, OCEAN).decision == "sell"
+    from autotrade.jobs.cli import main
+
+    with pytest.raises(SystemExit):
+        main(["resolve", "x", "--ask-again"], env={})

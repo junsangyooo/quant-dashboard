@@ -22,9 +22,9 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, a
              data/autotrade.db-ai.lock: a call has no time limit). Calls only when
              AUTOTRADE_AI_CALLS=1; without it the tasks wait and only the runner's heartbeat
              is written
-  ai-retry   ai-retry <ai-cli:failed:<id> | id> [--note TEXT]: ask a failed AI task again
-             (attempts back to 0; an answer it already got is applied, not asked again).
-             `resolve ai-cli:failed:<id>` gives it up instead
+  ai-retry   ai-retry <ai-cli:failed:<id> | id> [--note TEXT] [--ask-again]: ask a failed AI
+             task again (attempts back to 0; an answer it already got is applied, not asked
+             again, unless --ask-again). `resolve ai-cli:failed:<id>` gives it up instead
   todos      list the open '직접 할 일' (manual actions) with their ids
   resolve    resolve <todo-id> [--note TEXT]: close a manual action after handling it (e.g. in
              the Toss app); the rule plans again at the next check
@@ -145,6 +145,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--predeploy", action="store_true", help="backup: the copy deploy.sh makes before migrate"
     )
     parser.add_argument(
+        "--ask-again", action="store_true", help="ai-retry: drop a kept answer, ask the model"
+    )
+    parser.add_argument(
         "--world", choices=("first-day", "paper", "discovery"), help="dev-seed: the world"
     )
     parser.add_argument("--pin", help="dev-seed only: the owner PIN of the new database")
@@ -251,7 +254,9 @@ def _dispatch(
     if args.command == "resolve":
         return resolve_job(ctx, ledger, args.todo_id, at, note=args.note, dry_run=dry)
     if args.command == "ai-retry":
-        return ai_retry_job(ctx, ledger, args.todo_id, at, note=args.note, dry_run=dry)
+        return ai_retry_job(
+            ctx, ledger, args.todo_id, at, note=args.note, ask_again=args.ask_again, dry_run=dry
+        )
     return status_job(ctx, ledger, at)
 
 
@@ -347,6 +352,8 @@ def main(
         parser.error(f"{args.command} takes no argument")
     if args.predeploy and args.command != "backup":
         parser.error("--predeploy is only for backup")
+    if args.ask_again and args.command != "ai-retry":
+        parser.error("--ask-again is only for ai-retry")
     if args.command != "dev-seed" and (args.pin is not None or args.world is not None):
         # The owner PIN of a real ledger comes from standard input only (set-pin).
         parser.error("--pin and --world are only for dev-seed")

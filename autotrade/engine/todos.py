@@ -270,10 +270,12 @@ def retry_ai(
     at: datetime,
     note: str | None = None,
     max_attempts: int | None = None,
+    ask_again: bool = False,
 ) -> dict[str, Any]:
     """Ask a failed AI task again: attempts and source tries back to 0, due now. An answer it
-    already got (kept_answer) is applied, not asked again. `todo_id` is 'ai-cli:failed:<id>' or
-    the task id. The caller owns the transaction. Raises TodoError."""
+    already got (kept_answer) is applied, not asked again, unless `ask_again` (an answer that
+    can never be applied: the model is asked afresh, at the cost of a new call). `todo_id` is
+    'ai-cli:failed:<id>' or the task id. The caller owns the transaction. Raises TodoError."""
     require_aware(at)
     value = todo_id[len(AI_TODO) + 1 :] if todo_id.startswith(f"{AI_TODO}:") else todo_id
     if not value.isdigit():
@@ -283,6 +285,9 @@ def retry_ai(
         raise TodoError("not-a-todo", f"AI task {value} is {task.status}, not failed")
     stuck = task.is_stuck(_max(max_attempts))
     ai_repo.reset_task(conn, task.task_id, at)
+    kept = bool(task.answer_calls) and not ask_again
+    if ask_again:
+        ai_repo.keep_answer(conn, task.task_id, None)
     event_id = repo.insert_event(
         conn,
         ledger_id=ledger_id,
@@ -295,6 +300,7 @@ def retry_ai(
             "task_id": task.task_id,
             "task_kind": task.kind,
             "action": "retry",
+            "ask_again": ask_again,
             "attempts_before": task.attempts,
             "error": task.last_error,
             "closed": [f"{AI_TODO}:{task.task_id}"] if stuck else [],
@@ -304,7 +310,7 @@ def retry_ai(
     return {
         "result": "retried",
         "task_id": task.task_id,
-        "kept_answer": bool(task.answer_calls),
+        "kept_answer": kept,
         "event_id": event_id,
     }
 

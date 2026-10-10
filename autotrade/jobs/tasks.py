@@ -405,9 +405,11 @@ def ai_retry_job(
     at: datetime,
     *,
     note: str | None = None,
+    ask_again: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Ask a failed AI task again (attempts back to 0); the AI runner takes it on its next run."""
+    """Ask a failed AI task again (attempts back to 0); the AI runner takes it on its next run.
+    `ask_again` drops an answer it kept, so the model is asked instead of the answer re-applied."""
     require_aware(at)
     base: dict[str, Any] = {
         "job": "ai-retry",
@@ -418,7 +420,9 @@ def ai_retry_job(
     }
     try:
         with transaction(ctx.conn, rollback=dry_run):
-            outcome = retry_ai(ctx.conn, ledger_id, todo_id, at, note, ctx.cfg.ai_max_attempts)
+            outcome = retry_ai(
+                ctx.conn, ledger_id, todo_id, at, note, ctx.cfg.ai_max_attempts, ask_again
+            )
     except TodoError as exc:
         return {**base, "result": exc.code, "error": str(exc)}
     return {**base, **outcome}
