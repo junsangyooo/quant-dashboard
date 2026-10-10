@@ -6,6 +6,7 @@ live broker account (ops notes 안전), so no test may reach the outside world.
 
 from __future__ import annotations
 
+import os
 import socket
 import sqlite3
 from collections.abc import Iterator
@@ -33,6 +34,25 @@ def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket.socket, "connect_ex", blocked)
     monkeypatch.setattr(socket, "create_connection", blocked)
     monkeypatch.setattr(socket, "getaddrinfo", blocked)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_claude(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The laptop has the real `claude` on PATH: no test may find it (ops notes 안전).
+    PATH loses every folder holding one, and the fallbacks look in empty places; a test that
+    needs a CLI passes a fake one explicitly."""
+    from autotrade.ai import cli as cli_module
+
+    keep = [
+        part
+        for part in os.environ.get("PATH", "").split(os.pathsep)
+        if part and not os.path.exists(os.path.join(part, "claude"))
+    ]
+    monkeypatch.setenv("PATH", os.pathsep.join(keep))
+    monkeypatch.setattr(cli_module, "SYSTEM_CLAUDE", tmp_path_factory.mktemp("no-cli") / "claude")
+    monkeypatch.setattr(cli_module, "NVM_GLOB", "no-nvm-in-tests/*/bin/claude")
 
 
 @pytest.fixture(autouse=True)

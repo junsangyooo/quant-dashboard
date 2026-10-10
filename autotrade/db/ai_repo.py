@@ -735,11 +735,14 @@ class TaskRow:
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    source_tries: int = 0  # downloads it could not use (not attempts: no model was asked)
+    answer_calls: list[int] | None = None  # a complete answer waiting to be applied (call ids)
 
     @classmethod
     def from_row(cls, r: sqlite3.Row) -> TaskRow:
         detail = loads(str(r["detail"])) or {}
         result = loads(_s(r["result"]))
+        answer = loads(_s(r["answer_calls"]))
         return cls(
             task_id=int(r["task_id"]),
             kind=str(r["kind"]),
@@ -758,7 +761,21 @@ class TaskRow:
             created_at=from_iso(str(r["created_at"])),
             started_at=_dt(r["started_at"]),
             finished_at=_dt(r["finished_at"]),
+            source_tries=int(r["source_tries"]),
+            answer_calls=[int(x) for x in answer] if isinstance(answer, list) else None,
         )
+
+    def is_open(self, max_attempts: int) -> bool:
+        """Still to be asked: waiting, being asked, or failed with attempts left. A task that
+        failed max_attempts times waits for a person (python -m autotrade.jobs ai-retry or
+        resolve), and blocks nothing meanwhile."""
+        if self.status in ("pending", "running"):
+            return True
+        return self.status == "failed" and self.attempts < max_attempts
+
+    def is_stuck(self, max_attempts: int) -> bool:
+        """Failed max_attempts times: a red 'to do' until a person retries or cancels it."""
+        return self.status == "failed" and self.attempts >= max_attempts
 
 
 def enqueue_task(
@@ -868,13 +885,100 @@ def extract_tasks_of_instrument(conn: sqlite3.Connection, instrument_id: str) ->
     ]
 
 
+def open_tasks(
+    conn: sqlite3.Connection,
+    max_attempts: int,
+    *,
+    kind: str | None = None,
+    pick_id: int | None = None,
+    ledger_id: str | None = None,
+) -> list[TaskRow]:
+    """Tasks still to be asked (TaskRow.is_open)."""
+    return [
+        t
+        for t in tasks_of(
+            conn, kind=kind, statuses=("pending", "running", "failed"), pick_id=pick_id
+        )
+        if t.is_open(max_attempts) and (ledger_id is None or t.ledger_id == ledger_id)
+    ]
+
+
+def stuck_tasks(
+    conn: sqlite3.Connection, max_attempts: int, ledger_id: str | None = None
+) -> list[TaskRow]:
+    """Tasks that failed max_attempts times and wait for a person (TaskRow.is_stuck)."""
+    return [
+        t
+        for t in tasks_of(conn, statuses=("failed",))
+        if t.is_stuck(max_attempts) and (ledger_id is None or t.ledger_id == ledger_id)
+    ]
+
+
 def defer_task(
-    conn: sqlite3.Connection, task_id: int, not_before: datetime, error: str | None
+    conn: sqlite3.Connection,
+    task_id: int,
+    not_before: datetime,
+    error: str | None,
+    *,
+    status: str | None = None,
+    source_try: bool = False,
 ) -> None:
-    """Try again later without counting an attempt (a source was down, not the AI)."""
+    """Try again later without counting an attempt (a source was down, not the AI). `status`
+    puts back the status the task had before it was started; `source_try` counts a download the
+    task could not use."""
+    sets = ["not_before = ?", "last_error = ?", "source_tries = source_tries + ?"]
+    params: list[Any] = [to_iso(not_before), error, 1 if source_try else 0]
+    if status is not None:
+        sets.append("status = ?")
+        params.append(status)
+    conn.execute(f"UPDATE ai_tasks SET {', '.join(sets)} WHERE task_id = ?", (*params, task_id))
+
+
+def unstart_task(
+    conn: sqlite3.Connection, task: TaskRow, not_before: datetime, error: str | None
+) -> None:
+    """Undo start_task (the CLI could not even start): the task is as it was before, due again
+    at `not_before`. No attempt is counted."""
     conn.execute(
-        "UPDATE ai_tasks SET not_before = ?, last_error = ? WHERE task_id = ?",
-        (to_iso(not_before), error, task_id),
+        "UPDATE ai_tasks SET status = ?, attempts = ?, started_at = ?, not_before = ?,"
+        " last_error = ? WHERE task_id = ?",
+        (
+            task.status,
+            task.attempts,
+            None if task.started_at is None else to_iso(task.started_at),
+            to_iso(not_before),
+            error,
+            task.task_id,
+        ),
+    )
+
+
+def give_up_task(
+    conn: sqlite3.Connection, task_id: int, at: datetime, max_attempts: int, error: str
+) -> None:
+    """Fail a task for good now (a fault that would only repeat): it waits for a person."""
+    conn.execute(
+        "UPDATE ai_tasks SET status = 'failed', attempts = MAX(attempts + 1, ?), last_error = ?,"
+        " finished_at = ? WHERE task_id = ?",
+        (max_attempts, error, to_iso(at), task_id),
+    )
+
+
+def keep_answer(conn: sqlite3.Connection, task_id: int, call_ids: Sequence[int] | None) -> None:
+    """Remember a complete answer to apply (or forget it: None)."""
+    conn.execute(
+        "UPDATE ai_tasks SET answer_calls = ? WHERE task_id = ?",
+        (None if call_ids is None else dumps(list(call_ids)), task_id),
+    )
+
+
+def reset_task(conn: sqlite3.Connection, task_id: int, at: datetime) -> None:
+    """A person's retry: no attempts, no source tries, due now. The last error stays until the
+    next attempt; a kept answer stays too (it is applied instead of asking again)."""
+    conn.execute(
+        "UPDATE ai_tasks SET status = 'pending', attempts = 0, source_tries = 0,"
+        " not_before = ? WHERE task_id = ?",
+        (to_iso(at), task_id),
     )
 
 
@@ -889,9 +993,10 @@ def last_done(conn: sqlite3.Connection, kind: str, ledger_id: str) -> TaskRow | 
 
 
 def start_task(conn: sqlite3.Connection, task_id: int, at: datetime) -> None:
+    """Mark the task running. A task left running by a runner that died is a failed attempt
+    (runner.release_orphans)."""
     conn.execute(
-        "UPDATE ai_tasks SET status = 'running', attempts = attempts + 1, started_at = ?"
-        " WHERE task_id = ?",
+        "UPDATE ai_tasks SET status = 'running', started_at = ? WHERE task_id = ?",
         (to_iso(at), task_id),
     )
 
@@ -905,10 +1010,20 @@ def finish_task(
     result: Mapping[str, Any] | None = None,
     error: str | None = None,
 ) -> None:
+    """End an attempt. attempts counts the failed ones: a task that failed
+    Config.ai_max_attempts times waits for a person. A source that was down never gets here
+    (defer_task), so it never spends an attempt."""
     conn.execute(
-        "UPDATE ai_tasks SET status = ?, result = ?, last_error = ?, finished_at = ?"
-        " WHERE task_id = ?",
-        (status, None if result is None else dumps(dict(result)), error, to_iso(at), task_id),
+        "UPDATE ai_tasks SET status = ?, result = ?, last_error = ?, finished_at = ?,"
+        " attempts = attempts + ? WHERE task_id = ?",
+        (
+            status,
+            None if result is None else dumps(dict(result)),
+            error,
+            to_iso(at),
+            1 if status == "failed" else 0,
+            task_id,
+        ),
     )
 
 
@@ -1386,3 +1501,103 @@ def set_source_state(
 def source_state(conn: sqlite3.Connection, source_id: str) -> SourceStateRow | None:
     row = _one(conn, "SELECT * FROM source_states WHERE source_id = ?", (source_id,))
     return None if row is None else SourceStateRow.from_row(row)
+
+
+# ── the AI runner's heartbeat (one row, schema V5) ───────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RunnerRow:
+    enabled: bool  # AUTOTRADE_AI_CALLS on the runner's last run
+    started_at: datetime  # the last run's start
+    ended_at: datetime | None  # None while that run goes on (or when it died)
+    result: str | None
+    task_id: int | None  # the task being asked now
+    task_kind: str | None
+    task_started_at: datetime | None
+    cli: str | None  # the CLI the runner found; None = not found
+    cli_error: str | None
+    cli_missing_since: datetime | None
+    dart_key: bool  # the runner has a DART key (Korean filing texts)
+    updated_at: datetime
+
+    @classmethod
+    def from_row(cls, r: sqlite3.Row) -> RunnerRow:
+        return cls(
+            enabled=bool(r["enabled"]),
+            started_at=from_iso(str(r["started_at"])),
+            ended_at=_dt(r["ended_at"]),
+            result=_s(r["result"]),
+            task_id=None if r["task_id"] is None else int(r["task_id"]),
+            task_kind=_s(r["task_kind"]),
+            task_started_at=_dt(r["task_started_at"]),
+            cli=_s(r["cli"]),
+            cli_error=_s(r["cli_error"]),
+            cli_missing_since=_dt(r["cli_missing_since"]),
+            dart_key=bool(r["dart_key"]),
+            updated_at=from_iso(str(r["updated_at"])),
+        )
+
+
+def runner_begin(
+    conn: sqlite3.Connection,
+    at: datetime,
+    *,
+    enabled: bool,
+    cli: str | None,
+    cli_error: str | None,
+    dart_key: bool,
+) -> None:
+    """A run starts: its gate, the CLI it found (since when it has been missing) and its keys."""
+    conn.execute(
+        "INSERT INTO ai_runner (id, enabled, started_at, cli, cli_error, cli_missing_since,"
+        " dart_key, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET"
+        " enabled = excluded.enabled, started_at = excluded.started_at, ended_at = NULL,"
+        " result = NULL, task_id = NULL, task_kind = NULL, task_started_at = NULL,"
+        " cli = excluded.cli, cli_error = excluded.cli_error,"
+        " cli_missing_since = CASE WHEN excluded.cli IS NULL"
+        " THEN COALESCE(ai_runner.cli_missing_since, excluded.cli_missing_since) ELSE NULL END,"
+        " dart_key = excluded.dart_key, updated_at = excluded.updated_at",
+        (
+            1 if enabled else 0,
+            to_iso(at),
+            cli,
+            cli_error,
+            None if cli is not None else to_iso(at),
+            1 if dart_key else 0,
+            to_iso(at),
+        ),
+    )
+
+
+def runner_task(
+    conn: sqlite3.Connection, at: datetime, task_id: int | None, kind: str | None
+) -> None:
+    """The task the runner asks now (None between tasks)."""
+    conn.execute(
+        "UPDATE ai_runner SET task_id = ?, task_kind = ?, task_started_at = ?, updated_at = ?"
+        " WHERE id = 1",
+        (task_id, kind, None if task_id is None else to_iso(at), to_iso(at)),
+    )
+
+
+def runner_cli_lost(conn: sqlite3.Connection, at: datetime, error: str) -> None:
+    """The CLI could not start during a run (it was there when the run began)."""
+    conn.execute(
+        "UPDATE ai_runner SET cli = NULL, cli_error = ?,"
+        " cli_missing_since = COALESCE(cli_missing_since, ?), updated_at = ? WHERE id = 1",
+        (error, to_iso(at), to_iso(at)),
+    )
+
+
+def runner_end(conn: sqlite3.Connection, at: datetime, result: str) -> None:
+    conn.execute(
+        "UPDATE ai_runner SET ended_at = ?, result = ?, task_id = NULL, task_kind = NULL,"
+        " task_started_at = NULL, updated_at = ? WHERE id = 1",
+        (to_iso(at), result, to_iso(at)),
+    )
+
+
+def runner_state(conn: sqlite3.Connection) -> RunnerRow | None:
+    row = _one(conn, "SELECT * FROM ai_runner WHERE id = 1")
+    return None if row is None else RunnerRow.from_row(row)

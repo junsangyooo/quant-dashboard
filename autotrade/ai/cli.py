@@ -6,12 +6,21 @@
          --tools WebSearch,WebFetch --allowedTools WebSearch WebFetch
                          (the quarterly discovery and a sell confirmation set off by a shock)
 
-- ANTHROPIC_API_KEY is removed from the environment: with it the CLI bills the paid API (root
-  ops notes §7). Nothing else is added.
+- The child's environment (child_env) keeps what the CLI needs (HOME, PATH, the locale; its
+  OAuth login is the file under ~/.claude) and drops whatever could send it to the paid API or
+  is credential-shaped: ANTHROPIC_*, CLAUDE_CODE_USE_BEDROCK/_VERTEX/…, cloud-provider
+  credentials (AWS_*, GOOGLE_*, AZURE_* …), *_KEY/*_TOKEN/*_SECRET/*_PASSWORD names, the
+  repository's own keys (DART, KIS, KRX, Toss) and AUTOTRADE_* (the secrets file's path among
+  them). Root ops notes §7: with ANTHROPIC_API_KEY the CLI bills the paid API.
 - stdin is /dev/null and the working folder is an empty neutral one (no project files to read).
-- No time limit (ops notes §7): the CLI's exit code is the failure signal.
+- No time limit (ops notes §7): the CLI's exit code is the failure signal. Its output is
+  read as UTF-8 with bad bytes replaced (a broken byte must not lose a paid answer).
 - The answer is the JSON envelope's `structured_output`; its `usage` gives the tokens (input,
   cache creation, cache read, output, all counted) and `total_cost_usd` the list-price value.
+- Which CLI (find_claude): AUTOTRADE_CLAUDE_BIN, else `claude` on PATH, else
+  /usr/local/bin/claude (the server's wrapper: it puts the newest nvm node first on PATH), else
+  the newest ~/.nvm/versions/node/*/bin/claude with its folder put first on the child's PATH
+  (that `claude` is a link next to the node it needs). cron's PATH is /usr/bin:/bin.
 
 Real calls need AUTOTRADE_AI_CALLS=1 (the owner's go); the runner checks it before it gets here.
 Tests run a fake executable (tests/autotrade/fake_claude.py).
@@ -19,8 +28,11 @@ Tests run a fake executable (tests/autotrade/fake_claude.py).
 
 from __future__ import annotations
 
+import errno
 import json
 import os
+import re
+import shutil
 import subprocess
 import time
 from collections.abc import Callable, Mapping
@@ -43,6 +55,105 @@ WEB_TOOLS = ["--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch", "We
 STDERR_KEEP = 1500
 # Linux refuses one argument longer than 128 KiB (MAX_ARG_STRLEN); the prompt is an argument.
 MAX_PROMPT_BYTES = 120_000
+
+# Environment names never passed to the CLI (child_env). Prefixes route the CLI to another biller
+# or carry cloud credentials; suffixes are credential-shaped (the old backend's _SENSITIVE_ENV,
+# src/research/llm_backend.py, widened); AUTOTRADE_* is this program's own configuration.
+_DROP_PREFIXES = (
+    "ANTHROPIC_",
+    "CLAUDE_CODE_USE_",
+    "AWS_",
+    "AZURE_",
+    "GOOGLE_",
+    "GCLOUD_",
+    "GCP_",
+    "CLOUDSDK_",
+    "CLOUD_ML_",
+    "VERTEX_",
+    "BEDROCK_",
+    "OPENAI_",
+    "OPENROUTER_",
+    "AUTOTRADE_",
+    "DART_",
+    "KIS_",
+    "KRX_",
+    "TOSS_",
+)
+_DROP_SUFFIX = re.compile(
+    r"(KEY|TOKEN|SECRET|SECRETS|PASSWORD|PASSWD|_PW|_PASS|CREDENTIAL|CREDENTIALS|_AUTH|COOKIE"
+    r"|_WEBHOOK_URL)$",
+    re.IGNORECASE,
+)
+SYSTEM_CLAUDE = Path("/usr/local/bin/claude")
+NVM_GLOB = ".nvm/versions/node/*/bin/claude"
+
+
+def child_env(source: Mapping[str, str], path_prefix: str | None = None) -> dict[str, str]:
+    """The CLI's environment: the runner's, without anything that bills elsewhere or is a
+    credential; `path_prefix` goes first on PATH (the nvm node the CLI needs)."""
+    env = {
+        k: v
+        for k, v in source.items()
+        if not k.upper().startswith(_DROP_PREFIXES) and not _DROP_SUFFIX.search(k)
+    }
+    if path_prefix:
+        rest = env.get("PATH", "")
+        env["PATH"] = path_prefix if not rest else f"{path_prefix}{os.pathsep}{rest}"
+    return env
+
+
+def _executable(path: Path) -> bool:
+    return path.is_file() and os.access(path, os.X_OK)
+
+
+def _node_version(path: Path) -> tuple[int, ...]:
+    """(24, 14, 1) of '~/.nvm/versions/node/v24.14.1/bin/claude'; () when unreadable."""
+    found = re.fullmatch(r"v?(\d+(?:\.\d+)*)", path.parent.parent.name)
+    return tuple(int(x) for x in found.group(1).split(".")) if found else ()
+
+
+@dataclass(frozen=True)
+class ClaudeBinary:
+    path: str | None  # None: no CLI found
+    path_prefix: str | None = None  # a folder the CLI needs first on PATH
+    tried: tuple[str, ...] = ()
+
+    @property
+    def error(self) -> str | None:
+        if self.path is not None:
+            return None
+        return "claude CLI not found (tried " + ", ".join(self.tried or ("nothing",)) + ")"
+
+
+def find_claude(
+    configured: str | None,
+    environ: Mapping[str, str],
+    home: Path | None = None,
+    system: Path | None = None,
+) -> ClaudeBinary:
+    """The CLI to run: AUTOTRADE_CLAUDE_BIN, `claude` on PATH, /usr/local/bin/claude, then the
+    newest nvm install (its folder first on the child's PATH)."""
+    tried: list[str] = []
+    search = environ.get("PATH", os.defpath)
+    if configured:
+        tried.append(f"AUTOTRADE_CLAUDE_BIN={configured}")
+        found = shutil.which(configured, path=search)
+        if found is not None:
+            return ClaudeBinary(found, tried=tuple(tried))
+    tried.append("PATH")
+    on_path = shutil.which("claude", path=search)
+    if on_path is not None:
+        return ClaudeBinary(on_path, tried=tuple(tried))
+    wrapper = SYSTEM_CLAUDE if system is None else system
+    tried.append(str(wrapper))
+    if _executable(wrapper):
+        return ClaudeBinary(str(wrapper), tried=tuple(tried))
+    base = home if home is not None else Path(environ.get("HOME") or Path.home())
+    tried.append(str(base / NVM_GLOB))
+    nvm = sorted((p for p in base.glob(NVM_GLOB) if _executable(p)), key=_node_version)
+    if nvm:
+        return ClaudeBinary(str(nvm[-1]), str(nvm[-1].parent), tuple(tried))
+    return ClaudeBinary(None, tried=tuple(tried))
 
 
 @dataclass(frozen=True)
@@ -74,6 +185,9 @@ class CliResult:
     error: str | None
     started_at: datetime
     finished_at: datetime
+    # False: the CLI could not even start (missing, not executable). That is a source being
+    # down, not a failed call: no model was asked and no attempt is counted (runner.py).
+    launched: bool = True
 
     @property
     def ok(self) -> bool:
@@ -130,25 +244,38 @@ def parse_envelope(stdout: str) -> tuple[Any, dict[str, Any] | None, Decimal | N
 class ClaudeCli:
     def __init__(
         self,
-        binary: str,
+        binary: str | None,
         workdir: Path,
         runner: Runner | None = None,
         now: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] | None = None,
         environ: Mapping[str, str] | None = None,
+        path_prefix: str | None = None,
+        missing: str | None = None,
     ) -> None:
-        self.binary = binary
+        self.binary = binary  # None: no CLI was found (`missing` says where it looked)
         self.workdir = workdir
         self.runner = runner or subprocess.run
         self.now = now or (lambda: datetime.now(UTC))
         self.monotonic = monotonic or time.monotonic
         self.environ = environ
+        self.path_prefix = path_prefix
+        self.missing = missing
+
+    @classmethod
+    def found(
+        cls, binary: ClaudeBinary, workdir: Path, now: Callable[[], datetime] | None = None
+    ) -> ClaudeCli:
+        return cls(
+            binary.path, workdir, now=now, path_prefix=binary.path_prefix, missing=binary.error
+        )
 
     def command(self, call: CliCall) -> list[str]:
+        # A NUL in an argument makes exec fail; filing texts can carry one.
         cmd = [
-            self.binary,
+            self.binary or "claude",
             "-p",
-            call.prompt,
+            call.prompt.replace("\x00", ""),
             "--safe-mode",
             "--model",
             call.model,
@@ -157,7 +284,7 @@ class ClaudeCli:
             "--json-schema",
             json.dumps(call.schema, ensure_ascii=False, separators=(",", ":")),
             "--system-prompt",
-            call.system,
+            call.system.replace("\x00", ""),
             "--no-session-persistence",
         ]
         if call.effort:
@@ -166,8 +293,7 @@ class ClaudeCli:
         return cmd
 
     def env(self) -> dict[str, str]:
-        source = os.environ if self.environ is None else self.environ
-        return {k: v for k, v in source.items() if k != "ANTHROPIC_API_KEY"}
+        return child_env(os.environ if self.environ is None else self.environ, self.path_prefix)
 
     def run(self, call: CliCall) -> CliResult:
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -176,18 +302,27 @@ class ClaudeCli:
         output: Any = None
         usage: dict[str, Any] | None = None
         cost: Decimal | None = None
+        launched = True
         try:
+            if self.binary is None:
+                raise FileNotFoundError(self.missing or "claude CLI not found")
             done = self.runner(
                 self.command(call),
                 cwd=str(self.workdir),
                 env=self.env(),
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
             )
-        except OSError as exc:  # the CLI is missing or cannot start
+        except OSError as exc:
             error: str | None = f"{type(exc).__name__}: {exc}"
+            # Missing, not executable, not a program: the CLI is down. An argument list too
+            # long is this call's own fault.
+            launched = exc.errno == errno.E2BIG
+        except (ValueError, subprocess.SubprocessError) as exc:  # the call could not be made
+            error = f"{type(exc).__name__}: {exc}"
         else:
             exit_code = done.returncode
             output, usage, cost, error = parse_envelope(done.stdout or "")
@@ -207,4 +342,5 @@ class ClaudeCli:
             error=error,
             started_at=started_at,
             finished_at=self.now(),
+            launched=launched,
         )

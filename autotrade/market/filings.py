@@ -14,12 +14,15 @@
 
 Every request goes through one `http_get(url, params, headers)` function, so tests pass a fake
 (no network). Failures become FilingSourceError with the state the health screen shows:
-'maintenance' (DART said so), 'stale' (no answer), 'no-key', 'failed' (an answer we cannot use).
+'maintenance' (DART said so), 'stale' (no answer, a connection cut mid-answer), 'no-key',
+'failed' (an answer we cannot use: a refusal, a corrupt zip). A company the source does not know
+(an ETF has no DART corp_code) is CompanyNotFoundError: that company's fault, not the source's.
 """
 
 from __future__ import annotations
 
 import html
+import http.client
 import io
 import json
 import re
@@ -28,6 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -67,6 +71,23 @@ class SourceUnreachableError(FilingSourceError):
 
 class SourceNoKeyError(FilingSourceError):
     state = "no-key"
+
+
+class CompanyNotFoundError(FilingSourceError):
+    """The source answers but does not know this company (no DART corp_code, no EDGAR CIK)."""
+
+
+# A zip that arrived broken: a bad archive, a broken deflate stream, a cut-off member, an
+# unsupported or encrypted member.
+_CORRUPT = (
+    zipfile.BadZipFile,
+    zlib.error,
+    EOFError,
+    IndexError,
+    KeyError,
+    NotImplementedError,
+    RuntimeError,
+)
 
 
 @dataclass(frozen=True)
@@ -111,7 +132,8 @@ def _get(
         if exc.code >= 500 or exc.code == 429:
             raise SourceUnreachableError(f"HTTP {exc.code} from {url}") from exc
         raise FilingSourceError(f"HTTP {exc.code} from {url}") from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+        # http.client.IncompleteRead (the connection closed mid-answer) is not an OSError.
         raise SourceUnreachableError(f"{type(exc).__name__}: {exc}") from exc
 
 
@@ -202,7 +224,7 @@ class DartFilingSource:
         try:
             archive = zipfile.ZipFile(io.BytesIO(body))
             root = ElementTree.fromstring(archive.read(archive.namelist()[0]))
-        except (zipfile.BadZipFile, ElementTree.ParseError, IndexError) as exc:
+        except (*_CORRUPT, ElementTree.ParseError) as exc:
             raise FilingSourceError(f"DART corpCode.xml: {type(exc).__name__}: {exc}") from exc
         codes: dict[str, str] = {}
         for item in root.iter("list"):
@@ -219,7 +241,7 @@ class DartFilingSource:
         key = self._key()
         corp = self.corp_codes().get(instrument.ticker)
         if corp is None:
-            raise FilingSourceError(f"DART has no corp_code for {instrument.ticker}")
+            raise CompanyNotFoundError(f"DART has no corp_code for {instrument.ticker}")
         out: list[FilingInfo] = []
         page = 1
         while True:
@@ -275,8 +297,10 @@ class DartFilingSource:
             # The main document is the largest member; attachments come with it.
             names = sorted(archive.namelist(), key=lambda n: archive.getinfo(n).file_size)
             raw = archive.read(names[-1])
-        except (zipfile.BadZipFile, IndexError) as exc:
-            raise FilingSourceError(f"DART document {filing.source_ref}: {exc}") from exc
+        except _CORRUPT as exc:  # a corrupt download (audit E2: zlib.error escaped before)
+            raise FilingSourceError(
+                f"DART document {filing.source_ref}: {type(exc).__name__}: {exc}"
+            ) from exc
         for encoding in ("utf-8", "euc-kr"):
             try:
                 return plain_text(raw.decode(encoding))
@@ -329,7 +353,7 @@ class EdgarFilingSource:
     def fetch_filings(self, instrument: Instrument, start: date, end: date) -> list[FilingInfo]:
         cik = self.ciks().get(instrument.ticker.upper())
         if cik is None:
-            raise FilingSourceError(f"EDGAR has no CIK for {instrument.ticker}")
+            raise CompanyNotFoundError(f"EDGAR has no CIK for {instrument.ticker}")
         self.sleep(self.pause_s)
         data = self._json(EDGAR_SUBMISSIONS.format(cik))
         try:

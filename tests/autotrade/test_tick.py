@@ -55,7 +55,10 @@ def tasks(lines: list[dict[str, Any]]) -> list[tuple[str, str, str]]:
 
 @pytest.fixture
 def db(tmp_path: Path) -> Path:
-    return tmp_path / "data" / "autotrade.db"
+    """A migrated database (only `migrate` makes or changes the schema)."""
+    path = tmp_path / "data" / "autotrade.db"
+    assert cli.main(["migrate", "--db", str(path)], env=ENV, out=lambda line: None) == 0
+    return path
 
 
 def test_the_first_day_on_time(world: World, db: Path) -> None:
@@ -402,7 +405,13 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     assert ".venv/bin/python -m autotrade.jobs tick" in tick
     assert tick.endswith(">> data/logs/autotrade-jobs.log 2>&1")
     # The AI line: its own lock, no time limit, and no AUTOTRADE_AI_CALLS until the owner's go.
-    assert ai.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && flock -n ")
+    # cron's PATH has no `claude`: the line names the server's wrapper (audit E1); the runner
+    # reads Korean filing texts, so it gets the DART key's file like the tick (audit E3).
+    assert ai.startswith(
+        "*/5 * * * * cd /home/ubuntu/portfolio-dashboard"
+        " && AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude"
+        " AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n "
+    )
     assert ".venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1" in ai
     assert "timeout" not in ai
     assert "AUTOTRADE_AI_CALLS" not in ai

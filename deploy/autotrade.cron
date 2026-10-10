@@ -23,6 +23,9 @@
 # - One JSON line per task that ran goes to data/logs/autotrade-jobs.log (rotated daily with the
 #   other data/logs/*.log by deploy/logrotate-dashboard). A tick with nothing due writes nothing.
 # - The line has no % (crontab would cut it there; ops notes §8).
+# - Only `python -m autotrade.jobs migrate` (deploy.sh) changes the schema. A job that finds the
+#   database at another schema (between a deploy's `git pull` and its `migrate`, or before the
+#   first `migrate`) writes one line {"result": "schema-mismatch", ...} and exits 3, doing nothing.
 */5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
 #
 # The AI rule's questions (PHASE2.md §6): `python -m autotrade.jobs ai` takes the due AI tasks
@@ -33,7 +36,15 @@
 # - AUTOTRADE_AI_CALLS=1 is the owner's go. Without it (as below until he says so) the runner
 #   calls nothing, records nothing, and the tasks wait. Real calls cost the subscription:
 #   add AUTOTRADE_AI_CALLS=1 to this line only when the owner has agreed.
-# - The CLI runs in the empty folder data/ai-cwd with ANTHROPIC_API_KEY removed from its
-#   environment; it uses the server user's own `claude` login.
-# - One JSON line per run with work goes to data/logs/autotrade-ai.log.
-*/5 * * * * cd /home/ubuntu/portfolio-dashboard && flock -n data/autotrade.db-ai-cron.lock .venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1
+# - The CLI: cron's PATH is /usr/bin:/bin, which has no `claude`. AUTOTRADE_CLAUDE_BIN names the
+#   server's wrapper /usr/local/bin/claude (it puts the newest nvm node first on PATH and runs the
+#   CLI). Without it the runner still looks there and in ~/.nvm (autotrade/ai/cli.py
+#   find_claude); a CLI it cannot find is a source down on the health screen, never a failed task.
+# - Secrets: like the tick, the runner reads DART_API_KEY from AUTOTRADE_SECRETS_ENV (it reads
+#   Korean filing texts); without it Korean filing tasks wait and DART shows 'no-key'.
+# - The CLI runs in the empty folder data/ai-cwd with a scrubbed environment: no ANTHROPIC_*,
+#   no cloud or repository credentials, no AUTOTRADE_* (the secrets file's path stays here). It
+#   uses the server user's own `claude` login under ~/.claude.
+# - One JSON line per run with work goes to data/logs/autotrade-ai.log; the traceback of a task
+#   that broke goes there too (stderr).
+*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-ai-cron.lock .venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1

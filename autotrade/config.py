@@ -14,12 +14,17 @@ Environment variables can override the defaults before that first run:
 The AI runner (phase 2) reads these on every run:
 
   AUTOTRADE_AI_CALLS            '1' = real subscription CLI calls are allowed (the owner's go;
-                                without it the runner records nothing and leaves tasks queued)
-  AUTOTRADE_CLAUDE_BIN          the CLI to run (default 'claude')
+                                without it the runner asks nothing, only its heartbeat is written,
+                                and the tasks wait)
+  AUTOTRADE_CLAUDE_BIN          the CLI to run; unset or not found: `claude` on PATH, then
+                                /usr/local/bin/claude, then the newest nvm install
+                                (autotrade/ai/cli.py find_claude; cron's PATH has none of them)
   AUTOTRADE_AI_BUDGET           monthly token budget for the health screen (default 600,000)
   DART_API_KEY                  DART open API key (Korean filings); without it DART is 'no-key'
   AUTOTRADE_SECRETS_ENV         a KEY=VALUE file to read DART_API_KEY from when it is not set
-                                (on the server: /home/ubuntu/dotclaude/secrets/.env)
+                                (on the server: /home/ubuntu/dotclaude/secrets/.env). The tick
+                                and the AI runner both need it: the watch lists Korean filings,
+                                the runner reads their texts. Neither passes it to the CLI.
 """
 
 from __future__ import annotations
@@ -87,7 +92,7 @@ class Config:
     )
     # The AI rule '3년 발굴' (PHASE2.md, autotrade/ai/).
     ai_calls_enabled: bool = False  # AUTOTRADE_AI_CALLS=1
-    claude_bin: str = "claude"
+    claude_bin: str | None = None  # AUTOTRADE_CLAUDE_BIN; None = look for it (find_claude)
     ai_monthly_budget: int = 600_000  # tokens; over it the health screen shows a yellow todo
     ai_max_attempts: int = 3  # a task that failed this often waits for a person
     dart_api_key: str | None = None
@@ -152,7 +157,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         us_etf_ticker=us_etf or cfg.us_etf_ticker,
         rule_shares=shares,
         ai_calls_enabled=source.get("AUTOTRADE_AI_CALLS") == "1",
-        claude_bin=source.get("AUTOTRADE_CLAUDE_BIN") or cfg.claude_bin,
+        claude_bin=source.get("AUTOTRADE_CLAUDE_BIN") or None,
         ai_monthly_budget=int(budget) if budget else cfg.ai_monthly_budget,
         dart_api_key=dart,
     )

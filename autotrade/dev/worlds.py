@@ -239,7 +239,9 @@ class Replay:
     def ask(self, at: datetime) -> None:
         if self.runner is None:
             return
-        cfg = replace(self.ctx.cfg, ai_calls_enabled=True)  # the script answers, no CLI runs
+        # The script answers (no CLI runs); the scripted DART needs no key, and the runner's
+        # heartbeat says it has one, as the server's runner does (its cron line reads it).
+        cfg = replace(self.ctx.cfg, ai_calls_enabled=True, dart_api_key="dev-seed")
         cli = ClaudeCli("claude", self.scratch / "ai-cwd", runner=self.runner, now=lambda: at)
         report = run_ai(self.ctx.conn, cfg, self.ctx.sources, cli, lambda: at, max_tasks=200)
         if report.get("result") != "nothing-due":

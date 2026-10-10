@@ -6,13 +6,14 @@ transaction), then runs the engine in one write transaction; a dry run rolls it 
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from autotrade.ai.cli import ClaudeCli
+from autotrade.ai.cli import ClaudeCli, find_claude
 from autotrade.ai.runner import run_ai
 from autotrade.config import Config
 from autotrade.db import ai_repo, repo
@@ -21,7 +22,7 @@ from autotrade.domain.instruments import Market
 from autotrade.engine import discovery_plan, reviews, watch
 from autotrade.jobs.tasks import JobContext
 from autotrade.market.calendar import CalendarRangeError, calendar_for
-from autotrade.market.filings import FilingSource, FilingSourceError
+from autotrade.market.filings import CompanyNotFoundError, FilingSource, FilingSourceError
 from autotrade.market.freshness import expected_session
 from autotrade.market.service import prefetch_bars, prefetch_fx
 from autotrade.rules.discovery import SCORE_BENCHMARK
@@ -91,6 +92,9 @@ def fetch_watch_input(ctx: JobContext, ledger_id: str, at: datetime) -> watch.Wa
                 inst, watch.filing_window(conn, pick, today), today
             )
             asked[name] = asked.get(name, 0) + 1
+        except CompanyNotFoundError as exc:  # the source works; it does not know this company
+            data.filing_errors[inst.instrument_id] = str(exc)[:300]
+            asked[name] = asked.get(name, 0) + 1
         except FilingSourceError as exc:
             data.source_states[name] = (exc.state, str(exc)[:300])
             data.filing_errors[inst.instrument_id] = str(exc)[:300]
@@ -158,8 +162,12 @@ def ai_workdir(db_path: Path) -> Path:
 def ai_job(
     ctx: JobContext, now: Callable[[], datetime], *, cli: ClaudeCli | None = None
 ) -> dict[str, Any]:
-    """Run the due AI tasks (autotrade/ai/runner.py). Calls only with AUTOTRADE_AI_CALLS=1."""
-    cli = cli or ClaudeCli(ctx.cfg.claude_bin, ai_workdir(ctx.cfg.db_path), now=now)
+    """Run the due AI tasks (autotrade/ai/runner.py). Calls only with AUTOTRADE_AI_CALLS=1.
+    The CLI is looked for on every run (cron's PATH has none; autotrade/ai/cli.py find_claude):
+    a missing one is a source down, recorded in the runner's heartbeat."""
+    if cli is None:
+        binary = find_claude(ctx.cfg.claude_bin, os.environ)
+        cli = ClaudeCli.found(binary, ai_workdir(ctx.cfg.db_path), now=now)
     return run_ai(ctx.conn, ctx.cfg, ctx.sources, cli, now)
 
 
