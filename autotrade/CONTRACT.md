@@ -489,7 +489,7 @@ interface HealthResponse {
   todos: Array<{
     id: string
     severity: 'red' | 'yellow'
-    kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'order-failed' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings'
+    kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'order-failed' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings' | 'pin-failures'
     // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
     facts: Record<string, string | number>      // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' }
@@ -523,6 +523,9 @@ interface HealthResponse {
 //   ai-cli: 노랑 { reason: 'over-budget', tokens, budget }(한 달 토큰이 예산을 넘음, 멈추지는 않음)
 //           빨강 { reason: 'task-failed', count, taskKind, since }(세 번 실패한 일감이 사람을 기다림, since = 그중 가장 오래된 일감이 생긴 시각)
 //   filings: 빨강 { source: 'dart' | 'edgar', market: 'KR' | 'US', state, since? }(공시 감시가 멈춤, 다음 확인 때 다시. since = 마지막으로 받은 시각)
+//   pin-failures: 빨강, 직접 할 일, 목록 맨 앞 { since, count, lastAt?, closed: 0 | 1 }('PIN 실패 급증': 24시간에 틀린 PIN
+//           10회부터 서버의 unlock·set-pin까지. since = 생긴 시각, count = 그때부터 센 틀린 PIN 수, lastAt = 기록에 남은
+//           마지막 틀린 PIN, closed 1 = 새 로그인이 닫힘(30회)). 헤더 status는 이것도 'todo' 수로 세고, '첫 확인 전'보다 앞선다
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 ```
 
@@ -590,10 +593,10 @@ type NotifyEvent =
 ## 쓰기
 | 요청 | 본문 | 결과 |
 |---|---|---|
-| `POST /api/auth/pin` | `{pin}` | 204와 세션 쿠키. 틀리면 403 `{error:'pin', remaining}`, 잠기면 403 `{error:'locked', until, scope:'ip'|'global'}`. 6자리 숫자가 아니면 400 `{error:'invalid-pin'}`(실패로 세지 않음). PIN이 아직 없으면 403 `{error:'no-pin'}` |
+| `POST /api/auth/pin` | `{pin}` | 204와 세션 쿠키. 틀리면 403 `{error:'pin', remaining}`, 잠기면 403 `{error:'locked', until, scope:'ip'|'global'}`, 새 로그인이 서버의 unlock까지 닫혔으면 403 `{error:'locked', scope:'hold', since}`(끝나는 시각 없음). 6자리 숫자가 아니면 400 `{error:'invalid-pin'}`(실패로 세지 않음). PIN이 아직 없으면 403 `{error:'no-pin'}` |
 | `POST /api/auth/logout` | — | 204, 쿠키 지움 |
 | `POST /api/auth/logout-others` | — | 204, 이 세션만 남김 |
-| `POST /api/account/pin` | `{current, next}` | 204, 다른 세션 모두 끊김. 403 `{error:'current-pin'}`(틀린 PIN으로 셈, 잠기면 403 `{error:'locked'}`). `next`가 6자리 숫자가 아니면 400 `{error:'invalid-pin'}` |
+| `POST /api/account/pin` | `{current, next}` | 204, 다른 세션 모두 끊김. 403 `{error:'current-pin'}`(틀린 PIN으로 셈). 이 접속 위치가 잠기면 403 `{error:'locked', until, scope:'ip'}`(1시간 상한과 'hold'는 PIN 바꾸기에 걸지 않는다). 한 세션에서 5회 연속 틀리면 그 세션을 끊고 403 `{error:'session'}`. `next`가 6자리 숫자가 아니면 400 `{error:'invalid-pin'}` |
 | `POST /api/mode/live` | `{pin, confirm:true, previewHash}` | 200 `{mode:'live'}`. 다시 계산한 미리보기 금액이 1% 이상 다르면 409 `{error:'preview-changed', preview}`. 점검 ✕면 409 `{error:'blocked', detail:{cause}}`. **1단계는 항상 409 `{error:'blocked', detail:{cause:'live-not-available'}}`** |
 | `POST /api/mode/paper` | — | 200 `{mode:'paper', cancelFailed: Order[]}` (PIN 없음, 세션만) |
 | `POST /api/mode/cancel-retry` | — | 200 `{cancelFailed: Order[]}` |
@@ -603,33 +606,47 @@ type NotifyEvent =
 | `POST /api/account/push/test` | — | 200 `{results}`. **1·2단계는 501(위와 같음)** |
 
 - 중복 요청은 멱등이다. `POST /api/mode/live`는 진행 중이면 409 `{error:'in-progress'}`를 준다.
-- PIN 잠금은 접속 위치(IP)마다 5회 연속 실패면 30분이다. 전체 상한도 둔다: 어디서든 1시간에 20회 틀리면 그 1시간이 지날 때까지 새 로그인을 막는다(`scope:'global'`). 이미 열린 세션은 그대로다.
-- 첫 PIN은 웹에서 만들지 않는다. 서버 CLI로만 만든다(`python -m autotrade.jobs set-pin`, PIN은 표준 입력으로 두 번). CLI로 PIN을 다시 정하면 열린 세션이 모두 끊긴다.
-- `GET /api/healthz`는 세션 없이 200 `{ok: true, schema: number}`(DB 판 번호)를 준다. DB를 못 읽으면 503 `{error:'db'}`. 배포 헬스체크용이다.
+- PIN 잠금(`autotrade/api/auth.py` 머리 주석에 이유). 틀린 PIN은 모두 다음에 센다.
+  - 접속 위치: IPv4 주소, IPv6는 /64 묶음(한 집·한 휴대폰 망이 /64 하나를 통째로 갖는다). 5회 연속이면 그 위치를 30분 잠근다(`scope:'ip'`).
+  - 전체 1시간: 어디서든 1시간에 20회면 그 1시간이 지날 때까지 새 로그인을 막는다(`scope:'global'`).
+  - 전체 24시간: 10회면 'PIN 실패 급증'(작동 화면 빨간 직접 할 일 `pin-failures`, 헤더 '할 일'에 셈, 알림 사건 `pin-failures`의 기록), 30회면 서버에서 `python -m autotrade.jobs unlock`을 할 때까지 새 로그인을 닫는다(`scope:'hold'`). 1시간 상한만으로는 그 바로 아래 속도로 하루 480회씩 끝없이 맞혀 볼 수 있었다.
+  - 이미 열린 세션은 어떤 잠금에도 그대로다. PIN 바꾸기는 세션이 있어야 하므로 접속 위치 잠금만 건다(누군가 PIN을 맞혀 보는 동안에도 주인이 바꿀 수 있게). 틀리면 똑같이 세고, 한 세션에서 5회 연속이면 그 세션을 끊는다(훔친 쿠키로 여러 주소에서 맞혀 보지 못하게).
+- 첫 PIN은 웹에서 만들지 않는다. 서버 CLI로만 만든다(`python -m autotrade.jobs set-pin`, PIN은 표준 입력으로 두 번). CLI로 PIN을 다시 정하면 열린 세션이 모두 끊기고, `unlock`처럼 잠금·실패 기록도 모두 지운다. `unlock`은 세션을 건드리지 않는다.
+- `GET /api/healthz`는 세션 없이, DB가 코드의 스키마 판일 때만 200 `{ok: true, schema: number}`를 준다. 다르면(배포 중 이전 전후, 실패한 이전, 이전된 DB 위의 옛 코드) 503 `{error:'schema', detail:{stored, code}}`, DB를 못 읽으면 503 `{error:'db'}`. 배포 헬스체크용이다.
 
 ### 오류 코드
 | 상태 | `error` | `detail` | 언제 |
 |---|---|---|---|
-| 400 | `bad-request` | `{fields: string[]}` | 본문·쿼리·경로 값의 형식이 틀림(없는 `period`, 날짜 아님 …) |
+| 400 | `bad-request` | `{fields: string[]}` | 본문·쿼리·경로 값의 형식이 틀림(없는 `period`, 날짜 아님, JSON이 아닌 본문 …). 세션이 필요한 경로는 세션을 먼저 본다: 세션이 없으면 본문이 깨져 있어도 403 `session` |
 | 400 | `invalid-pin` | — | PIN이 6자리 숫자가 아님 |
 | 400 | `unknown-event` · `locked-event` | `{event}` | 알림 설정(위 표) |
-| 403 | `session` | — | 세션 쿠키가 없거나 만료·끊김 |
-| 403 | `no-pin` · `pin` · `locked` · `current-pin` | — | PIN(위 표). `pin`·`locked`는 `remaining`·`until`·`scope`를 맨 위에 싣는다 |
+| 403 | `session` | — | 세션 쿠키가 없거나 만료·끊김(서명이 안 맞거나 ASCII가 아닌 쿠키 값도 같다) |
+| 403 | `origin` | — | 쓰기 요청(POST·PUT·PATCH·DELETE)이 이 사이트에서 오지 않음(아래 '세션과 보안') |
+| 403 | `no-pin` · `pin` · `locked` · `current-pin` | — | PIN(위 표). `pin`·`locked`는 `remaining`·`until`·`scope`(`hold`면 `until` 대신 `since`)를 맨 위에 싣는다 |
 | 404 | `not-found` | `{rule}`(규칙일 때) | 없는 `/api` 경로, 없는 규칙 id |
 | 404 | `no-ledger` | `{ledger}` | `?ledger=`로 시작한 적 없는 장부를 열 때. 지금 모드의 장부는 404 대신 첫 확인 전 상태를 준다 |
 | 405 | `method-not-allowed` | — | |
 | 409 | `blocked` · `preview-changed` · `in-progress` | `{cause}`(blocked) | 실전 켜기(위 표) |
-| 500 | `internal` | — | 서버 오류. 보안 헤더는 그대로 붙는다 |
+| 500 | `internal` | — | 서버 오류. 보안 헤더는 그대로 붙고, 서버 로그에 경로와 traceback이 남는다(헤더·쿠키·본문은 남기지 않음) |
 | 501 | `not-implemented` | `{feature}` | 아직 없는 기능(`push`, 3단계) |
-| 503 | `db` | — | `/api/healthz`만 |
+| 503 | `schema` | `{stored, code}` | 모든 `/api`(세션 확인보다 먼저): DB가 코드의 스키마 판이 아님. 배포의 이전과 재시작 사이에 잠깐 나고, 남아 있으면 배포가 실패한 것이다 |
+| 503 | `db` | — | DB를 열거나 읽지 못함 |
 
 ## 세션과 보안
-- 쿠키 `qsess`: HttpOnly, Secure, SameSite=Strict, Domain 없이 둔다(host-only). HMAC으로 서명하고 30일 동안 유효하다. 서버 비밀값은 `data/autotrade.secret`이다.
+- 쿠키 `__Host-qsess`: HttpOnly, Secure, SameSite=Strict, Path=/, Domain 없이 둔다(host-only). `__Host-` 접두어라 브라우저가 이 조건을 강제하고, 다른 `*.jsyoo.dev` 사이트가 같은 이름으로 쿠키를 심거나 가리지 못한다. HMAC으로 서명하고 30일 동안 유효하다. 서버 비밀값은 `data/autotrade.secret`이다.
+  - 개발용(`AUTOTRADE_DEV=1`이고 DB가 `data/` 밖, dev-seed 세계)만 http에서도 되도록 Secure 없는 `qsess`를 쓴다. `data/autotrade.db`에서는 `AUTOTRADE_DEV`·`AUTOTRADE_FAKE_NOW`를 무시한다.
+- 쓰기(POST·PUT·PATCH·DELETE)는 이 사이트에서 온 것만 받는다. SameSite=Strict는 `*.jsyoo.dev`를 모두 같은 사이트로 보아서, 옛 portfolio 앱의 스크립트가 주인의 쿠키로 본문 없는 쓰기(`logout-others`, `mode/paper`)를 보낼 수 있었다.
+  - 받는 것: `Sec-Fetch-Site`가 `same-origin`·`none`, 또는 `Origin`의 호스트(와 포트)가 요청의 `Host`와 같음. nginx 뒤에서 앱은 http로 받고 브라우저 origin은 https라서 scheme은 비교하지 않는다. nginx는 `Host $host`를 그대로 넘겨야 한다.
+  - 두 헤더가 다 없는 요청(curl, 배포 확인)은 브라우저가 아니므로 받는다. 그 밖은 403 `{error:'origin'}`.
+- 세션이 필요한 경로는 본문을 세션 확인 뒤에 읽는다(JSON이 아니거나 `application/json`이 아니면 400 `bad-request`).
+- API는 DB를 이전하지 않는다(`python -m autotrade.jobs migrate`만 한다). 저장된 스키마(`schema_migrations`의 가장 큰 판, 표가 없으면 0)가 코드와 다르면 `/api/*`는 503 `schema`다. DB 파일이 없어도 만들지 않는다.
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`.
 - 모든 응답에 `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`를 붙인다. `/api/*` 응답은 `Cache-Control: no-store`다.
 - 세션은 서버 DB에 남는다(id·만료·끊김). 쿠키 값은 `<세션 id>.<만료 unix 초>.<HMAC>`이고, 끊긴 세션의 쿠키는 서명이 맞아도 403이다.
 - 접속 위치(IP)는 요청이 127.0.0.1(nginx)에서 왔을 때만 `X-Forwarded-For`를 읽는다(nginx가 붙인 맨 오른쪽 값).
-- `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일(`/assets/*`)은 immutable이다. `/api`가 아닌 다른 경로는 모두 `index.html`(화면 라우팅)이고, 빌드가 없으면 `/`는 503 안내 페이지다.
+- `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일(`/assets/*`)은 immutable이다. `/api`가 아닌 다른 경로는 모두 `index.html`(화면 라우팅)이고, 빌드가 없으면 `/`는 503 안내 페이지다. 어떤 파일도 가질 수 없는 경로(제어 문자, 255바이트를 넘는 경로 조각, 1,024자 넘는 경로)는 파일 시스템에 묻지 않고 404 text다.
+  - 서버의 `web/dist`는 지금 릴리스(`web/releases/<id>`)를 가리키는 심볼릭 링크다(배포가 원자적으로 바꾼다). 릴리스마다 이전 릴리스들의 해시 자산을 함께 두어, 배포 전에 연 화면도 청크를 찾는다.
+- 앞단(nginx, `deploy/nginx-quant.conf`): Cloudflare에서 온 연결만 받는다. `Strict-Transport-Security: max-age=31536000`(quant.jsyoo.dev만, includeSubDomains 없음), 서버 판 번호는 숨긴다.
 
 ## 화면 상태와 고정 자료
 - 화면은 `src/fixtures/bundles/<상태 id>.ts`(이 계약의 응답 묶음, 타입 검사를 받음)로 모든 상태를 띄운다. 개발 서버와 Playwright만 쓰고, 운영 빌드에는 넣지 않는다.
@@ -656,3 +673,4 @@ type NotifyEvent =
 - 2026-10-09: 계약 공백 정리 · 기록·그날·규칙(API 세션). 기록 사건에 `pending`(기다리는 단계·시각)과 `weightsMini.target`, 주문에 `retried`(다시 낸 결과, 실패한 주문은 실패한 날의 기록으로 남음)와 환전 `direction`, 그날 확인에 `failure`(코드·회복한 날)와 `rule`을 더했다. 규칙 목록 `example`, 규칙 상세 `stale`, 조건 타일 `deviation`, 흐름 카드 `more`·`targets`, '지금' 칸 `until`·kv `note`(데이터만)·주문 행 `retried`를 더하고, 주문 행 `text`(종목 이름 또는 환전 방향 코드)와 AI 규칙 kv 키 목록을 다시 정했다. '대기 6'은 상태가 아니라 kv `candidates`이고, 살 값까지 막대는 종목 줄의 `progress`·`marginText`다. 급락 확인 판단의 `outputSummary`에 뉴스 출처·날짜가 붙는다.
 - 2026-10-09: 서버 문구 걷어냄(API 세션). AI 판단의 `inputSummary`·`outputSummary`를 `input`·`output`(JudgmentItem: 코드·수·날짜·종목)으로 바꿨고, 모델이 쓴 근거와 뉴스는 기록에만 남긴다. `votes`에 바꾸기의 'switch'·'keep'을 더했다. 게이지·종목 줄의 `metric`은 지표 사전 키와 회사의 말(`MetricRef`), `marginText`는 수와 단위(`Margin`)로 바꿨고, '지금' 종목 행은 `margin`·`period`를 쓴다. 응답의 한국어는 이제 데이터 이름(종목·규칙 이름, 회사의 부문 이름, 규칙 정의의 흐름 카드 글)뿐이다. 헤더 '점검 n'은 1거래일 넘게 멈춘 AI 규칙 자료(공시 DART·EDGAR, AI 호출)를 원인으로 센다.
 - 2026-10-09: 웹 통합 실행에서 나온 것(API 세션). 그날 화면의 `basis`는 `total`과 같은 평가의 기준이다(주말·평가 없는 날은 그 전 마지막 평가, 휴장일은 그날 16:00 평가). 그날 확인과 기록의 리밸런싱 사건에 `cause`(`RebalanceCause`: band·new-cash·withdraw-expired)를 더했다. 홈 자산 그래프 표식(`Trend.events`)에서 check-failed를 뺐다(기록에는 남는다).
+- 2026-10-10: 보안 감사 수정(API 세션). 쿠키 이름 `__Host-qsess`(개발용만 Secure 없는 `qsess`). 쓰기 요청의 출처 검사와 403 `origin`. 세션이 필요한 경로는 본문보다 세션을 먼저 본다. 스키마 판이 코드와 다르면 모든 `/api`가 503 `schema {stored, code}`(API는 이전하지 않음, `/api/healthz` 포함), DB를 못 읽으면 어디서나 503 `db`. PIN 잠금: IPv6는 /64로 묶고, 24시간에 10회면 할 일 `pin-failures`('PIN 실패 급증'), 30회면 `scope:'hold'`(서버 `unlock`까지, `since`). PIN 바꾸기에는 접속 위치 잠금만 걸고, 한 세션에서 5회 연속 틀리면 그 세션을 끊는다(403 `session`). 고정 자료 `pin.hold`(그림 없음)를 더했다. 제어 문자·너무 긴 경로는 404 text, 깨진 쿠키는 403 `session`.
