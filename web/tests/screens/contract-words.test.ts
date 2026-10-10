@@ -217,6 +217,40 @@ describe('작동 cards whose facts changed shape', () => {
     ]);
   });
 
+  it('PIN 실패 급증: since, the count and the last one, and whether new logins are closed', () => {
+    const open = todoView(
+      todo({
+        kind: 'pin-failures',
+        facts: {
+          since: '2026-10-07T03:12:00+09:00',
+          count: 12,
+          lastAt: '2026-10-07T03:40:00+09:00',
+          closed: 0,
+        },
+      }),
+      NOW,
+    );
+    expect(open.tone).toBe('error');
+    expect(open.icon).toBe('pin');
+    expect(open.chip).toBe('직접 할 일');
+    expect(open.title).toBe('PIN 실패 급증 · 03:12부터');
+    expect(open.lines).toEqual(['틀린 PIN 12회 · 마지막 03:40', '새 로그인은 아직 열려 있어요']);
+    expect(open.result).toBe('Claude에게 서버에서 unlock 요청 · 그러면 이 카드도 사라져요');
+    const closed = todoView(
+      todo({
+        kind: 'pin-failures',
+        facts: { since: '2026-10-06T23:00:00+09:00', count: 30, closed: 1 },
+      }),
+      NOW,
+    );
+    expect(closed.title).toBe('PIN 실패 급증 · 10/6 23:00부터');
+    expect(closed.lines).toEqual([
+      '틀린 PIN 30회',
+      '새 로그인이 닫혔어요 · 열린 기기는 그대로 써요',
+    ]);
+    expect(todoView(todo({ kind: 'pin-failures', facts: {} }), NOW).title).toBe('PIN 실패 급증');
+  });
+
   it('공시 row names the stopped feed from extra { dart, edgar }', () => {
     const view = sourceView(
       {

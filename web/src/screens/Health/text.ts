@@ -207,7 +207,7 @@ export function unknownView(attemptAt: string, lastKnown: string | null): Summar
 
 export interface TodoView {
   tone: 'error' | 'warn';
-  icon: 'stale' | 'failed' | 'expiring' | 'push' | 'ai' | 'filings';
+  icon: 'stale' | 'failed' | 'expiring' | 'push' | 'ai' | 'filings' | 'pin';
   title: string;
   chip: string;
   lines: readonly string[];
@@ -361,6 +361,21 @@ export function todoView(todo: Todo, now: string | null): TodoView {
         chip,
         lines: since ? [...lines, t.todo.filingsSince(atTime(since, now))] : lines,
         result: effectLine(todo.effect),
+      };
+    }
+    case 'pin-failures': {
+      const since = str(f.since);
+      const last = str(f.lastAt);
+      return {
+        tone,
+        icon: 'pin',
+        title: since ? t.todo.pinFailuresTitle(atTime(since, now)) : t.todo.pinFailuresName,
+        chip,
+        lines: [
+          t.todo.pinFailuresCount(num(f.count) ?? 0, last ? atTime(last, now) : null),
+          num(f.closed) === 1 ? t.todo.pinFailuresClosed : t.todo.pinFailuresOpen,
+        ],
+        result: t.todo.pinFailuresResult,
       };
     }
   }

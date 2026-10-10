@@ -133,6 +133,16 @@ export const healthCopy = {
     ],
     /** NEW — facts.since, when the watch last received a filing. */
     filingsSince: (at: string) => `마지막으로 받음 ${at}`,
+    // PIN 실패 급증 (CONTRACT pin-failures; the name is the 알림 사건's, copy/account.ts) — NEW.
+    // Red and manual from 10 wrong PINs in 24 hours until the server's unlock (facts since, count,
+    // lastAt?, closed 1 = new logins closed at 30).
+    pinFailuresName: 'PIN 실패 급증',
+    pinFailuresTitle: (at: string) => `PIN 실패 급증 · ${at}부터`,
+    pinFailuresCount: (n: number, last: string | null) =>
+      last === null ? `틀린 PIN ${String(n)}회` : `틀린 PIN ${String(n)}회 · 마지막 ${last}`,
+    pinFailuresClosed: '새 로그인이 닫혔어요 · 열린 기기는 그대로 써요',
+    pinFailuresOpen: '새 로그인은 아직 열려 있어요',
+    pinFailuresResult: 'Claude에게 서버에서 unlock 요청 · 그러면 이 카드도 사라져요',
     /** Small result line, by effect. */
     effect: {
       'orders-zero-live-blocked': '그동안 주문 0건 · 실전 켜기 막힘',

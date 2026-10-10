@@ -5,7 +5,15 @@
 import clsx from 'clsx';
 import { useEffect, useId, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { ChevronDown, ChevronUp, Clock, KeyRound, LoaderCircle, Lock } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  KeyRound,
+  LoaderCircle,
+  Lock,
+  ShieldAlert,
+} from 'lucide-react';
 import { copy } from '../../copy';
 import { pinCopy } from '../../copy/pin';
 import { isApiError, safeNext } from '../../api/client';
@@ -20,10 +28,8 @@ import styles from './PinScreen.module.css';
 /** The keypad is drawn for 390 only; from 900px the keyboard types (기획 §5 레이아웃 의도). */
 const WIDE = '(min-width: 900px)';
 
-interface Lock {
-  until: number;
-  scope: 'ip' | 'global';
-}
+/** ip · global end at `until`; hold (new logins closed until the server's unlock) has no end. */
+type Lock = { until: number; scope: 'ip' | 'global' } | { until: null; scope: 'hold' };
 
 type Notice = { kind: 'wrong'; remaining: number } | { kind: 'failed' } | null;
 
@@ -58,17 +64,18 @@ export function PinScreen() {
   const [now, setNow] = useState(() => Date.now());
 
   // A lock ends by itself at its time ('표시 시각이 지나면 자동 해제'); the global one also counts
-  // its minutes down.
+  // its minutes down. The hold has no time: it stays until the page is opened again.
   useEffect(() => {
-    if (!lock) return;
+    const until = lock?.until ?? null;
+    if (until === null) return;
     const tick = () => {
       const t = Date.now();
       setNow(t);
-      if (t >= lock.until) setLock(null);
+      if (t >= until) setLock(null);
     };
     tick();
     const timer = setInterval(tick, 15_000);
-    const end = setTimeout(tick, Math.min(Math.max(0, lock.until - Date.now()), 2 ** 31 - 1));
+    const end = setTimeout(tick, Math.min(Math.max(0, until - Date.now()), 2 ** 31 - 1));
     return () => {
       clearInterval(timer);
       clearTimeout(end);
@@ -94,9 +101,12 @@ export function PinScreen() {
         } else if (isApiError(error, 'locked')) {
           const raw = errorField(error, 'until');
           const until = typeof raw === 'string' ? Date.parse(raw) : Number.NaN;
-          const scope = errorField(error, 'scope') === 'global' ? 'global' : 'ip';
+          const scope = errorField(error, 'scope');
           setRedCells(false);
-          if (Number.isFinite(until)) setLock({ until, scope });
+          if (scope === 'hold') setLock({ until: null, scope: 'hold' });
+          else if (Number.isFinite(until))
+            setLock({ until, scope: scope === 'global' ? 'global' : 'ip' });
+          else setNotice({ kind: 'failed' });
         } else if (isApiError(error, 'no-pin')) {
           setRedCells(false);
           setNoPin(true);
@@ -148,7 +158,15 @@ export function PinScreen() {
             {notice.kind === 'wrong' ? pinCopy.wrong(notice.remaining) : pinCopy.failed}
           </p>
         ) : null}
-        {lock ? (
+        {lock?.scope === 'hold' ? (
+          <>
+            <ShieldAlert size={24} className={styles.error} aria-hidden />
+            <p className={clsx('t-body-strong', styles.error)}>{pinCopy.lockedHold}</p>
+            <p className={clsx('t-caption', styles.note)}>{pinCopy.lockedHoldHelp}</p>
+            <code className={clsx('t-caption', styles.code)}>{pinCopy.unlockCommand}</code>
+            <p className={clsx('t-caption', styles.note)}>{pinCopy.lockedNote}</p>
+          </>
+        ) : lock ? (
           <>
             {lock.scope === 'ip' ? (
               <Lock size={24} className={styles.error} aria-hidden />

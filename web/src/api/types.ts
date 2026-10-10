@@ -682,7 +682,8 @@ export interface HealthResponse {
       | 'cancel-failed'
       | 'push-undelivered'
       | 'ai-cli'
-      | 'filings';
+      | 'filings'
+      | 'pin-failures';
     // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
     facts: Record<string, string | number>; // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' };
@@ -730,6 +731,8 @@ export interface HealthResponse {
 //   ai-cli: 노랑 { reason: 'over-budget', tokens, budget }(한 달 토큰이 예산을 넘음, 멈추지는 않음)
 //           빨강 { reason: 'task-failed', count, taskKind, since }(세 번 실패한 일감이 사람을 기다림, since = 그중 가장 오래된 일감이 생긴 시각)
 //   filings: 빨강 { source: 'dart' | 'edgar', market: 'KR' | 'US', state, since? }(공시 감시가 멈춤, 다음 확인 때 다시. since = 마지막으로 받은 시각)
+//   pin-failures: 빨강, 직접 할 일 { since, count, lastAt?, closed: 0 | 1 }('PIN 실패 급증': 24시간에 틀린 PIN 10회부터
+//           서버 unlock까지. since = 생긴 시각, count = 그때부터 센 틀린 PIN 수, closed 1 = 새 로그인이 닫힘(30회))
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 
 // ── `GET /api/mode` — SCR-MODE ──
@@ -849,9 +852,10 @@ export type ApiErrorCode =
   | 'unknown-event' // 400 {event} — notification settings
   | 'locked-event' // 400 {event} — notification settings
   | 'session' // 403 — no session cookie, or it expired or was ended
+  | 'origin' // 403 — a write (POST/PUT/DELETE) that did not come from this site
   | 'no-pin' // 403 — PIN (table above)
   | 'pin' // 403 — + remaining
-  | 'locked' // 403 — + until, scope
+  | 'locked' // 403 — + until, scope ('ip' | 'global'); scope 'hold' has since instead of until
   | 'current-pin' // 403
   | 'not-found' // 404 {rule}(규칙일 때) — unknown /api path or rule id
   | 'no-ledger' // 404 {ledger} — ?ledger= of a ledger that never started
@@ -861,7 +865,8 @@ export type ApiErrorCode =
   | 'in-progress' // 409 — turning live on
   | 'internal' // 500
   | 'not-implemented' // 501 {feature} — not built yet (push, stage 3)
-  | 'db'; // 503 — /api/healthz only
+  | 'db' // 503 — the database cannot be read
+  | 'schema'; // 503 {stored, code} — the database is not at the code's schema (during a deploy)
 
 // POST /api/auth/pin {pin} → 204 and the session cookie
 export interface PinLoginRequest {
@@ -870,6 +875,8 @@ export interface PinLoginRequest {
 export type PinLoginError =
   | { error: 'pin'; remaining: number }
   | { error: 'locked'; until: string; scope: 'ip' | 'global' }
+  // 30 wrong PINs in 24 h: new logins closed until `python -m autotrade.jobs unlock` (no end time)
+  | { error: 'locked'; scope: 'hold'; since: string }
   | { error: 'invalid-pin' } // 400, not counted as a failure
   | { error: 'no-pin' }; // no PIN yet (the server CLI sets the first one)
 // POST /api/auth/logout → 204 (cookie cleared) · POST /api/auth/logout-others → 204
@@ -881,8 +888,10 @@ export interface ChangePinRequest {
 }
 export type ChangePinError =
   | { error: 'current-pin' } // counted as a wrong PIN
-  | { error: 'locked'; until: string; scope: 'ip' | 'global' }
-  | { error: 'invalid-pin' }; // 400: `next` is not six digits
+  // Only this address's lock applies to a PIN change (the hourly cap and the hold do not).
+  | { error: 'locked'; until: string; scope: 'ip' }
+  | { error: 'invalid-pin' } // 400: `next` is not six digits
+  | { error: 'session' }; // the 5th wrong current PIN on one session closes that session
 
 // POST /api/mode/live
 export interface LiveOnRequest {

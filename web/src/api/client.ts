@@ -93,13 +93,22 @@ export function pinPath(next: string): string {
 }
 
 /**
- * A same-origin path to return to after PIN entry, or null. Rejects absolute and
- * protocol-relative URLs (open redirect) and the PIN page itself.
+ * A same-origin path to return to after PIN entry, or null. `next` is read the way the browser
+ * reads a link — resolved against this origin by the URL parser, which drops tabs and newlines
+ * and treats `\` as `/` (so `/\t/evil.example` is `//evil.example`, another site) — and only a
+ * result on this origin is kept, as its path, query and hash. The PIN page itself is refused.
  */
 export function safeNext(next: string | null | undefined): string | null {
-  if (!next?.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return null;
-  if (next === '/pin' || next.startsWith('/pin?') || next.startsWith('/pin/')) return null;
-  return next;
+  if (!next) return null;
+  let url: URL;
+  try {
+    url = new URL(next, window.location.origin);
+  } catch {
+    return null;
+  }
+  if (url.origin !== window.location.origin) return null;
+  if (url.pathname === '/pin' || url.pathname.startsWith('/pin/')) return null;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function currentPath(): string {
