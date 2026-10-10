@@ -131,6 +131,23 @@ test.describe('SCR-PIN', () => {
     expect(await axe(page)).toEqual([]);
   });
 
+  test('pin.hold: closed until the server unlocks it — the command, no time', async ({
+    page,
+    isMobile,
+  }, info) => {
+    await pinClock(page);
+    await page.goto('/pin?fixture=pin.hold');
+    await enter(page, '123456', isMobile);
+    await expect(page.getByText('새 로그인이 닫혔어요 · 서버에서 열어야 해요')).toBeVisible();
+    await expect(page.getByText('python -m autotrade.jobs unlock')).toBeVisible();
+    await expect(
+      page.getByText('이미 열린 기기는 그대로 써요 · 실전 끄기도 그 기기에서 돼요'),
+    ).toBeVisible();
+    await expect(page.getByLabel(PROMPT)).toBeDisabled();
+    await shoot(page, info, 'pin.hold');
+    expect(await axe(page)).toEqual([]);
+  });
+
   test('pin.no-pin: the server-CLI guidance, nothing to type', async ({ page, isMobile }, info) => {
     await page.goto('/pin?fixture=pin.no-pin');
     await enter(page, '123456', isMobile);

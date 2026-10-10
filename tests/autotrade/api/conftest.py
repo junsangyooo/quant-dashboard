@@ -1,5 +1,8 @@
 """Fixtures for the web API tests: a temp database built through the engine, a fixed clock,
-and a TestClient over https (the session cookie is Secure)."""
+and a TestClient over https (the session cookie is Secure).
+
+The app never migrates (autotrade/api/schema.py), so `app` depends on `db`, which bootstraps the
+database the way `python -m autotrade.jobs migrate` does on the server."""
 
 from __future__ import annotations
 
@@ -64,7 +67,7 @@ def jobs(db: sqlite3.Connection, api_cfg: Config, world: World) -> JobContext:
 
 
 @pytest.fixture
-def app(api_cfg: Config, settings: ApiSettings, clock: Clock) -> FastAPI:
+def app(api_cfg: Config, settings: ApiSettings, clock: Clock, db: sqlite3.Connection) -> FastAPI:
     return create_app(api_cfg, settings, clock)
 
 

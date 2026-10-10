@@ -7,6 +7,7 @@ import { pinCopy } from '../../src/copy/pin';
 import pinEntering from '../../src/fixtures/bundles/pin.entering';
 import pinError from '../../src/fixtures/bundles/pin.error';
 import pinGlobal from '../../src/fixtures/bundles/pin.global-lock';
+import pinHold from '../../src/fixtures/bundles/pin.hold';
 import pinLoading from '../../src/fixtures/bundles/pin.loading';
 import pinLocked from '../../src/fixtures/bundles/pin.locked';
 import pinNoPin from '../../src/fixtures/bundles/pin.no-pin';
@@ -176,6 +177,50 @@ describe('입장 (SCR-PIN)', () => {
     expect(await screen.findByText('시도가 많아요 · 42분 뒤 다시')).toBeInTheDocument();
     expect(screen.getByText(pinCopy.lockedNote)).toBeInTheDocument();
     expect(pinInput()).toBeDisabled();
+  });
+
+  it('closes until the server unlocks it after a day of wrong PINs (scope hold, no end time)', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
+    vi.setSystemTime(AT_1610);
+    serve(pinHold);
+    renderApp('/pin');
+    const pad = screen.getByRole('group', { name: pinCopy.keypad });
+    for (const d of '123456') {
+      act(() => {
+        within(pad).getByRole('button', { name: d }).click();
+      });
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(screen.getByText(pinCopy.lockedHold)).toBeInTheDocument();
+    expect(screen.getByText(pinCopy.lockedHoldHelp)).toBeInTheDocument();
+    expect(screen.getByText('python -m autotrade.jobs unlock')).toBeInTheDocument();
+    expect(screen.getByText(pinCopy.lockedNote)).toBeInTheDocument();
+    expect(pinInput()).toBeDisabled();
+    expect(screen.getByRole('button', { name: '1' })).toBeDisabled();
+    // No time on it: a day later it is still closed (only the server's unlock opens it).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
+    });
+    expect(pinInput()).toBeDisabled();
+    expect(screen.getByText(pinCopy.lockedHold)).toBeInTheDocument();
+  });
+
+  it('shows a failure, not a silent page, for a lock without its time', async () => {
+    serve({
+      ...pinHold,
+      id: 'pin.hold',
+      responses: {
+        'POST /api/auth/pin': { $status: 403, $body: { error: 'locked', scope: 'ip' } },
+      },
+    });
+    renderApp('/pin');
+    await typeOnKeypad('123456');
+    expect(await screen.findByText(pinCopy.failed)).toBeInTheDocument();
+    expect(pinInput()).toBeEnabled();
   });
 
   it('explains that the first PIN is set on the server when there is none (403 no-pin)', async () => {

@@ -27,7 +27,7 @@ from autotrade.db import auth_repo
 from autotrade.db.migrations import MIGRATIONS
 from autotrade.jobs.cli import main as jobs_main
 
-from .support import PIN, Clock, owner_pin
+from .support import COOKIE, PIN, Clock, owner_pin
 
 PROXY = ("127.0.0.1", 40000)
 
@@ -44,7 +44,7 @@ def test_login_sets_a_host_only_strict_secure_cookie(
     response = client.post("/api/auth/pin", json={"pin": PIN})
     assert response.status_code == 204
     cookie = response.headers["set-cookie"]
-    assert cookie.startswith("qsess=")
+    assert cookie.startswith(f"{COOKIE}=")  # __Host-: Secure, Path=/, no Domain
     for flag in ("HttpOnly", "Secure", "SameSite=strict", "Path=/", "Max-Age=2592000"):
         assert flag.lower() in cookie.lower()
     assert "domain" not in cookie.lower()
@@ -140,22 +140,23 @@ def test_session_is_required_and_checked(
     assert logged_in.get("/api/shell").status_code == 200
     with TestClient(app, base_url="https://testserver") as stranger:
         assert stranger.get("/api/shell").json() == {"error": "session"}
-        stranger.cookies.set("qsess", "made.up.token")
+        stranger.cookies.set(COOKIE, "made.up.token")
         assert stranger.get("/api/shell").status_code == 403
         forged = make_token("nope", 4102444800, b"another-secret-of-32-bytes-long!")
-        stranger.cookies.set("qsess", forged)
+        stranger.cookies.set(COOKIE, forged)
         assert stranger.get("/api/shell").status_code == 403
     clock.now += timedelta(days=31)
     assert logged_in.get("/api/shell").status_code == 403
 
 
 def test_logout_revokes_the_session(logged_in: TestClient, app: FastAPI) -> None:
-    token = logged_in.cookies.get("qsess")
+    token = logged_in.cookies.get(COOKIE)
+    assert token
     response = logged_in.post("/api/auth/logout")
     assert response.status_code == 204
     assert "max-age=0" in response.headers["set-cookie"].lower()
     with TestClient(app, base_url="https://testserver") as other:
-        other.cookies.set("qsess", token or "")
+        other.cookies.set(COOKIE, token or "")
         assert other.get("/api/shell").status_code == 403
     assert logged_in.post("/api/auth/logout").status_code == 204  # idempotent
 
@@ -257,7 +258,18 @@ def test_cli_migrate_and_set_pin(tmp_path: Path) -> None:
     code, out = run_cli(["set-pin"], db_path, "12ab56\n12ab56\n")
     assert (code, out["error"]) == (1, "invalid-pin")
     code, out = run_cli(["set-pin"], db_path, "123456\n123456\n")
-    assert (code, out) == (0, {"job": "set-pin", "result": "ok", "revokedSessions": 0})
+    assert (code, out) == (
+        0,
+        {
+            "job": "set-pin",
+            "result": "ok",
+            "revokedSessions": 0,
+            "clearedFailures": 0,
+            "clearedLocks": 0,
+            "wasClosed": False,
+            "wasAlerted": False,
+        },
+    )
     secret = load_or_create_secret(tmp_path / "data" / "autotrade.secret")
     from autotrade.db.connection import connect
 

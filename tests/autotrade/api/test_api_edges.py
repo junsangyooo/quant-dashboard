@@ -14,7 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from autotrade.api.routes import system as system_routes
+from autotrade.api import schema
 from autotrade.api.security import read_token, verify_pin
 from autotrade.api.views import fmt
 from autotrade.api.views import home as home_view
@@ -138,7 +138,7 @@ def test_health_check_reports_a_broken_database(
     def broken(conn: sqlite3.Connection) -> int:
         raise sqlite3.OperationalError("disk I/O error")
 
-    monkeypatch.setattr(system_routes, "current_version", broken)
+    monkeypatch.setattr(schema, "stored_version", broken)
     response = client.get("/api/healthz")
     assert (response.status_code, response.json()) == (503, {"error": "db"})
 

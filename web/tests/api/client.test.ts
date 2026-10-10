@@ -105,6 +105,26 @@ describe('return path', () => {
     expect(safeNext(null)).toBeNull();
   });
 
+  it('reads next as the browser would: control characters cannot hide another site', () => {
+    // next=%2F%09%2Fevil.example — the URL parser drops the tab: '//evil.example'.
+    expect(safeNext(decodeURIComponent('%2F%09%2Fevil.example'))).toBeNull();
+    expect(safeNext('/\n/evil.example')).toBeNull();
+    expect(safeNext('/\r\n/evil.example/x')).toBeNull();
+    expect(safeNext('\t//evil.example')).toBeNull();
+    expect(safeNext('/\\/evil.example')).toBeNull();
+    expect(safeNext('javascript:alert(1)')).toBeNull();
+    expect(safeNext('data:text/html,x')).toBeNull();
+    expect(safeNext(`${window.location.origin}.evil.example/`)).toBeNull();
+    expect(safeNext('')).toBeNull();
+    // Same-origin results come back as path, query and hash only.
+    expect(safeNext(`${window.location.origin}/health#todo`)).toBe('/health#todo');
+    expect(safeNext('/day/../plan?drift=1y')).toBe('/plan?drift=1y');
+    expect(safeNext('/\t/health')).toBeNull(); // '//health' is a host named health
+    expect(safeNext('/ho\tme')).toBe('/home');
+    expect(safeNext('/pin/x')).toBeNull();
+    expect(safeNext('/pinboard')).toBe('/pinboard');
+  });
+
   it('builds the PIN link', () => {
     expect(pinPath('/day/2026-08-21?ledger=paper')).toBe(
       '/pin?next=%2Fday%2F2026-08-21%3Fledger%3Dpaper',

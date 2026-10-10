@@ -10,6 +10,13 @@ export const pinCopy = {
   /** Global cap (spec: '시도가 많아요 · [n]분 뒤 다시'). */
   lockedEverywhere: (minutes: number) => `시도가 많아요 · ${String(minutes)}분 뒤 다시`,
   lockedNote: '이미 열린 기기는 그대로 써요 · 실전 끄기도 그 기기에서 돼요',
+  /** NEW — 403 locked scope 'hold': a day of wrong PINs closed new logins until the server opens
+   * them (CONTRACT.md 쓰기). No time: it does not end by itself. */
+  lockedHold: '새 로그인이 닫혔어요 · 서버에서 열어야 해요',
+  /** NEW — guidance under the hold, same shape as noPinHelp. */
+  lockedHoldHelp: '틀린 PIN이 많았어요 · 서버에서 아래 명령으로 열어요 · Claude에게 요청',
+  /** The command from CONTRACT.md that reopens login. */
+  unlockCommand: 'python -m autotrade.jobs unlock',
   /** NEW — 403 no-pin: the first PIN is set only on the server (CONTRACT.md). */
   noPin: 'PIN이 아직 없어요 · 서버에서 먼저 정해요',
   /** NEW — guidance under no-pin, same shape as copy.pin.forgotHelp. */

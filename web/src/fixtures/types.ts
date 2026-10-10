@@ -124,7 +124,9 @@ export type StateId =
   // SCR-PIN states drawn only in the spec, plus 403 no-pin (CONTRACT.md)
   | 'pin.global-lock'
   | 'pin.no-pin'
-  | 'pin.loading';
+  | 'pin.loading'
+  // 403 locked scope 'hold': new logins closed until the server's unlock (CONTRACT.md 쓰기)
+  | 'pin.hold';
 
 /** The request never gets a response (the client raises NetworkError → '연결 안 됨'). */
 export interface NetworkDown {

@@ -9,6 +9,7 @@ import {
   ClockAlert,
   FileText,
   TriangleAlert,
+  UserX,
   type LucideIcon,
 } from 'lucide-react';
 import { SignalChip } from '../../components/Chips';
@@ -22,6 +23,7 @@ const ICON: Record<TodoView['icon'], LucideIcon> = {
   push: BellOff,
   ai: Bot,
   filings: FileText,
+  pin: UserX, // the 'PIN 실패 급증' icon of the notification settings
 };
 
 export function TodoCard({ todo, now }: { todo: Todo; now: string | null }) {
