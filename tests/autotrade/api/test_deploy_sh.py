@@ -345,3 +345,25 @@ def test_unknown_service_names_stop_before_anything(sim: Sim) -> None:
     assert done.returncode != 0
     assert "unknown service 'autotrad'" in done.stderr
     assert sim.calls() == []
+
+
+def test_the_old_app_deploys_and_rolls_back_as_before(sim: Sim) -> None:
+    """qdd (deploy.sh dashboard): pull, the old app's backup, restart and its health check. A
+    rollback restarts it only when its code (src/) differs between the two commits."""
+    assert sim.deploy("autotrade").returncode == 0  # autotrade's database exists (schema 2)
+    before = sim.head()
+    changed = sim.commit({"src/app.py": "print('old app, fixed')\n"}, "old app change")
+    done = sim.deploy("dashboard")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert sim.head() == changed
+    assert "systemctl restart dashboard.service" in sim.calls()
+    assert "python -m src.core.backup --only portfolio quant news" in sim.calls()
+    assert "health OK (http://127.0.0.1:8888/api/accounts" in done.stdout
+    restarts = sim.calls().count("systemctl restart dashboard.service")
+    done = sim.deploy("rollback", "--yes")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "old app: src/ differs, dashboard.service will be restarted" in done.stdout
+    assert "autotrade DB: schema 2 fits that code, it stays as it is" in done.stdout
+    assert sim.head() == before
+    assert sim.calls().count("systemctl restart dashboard.service") == restarts + 1
+    assert sim.schema() == 2  # nothing restored
