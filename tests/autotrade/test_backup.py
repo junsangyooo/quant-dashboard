@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import stat
+import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -47,12 +49,22 @@ def test_seven_copies_are_kept(conn: sqlite3.Connection, tmp_path: Path) -> None
     folder.mkdir()
     for day in range(1, 9):
         (folder / f"autotrade-2026-10-0{day}.db").write_bytes(b"")
-    (folder / "autotrade-2026-10-05.db.tmp").write_bytes(b"half")
+    stray = folder / "autotrade-2026-10-05.db.4242.tmp"  # left by a copy that died
+    stray.write_bytes(b"half")
+    old = time.time() - 2 * 3600
+    os.utime(stray, (old, old))
+    # Another copy is writing right now (the pre-deploy copy and the daily one may meet): its
+    # temporary file is young and stays.
+    (folder / "autotrade-predeploy-20261009-010000.db.4343.tmp").write_bytes(b"busy")
     (folder / "notes.txt").write_text("not a backup")
     report = run_backup(conn, folder, date(2026, 10, 9))
     assert report["removed"] == ["autotrade-2026-10-01.db", "autotrade-2026-10-02.db"]
     assert report["kept"] == [f"autotrade-2026-10-0{d}.db" for d in range(3, 10)]
-    assert sorted(p.name for p in folder.iterdir()) == [*report["kept"], "notes.txt"]
+    assert sorted(p.name for p in folder.iterdir()) == [
+        *report["kept"],
+        "autotrade-predeploy-20261009-010000.db.4343.tmp",
+        "notes.txt",
+    ]
 
 
 def test_a_copy_that_fails_its_check_is_not_kept(
@@ -65,7 +77,7 @@ def test_a_copy_that_fails_its_check_is_not_kept(
             self.inner = inner
 
         def execute(self, sql: str) -> Any:
-            return self if sql.startswith("PRAGMA quick_check") else self.inner.execute(sql)
+            return self if sql.startswith("PRAGMA integrity_check") else self.inner.execute(sql)
 
         def fetchone(self) -> tuple[str]:
             return ("*** in database main *** page 3 is never used",)

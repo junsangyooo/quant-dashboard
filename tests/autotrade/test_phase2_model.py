@@ -101,7 +101,7 @@ def test_v4_keeps_plans_stages_orders_and_events(tmp_path: Path) -> None:
                 " '2026-10-07', ?, 7, 'r', '{}', ?, ?)",
                 (stamp, stamp, stamp),
             )
-        assert migrate(conn) == len(MIGRATIONS) == 4
+        assert migrate(conn) == len(MIGRATIONS) == 5
         assert repo.get_plan(conn, 7).reason == "drift"
         assert [s.stage_id for s in repo.stages_of(conn, 7)] == [3]
         assert repo.get_order(conn, 5).plan_id == 7
@@ -139,16 +139,16 @@ def test_a_migration_that_breaks_foreign_keys_is_refused(
     try:
         migrate(conn)
         bad = (
-            5,
+            6,
             "orphan",
             "INSERT INTO stages (plan_id, seq, kind, market, scheduled_at, due_at,"
             " status) VALUES (99, 1, 'sell', 'KR', 'x', 'x', 'pending')",
         )
         monkeypatch.setattr(migrations, "MIGRATIONS", (*migrations.MIGRATIONS, bad))
-        monkeypatch.setattr(migrations, "FK_OFF", frozenset({5}))
+        monkeypatch.setattr(migrations, "FK_OFF", frozenset({6}))
         with pytest.raises(sqlite3.IntegrityError, match="breaks foreign keys"):
             migrate(conn)
-        assert current_version(conn) == 4  # rolled back
+        assert current_version(conn) == 5  # rolled back
         assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     finally:
         conn.close()

@@ -3,12 +3,20 @@
 The connection runs in autocommit mode (isolation_level=None); jobs open one explicit
 BEGIN IMMEDIATE transaction around their work, so a crash leaves nothing half-written and
 dry runs simply roll back. Engine functions never commit on their own.
+
+The database holds the PIN hash and the sessions, so a new file is created 0600 whatever the
+umask (the server's is 0002). SQLite gives the -wal and -shm files the main file's mode when it
+creates them (measured with SQLite 3.53: a 0600 database gets 0600 -wal/-shm under umask 0002);
+`secure_files` tightens a database made before this rule (python -m autotrade.jobs migrate).
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import sqlite3
+import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -19,12 +27,37 @@ from typing import Any
 
 from autotrade.timeutil import to_iso
 
+DB_MODE = 0o600
+SIDE_FILES = ("-wal", "-shm", "-journal")
+
+
+def _create_private(path: Path) -> None:
+    """An empty database file only its owner can read (SQLite accepts an empty file as new)."""
+    with contextlib.suppress(FileExistsError):  # another process created it first
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, DB_MODE))
+
+
+def secure_files(path: Path) -> list[str]:
+    """Make the database and its -wal/-shm/-journal files 0600. Returns the files changed."""
+    changed: list[str] = []
+    for file in (path, *(path.with_name(path.name + s) for s in SIDE_FILES)):
+        try:
+            mode = stat.S_IMODE(file.stat().st_mode)
+        except FileNotFoundError:
+            continue
+        if mode != DB_MODE:
+            file.chmod(DB_MODE)
+            changed.append(file.name)
+    return changed
+
 
 def connect(path: Path | str, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open the database. The web API passes check_same_thread=False: each request owns its
     connection, but FastAPI may open and close it on different worker threads."""
     if str(path) != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if not Path(path).exists():
+            _create_private(Path(path))
     conn = sqlite3.connect(
         str(path), isolation_level=None, timeout=30.0, check_same_thread=check_same_thread
     )

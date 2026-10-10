@@ -13,11 +13,16 @@ from autotrade.jobs.cli import build_parser, main
 from .fakes import KR, US, World
 from .helpers import PHASE1_ENV, kst
 
+ENV = {"AUTOTRADE_PAPER_START_DATE": "2026-07-01", **PHASE1_ENV}
+
 
 def run(argv: list[str], world: World, db: Path) -> tuple[int, dict[str, Any]]:
+    """The command on `db`, migrated first when it is new (only `migrate` makes a schema)."""
     lines: list[str] = []
-    env = {"AUTOTRADE_PAPER_START_DATE": "2026-07-01", **PHASE1_ENV}
-    code = main([*argv, "--db", str(db)], sources=world.sources(), env=env, out=lines.append)
+    if not db.exists():
+        assert main(["migrate", "--db", str(db)], env=ENV, out=lines.append) == 0
+        lines.clear()
+    code = main([*argv, "--db", str(db)], sources=world.sources(), env=ENV, out=lines.append)
     return code, json.loads(lines[0]) if lines else {}
 
 
@@ -81,6 +86,8 @@ def test_live_ledger_is_refused(
 
 def test_clock_defaults_to_now(tmp_path: Path, world: World) -> None:
     lines: list[str] = []
+    assert main(["migrate", "--db", str(tmp_path / "c.db")], env={}, out=lines.append) == 0
+    lines.clear()
     code = main(
         ["check", "--db", str(tmp_path / "c.db")],
         sources=world.sources(),

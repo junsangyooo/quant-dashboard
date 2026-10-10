@@ -684,12 +684,45 @@ CREATE TABLE source_states (
 )
 """
 
+# V5: the AI runner's records (audit 2026-10-10, PHASE2.md §6).
+# - ai_tasks.source_tries: downloads a task could not use (a corrupt file, a refusal, an empty
+#   text). They are not attempts (no model was asked); after MAX_SOURCE_TRIES the task gives up
+#   with a record (autotrade/ai/runner.py).
+# - ai_tasks.answer_calls: the ai_calls of a complete answer that is not applied yet (the code
+#   after the calls broke): the next attempt applies it again instead of asking the model again.
+# - ai_runner: the runner's heartbeat, one row. The web service never sees the runner's
+#   environment, so the health screen reads the gate (AUTOTRADE_AI_CALLS), the last run, the task
+#   being asked and since when, the CLI the runner found and whether it has a DART key here.
+V5 = """
+ALTER TABLE ai_tasks ADD COLUMN source_tries INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE ai_tasks ADD COLUMN answer_calls TEXT;
+
+CREATE TABLE ai_runner (
+    id                 INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled            INTEGER NOT NULL,
+    started_at         TEXT NOT NULL,
+    ended_at           TEXT,
+    result             TEXT,
+    task_id            INTEGER,
+    task_kind          TEXT,
+    task_started_at    TEXT,
+    cli                TEXT,
+    cli_error          TEXT,
+    cli_missing_since  TEXT,
+    dart_key           INTEGER NOT NULL DEFAULT 0,
+    updated_at         TEXT NOT NULL
+)
+"""
+
 MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (1, "initial schema", V1),
     (2, "pin, sessions, lockout, notification preferences", V2),
     (3, "event refs, todo resolutions, dividends, baseline dividend cash", V3),
     (4, "the AI rule: shares, sleeves, picks, metrics, filings, AI tasks and calls", V4),
+    (5, "the AI runner: source tries, kept answers, heartbeat", V5),
 )
+LATEST_VERSION = MIGRATIONS[-1][0]  # the schema this code reads and writes
 
 # Migrations that rebuild a table other tables reference. SQLite's documented procedure: foreign
 # keys off around the transaction, PRAGMA foreign_key_check before the commit.
@@ -703,6 +736,14 @@ def _statements(sql: str) -> list[str]:
 def current_version(conn: sqlite3.Connection) -> int:
     row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
     return int(row[0]) if row and row[0] is not None else 0
+
+
+def stored_version(conn: sqlite3.Connection) -> int:
+    """The schema the database is at; 0 for a database that was never migrated."""
+    found = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'"
+    ).fetchone()
+    return current_version(conn) if found else 0
 
 
 def migrate(conn: sqlite3.Connection, now: datetime | None = None) -> int:
