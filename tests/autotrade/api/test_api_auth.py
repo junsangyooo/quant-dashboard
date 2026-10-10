@@ -258,7 +258,18 @@ def test_cli_migrate_and_set_pin(tmp_path: Path) -> None:
     code, out = run_cli(["set-pin"], db_path, "12ab56\n12ab56\n")
     assert (code, out["error"]) == (1, "invalid-pin")
     code, out = run_cli(["set-pin"], db_path, "123456\n123456\n")
-    assert (code, out) == (0, {"job": "set-pin", "result": "ok", "revokedSessions": 0})
+    assert (code, out) == (
+        0,
+        {
+            "job": "set-pin",
+            "result": "ok",
+            "revokedSessions": 0,
+            "clearedFailures": 0,
+            "clearedLocks": 0,
+            "wasClosed": False,
+            "wasAlerted": False,
+        },
+    )
     secret = load_or_create_secret(tmp_path / "data" / "autotrade.secret")
     from autotrade.db.connection import connect
 

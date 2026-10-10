@@ -1,6 +1,15 @@
 """Owner PIN, sessions, PIN lockout and notification preferences (tables of migration 2).
 
 None of these commit; the caller owns the transaction.
+
+Lockout rows (autotrade/api/auth.py decides what they mean):
+- pin_failures: one row per wrong PIN, keyed by the caller's address (IPv4 address or IPv6 /64).
+- pin_locks: keyed by text. An address key holds that address's consecutive failures and its
+  lock; 'session:<id prefix>' holds one session's consecutive wrong current PINs (PIN change);
+  the reserved keys ALERT_KEY and HOLD_KEY ('*…', never an address) are flags: the row exists
+  from the moment 'PIN 실패 급증' was raised or new logins were closed, with `updated_at` = that
+  moment and `failures` = the wrong PINs counted for it. Only `python -m autotrade.jobs unlock`
+  and `set-pin` (clear_lockouts) remove them.
 """
 
 from __future__ import annotations
@@ -45,11 +54,21 @@ class SessionRow:
         )
 
 
+ALERT_KEY = "*alert"
+HOLD_KEY = "*hold"
+
+
 @dataclass(frozen=True)
 class PinLock:
     ip: str
     failures: int
     locked_until: datetime | None
+
+
+@dataclass(frozen=True)
+class LockoutFlag:
+    raised_at: datetime
+    count: int
 
 
 @dataclass(frozen=True)
@@ -184,6 +203,46 @@ def failures_since(conn: sqlite3.Connection, since: datetime) -> list[datetime]:
 
 def prune_failures(conn: sqlite3.Connection, before: datetime) -> None:
     conn.execute("DELETE FROM pin_failures WHERE at <= ?", (to_iso(before),))
+
+
+def count_failures_since(conn: sqlite3.Connection, since: datetime) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) FROM pin_failures WHERE at > ?", (to_iso(since),)
+    ).fetchone()
+    return int(row[0])
+
+
+def last_failure_at(conn: sqlite3.Connection) -> datetime | None:
+    row = conn.execute("SELECT MAX(at) FROM pin_failures").fetchone()
+    return None if row is None or row[0] is None else from_iso(str(row[0]))
+
+
+def get_flag(conn: sqlite3.Connection, key: str) -> LockoutFlag | None:
+    row = conn.execute("SELECT failures, updated_at FROM pin_locks WHERE ip = ?", (key,)).fetchone()
+    if row is None:
+        return None
+    return LockoutFlag(raised_at=from_iso(str(row["updated_at"])), count=int(row["failures"]))
+
+
+def raise_flag(conn: sqlite3.Connection, key: str, count: int, at: datetime) -> None:
+    """Set a flag once; a flag already raised keeps its moment."""
+    conn.execute(
+        "INSERT INTO pin_locks (ip, failures, locked_until, updated_at) VALUES (?, ?, NULL, ?)"
+        " ON CONFLICT(ip) DO NOTHING",
+        (key, count, to_iso(at)),
+    )
+
+
+def bump_flag(conn: sqlite3.Connection, key: str) -> None:
+    """Count one more wrong PIN on a raised flag (its moment stays)."""
+    conn.execute("UPDATE pin_locks SET failures = failures + 1 WHERE ip = ?", (key,))
+
+
+def clear_lockouts(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Empty pin_failures and pin_locks (unlock, set-pin). Returns the rows removed of each."""
+    failures = conn.execute("DELETE FROM pin_failures").rowcount
+    locks = conn.execute("DELETE FROM pin_locks").rowcount
+    return int(failures), int(locks)
 
 
 # ── notification preferences ─────────────────────────────────────────────────────────────

@@ -2,14 +2,19 @@
 
 Phase 1 has three data sources (Korean and US closes, the rate). Toss link, Toss balance and
 push devices do not exist yet, so they are not listed (no invented rows).
+
+'PIN 실패 급증' (autotrade/api/auth.py) is a red manual to-do, first in the list and counted in
+the header's '할 일 n', from the moment it is raised until `python -m autotrade.jobs unlock`.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from autotrade.api.auth import pin_alert
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext
 from autotrade.api.views.history import OK_RESULTS, DayData, failure_reason
@@ -55,6 +60,29 @@ def _today_check_failure(ctx: LedgerContext) -> tuple[RunRow, datetime | None] |
     return last, None if not retry else from_iso(str(retry))
 
 
+def _pin_todo(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    """'PIN 실패 급증': facts since (raised), count (wrong PINs counted for it), lastAt (the latest
+    wrong PIN on record, left out when none), closed (1 = new logins closed until unlock)."""
+    alert = pin_alert(conn)
+    if alert is None:
+        return None
+    facts: dict[str, Any] = {
+        "since": fmt.iso(alert.since),
+        "count": alert.count,
+        "closed": 1 if alert.closed else 0,
+    }
+    if alert.last_at is not None:
+        facts["lastAt"] = fmt.iso(alert.last_at)
+    return {
+        "id": "pin-failures",
+        "severity": "red",
+        "kind": "pin-failures",
+        "facts": facts,
+        "action": {"kind": "manual"},
+        "effect": "other",
+    }
+
+
 def _last_success(ctx: LedgerContext) -> RunRow | None:
     runs = [
         r for r in repo.runs_of_ledger(ctx.conn, ctx.ledger_id, "check") if r.result in OK_RESULTS
@@ -66,16 +94,19 @@ def _last_success(ctx: LedgerContext) -> RunRow | None:
 def shell(ctx: LedgerContext, mode_changed_at: datetime | None) -> dict[str, Any]:
     failure = _today_check_failure(ctx)
     todo = _todo_orders(ctx)
-    todo_count = len(todo) + (1 if failure is not None and failure[1] is None else 0)
+    pin_todo = 1 if _pin_todo(ctx.conn) is not None else 0
+    todo_count = len(todo) + (1 if failure is not None and failure[1] is None else 0) + pin_todo
     stale = ctx.stale_source() if ctx.status.value == "quote-wait" else None
     retries = _retry_orders(ctx)
     # AI-rule sources (filings, the AI CLI) count once dead for more than a trading day.
     ai_dead = ctx.ai_rule.header_causes()
     status: dict[str, Any]
-    if ctx.last_check is None:
-        status = {"kind": "before-first", "firstCheckAt": fmt.iso(ctx.first_check_at)}
-    elif todo_count:
+    # Before the first check there are no order to-dos or failed checks: only 'PIN 실패 급증'
+    # can make a count then, and it outranks '첫 확인 전'.
+    if todo_count:
         status = {"kind": "todo", "count": todo_count}
+    elif ctx.last_check is None:
+        status = {"kind": "before-first", "firstCheckAt": fmt.iso(ctx.first_check_at)}
     elif failure is not None:
         status = {"kind": "check-failed", "at": fmt.iso(failure[0].started_at)}
     elif stale is not None or retries or ai_dead:
@@ -212,6 +243,9 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
     sources = [_source(ctx, s, rows.get(s)) for s in SOURCE_IDS]
     sources += ctx.ai_rule.sources()  # filings, ai-cli, metric-table where the AI rule runs
     todos: list[dict[str, Any]] = []
+    pin_todo = _pin_todo(ctx.conn)
+    if pin_todo is not None:
+        todos.append(pin_todo)
     for src in sources:
         if src["state"] == "stale" and src["id"] in SOURCE_IDS:
             row = rows[src["id"]]

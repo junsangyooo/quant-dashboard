@@ -23,7 +23,10 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve).
   status     read-only summary
   migrate    create or upgrade data/autotrade.db (deploy.sh runs it)
   set-pin    set the owner PIN (first time or reset). Reads it twice from standard input,
-             never from the command line, and closes every open session.
+             never from the command line, closes every open session and clears the lockout
+             (as unlock does).
+  unlock     clear every wrong PIN and PIN lock: reopens new logins after 'PIN 실패 급증' closed
+             them and takes the alert off the screens. Open sessions are untouched.
   dev-seed   development only: build a new database at --db by replaying the engine on a scripted
              market (--world first-day | paper | discovery, autotrade/dev/worlds.py). No network,
              no AI CLI. --pin sets the owner PIN without asking (default 123456); no other command
@@ -88,6 +91,7 @@ COMMANDS = (
     "status",
     "migrate",
     "set-pin",
+    "unlock",
     "dev-seed",
 )
 LOCKED = (
@@ -166,10 +170,29 @@ def _set_pin(conn: sqlite3.Connection, cfg: Config, at: datetime, stdin: TextIO)
     if first != second:
         return {"job": "set-pin", "result": "failed", "error": "pin-mismatch"}
     settings = default_settings(cfg)
-    revoked = set_pin(
-        conn, load_or_create_secret(settings.secret_path), first, settings.scrypt_n, at
-    )
-    return {"job": "set-pin", "result": "ok", "revokedSessions": revoked}
+    reset = set_pin(conn, load_or_create_secret(settings.secret_path), first, settings.scrypt_n, at)
+    return {
+        "job": "set-pin",
+        "result": "ok",
+        "revokedSessions": reset.revoked,
+        **_lockout_report(reset.unlocked),
+    }
+
+
+def _lockout_report(cleared: Any) -> dict[str, Any]:
+    """What unlock / set-pin cleared (autotrade.api.auth.Unlocked)."""
+    return {
+        "clearedFailures": cleared.failures,
+        "clearedLocks": cleared.locks,
+        "wasClosed": cleared.held,
+        "wasAlerted": cleared.alerted,
+    }
+
+
+def _unlock(conn: sqlite3.Connection) -> dict[str, Any]:
+    from autotrade.api.auth import unlock  # the web API stack is only needed for this command
+
+    return {"job": "unlock", "result": "ok", **_lockout_report(unlock(conn))}
 
 
 def _dump(report: dict[str, Any], *, line: bool = False) -> str:
@@ -197,6 +220,8 @@ def _dispatch(
         return {"job": "migrate", "result": "ok", "schema": current_version(ctx.conn)}
     if args.command == "set-pin":
         return _set_pin(ctx.conn, ctx.cfg, at, stdin)
+    if args.command == "unlock":
+        return _unlock(ctx.conn)
     if args.command == "check":
         return check_job(ctx, ledger, at, dry_run=dry)
     if args.command == "retry":
