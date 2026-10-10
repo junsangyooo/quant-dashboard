@@ -296,7 +296,6 @@ class ClaudeCli:
         return child_env(os.environ if self.environ is None else self.environ, self.path_prefix)
 
     def run(self, call: CliCall) -> CliResult:
-        self.workdir.mkdir(parents=True, exist_ok=True)
         started_at, t0 = self.now(), self.monotonic()
         exit_code: int | None = None
         output: Any = None
@@ -306,6 +305,8 @@ class ClaudeCli:
         try:
             if self.binary is None:
                 raise FileNotFoundError(self.missing or "claude CLI not found")
+            # A working folder that cannot be made is like a CLI that cannot start.
+            self.workdir.mkdir(parents=True, exist_ok=True)
             done = self.runner(
                 self.command(call),
                 cwd=str(self.workdir),

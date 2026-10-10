@@ -281,7 +281,10 @@ def run_task(
         results, call_ids = kept
         tokens = 0
     else:
-        results = _ask(cli, prepared)
+        try:
+            results = _ask(cli, prepared)
+        except Exception as exc:  # the CLI wrapper itself broke (it catches what it expects)
+            return _wait(conn, cfg, task, now, exc, "call", started=True)
         lost = next((r for r in results if not r.launched), None)
         if lost is not None:  # the CLI is down: no attempt, no record, the run stops
             error = lost.error or "the CLI could not start"

@@ -762,6 +762,11 @@ def test_the_last_review_of_a_full_month_asks_to_switch(
     p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
 ) -> None:
     prices(world, "042660.KS", "069500.KS", "SPY")
+    # An older candidate: a discovery's new pick its two buy answers did not confirm (no buy
+    # condition). It waits for the next discovery and is never offered as a switch.
+    unconfirmed = candidate(p2conn, "OLD")
+    with transaction(p2conn):
+        ai_repo.update_pick(p2conn, unconfirmed, AT, buy=[])
     nvda = candidate(p2conn)
     with transaction(p2conn):
         reviews.queue_reviews(p2conn, "paper", kst("2026-10-31 22:00"))

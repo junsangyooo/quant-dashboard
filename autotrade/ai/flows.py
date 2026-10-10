@@ -926,13 +926,14 @@ def apply_monthly_review(
 
 def _monthly_switch(env: FlowEnv, task: ai_repo.TaskRow, month: str) -> int | None:
     """D37: with every slot taken, the month's last review asks whether the weakest holding
-    should give way to the oldest candidate."""
+    should give way to the oldest candidate. A new pick of the discovery that its two buy answers
+    did not confirm (it has no buy condition) is not offered: it waits for the next discovery."""
     if held_count(env.conn, task.ledger_id) < env.cfg.discovery_max_picks:
         return None
     candidates = [
         p
         for p in ai_repo.picks_of(env.conn, task.ledger_id, RULE_ID, ("candidate",))
-        if p.decision is None
+        if p.decision is None and p.buy
     ]
     if not candidates:
         return None

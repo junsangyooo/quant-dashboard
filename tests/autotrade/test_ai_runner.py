@@ -466,3 +466,39 @@ def test_the_end_to_end_runner_finds_no_cli_without_the_setting(
     assert beat is not None
     assert beat.cli is None
     assert os.environ.get("AUTOTRADE_CLAUDE_BIN") is None
+
+
+def test_a_working_folder_that_cannot_be_made_is_a_cli_that_cannot_start(
+    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World, tmp_path: Path
+) -> None:
+    prices(world, "042660.KS", "069500.KS")
+    tid = shock_task(p2conn)
+    blocker = tmp_path / "data"
+    blocker.write_text("a file where the folder should be")
+    report = _run(p2ctx, ClaudeCli("claude", blocker / "ai-cwd", runner=ScriptedRunner()))
+    assert [t["status"] for t in report["tasks"]] == ["cli-missing"]
+    waiting = ai_repo.get_task(p2conn, tid)
+    assert (waiting.status, waiting.attempts) == ("pending", 0)
+    assert ai_repo.last_calls(p2conn) == []
+
+
+def test_a_broken_cli_wrapper_is_recorded_like_any_fault(
+    p2ctx: JobContext,
+    p2conn: sqlite3.Connection,
+    world: World,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    prices(world, "042660.KS", "069500.KS")
+    tid = shock_task(p2conn)
+
+    def broken(cmd: list[str], **kw: Any) -> Any:
+        raise RuntimeError("the wrapper itself broke")
+
+    report = _run(p2ctx, ClaudeCli("claude", tmp_path / "cwd", runner=broken))
+    assert [t["status"] for t in report["tasks"]] == ["gave-up"]
+    stuck = ai_repo.get_task(p2conn, tid)
+    assert (stuck.status, stuck.attempts) == ("failed", 3)
+    assert stuck.last_error is not None
+    assert stuck.last_error.startswith("call: RuntimeError: the wrapper itself broke")
+    assert "Traceback" in capsys.readouterr().err
