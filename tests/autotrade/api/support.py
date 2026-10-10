@@ -15,6 +15,7 @@ from ..fakes import KR, US, World
 from ..helpers import kst
 
 PIN = "123456"
+COOKIE = "__Host-qsess"  # the production cookie (ApiSettings.cookie_secure is True in tests)
 
 
 @dataclass

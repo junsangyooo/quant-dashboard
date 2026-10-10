@@ -1,5 +1,8 @@
 """Write endpoints (CONTRACT.md 쓰기) besides auth. Phase 1: live mode and web push are not
-available — they answer 409 and 501 instead of pretending."""
+available — they answer 409 and 501 instead of pretending.
+
+Bodies come through deps.session_body, never as a body parameter: the session is checked first,
+so a request without one is 403 session whatever its body (tests/autotrade/api pins this)."""
 
 from __future__ import annotations
 
@@ -10,7 +13,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict
 
 from autotrade.api import auth
-from autotrade.api.deps import app_state, client_ip, current_session, get_conn
+from autotrade.api.deps import app_state, client_ip, current_session, get_conn, session_body
 from autotrade.api.errors import ApiError
 from autotrade.api.views import fmt
 from autotrade.api.views.account import LOCKED_EVENTS, NOTIFY_DEFAULTS, effective_events
@@ -41,10 +44,15 @@ class NotificationsBody(BaseModel):
     hideAmounts: bool | None = None  # noqa: N815 — the contract's field name
 
 
+PIN_CHANGE_BODY = session_body(PinChangeBody)
+NOTIFICATIONS_BODY = session_body(NotificationsBody)
+LIVE_BODY = session_body(LiveBody)
+
+
 @router.post("/account/pin", status_code=204)
 def change_pin(
-    body: PinChangeBody,
     request: Request,
+    body: PinChangeBody = Depends(PIN_CHANGE_BODY),
     session: SessionRow = Depends(current_session),
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> Response:
@@ -64,7 +72,9 @@ def change_pin(
 
 @router.put("/account/notifications")
 def save_notifications(
-    body: NotificationsBody, request: Request, conn: sqlite3.Connection = Depends(get_conn)
+    request: Request,
+    body: NotificationsBody = Depends(NOTIFICATIONS_BODY),
+    conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
     at = app_state(request).clock()
     with transaction(conn):
@@ -86,7 +96,9 @@ def save_notifications(
 
 
 @router.post("/mode/live")
-def turn_live_on(body: LiveBody) -> Response:
+def turn_live_on(body: LiveBody = Depends(LIVE_BODY)) -> Response:
+    # Phase 3 checks body.pin here: give it the per-session guard of auth.change_pin (5 wrong
+    # PINs close the session), or a stolen cookie could guess the PIN from many addresses.
     raise ApiError(409, "blocked", {"cause": "live-not-available"})
 
 

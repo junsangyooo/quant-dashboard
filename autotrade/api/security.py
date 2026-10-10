@@ -25,6 +25,9 @@ PIN_LENGTH = 6
 SCRYPT_R = 8
 SCRYPT_P = 1
 SCRYPT_DKLEN = 32
+# Our tokens are ~120 ASCII characters ('<43-char id>.<10 digits>.<64 hex>'). Anything longer or
+# not ASCII is no token; hmac.compare_digest would raise TypeError on non-ASCII text.
+MAX_TOKEN_LENGTH = 256
 
 
 def is_valid_pin(pin: object) -> bool:
@@ -99,8 +102,9 @@ def make_token(session_id: str, expires_unix: int, secret: bytes) -> str:
 
 
 def read_token(token: str | None, secret: bytes, now_unix: float | None = None) -> str | None:
-    """The session id inside a valid, unexpired token; None otherwise."""
-    if not token:
+    """The session id inside a valid, unexpired token; None otherwise (never raises: a cookie is
+    whatever the client sent)."""
+    if not token or len(token) > MAX_TOKEN_LENGTH or not token.isascii():
         return None
     parts = token.split(".")
     if len(parts) != 3:
