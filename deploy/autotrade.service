@@ -15,6 +15,8 @@
 #   sudo systemctl enable --now autotrade      (first time)  |  sudo systemctl restart autotrade
 #   curl -s http://127.0.0.1:8890/api/healthz  -> {"ok":true,"schema":N}
 #   systemd-analyze security autotrade         (exposure; expect well under 5 "OK")
+#   sudo cat /proc/$(systemctl show -p MainPID --value autotrade)/environ | tr '\0' '\n'
+#      -> no AUTOTRADE_*, *_KEY, KRX_*, TOSS_* lines (how ops notes §9.5 found the old leak)
 # If it does not come up: journalctl -u autotrade -n 50 --no-pager and data/logs/autotrade.log;
 # go back with: sudo cp /etc/systemd/system/autotrade.service.bak /etc/systemd/system/autotrade.service
 #   && sudo systemctl daemon-reload && sudo systemctl restart autotrade
