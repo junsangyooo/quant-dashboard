@@ -149,7 +149,10 @@ def export(root: Path, commit: str, subdir: str, dest: Path) -> bool:
     if done.returncode != 0:
         raise ReleaseError(f"git archive {commit} {subdir}: {done.stderr.decode().strip()}")
     with tarfile.open(fileobj=io.BytesIO(done.stdout)) as tar:
-        tar.extractall(dest, filter="data")  # plain files only (3.10.12 has the filters)
+        if hasattr(tarfile, "data_filter"):  # 3.10.12+ (the server's): plain files only
+            tar.extractall(dest, filter="data")
+        else:  # pragma: no cover — an older 3.10; the archive is our own repository's
+            tar.extractall(dest)
     return True
 
 
