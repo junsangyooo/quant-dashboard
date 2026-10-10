@@ -6,6 +6,10 @@
 # Install or update (with the owner's go; deploy.sh warns when the installed copy differs):
 #   sudo cp /etc/systemd/system/autotrade.service /etc/systemd/system/autotrade.service.bak  (an update)
 #   sudo cp ~/portfolio-dashboard/deploy/autotrade.service /etc/systemd/system/autotrade.service
+#   sudo touch ~/portfolio-dashboard/data/logs/autotrade.log
+#   sudo chown ubuntu:ubuntu ~/portfolio-dashboard/data/logs/autotrade.log
+#      (systemd opens the log as root and would create it root-owned; logrotate's copytruncate
+#       runs as ubuntu, deploy/logrotate-dashboard — the same step dashboard.log needed)
 #   sudo systemd-analyze verify /etc/systemd/system/autotrade.service   (no output = fine)
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now autotrade      (first time)  |  sudo systemctl restart autotrade
@@ -48,7 +52,9 @@
 # - Considered and left out: MemoryDenyWriteExecute= (libffi/ctypes callbacks need writable code
 #   pages; a crash at runtime is worse than the gain), PrivateUsers= (supplementary groups stay
 #   effective inside it anyway), RemoveIPC= (it would delete the IPC objects of every process of
-#   user ubuntu, the old app's too, whenever this unit stops).
+#   user ubuntu, the old app's too, whenever this unit stops), UMask=0077 (systemd creates a
+#   missing log file with the unit's umask: root-owned 0600, unreadable for ubuntu; the database
+#   file itself is created by the jobs, not by this process).
 
 [Unit]
 Description=autotrade — quant.jsyoo.dev engine API and web (FastAPI)
@@ -71,7 +77,6 @@ UnsetEnvironment=AUTOTRADE_LIVE_ORDERS AUTOTRADE_DEV AUTOTRADE_FAKE_NOW AUTOTRAD
 
 NoNewPrivileges=yes
 CapabilityBoundingSet=
-UMask=0077
 ProtectSystem=strict
 ProtectHome=tmpfs
 BindReadOnlyPaths=/home/ubuntu/portfolio-dashboard
