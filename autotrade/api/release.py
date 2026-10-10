@@ -16,7 +16,7 @@ Layout on the server (paths relative to the repository root, the working directo
   web/dist -> releases/<id>  the live release: a symlink, switched by one rename(2)
   data/deploy/history.jsonl  one line per deploy and rollback
   data/backup/autotrade/autotrade-predeploy-<UTC yyyymmdd-HHMMSS>.db
-                             written by `python -m autotrade.jobs backup --predeploy`
+                             written by `python -m autotrade.jobs migrate --predeploy` (deploy.sh)
 
 Releases: a build is made from `git archive <commit> web` in a temporary folder (npm ci
 --ignore-scripts, npm run build), never in the live tree, so a failed build changes nothing. The

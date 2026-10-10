@@ -2,8 +2,9 @@
 
 - Daily (after the snapshot, autotrade/jobs/schedule.py): autotrade-<KST date>.db, seven kept.
   Running it again the same day replaces that day's copy.
-- Before a deploy (`python -m autotrade.jobs backup --predeploy`, deploy/deploy.sh runs it before
-  `migrate`): autotrade-predeploy-<UTC YYYYmmdd-HHMMSS>.db, the newest five kept. They are a
+- Before a deploy (deploy/deploy.sh: `python -m autotrade.jobs migrate --predeploy`, which makes
+  it under migrate's locks just before migrating; `backup --predeploy` makes one by hand):
+  autotrade-predeploy-<UTC YYYYmmdd-HHMMSS>.db, the newest five kept. They are a
   separate set: they never push a daily copy out, nor the other way round.
 - VACUUM INTO writes a consistent, compacted copy while the web service and the jobs keep using
   the database (WAL). The copy goes to a temporary name, is checked (PRAGMA integrity_check) and

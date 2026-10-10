@@ -13,8 +13,9 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, a
   dividends  download recent dividends of what the ledger holds and book those paid by today
   backup     copy the database to data/backup/autotrade/autotrade-<date>.db (7 kept).
              --predeploy: autotrade-predeploy-<UTC YYYYmmdd-HHMMSS>.db instead (5 kept apart from
-             the daily ones), one JSON line with its path; no lock and any schema (deploy.sh runs
-             it before migrate). No database yet: {"job":"backup","result":"no-database"}, exit 0
+             the daily ones), one JSON line with its path; no lock and any schema. deploy.sh
+             makes this copy through `migrate --predeploy`, under migrate's locks.
+             No database yet: {"job":"backup","result":"no-database"}, exit 0
   watch      the AI rule's daily code checks (filings, sell and buy conditions, price shocks,
              the 'vs index' line, scores); it queues AI tasks and never trades
   ai-plan    turn the AI rule's decisions into a plan (the tick runs it before 09:05)
