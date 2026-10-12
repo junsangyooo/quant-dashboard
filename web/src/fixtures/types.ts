@@ -40,6 +40,13 @@ export type StateId =
   | 'home.live-todo'
   | 'home.push-undelivered'
   | 'home.permission'
+  // 계좌별 보기 (2026-10-12, no drawing): the switch on 한국 ₩ · 미국 $, the moment before the
+  // first fill, 미국 계좌 with dollars only, and 미국 계좌 empty before the first conversion
+  | 'home.account-kr'
+  | 'home.account-us'
+  | 'home.before-fill'
+  | 'home.us-cash'
+  | 'home.us-empty'
   | 'plan.paper'
   | 'plan.live'
   | 'plan.stale'
@@ -207,5 +214,7 @@ export interface FixtureBundle {
   now: string;
   /** Faster /api/shell polling for scripted sequences (offline, other-device). Default 60 s. */
   shellPollMs?: number;
+  /** Query the page opens with, for a state chosen in the address ('account=us'). */
+  search?: string;
   responses: FixtureResponses;
 }

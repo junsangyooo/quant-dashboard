@@ -1,5 +1,7 @@
 // 지금 자산 (Figma '지금 자산'): '[장부] 자산 · [시작일]부터' + 예시 + 낡음 | 기준 chip → 총액 →
-// 손익 chip · 손대지 않았을 때 chip → 계획 칩 줄 (상태 칩 + 다음 행동 ›, → 계획).
+// 손익 chip · 손대지 않았을 때 chip → 환율 효과 줄 → 계좌 칸 (한국 계좌 · 미국 계좌, 각 통화) →
+// 계획 칩 줄 (상태 칩 + 다음 행동 ›, → 계획). The 환율 효과 line and the tiles come with the first
+// fill (HomeResponse.accounts).
 import clsx from 'clsx';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -14,15 +16,18 @@ import { homeCopy } from '../../copy/home';
 import {
   formatFxRate,
   formatKrw,
-  formatKrwSigned,
   formatMonthDay,
   formatPercentSigned,
   formatTime,
   pnlDirection,
 } from '../../lib/format';
 import { nextActionText } from '../Plan/words';
+import { AccountTiles, FxEffectLine } from './Accounts';
+import { pnlText } from './money';
 import { Sheet } from './Sheet';
 import styles from './Home.module.css';
+
+export { pnlText };
 
 /** '모의투자 자산 · 7/1부터', '실전 자산 · 9/1 시작', '모의투자 시작 금액'. */
 export function heroLabel(home: HomeResponse): string {
@@ -32,17 +37,6 @@ export function heroLabel(home: HomeResponse): string {
   if (home.trend.empty === 'before-first-check') return h.startAmount(ledger);
   if (home.trend.empty === 'before-first-fill') return `${h.assets(ledger)} · ${h.started(start)}`;
   return `${h.assets(ledger)} · ${h.since(start)}`;
-}
-
-/** '▲ +243,800원 · +2.44%' (pct hidden when its base is 0 or less). */
-export function pnlText(pnl: NonNullable<HomeResponse['pnl']>): string {
-  const dir = pnlDirection(pnl.amount);
-  const arrow = dir === 'gain' ? homeCopy.hero.up : dir === 'loss' ? homeCopy.hero.down : '';
-  const body = homeCopy.hero.pnl(
-    formatKrwSigned(pnl.amount),
-    pnl.pct === null ? null : formatPercentSigned(pnl.pct, 2),
-  );
-  return arrow ? `${arrow} ${body}` : body;
 }
 
 function BasisSheet({ home, onClose }: { home: HomeResponse; onClose: () => void }) {
@@ -148,6 +142,12 @@ export function Hero({ home, now }: { home: HomeResponse; now: string | null }) 
           </InfoChip>
         ) : null}
       </div>
+      {home.accounts ? (
+        <>
+          <FxEffectLine home={home} accounts={home.accounts} />
+          <AccountTiles accounts={home.accounts} />
+        </>
+      ) : null}
       <PlanChipLine home={home} now={now} />
       {sheet === 'basis' ? <BasisSheet home={home} onClose={close} /> : null}
       {sheet === 'baseline' ? <BaselineSheet onClose={close} /> : null}

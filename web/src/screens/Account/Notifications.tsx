@@ -2,6 +2,9 @@
 // per event (확인 실패 locked) → 알림에 금액 숨기기 → '[시각] 저장됨' → 시험 알림 보내기 → a result row per
 // device. Every switch saves at once; the browser permission is asked only from this device's
 // switch. Phase 1 answers the push endpoints with 501: shown as a calm '준비 중', not an error.
+// Until the server has web push (`available` false, 1·2단계) the screen shows NotificationsLater —
+// one disabled row — instead of this card (the owner, 2026-10-12: ten switches looked live while
+// nothing was sent); this card returns as it is when push comes (3단계).
 import clsx from 'clsx';
 import { useId, useState } from 'react';
 import {
@@ -104,6 +107,29 @@ interface Saved {
   events: Partial<Record<NotifyEvent, boolean>>;
   hideAmounts?: boolean | undefined;
   savedAt: string | null;
+}
+
+/** 1·2단계: one disabled row — 알림 · '3단계에서 켤 수 있어요' · a switch that cannot be turned on. */
+export function NotificationsLater() {
+  const titleId = useId();
+  return (
+    <section
+      id="notifications"
+      className={clsx(styles.card, styles.notificationsLater)}
+      aria-labelledby={titleId}
+    >
+      <div className={styles.laterRow}>
+        <Bell size={20} aria-hidden />
+        <div className={styles.switchText}>
+          <h2 id={titleId} className="t-body-strong">
+            {t.notifications.title}
+          </h2>
+          <p className={clsx('t-caption', styles.muted)}>{t.notifications.later}</p>
+        </div>
+        <Toggle checked={false} disabled aria-labelledby={titleId} className={styles.toggleLater} />
+      </div>
+    </section>
+  );
 }
 
 export function NotificationsCard({ notifications: n }: { notifications: Notifications }) {

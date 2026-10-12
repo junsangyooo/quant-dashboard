@@ -86,6 +86,44 @@ test('real API: PIN, the nine screens and their links, logout', async ({ page, b
     }
   });
 
+  await test.step('자산 · 한국 ₩ · 미국 $ (each account in its own money)', async () => {
+    const home = await page.evaluate(async () => {
+      const res = await fetch('/api/home', { credentials: 'same-origin' });
+      return (await res.json()) as {
+        pnl: { amount: number } | null;
+        accounts: {
+          list: { id: 'kr' | 'us'; total: number }[];
+          split: { kr: number; us: number; fx: number };
+        } | null;
+      };
+    });
+    // Every world here has filled: the switch is there and the parts add up to the won.
+    expect(home.accounts).not.toBeNull();
+    const { kr, us, fx } = home.accounts?.split ?? { kr: 0, us: 0, fx: 0 };
+    expect(kr + us + fx).toBe(home.pnl?.amount);
+    const switcher = page.getByRole('radiogroup', { name: '계좌' });
+    for (const [label, id] of [
+      ['한국 ₩', 'kr'],
+      ['미국 $', 'us'],
+    ] as const) {
+      await switcher.getByRole('radio', { name: label }).click();
+      await expect(page).toHaveURL(new RegExp(`\\?account=${id}$`));
+      const total = home.accounts?.list.find((a) => a.id === id)?.total ?? 0;
+      const shown =
+        id === 'kr'
+          ? `${total.toLocaleString('en-US')}원`
+          : `$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      await expect(page.locator('.t-display', { hasText: shown })).toBeVisible();
+      await check.screen(`자산 ${label}`, { shot: `home-${id}` });
+    }
+    if (world === 'first-day') {
+      // 7/1 16:10: 미국 계좌 holds only the dollars waiting for the 22:30 buy.
+      await expect(page.locator('.t-display', { hasText: '$3,568.24' })).toBeVisible();
+    }
+    await switcher.getByRole('radio', { name: '전체' }).click();
+    await expect(page).not.toHaveURL(/account=/);
+  });
+
   await test.step('계획 (tab)', async () => {
     await link(page, '계획').click();
     await expect(page).toHaveURL(/\/plan$/);
@@ -169,20 +207,31 @@ test('real API: PIN, the nine screens and their links, logout', async ({ page, b
     await check.settle();
     const header = page.getByRole('banner');
     // The status chip links to 작동 whatever it says.
+    // The address changes before the next page renders (a transition): wait for its title, or
+    // the checks read the page that is leaving (and measure its height for axe).
     await header.getByRole('link', { name: /확인|점검|실패|불가|할 일|취소/ }).click();
     await expect(page).toHaveURL(/\/health$/);
+    await expect(page.getByRole('heading', { level: 1, name: '작동' })).toBeVisible();
     await visit('작동', 'health');
 
     await header.getByRole('link', { name: '모의투자', exact: true }).click();
     await expect(page).toHaveURL(/\/mode$/);
+    await expect(page.getByRole('heading', { level: 1, name: '모의투자·실전' })).toBeVisible();
     await visit('모의투자·실전', 'mode');
 
     await header.getByRole('link', { name: '설정', exact: true }).click();
     await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByRole('heading', { level: 1, name: '설정' })).toBeVisible();
     await visit('설정', 'account');
+    // The server has no web push yet (1·2단계): 알림 is one disabled row, nothing pretends to work.
+    const notes = page.getByRole('region', { name: '알림' });
+    await expect(notes.getByText('3단계에서 켤 수 있어요')).toBeVisible();
+    await expect(notes.getByRole('switch')).toHaveCount(1);
+    await expect(notes.getByRole('switch')).toBeDisabled();
 
     await page.getByRole('link', { name: '뒤로' }).click();
     await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator('.t-display').first()).toBeVisible();
     await check.screen('자산 (뒤로)');
   });
 
@@ -206,7 +255,7 @@ test('real API: PIN, the nine screens and their links, logout', async ({ page, b
     await check.settle();
     await page
       .getByRole('region', { name: '기기' })
-      .getByRole('button', { name: '로그아웃', exact: true })
+      .getByRole('button', { name: '이 기기 로그아웃', exact: true })
       .click();
     await expect(page).toHaveURL(/\/pin/);
     check.allow((a) => a.method === 'GET' && a.status === 403 && a.path.startsWith('/api/'));

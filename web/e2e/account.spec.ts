@@ -130,12 +130,13 @@ test.describe('SCR-ACCOUNT', () => {
     await expect(page.getByText('다른 기기 로그아웃됨')).toBeVisible();
   });
 
-  test('logout ends this session and goes to 입장', async ({ page }) => {
+  test('이 기기 로그아웃 ends this session and goes to 입장', async ({ page }) => {
     await open(page, 'account.default');
-    await page
-      .getByRole('region', { name: '기기' })
-      .getByRole('button', { name: '로그아웃', exact: true })
-      .click();
+    const card = page.getByRole('region', { name: '기기' });
+    // Each button says what it does in one line above it.
+    await expect(card.getByText('이 기기에서만 나가요')).toBeVisible();
+    await expect(card.getByText('휴대폰을 잃어버렸을 때 · 이 기기만 남겨요')).toBeVisible();
+    await card.getByRole('button', { name: '이 기기 로그아웃', exact: true }).click();
     await expect(page).toHaveURL(/\/pin$/);
   });
 
@@ -230,14 +231,19 @@ test.describe('SCR-ACCOUNT', () => {
     await expect(card.getByRole('switch', { name: '이 기기에서 알림 받기' })).not.toBeChecked();
   });
 
-  test('account.push-not-ready: the 1단계 server on a browser that can push reads 준비 중', async ({
+  test('account.push-not-ready: the 1·2단계 server folds 알림 into one disabled row', async ({
     page,
   }, info) => {
     await open(page, 'account.push-not-ready');
     const card = notifications(page);
-    await expect(card.getByText('알림은 준비 중이에요 · 다음 단계에서 켤 수 있어요')).toBeVisible();
-    await expect(card.getByRole('switch', { name: '이 기기에서 알림 받기' })).toBeDisabled();
-    await expect(card.getByText(/못 받아요/)).toHaveCount(0);
+    await expect(card.getByText('3단계에서 켤 수 있어요')).toBeVisible();
+    await expect(card.getByRole('switch')).toHaveCount(1);
+    await expect(card.getByRole('switch', { name: '알림' })).toBeDisabled();
+    await expect(card.getByRole('switch', { name: '알림' })).not.toBeChecked();
+    await expect(card.getByText(/받을 사건/)).toHaveCount(0);
+    await expect(card.getByRole('button', { name: '시험 알림 보내기' })).toHaveCount(0);
+    // The PIN card says what it does before it opens.
+    await expect(page.getByText('들어올 때 넣는 6자리를 바꿔요')).toBeVisible();
     await shoot(page, info, 'account.push-not-ready');
     expect(await axe(page)).toEqual([]);
   });

@@ -156,6 +156,38 @@ interface HomeResponse {
   trend: Trend
   planCard: PlanCard                 // 첫 확인 전에도 준다(바늘·단계 없음)
   composition: Composition
+  accounts: HomeAccounts | null      // 계좌별 보기('전체 · 한국 ₩ · 미국 $'). pnl이 null이면(첫 체결 전) null
+}
+
+// 계좌는 통화로 가른다: 한국 계좌 = 원화 종목(원화 가격) + 원화 현금, 미국 계좌 = 달러 종목(달러 가격) + 달러 현금.
+// 계좌에 들어온 돈(그 통화): 시작 금액·입금(+)·출금(−)은 그 통화의 계좌(지금은 모두 원화라 한국 계좌), 환전은 두 계좌
+// 사이를 옮기는 돈이다(원→달러: 한국 계좌에서 낸 원만큼 빠지고 미국 계좌에 산 달러만큼 들어옴). 환전은 손익이 아니다.
+// 배당(세후)·수수료·세금은 들어온 돈이 아니라 그 통화 계좌의 손익이다. 환전은 장부가 받아들인 때(주문 실행 시각)부터 센다.
+// 계좌 손익 = 계좌 값 − 들어온 돈(그 통화), pct = 손익 ÷ 들어온 돈(0 이하면 null).
+interface HomeAccounts {
+  list: HomeAccount[]                // 한국 계좌('kr'), 미국 계좌('us') 순. 둘 다 늘 있다
+  split: { kr: number; us: number; fx: number }
+  // krw. 전체 손익 = kr + us + fx(원 단위까지 정확히, HomeResponse.pnl.amount).
+  // kr = 한국 계좌 손익. us = 미국 계좌 손익(달러) × basis.fxRate를 원 단위 반올림.
+  // fx = '환율 효과' = 나머지: 환전으로 산 달러가 지금 환율로 얼마인지 − 그 달러에 낸 원(+ 달러 행의 원 단위 반올림)
+}
+interface HomeAccount {
+  id: 'kr' | 'us'
+  currency: Currency                 // kr 'KRW' · us 'USD'
+  total: number                      // 그 통화(krw 정수 · usd 센트)
+  pnl: { amount: number; pct: number | null } | null   // 그 통화. null = 돈이 들어온 적 없는 빈 계좌(화면은 빈 상태)
+  stale: boolean                     // 그 계좌 시세가 낡음(한국은 kr-quotes, 미국은 us-quotes. 환율은 달러 값에 들어가지 않는다)
+  trend: Trend
+  // 그 통화. ret = (값 − 그날까지 들어온 돈) ÷ 들어온 돈. 선은 돈이 처음 들어온 스냅숏부터다.
+  // series[].netIn(계좌만): 그날까지 들어온 돈('원금', 그 통화). 환전 날 값과 같이 움직여서 둘의 차가 그 계좌 손익이다.
+  // 30거래일 규칙은 그 계좌 기록(점 수)으로 정한다: 짧으면 periods null·period 'all'. 길면 요청한 period.
+  // baseline·baselineRet는 늘 null: '손대지 않았을 때'는 전체만이다(규칙이 두 계좌 사이로 돈을 옮겨서, 한 계좌만 견주면
+  // 차이가 대부분 옮긴 돈이 된다). events: 시작·실전 켬/끔은 두 계좌 모두, 리밸런싱(일부 실패·진행 중 포함)은 그 계획의
+  // 주문이 닿은 계좌(거래는 그 통화, 환전은 둘 다), 입출금·배당은 그 통화 계좌만.
+  // empty: 'first-day'(점이 하나 이하, 돈은 들어옴) | null
+  composition: Composition
+  // 그 계좌의 행. pct = 계좌 대비(합 100.0), 묶음 target은 null(목표는 장부 전체의 것).
+  // 미국 계좌는 모든 행에 usd(금액)를 싣고 krw는 원화 환산이다. pnlPct·avgCost는 그 통화(달러 손익률에는 환율이 없다)
 }
 
 interface Trend {
@@ -231,11 +263,17 @@ interface CompRow {
 }
 ```
 
-### `GET /api/home/breakdown?ledger=&period=` — 변동 분해 시트
+### `GET /api/home/breakdown?ledger=&period=&account=` — 변동 분해 시트
 ```ts
-interface Breakdown { from: string; to: string; start: number; deposit: number; withdrawal: number; market: number; dividend: number; fees: number; end: number }
+interface Breakdown { from: string; to: string; start: number; deposit: number; withdrawal: number; market: number; dividend: number; fees: number; end: number
+  currency?: Currency                // account가 있을 때만: 그 계좌 통화. 없으면 원화(전체)
+  transfer?: number                  // account가 있을 때만: 환전으로 들어오고(+) 나간(−) 돈, 그 통화
+}
 // krw. 부호 있음: withdrawal·fees는 0 이하. deposit + withdrawal + market + dividend + fees = end - start(market이 반올림 나머지를 받는다).
 // 'all'(기록 30거래일 미만이면 항상 'all')은 from = 시작일, start = 시작 금액이다. 시작 금액은 deposit에 넣지 않는다.
+// account('kr' | 'us'): 그 계좌의 변동을 그 통화로(달러는 센트). deposit + withdrawal + transfer + market + dividend + fees
+// = end − start. 'all'의 start는 한국 계좌가 시작 금액, 미국 계좌가 0. 30거래일 규칙은 그 계좌 기록으로 센다(HomeAccount.trend).
+// market은 그 계좌 시세 변동(환율은 없다)이고 나머지를 받는다
 ```
 
 ### `GET /api/plan?ledger=&drift=` — SCR-PLAN
@@ -583,7 +621,7 @@ interface AccountResponse {
   // name·kind는 로그인 때의 User-Agent로 정한다. name은 '[시스템] · [브라우저]'('Mac · Chrome', 'iPhone · Safari').
   // UA에 'Safari/'가 없는 iPhone을 홈 화면 앱으로 보고 name은 'iPhone'만 준다(화면이 '· 홈 화면 앱'을 붙인다)
   notifications: {
-    available: boolean            // 웹 푸시가 있나. 1·2단계는 false('알림은 준비 중')
+    available: boolean            // 웹 푸시가 있나. 1·2단계는 false: 화면은 알림을 한 줄('3단계에서 켤 수 있어요')로 접는다
     vapidPublicKey?: string       // 3단계: 이 기기를 구독할 때 쓰는 공개키(available일 때만)
     thisDevice: { supported: boolean; reason?: 'safari-tab' | 'denied' | 'unsupported'; subscribed: boolean }
     events: Array<{ id: NotifyEvent; on: boolean; locked?: boolean }>
@@ -662,6 +700,7 @@ type NotifyEvent =
 - 화면은 `src/fixtures/bundles/<상태 id>.ts`(이 계약의 응답 묶음, 타입 검사를 받음)로 모든 상태를 띄운다. 개발 서버와 Playwright만 쓰고, 운영 빌드에는 넣지 않는다.
 - 상태 id는 화면과 상태를 '.'으로 잇는다.
   - home.paper(모의투자 기본), home.live(실전 평상), home.live-first(실전 첫 체결 전), home.withdraw(출금 대기), home.stale(시세 대기), home.partial(일부 실패), home.offline, home.other-device, home.first-day(출시 첫날), home.empty(첫 확인 전)
+  - 계좌별 보기(그림 없음): home.paper가 '전체'(계좌 칸·환율 효과), home.account-kr·home.account-us(같은 세계에서 스위치 '한국 ₩'·'미국 $', 주소 `?account=kr|us`), home.before-fill(첫 체결 전: 스위치 없음), home.us-cash(미국 계좌에 달러 현금만), home.us-empty(미국 계좌가 빔: 환전 전)
   - plan.paper, plan.live, plan.stale, plan.partial, plan.live-todo, plan.first-day
   - history.paper, history.paper-ledger
   - day.0821, day.0925
@@ -685,3 +724,4 @@ type NotifyEvent =
 - 2026-10-09: 웹 통합 실행에서 나온 것(API 세션). 그날 화면의 `basis`는 `total`과 같은 평가의 기준이다(주말·평가 없는 날은 그 전 마지막 평가, 휴장일은 그날 16:00 평가). 그날 확인과 기록의 리밸런싱 사건에 `cause`(`RebalanceCause`: band·new-cash·withdraw-expired)를 더했다. 홈 자산 그래프 표식(`Trend.events`)에서 check-failed를 뺐다(기록에는 남는다).
 - 2026-10-10: 점검 고침(엔진 세션). 사는 판단도 두 번 묻는다: 사기 확인의 `votes`에 'buy'·'skip'(두 답)을 더했고, 입력 줄에 `filings`(꾸러미의 최근 공시 수)와 분기 발굴이 새로 고른 종목이면 `checks` 대신 `month`가 온다. 분기 발굴 판단의 `action`은 늘 'none'이다(새 종목은 사기 확인 두 번 뒤에 산다). 작동 화면의 ai-cli 줄은 웹 서비스의 환경이 아니라 AI 실행기의 심장 박동을 읽는다: `extra.enabled`는 실행기가 본 값이고 `cli`·`lastRunAt`·`running`·`runningSince`를 더했으며, CLI를 못 찾으면 줄이 'stale'이다. ai-cli 할 일에 빨강 'cli-missing', 노랑 'call-running'·'queue-waiting'(`cause`)을, filings 할 일에 실행기에 DART 키가 없을 때의 state 'no-key'(action 'manual')를 더했다. 헤더 '점검 n'은 실행기가 CLI를 1거래일 넘게 못 찾을 때도 센다.
 - 2026-10-10: 보안 감사 수정(API 세션). 쿠키 이름 `__Host-qsess`(개발용만 Secure 없는 `qsess`). 쓰기 요청의 출처 검사와 403 `origin`. 세션이 필요한 경로는 본문보다 세션을 먼저 본다. 스키마 판이 코드와 다르면 모든 `/api`가 503 `schema {stored, code}`(API는 이전하지 않음, `/api/healthz` 포함), DB를 못 읽으면 어디서나 503 `db`. PIN 잠금: IPv6는 /64로 묶고, 24시간에 10회면 할 일 `pin-failures`('PIN 실패 급증'), 30회면 `scope:'hold'`(서버 `unlock`까지, `since`). PIN 바꾸기에는 접속 위치 잠금만 걸고, 한 세션에서 5회 연속 틀리면 그 세션을 끊는다(403 `session`). 고정 자료 `pin.hold`(그림 없음)를 더했다. 제어 문자·너무 긴 경로는 404 text, 깨진 쿠키는 403 `session`.
+- 2026-10-12: 계좌별 보기와 설정 정리(웹 세션, 주인 요청 '국장과 미장은 엄연히 다른 화폐단위'). `HomeResponse.accounts`(한국 계좌·미국 계좌를 각 통화로: 값·손익·선·구성, 선의 점마다 원금 `netIn`, 30거래일 규칙은 계좌 기록으로, 리밸런싱 표식은 그 계획이 닿은 계좌에만)와 `split`(전체 손익 = 한국 + 미국 원화 환산 + 환율 효과, 원 단위까지 맞음)을 더했다. 환전은 계좌 사이를 옮기는 돈이고 손익이 아니다. '손대지 않았을 때'는 전체에만 둔다. `/api/home/breakdown?account=`(`Breakdown.currency`·`transfer`)를 더했다. 설정의 알림은 `notifications.available`이 false인 동안(1·2단계) 화면이 한 줄로 접는다(API는 그대로). 고정 자료 home.account-kr·home.account-us·home.before-fill·home.us-cash·home.us-empty를 더했다.

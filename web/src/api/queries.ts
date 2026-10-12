@@ -20,6 +20,7 @@ import type { HeaderStatus } from '../components/Chips';
 import { formatTime } from '../lib/format';
 import { NetworkError, api, shellPollMs } from './client';
 import type {
+  AccountId,
   AccountResponse,
   Breakdown,
   CancelRetryResponse,
@@ -49,7 +50,8 @@ import type {
 export const queryKeys = {
   shell: ['shell'] as const,
   home: (ledger: Ledger | null, period?: HomePeriod) => ['home', ledger, period ?? null] as const,
-  breakdown: (ledger: Ledger | null, period: HomePeriod) => ['breakdown', ledger, period] as const,
+  breakdown: (ledger: Ledger | null, period: HomePeriod, account?: AccountId) =>
+    ['breakdown', ledger, period, account ?? null] as const,
   plan: (ledger: Ledger | null, drift?: DriftPeriod) => ['plan', ledger, drift ?? null] as const,
   history: (ledger: Ledger | null, year?: number) => ['history', ledger, year ?? null] as const,
   day: (date: string, ledger: Ledger | null) => ['day', date, ledger] as const,
@@ -218,16 +220,22 @@ export function useHome(
   });
 }
 
+/** `account` asks for one account's change in its own currency (전체 when absent). */
 export function useBreakdown(params: {
   ledger?: Ledger;
   period: HomePeriod;
+  account?: AccountId | undefined;
   enabled?: boolean;
 }): UseQueryResult<Breakdown> {
   const ledger = useLedger(params.ledger);
   return useQuery({
-    queryKey: queryKeys.breakdown(ledger, params.period),
+    queryKey: queryKeys.breakdown(ledger, params.period, params.account),
     queryFn: ({ signal }) =>
-      api.get<Breakdown>('/api/home/breakdown', { ledger, period: params.period }, signal),
+      api.get<Breakdown>(
+        '/api/home/breakdown',
+        { ledger, period: params.period, account: params.account },
+        signal,
+      ),
     enabled: ledger !== null && params.enabled !== false,
   });
 }

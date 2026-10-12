@@ -181,6 +181,26 @@ export interface HomeResponse {
   trend: Trend;
   planCard: PlanCard; // 첫 확인 전에도 준다(바늘·단계 없음)
   composition: Composition;
+  accounts: HomeAccounts | null; // 계좌별 보기('전체 · 한국 ₩ · 미국 $'). pnl이 null이면(첫 체결 전) null
+}
+
+// 계좌는 통화로 가른다: 한국 계좌 = 원화 종목 + 원화 현금, 미국 계좌 = 달러 종목 + 달러 현금. 환전은 두 계좌 사이를 옮기는
+// 돈이고 손익이 아니다. 배당·수수료·세금은 그 통화 계좌의 손익. 계좌 손익 = 계좌 값 − 들어온 돈(그 통화).
+export type AccountId = 'kr' | 'us';
+export interface HomeAccounts {
+  list: HomeAccount[]; // 한국 계좌('kr'), 미국 계좌('us') 순. 둘 다 늘 있다
+  split: { kr: number; us: number; fx: number };
+  // krw. 전체 손익 = kr + us + fx. us = 미국 손익(달러) × basis.fxRate(원 단위 반올림), fx = '환율 효과'(나머지)
+}
+export interface HomeAccount {
+  id: AccountId;
+  currency: Currency; // kr 'KRW' · us 'USD'
+  total: number; // 그 통화(krw 정수 · usd 센트)
+  pnl: { amount: number; pct: number | null } | null; // 그 통화. null = 돈이 들어온 적 없는 빈 계좌
+  stale: boolean; // 그 계좌 시세가 낡음(한국 kr-quotes · 미국 us-quotes)
+  trend: Trend; // 그 통화. 30거래일 규칙은 그 계좌 기록으로. baseline·baselineRet는 늘 null(손대지 않았을 때는 전체만).
+  // events: 시작·실전 켬/끔은 두 계좌, 리밸런싱은 그 계획의 주문이 닿은 계좌, 입출금·배당은 그 통화 계좌
+  composition: Composition; // pct = 계좌 대비, target null. 미국 계좌는 모든 행에 usd(금액), krw는 원화 환산
 }
 
 export interface Trend {
@@ -193,6 +213,7 @@ export interface Trend {
     ret: number;
     baseline: number | null;
     baselineRet: number | null;
+    netIn?: number; // HomeAccount.trend만: 그날까지 들어온 돈('원금', 그 통화)
   }>;
   events: Array<{ date: string; kind: EventKind; kinds: EventKind[]; count?: number }>;
   // 하루에 표식 하나. kind는 그날 첫 사건, kinds는 그날 사건 전부(순서대로), 둘 이상이면 count(묶음 표식)
@@ -304,9 +325,13 @@ export interface Breakdown {
   dividend: number;
   fees: number;
   end: number;
+  currency?: Currency; // ?account=만: 그 계좌 통화. 없으면 원화(전체)
+  transfer?: number; // ?account=만: 환전으로 들어오고(+) 나간(−) 돈, 그 통화
 }
 // krw. 부호 있음: withdrawal·fees는 0 이하. deposit + withdrawal + market + dividend + fees = end - start(market이 반올림 나머지를 받는다).
 // 'all'(기록 30거래일 미만이면 항상 'all')은 from = 시작일, start = 시작 금액이다. 시작 금액은 deposit에 넣지 않는다.
+// ?account=kr|us: 그 계좌를 그 통화로. deposit + withdrawal + transfer + market + dividend + fees = end − start.
+// 'all'의 start는 한국 계좌가 시작 금액, 미국 계좌가 0. market은 그 계좌 시세 변동(환율 없음)
 
 // ── `GET /api/plan?ledger=&drift=` — SCR-PLAN ──
 export interface PlanResponse {
@@ -835,7 +860,7 @@ export interface AccountResponse {
   // name·kind는 로그인 때의 User-Agent로 정한다. name은 '[시스템] · [브라우저]'('Mac · Chrome', 'iPhone · Safari').
   // UA에 'Safari/'가 없는 iPhone을 홈 화면 앱으로 보고 name은 'iPhone'만 준다(화면이 '· 홈 화면 앱'을 붙인다)
   notifications: {
-    available: boolean; // 웹 푸시가 있나. 1·2단계는 false('알림은 준비 중')
+    available: boolean; // 웹 푸시가 있나. 1·2단계는 false: 화면은 알림을 한 줄로 접는다
     vapidPublicKey?: string; // 3단계: 이 기기를 구독할 때 쓰는 공개키(available일 때만)
     thisDevice: {
       supported: boolean;

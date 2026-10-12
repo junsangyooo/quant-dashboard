@@ -2,9 +2,11 @@
 // (only criteria with two or more groups; the choice stays on this device) → group heads
 // ('● 지수 반반 · 자산의 81.1% · 목표 80%') → instrument and cash rows. Row % is of all assets.
 // 390: a holding row opens '115주 · 평균 32,005원'; 1440: that line is always there.
+// One account (한국 ₩ · 미국 $) lists only its rows, in its own money, with % of the account and no
+// targets ('계좌의 81.4%'); 미국 계좌 rows read in dollars.
 import clsx from 'clsx';
 import { useState } from 'react';
-import type { CompRow, Composition, HomeResponse, Instrument } from '../../api/types';
+import type { CompRow, Composition, Currency, HomeAccount, Instrument } from '../../api/types';
 import {
   CompositionBar,
   type CompositionSegment,
@@ -27,6 +29,7 @@ import {
   pnlDirection,
 } from '../../lib/format';
 import { countryOf, ruleName } from '../Plan/words';
+import { formatMoney } from './money';
 import styles from './Home.module.css';
 
 export type GroupKey = Composition['groupBy'][number];
@@ -182,8 +185,9 @@ export function barSegments(groups: readonly ViewGroup[]): CompositionSegment[] 
   return segs;
 }
 
-function shareText(g: ViewGroup): string {
+function shareText(g: ViewGroup, inAccount: boolean): string {
   const c = homeCopy.composition;
+  if (inAccount) return homeCopy.accounts.share(formatPercent(g.pct));
   return g.target !== null
     ? c.shareTarget(formatPercent(g.pct), `${formatNumber(g.target)}%`)
     : c.share(formatPercent(g.pct));
@@ -195,16 +199,15 @@ function cashName(row: CompRow): string {
 }
 
 /**
- * '매수 대기 · S&P 500 ETF 2주'; when no dollar instrument is held yet the name says nothing
- * new and is left out ('매수 대기 · 54주', 기획 §5 SCR-HOME.first-day).
+ * '매수 대기 · S&P 500 ETF 2주'; when no dollar instrument is held yet the dollars can only be for
+ * it, so the name says nothing new and is left out ('매수 대기 · 54주', 기획 §5 SCR-HOME.first-day).
+ * Won waiting to buy keeps the name: it may be for either market (첫 확인 직후 · 환전 전).
  */
-function chipText(chip: NonNullable<CompRow['chip']>, dollarHoldings: number): string {
+function chipText(chip: NonNullable<CompRow['chip']>, named: boolean): string {
   const c = homeCopy.composition.chip;
   switch (chip.kind) {
     case 'buy-wait':
-      return dollarHoldings > 0
-        ? c.buyWait(chip.instrumentName, chip.qty)
-        : c.buyWaitShort(chip.qty);
+      return named ? c.buyWait(chip.instrumentName, chip.qty) : c.buyWaitShort(chip.qty);
     case 'sub-share':
       return c.subShare;
     case 'withdraw-wait':
@@ -244,6 +247,7 @@ function Row({
   wide,
   showPct,
   dollarHoldings,
+  currency,
 }: {
   row: CompRow;
   tones: ReadonlyMap<string, LogoTone>;
@@ -251,30 +255,40 @@ function Row({
   showPct: boolean;
   /** Dollar instruments held (decides the 매수 대기 chip wording). */
   dollarHoldings: number;
+  /** The money the rows read in: won (전체, 한국 계좌) or dollars (미국 계좌, `usd` of every row). */
+  currency: Currency;
 }) {
+  const dollars = currency === 'USD';
+  const figure = formatMoney(dollars ? (row.usd ?? 0) : row.krw, currency);
   const [open, setOpen] = useState(false);
   const pct = showPct ? (
     <span className={clsx('t-caption', styles.muted)}>{formatPercent(row.pct)}</span>
   ) : null;
 
   if (row.kind === 'cash') {
-    const currency = row.cash?.currency ?? 'KRW';
-    const usd = row.usd !== undefined;
+    const cashCurrency = row.cash?.currency ?? 'KRW';
+    // In 전체 a dollar row adds its $ amount under the won; in 미국 계좌 the dollars are the figure.
+    const usd = row.usd !== undefined && !dollars;
+    // A long chip line ('매수 대기 · KOSPI200 ETF 156주') wraps under the figure instead of
+    // running into it.
+    const wide = usd || row.chip?.kind === 'buy-wait';
     return (
-      <div className={clsx(styles.row, usd && styles.rowCashUsd)}>
+      <div className={clsx(styles.row, wide && styles.rowCashUsd)}>
         <InitialLogo
           className={styles.rowLogo}
-          initials={homeCopy.composition.cashSymbol[currency]}
+          initials={homeCopy.composition.cashSymbol[cashCurrency]}
           tone="cash"
         />
         <span className={clsx('t-body-strong', styles.rowName)}>{cashName(row)}</span>
         <span className={styles.rowValues}>
-          <span className="t-figure">{formatKrw(row.krw)}</span>
+          <span className="t-figure">{figure}</span>
         </span>
         <span className={styles.rowAttrs}>
-          {row.chip ? <InfoChip>{chipText(row.chip, dollarHoldings)}</InfoChip> : null}
+          {row.chip ? (
+            <InfoChip>{chipText(row.chip, cashCurrency !== 'USD' || dollarHoldings > 0)}</InfoChip>
+          ) : null}
           {pct}
-          {row.usd !== undefined ? (
+          {usd && row.usd !== undefined ? (
             <span className={clsx('t-caption', styles.muted, styles.rowUsd)}>
               {formatUsd(row.usd)}
             </span>
@@ -299,7 +313,7 @@ function Row({
         {pct}
       </span>
       <span className={styles.rowValues}>
-        <span className="t-figure">{formatKrw(row.krw)}</span>
+        <span className="t-figure">{figure}</span>
         {row.pnlPct !== undefined ? (
           <span className={clsx('t-caption', styles[dir])}>{pnlText(row.pnlPct)}</span>
         ) : null}
@@ -326,16 +340,24 @@ function Row({
 }
 
 export function CompositionCard({
-  home,
+  composition: c,
+  stale,
+  beforeCheck,
   wide,
   tones,
+  account,
 }: {
-  home: HomeResponse;
+  composition: Composition;
+  stale: readonly ('hero' | 'plan' | 'composition')[];
+  /** First check not run yet: the bar shows the targets (dotted) and rows no %. */
+  beforeCheck: boolean;
   wide: boolean;
   tones: ReadonlyMap<string, LogoTone>;
+  /** One account's rows in its money (한국 ₩ · 미국 $); the whole ledger when absent. */
+  account?: HomeAccount | undefined;
 }) {
-  const c = home.composition;
   const cc = homeCopy.composition;
+  const currency: Currency = account?.currency ?? 'KRW';
   const [choice, setChoice] = useState<GroupKey | null>(readGroupChoice);
   const selected: GroupKey | null =
     choice !== null && c.groupBy.includes(choice)
@@ -345,7 +367,6 @@ export function CompositionCard({
         : null;
   const view: GroupKey = selected ?? 'rule';
   const groups = viewGroups(c, view, tones);
-  const beforeCheck = home.trend.empty === 'before-first-check';
 
   const targets = c.groups.filter((g) => g.rule && g.target !== null);
   const segments: CompositionSegment[] = beforeCheck
@@ -381,7 +402,7 @@ export function CompositionCard({
         <h2 id="home-composition" className="t-heading-1">
           {cc.title}
         </h2>
-        <StaleMark stale={home.stale} section="composition" />
+        <StaleMark stale={stale} section="composition" />
       </div>
       <div className={styles.barBlock}>
         <CompositionBar segments={segments} label={barLabel} />
@@ -417,7 +438,7 @@ export function CompositionCard({
                 <h3 className="t-label">{g.name}</h3>
                 {!beforeCheck ? (
                   <span className={clsx('t-caption', styles.muted, styles.groupShare)}>
-                    {shareText(g)}
+                    {shareText(g, account !== undefined)}
                   </span>
                 ) : null}
               </div>
@@ -431,6 +452,7 @@ export function CompositionCard({
                     wide={wide}
                     showPct={!beforeCheck}
                     dollarHoldings={dollarHoldings}
+                    currency={currency}
                   />
                 </li>
               ))}
@@ -438,7 +460,7 @@ export function CompositionCard({
           </div>
         ))}
       </div>
-      {c.outsideRules ? (
+      {c.outsideRules && currency === 'KRW' ? (
         <p className={clsx('t-caption', styles.muted)}>
           {cc.outsideRules(c.outsideRules.count, formatKrw(c.outsideRules.krw))}
         </p>

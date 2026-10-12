@@ -16,8 +16,8 @@ import './styles/global.css';
 if (import.meta.env.MODE !== 'production') {
   const fixture = new URLSearchParams(window.location.search).get('fixture');
   if (fixture) {
-    const { installFixture } = await import('./fixtures/runtime');
-    await installFixture(fixture);
+    const { installFixture, applyFixtureSearch } = await import('./fixtures/runtime');
+    applyFixtureSearch(await installFixture(fixture));
   }
 }
 

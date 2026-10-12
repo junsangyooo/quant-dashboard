@@ -213,7 +213,7 @@ describe('설정 (SCR-ACCOUNT)', () => {
     ]);
   });
 
-  it('reads 준비 중 and keeps the switch shut while the server has no web push (available false)', async () => {
+  it('folds 알림 into one disabled row while the server has no web push (available false)', async () => {
     stubPushBrowser();
     const base = account();
     const phase2: FixtureBundle = {
@@ -232,10 +232,18 @@ describe('설정 (SCR-ACCOUNT)', () => {
         },
       },
     };
-    await open(phase2);
-    expect(within(notifications()).getByText(N.notReady)).toBeInTheDocument();
-    expect(within(notifications()).getByRole('switch', { name: N.thisDevice })).toBeDisabled();
+    const { calls } = await open(phase2);
+    // Nothing would be sent, so nothing looks live: one switch, off and disabled, and when.
+    expect(within(notifications()).getAllByRole('switch')).toHaveLength(1);
+    const only = within(notifications()).getByRole('switch');
+    expect(only).toHaveAccessibleName(N.title);
+    expect(only).toBeDisabled();
+    expect(only).toHaveAttribute('aria-checked', 'false');
+    expect(within(notifications()).getByText(N.later)).toBeInTheDocument();
+    expect(within(notifications()).queryByRole('button', { name: N.test })).toBeNull();
     expect(within(notifications()).queryByText(N.start)).toBeNull();
+    await userEvent.click(only);
+    expect(writes(calls)).toEqual([]);
   });
 
   it('says the device cannot receive when the permission is denied', async () => {
@@ -249,12 +257,20 @@ describe('설정 (SCR-ACCOUNT)', () => {
     expect(writes(calls)).toEqual([]);
   });
 
-  it('shows the 1단계 server (push not built) as 준비 중 on a capable browser', async () => {
+  it('shows the 1·2단계 server (push not built) as the one row 알림 · 3단계에서 켤 수 있어요', async () => {
     stubPushBrowser();
     await open(accountPushNotReady);
-    expect(within(notifications()).getByText(N.notReady)).toBeInTheDocument();
-    expect(within(notifications()).getByRole('switch', { name: N.thisDevice })).toBeDisabled();
+    expect(within(notifications()).getByRole('switch', { name: N.title })).toBeDisabled();
+    expect(within(notifications()).getByText(N.later)).toBeInTheDocument();
+    // The event switches, 금액 숨기기 and 시험 알림 come back with web push; none shows now.
+    expect(within(notifications()).queryByText(/받을 사건/)).toBeNull();
+    expect(within(notifications()).queryByRole('switch', { name: N.hideAmounts })).toBeNull();
     expect(within(notifications()).queryByText(/못 받아요/)).toBeNull();
+  });
+
+  it('keeps the 알림 anchor for links that point at it (#notifications)', async () => {
+    await open(accountPushNotReady);
+    expect(notifications()).toHaveAttribute('id', 'notifications');
   });
 
   it('starts from 0 devices: the start line, a disabled test button and no result rows', async () => {
@@ -298,10 +314,12 @@ describe('설정 (SCR-ACCOUNT)', () => {
     expect(within(devices).getByText('iPhone · 홈 화면 앱')).toBeInTheDocument();
     expect(within(devices).getByText('들어온 시각 10/1 08:12')).toBeInTheDocument();
     expect(within(devices).getByText('이 기기')).toBeInTheDocument();
-    expect(within(devices).getByText('휴대폰을 잃어버렸을 때')).toBeInTheDocument();
-    await userEvent.click(
-      within(devices).getByRole('button', { name: accountCopy.devices.logout }),
-    );
+    // Each button says what it does in one line above it.
+    expect(within(devices).getByText('이 기기에서만 나가요')).toBeInTheDocument();
+    expect(
+      within(devices).getByText('휴대폰을 잃어버렸을 때 · 이 기기만 남겨요'),
+    ).toBeInTheDocument();
+    await userEvent.click(within(devices).getByRole('button', { name: '이 기기 로그아웃' }));
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/pin');
     });
@@ -331,8 +349,10 @@ describe('설정 (SCR-ACCOUNT)', () => {
     const card = screen.getByRole('region', { name: accountCopy.pin.title });
     const toggle = within(card).getByRole('button', { name: accountCopy.pin.title });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(within(card).getByText('바꾸면 다른 기기는 다시 들어와야 해요')).toBeInTheDocument();
+    expect(within(card).getByText('들어올 때 넣는 6자리를 바꿔요')).toBeInTheDocument();
     await user.click(toggle);
+    // Before sending, the form says what changing it does to the other devices.
+    expect(within(card).getByText('바꾸면 다른 기기는 다시 들어와야 해요')).toBeInTheDocument();
     await user.type(within(card).getByLabelText(accountCopy.pin.current), '111111');
     await user.type(within(card).getByLabelText(accountCopy.pin.next), '222222');
     await user.type(within(card).getByLabelText(accountCopy.pin.again), '222222');

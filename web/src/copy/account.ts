@@ -6,6 +6,9 @@ import type { NotifyEvent } from '../api/types';
 export const accountCopy = {
   pin: {
     title: 'PIN 바꾸기',
+    /** NEW — what it does (the owner, 2026-10-12: '각 기능이 뭘 하는건지'). */
+    what: '들어올 때 넣는 6자리를 바꿔요',
+    /** Shown in the open form, before sending. */
     note: '바꾸면 다른 기기는 다시 들어와야 해요',
     /** Spec: '펼친 칸 3개(현재·새·새 다시)'. */
     current: '현재 PIN',
@@ -29,8 +32,11 @@ export const accountCopy = {
     homeScreenApp: '홈 화면 앱',
     enteredAt: (at: string) => `들어온 시각 ${at}`,
     thisDevice: '이 기기',
-    logout: '로그아웃',
-    lost: '휴대폰을 잃어버렸을 때',
+    /** NEW — the button says which device ('이 기기'), and a line says what it does. */
+    logout: '이 기기 로그아웃',
+    logoutWhat: '이 기기에서만 나가요',
+    /** When to use it, then what it does (was '휴대폰을 잃어버렸을 때' alone). */
+    othersWhat: '휴대폰을 잃어버렸을 때 · 이 기기만 남겨요',
     logoutOthers: '다른 기기 모두 로그아웃',
     /** NEW — the confirm modal (spec: '확인 모달(그림 없음)'). */
     confirmTitle: '다른 기기를 모두 로그아웃할까요?',
@@ -45,6 +51,11 @@ export const accountCopy = {
 
   notifications: {
     title: '알림',
+    /**
+     * NEW — while the server has no web push (`available` false, 1·2단계) the section is one
+     * disabled row: nothing would be sent, so no switch pretends to work.
+     */
+    later: '3단계에서 켤 수 있어요',
     thisDevice: '이 기기에서 알림 받기',
     iphoneOnly: 'iPhone은 홈 화면 앱에서만 받아요',
     /** Empty state (0 devices): above the switch. */

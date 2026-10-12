@@ -1,5 +1,6 @@
 // PIN 바꾸기 (Figma 1:65384 row; the open form is not drawn): key icon · 'PIN 바꾸기' · ⌄ and a grey
-// line; open, three PIN fields (현재 · 새 · 새 다시) and 바꾸기. Wrong current PIN → '현재 PIN이 맞지
+// line saying what it does; open, three PIN fields (현재 · 새 · 새 다시), the line '바꾸면 다른 기기는
+// 다시 들어와야 해요' and 바꾸기. Wrong current PIN → '현재 PIN이 맞지
 // 않아요' (that field clears); the two new ones differ → '두 PIN이 달라요'. Done → '바꿨어요 · 다른 기기
 // 로그아웃됨' (the server ends every other session).
 import clsx from 'clsx';
@@ -103,7 +104,7 @@ export function PinChangeCard() {
         <span className={clsx('t-body-strong', styles.grow)}>{t.pin.title}</span>
         {open ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
       </button>
-      <p className={clsx('t-caption', styles.muted)}>{t.pin.note}</p>
+      <p className={clsx('t-caption', styles.muted)}>{t.pin.what}</p>
       {open ? (
         <form
           id={formId}
@@ -129,6 +130,7 @@ export function PinChangeCard() {
               />
             </div>
           ))}
+          <p className={clsx('t-caption', styles.muted)}>{t.pin.note}</p>
           <Button type="submit" kind="primary" className={styles.wide} disabled={!ready}>
             {busy ? (
               <>
