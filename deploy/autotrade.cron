@@ -33,9 +33,10 @@
 # discovery, switches) and asks the subscription CLI (`claude -p`, never the paid API).
 # - Its own line and its own lock (data/autotrade.db-ai.lock, and flock -n here): a model call
 #   has no time limit (ops notes §7), so there is no `timeout` and it never holds the tick.
-# - AUTOTRADE_AI_CALLS=1 is the owner's go. Without it (as below until he says so) the runner
-#   calls nothing, records nothing, and the tasks wait. Real calls cost the subscription:
-#   add AUTOTRADE_AI_CALLS=1 to this line only when the owner has agreed.
+# - AUTOTRADE_AI_CALLS=1 is the owner's go, given 2026-10-12 (installed that night after one
+#   smoke call). Without it the runner calls nothing, records nothing, and the tasks wait: take
+#   it off this line (and the server's crontab) to stop all model calls. Calls use the
+#   subscription only, never the paid API.
 # - The CLI: cron's PATH is /usr/bin:/bin, which has no `claude`. AUTOTRADE_CLAUDE_BIN names the
 #   server's wrapper /usr/local/bin/claude (it puts the newest nvm node first on PATH and runs the
 #   CLI). Without it the runner still looks there and in ~/.nvm (autotrade/ai/cli.py
@@ -47,4 +48,4 @@
 #   uses the server user's own `claude` login under ~/.claude.
 # - One JSON line per run with work goes to data/logs/autotrade-ai.log; the traceback of a task
 #   that broke goes there too (stderr).
-*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-ai-cron.lock .venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1
+*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_AI_CALLS=1 AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-ai-cron.lock .venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1

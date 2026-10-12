@@ -404,17 +404,17 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     assert "AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env" in tick  # DART key only
     assert ".venv/bin/python -m autotrade.jobs tick" in tick
     assert tick.endswith(">> data/logs/autotrade-jobs.log 2>&1")
-    # The AI line: its own lock, no time limit, and no AUTOTRADE_AI_CALLS until the owner's go.
-    # cron's PATH has no `claude`: the line names the server's wrapper (audit E1); the runner
-    # reads Korean filing texts, so it gets the DART key's file like the tick (audit E3).
+    # The AI line: its own lock, no time limit, and AUTOTRADE_AI_CALLS=1 since the owner's go
+    # (2026-10-12). cron's PATH has no `claude`: the line names the server's wrapper (audit E1);
+    # the runner reads Korean filing texts, so it gets the DART key's file like the tick (E3).
     assert ai.startswith(
         "*/5 * * * * cd /home/ubuntu/portfolio-dashboard"
-        " && AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude"
+        " && AUTOTRADE_AI_CALLS=1 AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude"
         " AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n "
     )
     assert ".venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1" in ai
     assert "timeout" not in ai
-    assert "AUTOTRADE_AI_CALLS" not in ai
+    assert "AUTOTRADE_AI_CALLS=1 " in ai and "AUTOTRADE_AI_CALLS" not in tick
     assert "ANTHROPIC_API_KEY" not in ai
     for line in (tick, ai):
         assert "%" not in line  # cron would cut the line at an unescaped %
