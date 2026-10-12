@@ -19,6 +19,7 @@ import {
   formatFxRate,
   formatKrwSigned,
   formatMonthDay,
+  formatPercentSigned,
   formatTime,
   formatUsdSigned,
   pnlDirection,
@@ -39,19 +40,28 @@ export function accountPnlText(account: HomeAccount): string {
   return account.pnl ? pnlText(account.pnl, account.currency) : a.emptyShort;
 }
 
+/**
+ * '[국기] 한국 계좌  +9.92%' / '5,368,683원' / '▲ +484,683원'. The % sits on the name line so the
+ * amount line never wraps at 390 (two tiles share 350px; '▲ +668,698원 · +14.55%' is 151px of 147).
+ */
 function AccountTile({ account }: { account: HomeAccount }) {
-  const dir = account.pnl ? moneyDirection(account.pnl.amount, account.currency) : 'flat';
+  const pnl = account.pnl;
+  const dir = pnl ? moneyDirection(pnl.amount, account.currency) : 'flat';
   return (
     <Link to={accountHref(account.id)} className={styles.tile}>
       <span className={styles.tileHead}>
         <Flag country={account.id} decorative />
         <span className="t-label">{a.name[account.id]}</span>
         {account.stale ? <StaleTag /> : null}
-        <ChevronRight size={14} className={clsx(styles.muted, styles.tileChevron)} aria-hidden />
+        {pnl && pnl.pct !== null ? (
+          <span className={clsx('t-caption', styles.tilePct, styles[dir])}>
+            {formatPercentSigned(pnl.pct, 2)}
+          </span>
+        ) : null}
       </span>
       <span className="t-figure">{formatMoney(account.total, account.currency)}</span>
-      <span className={clsx('t-caption', account.pnl ? styles[dir] : styles.muted)}>
-        {accountPnlText(account)}
+      <span className={clsx('t-caption', pnl ? styles[dir] : styles.muted)}>
+        {pnl ? pnlText({ amount: pnl.amount, pct: null }, account.currency) : a.emptyShort}
       </span>
     </Link>
   );

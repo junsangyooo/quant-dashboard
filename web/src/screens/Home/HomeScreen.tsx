@@ -169,7 +169,8 @@ function HomeBody({
   );
   const account = home.accounts?.list.find((a) => a.id === view);
   return (
-    <>
+    // The switch sits closer to what it switches than the sections to each other (12 vs 20).
+    <div className={styles.view}>
       {home.accounts ? (
         <AccountSwitch value={account ? account.id : 'all'} onSelect={onView} />
       ) : null}
@@ -193,7 +194,7 @@ function HomeBody({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

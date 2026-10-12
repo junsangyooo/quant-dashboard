@@ -45,8 +45,8 @@ describe('전체 (the ledger in won)', () => {
     // Each account in its own money; a tile opens that account's view.
     const kr = screen.getByRole('link', { name: /한국 계좌/ });
     const us = screen.getByRole('link', { name: /미국 계좌/ });
-    expect(textOf(kr)).toBe('한국 계좌5,368,683원▲ +484,683원 · +9.92%');
-    expect(textOf(us)).toBe('미국 계좌$3,526.56▼ −$149.95 · −4.08%');
+    expect(textOf(kr)).toBe('한국 계좌+9.92%5,368,683원▲ +484,683원');
+    expect(textOf(us)).toBe('미국 계좌−4.08%$3,526.56▼ −$149.95');
     expect(kr).toHaveAttribute('href', '/?account=kr');
     expect(us).toHaveAttribute('href', '/?account=us');
   });
@@ -236,7 +236,7 @@ describe('the edges: before the first fill, dollars only, an empty account', () 
     expect(await findTotal('9,999,252원')).toBeInTheDocument();
     expect(textOf(screen.getByRole('link', { name: /미국 계좌/ }))).toBe('미국 계좌$0.00비어 있음');
     expect(textOf(screen.getByRole('link', { name: /한국 계좌/ }))).toBe(
-      '한국 계좌9,999,252원▼ −748원 · −0.01%',
+      '한국 계좌−0.01%9,999,252원▼ −748원',
     );
   });
 });

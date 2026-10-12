@@ -122,6 +122,14 @@
   text-decoration: underline;
 }
 
+/* The switch and the view it shows. */
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  min-width: 0;
+}
+
 /* ── 계좌 스위치: 전체 · 한국 ₩ · 미국 $ (the 스위치/모드 look). Full width on 390, its own width
    from 600. ── */
 .switch {
@@ -202,12 +210,13 @@
 
 .tileHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-tight);
   min-width: 0;
 }
 
-.tileChevron {
+.tilePct {
   margin-left: auto;
 }
 
