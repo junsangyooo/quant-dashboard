@@ -288,6 +288,9 @@ def checks(paper: LedgerContext, now: datetime) -> Checks:
         and fresh["facts"].get("source") == health["facts"].get("source")
     ):
         fresh["sameCauseAs"] = "health"
+    elif not fresh["ok"] and not link["ok"] and fresh["facts"].get("source") == "toss-balance":
+        # No fresh account picture because the tick cannot look at Toss: one cause, not two.
+        fresh["sameCauseAs"] = "toss-link"
     push = {"id": "push", "ok": True, "warn": True, "facts": {"devices": 0}}
     preflight = [health, link, fresh, push]
     if live.cancel_failed(conn) or live.cancel_pending(conn):

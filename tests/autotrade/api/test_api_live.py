@@ -152,6 +152,8 @@ def test_an_old_toss_check_blocks_turning_on(lw: Live, web: TestClient) -> None:
     rows = {r["id"]: r for r in mode["preflight"]}
     assert rows["toss-link"]["facts"] == {"cause": "old"}
     assert rows["freshness"]["facts"]["source"] == "toss-balance"
+    # The old account picture is the link's doing: one cause, not two.
+    assert rows["freshness"]["sameCauseAs"] == "toss-link"
     assert mode["preview"]["kind"] == "not-computable"
 
 
