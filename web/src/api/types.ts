@@ -843,7 +843,7 @@ export interface AccountResponse {
   // name·kind는 로그인 때의 User-Agent로 정한다. name은 '[시스템] · [브라우저]'('Mac · Chrome', 'iPhone · Safari').
   // UA에 'Safari/'가 없는 iPhone을 홈 화면 앱으로 보고 name은 'iPhone'만 준다(화면이 '· 홈 화면 앱'을 붙인다)
   notifications: {
-    available: boolean; // 웹 푸시가 있나. 1·2단계는 false('알림은 준비 중')
+    available: boolean; // 웹 푸시가 있나. 1·2단계는 false: 화면은 알림을 한 줄로 접는다
     vapidPublicKey?: string; // 3단계: 이 기기를 구독할 때 쓰는 공개키(available일 때만)
     thisDevice: {
       supported: boolean;
