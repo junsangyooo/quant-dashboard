@@ -55,7 +55,7 @@ describe('작동 (SCR-HEALTH)', () => {
       '10/7 종가 · 16:00 받음 · 매일',
       '10/6 종가(ET) · 06:20 받음 · 매일',
       '1,382.4원 · 16:00 받음 · 매일',
-      '만료 10/19 · 12일 남음 · 90일마다 갱신',
+      '만료 10/19 · 12일 남음 · 16:05 확인 · 확인마다',
       '08:30 일치 · 확인마다',
       '2대 · 마지막 전달 10/7 08:31',
     ]);
@@ -82,10 +82,11 @@ describe('작동 (SCR-HEALTH)', () => {
     const widths = sourceRows().map(
       (r) => r.querySelector<HTMLElement>('[class*="ageFill"]')?.style.width,
     );
-    // 토스 연결: the contract's age is days since connecting ÷ 90 (0.87 on 10/7, 12 days left);
-    // the bar puts the expiry at the late/stale edge, so it ends at 65.25% (the drawing's 62%
-    // came from the old cadence-relative 1.24).
-    expect(widths).toEqual(['8%', '20%', '8%', '65.25%', '12%', '5%']);
+    // 토스 연결 (3단계): checked every 5 minutes, its age is per check (0.33 of the 15-minute
+    // limit at 16:10), on the same two-cadence bar as the others. The key expiry the owner gave
+    // shows in the line and the chip instead (the drawing's 90-day bar has no source: the API
+    // states no expiry, autotrade/PHASE3.md 1.6).
+    expect(widths).toEqual(['8%', '20%', '8%', '16.5%', '12%', '5%']);
   });
 
   it('shows 토스 연결 만료 예정 only as 할 일 1 and a yellow card; the header stays 정상 · 08:30 확인', async () => {

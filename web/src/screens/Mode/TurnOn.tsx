@@ -53,7 +53,9 @@ function failureLine(error: unknown): { text: string; pin: boolean } {
         ? t.turnOn.reasons.notAvailable
         : cause === 'preview'
           ? t.turnOn.reasons.preview
-          : t.turnOn.reasons.checks;
+          : cause === 'cancel-pending'
+            ? t.turnOn.reasons.cancelPending
+            : t.turnOn.reasons.checks;
     return { text: t.turnOn.failed(reason), pin: false };
   }
   if (isApiError(error, 'in-progress'))

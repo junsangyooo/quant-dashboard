@@ -354,3 +354,166 @@ describe('작동 cards whose facts changed shape', () => {
     expect(tossFill(2)).toBe(1);
   });
 });
+
+describe('작동 cards of the live link (3단계, autotrade/PHASE3.md 2.7)', () => {
+  const NOW = '2026-07-01T09:20:00+09:00';
+  const todo = (t: Partial<HealthResponse['todos'][number]>): HealthResponse['todos'][number] => ({
+    id: 'x',
+    severity: 'red',
+    kind: 'toss-link',
+    facts: {},
+    action: { kind: 'manual' },
+    effect: 'orders-zero-live-blocked',
+    ...t,
+  });
+
+  it('토스 연결 names the cause and what to do; a passing cause retries by itself', () => {
+    const ip = todoView(todo({ facts: { cause: 'ip' } }), NOW);
+    expect(ip.title).toBe('토스 연결 · 허용 IP 아님');
+    expect(ip.lines).toEqual(['토스가 서버 IP를 막았어요', '토스 WTS 허용 IP에 서버 주소 추가']);
+    expect([ip.tone, ip.icon, ip.chip, ip.result]).toEqual([
+      'error',
+      'link',
+      '직접 할 일',
+      '그동안 주문 0건 · 실전 켜기 막힘',
+    ]);
+    const down = todoView(
+      todo({
+        severity: 'yellow',
+        facts: { cause: 'maintenance' },
+        action: { kind: 'auto-retry', at: '2026-07-01T09:25:00+09:00' },
+      }),
+      NOW,
+    );
+    expect(down.title).toBe('토스 연결 · 토스 점검 중');
+    expect(down.chip).toBe('09:25 자동 재시도');
+    expect(down.tone).toBe('warn');
+    // A cause this screen does not know is not shown raw.
+    expect(todoView(todo({ facts: { cause: 'new-cause' } }), NOW).title).toBe('토스 연결 · —');
+  });
+
+  it('토스 잔고 불일치 says what differs; an order whose result is unknown says where', () => {
+    const qty = todoView(
+      todo({
+        kind: 'broker-mismatch',
+        facts: {
+          reason: 'positions',
+          instrument: 'KOSPI200 ETF',
+          ledgerQty: '0',
+          brokerQty: '3',
+          count: 2,
+        },
+      }),
+      NOW,
+    );
+    expect(qty.title).toBe('토스 잔고와 장부가 달라요');
+    expect(qty.lines).toEqual([
+      'KOSPI200 ETF 장부 0주 · 토스 3주 외 1종목',
+      '토스 앱에서 확인 뒤 Claude에게 장부 맞추기 요청',
+    ]);
+    expect([qty.icon, qty.result]).toEqual(['mismatch', '그동안 주문 0건 · 실전 켜기 막힘']);
+    const cash = todoView(
+      todo({ kind: 'broker-mismatch', facts: { reason: 'cash', currency: 'USD' } }),
+      NOW,
+    );
+    expect(cash.lines[0]).toBe('USD 현금이 장부로 설명되지 않게 바뀌었어요');
+    const fill = todoView(
+      todo({
+        kind: 'broker-mismatch',
+        facts: { reason: 'fractional', instrument: 'S&P 500 ETF' },
+      }),
+      NOW,
+    );
+    expect(fill.lines[0]).toBe('S&P 500 ETF 체결을 장부에 맞출 수 없어요');
+    expect(
+      todoView(todo({ kind: 'broker-mismatch', facts: { reason: 'other' } }), NOW).lines[0],
+    ).toBe('장부로 설명되지 않는 차이가 있어요');
+    const unknown = todoView(
+      todo({
+        kind: 'broker-mismatch',
+        facts: { reason: 'order-unknown', market: 'KR', side: 'buy' },
+      }),
+      NOW,
+    );
+    expect(unknown.title).toBe('한국 매수 주문 결과 모름');
+    expect(unknown.lines).toEqual([
+      '토스에 이 주문으로 보이는 것이 둘이에요',
+      '토스 앱에서 확인 뒤 Claude에게 요청',
+    ]);
+  });
+
+  it('토스 앱에서 환전 gives the amounts, the rate and the time the buy waits for', () => {
+    const toUsd = todoView(
+      todo({
+        severity: 'yellow',
+        kind: 'fx-manual',
+        effect: 'other',
+        facts: {
+          direction: 'krw-usd',
+          krw: 4967000,
+          usd: 3568.24,
+          rate: 1392,
+          orderId: 12,
+          by: '2026-07-01T22:30:00+09:00',
+        },
+      }),
+      NOW,
+    );
+    expect(toUsd.title).toBe('토스 앱에서 환전 · 원→달러');
+    expect(toUsd.lines).toEqual([
+      '약 4,967,000원 → $3,568.24 · 환율 1,392.0원',
+      '22:30 미국 매수 전까지 바꿔 주세요',
+    ]);
+    expect([toUsd.tone, toUsd.icon, toUsd.chip, toUsd.result]).toEqual([
+      'warn',
+      'fx',
+      '직접 할 일',
+      '바뀐 돈이 보이면 다음 확인이 이어서 주문해요',
+    ]);
+    const toKrw = todoView(
+      todo({
+        severity: 'yellow',
+        kind: 'fx-manual',
+        effect: 'other',
+        facts: { direction: 'usd-krw', krw: 139200, usd: 100, rate: 1392, orderId: 13 },
+      }),
+      NOW,
+    );
+    expect(toKrw.title).toBe('토스 앱에서 환전 · 달러→원');
+    expect(toKrw.lines).toEqual([
+      '$100.00 → 약 139,200원 · 환율 1,392.0원',
+      '토스 API는 환전을 못 해서 직접 바꿔 주세요',
+    ]);
+  });
+
+  it('토스 연결 row: the account and the last check, or the cause and the last success', () => {
+    const base = {
+      id: 'toss-link',
+      state: 'fresh',
+      basis: null,
+      receivedAt: '2026-07-01T09:15:00+09:00',
+      cadence: 'per-check',
+      age: 0.33,
+    } as const;
+    const ok = sourceView({ ...base, extra: { account: '8901' } }, NOW);
+    expect([ok.line, ok.chip, ok.fill]).toEqual([
+      '계좌 끝 8901 · 09:15 확인 · 확인마다',
+      '제때',
+      0.165,
+    ]);
+    const late = sourceView(
+      { ...base, state: 'late', basis: '2026-07-10', extra: { account: '8901', daysLeft: 9 } },
+      NOW,
+    );
+    expect([late.line, late.chip]).toEqual([
+      '만료 7/10 · 9일 남음 · 09:15 확인 · 확인마다',
+      '만료 9일 전',
+    ]);
+    const broken = sourceView({ ...base, state: 'stale', age: 2.4, extra: { cause: 'ip' } }, NOW);
+    expect([broken.line, broken.chip, broken.fill]).toEqual([
+      '허용 IP 아님 · 마지막 성공 09:15 · 확인마다',
+      '낡음',
+      1,
+    ]);
+  });
+});

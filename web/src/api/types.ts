@@ -686,8 +686,12 @@ export interface HealthResponse {
       | 'push-undelivered'
       | 'ai-cli'
       | 'filings'
-      | 'pin-failures';
+      | 'pin-failures'
+      | 'toss-link'
+      | 'broker-mismatch'
+      | 'fx-manual';
     // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
+    // toss-link·broker-mismatch·fx-manual: 실전 연결(3단계, autotrade/PHASE3.md 2.7)
     facts: Record<string, string | number>; // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' };
     effect: 'orders-zero-live-blocked' | 'orders-and-reconcile-stop' | 'no-order-sent' | 'other';
@@ -742,7 +746,16 @@ export interface HealthResponse {
 //            state 'no-key'는 AI 실행기에 DART 키가 없음(action 'manual': 서버 cron 줄을 고쳐야 함)
 //   pin-failures: 빨강, 직접 할 일 { since, count, lastAt?, closed: 0 | 1 }('PIN 실패 급증': 24시간에 틀린 PIN 10회부터
 //           서버 unlock까지. since = 생긴 시각, count = 그때부터 센 틀린 PIN 수, closed 1 = 새 로그인이 닫힘(30회))
+//   toss-link(3단계): { cause }(TossLinkCause). 실전이면 빨강, 아니면 노랑. 사람이 고칠 원인이면 직접 할 일, 아니면 다음 확인에 자동
+//   broker-mismatch(3단계, 빨강·직접): { reason, instrument?, ledgerQty?, brokerQty?, count?, currency? }
+//           reason 'positions'(보유 수량이 다름, 첫 종목과 다른 종목 수) | 'cash'(설명 안 되는 현금 변화, currency)
+//           | 'external-fill' | 'fractional' | 'sleeves' | 'other' · 'order-unknown'(보낸 주문의 결과를 가를 수 없음: { reason, market, side })
+//   fx-manual(3단계, 노랑·직접): { direction: 'krw-usd' | 'usd-krw', krw, usd, rate, orderId, by? }
+//           토스 API는 환전을 못 해요: 주인이 토스 앱에서 바꾸면 다음 대조가 알아보고 이어서 사요. by = 기다리는 매수 시각
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
+// 3단계 실제 연결: toss-link는 cadence 'per-check', age = 마지막 확인 뒤 ÷ 15분, basis = 주인이 알려 준 키 만료일(없으면 null),
+//   receivedAt = 마지막 성공, extra { cause?(TossLinkCause), account?(끝 4자리), daysLeft? }. 만료 14일 안이면 'late'.
+//   toss-balance는 basis 'match' | 'mismatch' | null, receivedAt = 마지막 대조
 
 // ── `GET /api/mode` — SCR-MODE ──
 export interface ModeResponse {
@@ -779,7 +792,8 @@ export interface ModeResponse {
     facts: Record<string, string | number>;
     sameCauseAs?: string;
   }>;
-  // facts 키: health ok면 { lastCheckAt }, 아니면 { count, source }(원인 수와 첫 원인의 출처 id) · toss-link { expiresAt, daysLeft }
+  // facts 키: health ok면 { lastCheckAt }, 아니면 { count, source }(원인 수와 첫 원인의 출처 id)
+  //          toss-link ok면 { checkedAt, account }(계좌 끝 4자리), 아니면 { cause }(TossLinkCause). 주인이 키 만료일을 알려 줬으면 + { expiresAt, daysLeft }
   //          freshness ok면 { balanceAt, priceAt, fxAt }, 아니면 { source, basisDate } · push { devices, lastDelivery }
   preview:
     | null
@@ -799,7 +813,10 @@ export interface ModeResponse {
       }
     | { kind: 'not-computable'; at: string; cause: 'stale' | 'other' };
   cancelFailed: Order[] | null;
-  canTurnOn: { ok: true } | { ok: false; cause: 'checks' | 'preview' | 'live-not-available' }; // 1단계는 항상 live-not-available
+  cancelPending: Order[] | null; // 3단계: 끄기·계획 종료로 토스에 취소를 요청했고 다음 확인(5분 안)이 처리할 주문
+  canTurnOn:
+    | { ok: true }
+    | { ok: false; cause: 'checks' | 'preview' | 'live-not-available' | 'cancel-pending' }; // cancel-pending = 지난 실전 주문의 취소가 안 끝남
   offPreview: null | {
     // 실전이 켜져 있을 때만: 끄면 취소될 주문과 계좌에 남는 현금(실전 끄기 모달)
     cancel: Order[]; // 실전 장부의 열린 계획에서 아직 대기 중인 주문
@@ -921,11 +938,29 @@ export type TurnOnBlockedCause = Extract<ModeResponse['canTurnOn'], { ok: false 
 export interface LiveOffResponse {
   mode: 'paper';
   cancelFailed: Order[];
+  cancelPending: Order[]; // 3단계: 토스에 있어 다음 확인이 취소할 주문
 }
 // POST /api/mode/cancel-retry
 export interface CancelRetryResponse {
   cancelFailed: Order[];
+  cancelPending: Order[]; // 3단계: 다시 요청한 취소(다음 확인이 처리)
 }
+/** Why the Toss link cannot carry live orders now (toss-link preflight·todo·source). */
+export type TossLinkCause =
+  | 'never' // 아직 한 번도 확인 안 함
+  | 'env-off' // 주문 실행기의 AUTOTRADE_LIVE_ORDERS가 없음(서버 cron 줄)
+  | 'no-key' // 서버에 토스 키가 없음
+  | 'auth' // 토스가 키를 받지 않음
+  | 'ip' // 서버 IP가 허용 목록에 없음
+  | 'account' // 계좌를 못 찾음
+  | 'unreachable' // 토스 응답 없음
+  | 'maintenance' // 토스 점검 중
+  | 'error' // 토스 오류
+  | 'old' // 마지막 확인이 15분보다 오래됨
+  | 'conflict' // 다른 프로그램이 같은 키로 토큰을 받음(옛 quant)
+  | 'not-tradable' // 규칙 종목이 지금 거래 안 됨
+  | 'mismatch' // 잔고가 장부와 다름
+  | 'expired'; // 주인이 알려 준 키 만료일이 지남
 
 // PUT /api/account/notifications {events?: {[id]: boolean}, hideAmounts?} → 200 {savedAt}.
 // Only what is sent changes; 400 unknown-event / locked-event (turning check-failed off).

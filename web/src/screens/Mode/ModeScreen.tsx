@@ -18,7 +18,13 @@ import { ErrorBlock, Skeleton, SkeletonBlock } from '../../components/State';
 import { PageTitle } from '../../shell/PageTitle';
 import { pageTitle, useDocumentTitle } from '../../shell/page';
 import { useMediaQuery } from '../Pin/useMediaQuery';
-import { CancelFailedCard, PerformanceCard, PreflightSection, PreviewCard } from './Sections';
+import {
+  CancelFailedCard,
+  CancelPendingCard,
+  PerformanceCard,
+  PreflightSection,
+  PreviewCard,
+} from './Sections';
 import { TurnOffSection } from './TurnOff';
 import { TurnOnCard } from './TurnOn';
 import { TwoLedgersCard } from './TwoLedgers';
@@ -82,6 +88,7 @@ export function ModeScreen() {
     const override = changed !== null && changed.replaced === serverHash ? changed : null;
     const preview = override?.preview ?? m.preview;
     const cancelFailed = m.cancelFailed && m.cancelFailed.length > 0 ? m.cancelFailed : null;
+    const cancelPending = m.cancelPending && m.cancelPending.length > 0 ? m.cancelPending : null;
     const canTurnOnBlock = m.mode === 'paper' && cancelFailed === null;
     const checksBlocked =
       canTurnOnBlock &&
@@ -122,13 +129,21 @@ export function ModeScreen() {
               // The answer is authoritative: drop the card at once, the refetch confirms it.
               client.setQueryData<ModeResponse>(queryKeys.mode, (old) =>
                 old
-                  ? { ...old, cancelFailed: res.cancelFailed.length > 0 ? res.cancelFailed : null }
+                  ? {
+                      ...old,
+                      cancelFailed: res.cancelFailed.length > 0 ? res.cancelFailed : null,
+                      cancelPending: res.cancelPending.length > 0 ? res.cancelPending : null,
+                    }
                   : old,
               );
             },
           });
         }}
       />
+    ) : null;
+    // 3단계: cancels asked of Toss that the next check carries out (shown under the segment).
+    const pendingCard = cancelPending ? (
+      <CancelPendingCard key="cancel-pending" orders={cancelPending} />
     ) : null;
     const twoLedgers = m.twoLedgers ? <TwoLedgersCard key="two" data={m.twoLedgers} /> : null;
     const performance = (
@@ -172,21 +187,21 @@ export function ModeScreen() {
     let left: ReactNode[];
     let right: ReactNode[];
     if (cancelCard) {
-      left = [cancelCard, modeSection, twoLedgers, performance];
+      left = [cancelCard, modeSection, pendingCard, twoLedgers, performance];
       right = [];
     } else if (m.mode === 'live') {
-      left = [modeSection, twoLedgers, performance];
+      left = [modeSection, pendingCard, twoLedgers, performance];
       right = [turnOff];
     } else if (checksBlocked) {
-      left = [modeSection, preflight, twoLedgers, performance];
+      left = [modeSection, pendingCard, preflight, twoLedgers, performance];
       right = [previewCard, turnOn];
     } else {
-      left = [modeSection, twoLedgers, performance, preflight];
+      left = [modeSection, pendingCard, twoLedgers, performance, preflight];
       right = [previewCard, turnOn];
     }
     // 390 reads one column; the blocked order puts 미리보기 · 켜기 before 성적.
     const narrow = checksBlocked
-      ? [modeSection, preflight, previewCard, turnOn, twoLedgers, performance]
+      ? [modeSection, pendingCard, preflight, previewCard, turnOn, twoLedgers, performance]
       : [...left, ...right];
 
     body = wide ? (

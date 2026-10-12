@@ -210,7 +210,7 @@ describe('fixture runtime: { $afterWrite }', () => {
           $before: shell({ mode: 'live' }),
           $after: shell(),
         },
-        'POST /api/mode/paper': { mode: 'paper', cancelFailed: [] },
+        'POST /api/mode/paper': { mode: 'paper', cancelFailed: [], cancelPending: [] },
       },
     } satisfies FixtureBundle;
     const fetch = fixtureFetch(bundle);

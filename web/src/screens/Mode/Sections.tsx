@@ -1,4 +1,4 @@
-// SCR-MODE sections: 모의투자 성적, 켜기 전 점검, 첫 주문 미리보기, 취소 안 된 주문.
+// SCR-MODE sections: 모의투자 성적, 켜기 전 점검, 첫 주문 미리보기, 취소 안 된 주문, 취소 요청한 주문.
 import clsx from 'clsx';
 import { Fragment, useId } from 'react';
 import {
@@ -390,6 +390,38 @@ export function CancelFailedCard({
           {t.cancelFailed.retryFailed}
         </p>
       ) : null}
+    </section>
+  );
+}
+
+// ── 취소 요청한 주문 (3단계) ─────────────────────────────────────────────────
+
+/**
+ * Orders of the last live period still at Toss whose cancel was asked (CONTRACT
+ * ModeResponse.cancelPending): the next check carries it out within five minutes. Not an error —
+ * a failed cancel moves the order to the red card above.
+ */
+export function CancelPendingCard({ orders }: { orders: readonly Order[] }) {
+  const titleId = useId();
+  return (
+    <section className={clsx(styles.card, styles.subtle)} aria-labelledby={titleId}>
+      <h2 id={titleId} className="t-heading-1">
+        {t.cancelPending.title}
+      </h2>
+      <ul className={styles.cancelList}>
+        {orders.map((o) => (
+          <li key={o.id}>
+            <OrderRow
+              state="pending"
+              stateLabel={t.cancelPending.stateLabel}
+              time={t.cancelFailed.waiting(formatTime(o.at))}
+            >
+              {cancelFailedRow(o)}
+            </OrderRow>
+          </li>
+        ))}
+      </ul>
+      <p className={clsx('t-caption', styles.muted)}>{t.cancelPending.note}</p>
     </section>
   );
 }

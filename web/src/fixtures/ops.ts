@@ -18,6 +18,14 @@ import { BTC, INDEX_HALF, KOSPI200, MOMENTUM, NVDA, SAMSUNG, SP500, kst, ret2 } 
 export const NOW = kst('2026-10-07', '16:10');
 export const LAST_CHECK = kst('2026-10-07', '08:30');
 export const NEXT_CHECK = kst('2026-10-08', '08:30');
+/** The tick's last look at Toss (3단계, every 5 minutes). */
+export const TOSS_CHECKED = kst('2026-10-07', '16:05');
+const TOSS_LINK_FACTS = {
+  checkedAt: TOSS_CHECKED,
+  account: '8901',
+  expiresAt: '2026-10-19',
+  daysLeft: 12,
+};
 
 // ── /api/shell ───────────────────────────────────────────────────────────────
 
@@ -94,14 +102,16 @@ export const sources = {
     cadence: 'daily',
     age: 0.16,
   },
+  // 3단계: the tick's last good look at Toss (every 5 minutes); the key expiry is the one the
+  // owner gave (AUTOTRADE_TOSS_KEY_EXPIRES), 12 days away, so the row reads 'late'.
   tossLink: {
     id: 'toss-link',
     state: 'late',
     basis: '2026-10-19',
-    receivedAt: kst('2026-07-21', '10:00'),
-    cadence: '90d',
-    age: 0.87,
-    extra: { daysLeft: 12 },
+    receivedAt: TOSS_CHECKED,
+    cadence: 'per-check',
+    age: 0.33,
+    extra: { daysLeft: 12, account: '8901' },
   },
   tossBalance: {
     id: 'toss-balance',
@@ -259,7 +269,7 @@ export const PERFORMANCE_SHORT: ModeResponse['performance'] = {
 
 export const PREFLIGHT_OK: NonNullable<ModeResponse['preflight']> = [
   { id: 'health', ok: true, facts: { lastCheckAt: LAST_CHECK } },
-  { id: 'toss-link', ok: true, facts: { expiresAt: '2026-10-19', daysLeft: 12 } },
+  { id: 'toss-link', ok: true, facts: TOSS_LINK_FACTS },
   {
     id: 'freshness',
     ok: true,
@@ -275,7 +285,7 @@ export const PREFLIGHT_OK: NonNullable<ModeResponse['preflight']> = [
 /** SCR-MODE.blocked (1:38336): one cause, US quotes stale since 10/02. */
 export const PREFLIGHT_BLOCKED: NonNullable<ModeResponse['preflight']> = [
   { id: 'health', ok: false, facts: { count: 1, source: 'us-quotes' } },
-  { id: 'toss-link', ok: true, facts: { expiresAt: '2026-10-19', daysLeft: 12 } },
+  { id: 'toss-link', ok: true, facts: TOSS_LINK_FACTS },
   {
     id: 'freshness',
     ok: false,
@@ -372,6 +382,7 @@ export function modePaper(overrides: Partial<ModeResponse> = {}): ModeResponse {
     preflight: PREFLIGHT_OK,
     preview: PREVIEW_OK,
     cancelFailed: null,
+    cancelPending: null,
     canTurnOn: { ok: true },
     offPreview: null,
     ...overrides,
@@ -451,6 +462,7 @@ export function modeLive(overrides: Partial<ModeResponse> = {}): ModeResponse {
     preflight: null,
     preview: null,
     cancelFailed: null,
+    cancelPending: null,
     canTurnOn: { ok: true },
     offPreview: LIVE_OFF_PREVIEW,
     ...overrides,

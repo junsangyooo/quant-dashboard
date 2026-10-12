@@ -173,6 +173,33 @@ export const healthCopy = {
     pinFailuresClosed: '새 로그인이 닫혔어요 · 열린 기기는 그대로 써요',
     pinFailuresOpen: '새 로그인은 아직 열려 있어요',
     pinFailuresResult: 'Claude에게 서버에서 unlock 요청 · 그러면 이 카드도 사라져요',
+    // 실전 연결 (3단계, autotrade/PHASE3.md 2.7) — NEW. 토스 연결: facts { cause } (lines: toss.lines).
+    tossLinkTitle: (cause: string) => `토스 연결 · ${cause}`,
+    // 토스 잔고 불일치: facts { reason, instrument?, ledgerQty?, brokerQty?, count?, currency? }.
+    brokerMismatchTitle: '토스 잔고와 장부가 달라요',
+    /** 'KOSPI200 ETF 장부 0주 · 토스 3주' (+ ' 외 1종목'). */
+    brokerMismatchQty: (name: string, ledger: string, broker: string, more: number) =>
+      `${name} 장부 ${ledger}주 · 토스 ${broker}주${more > 0 ? ` 외 ${String(more)}종목` : ''}`,
+    brokerMismatchCash: (currency: string) => `${currency} 현금이 장부로 설명되지 않게 바뀌었어요`,
+    brokerMismatchFill: (name: string) => `${name} 체결을 장부에 맞출 수 없어요`,
+    brokerMismatchOther: '장부로 설명되지 않는 차이가 있어요',
+    brokerMismatchAction: '토스 앱에서 확인 뒤 Claude에게 장부 맞추기 요청',
+    // 결과를 모르는 주문: facts { reason: 'order-unknown', market, side }.
+    orderUnknownTitle: (market: string, side: string) => `${market} ${side} 주문 결과 모름`,
+    orderUnknownLines: [
+      '토스에 이 주문으로 보이는 것이 둘이에요',
+      '토스 앱에서 확인 뒤 Claude에게 요청',
+    ],
+    // 토스 앱에서 환전: facts { direction, krw, usd, rate, orderId, by? }.
+    fxManualTitle: (direction: string) => `토스 앱에서 환전 · ${direction}`,
+    fxDirection: { 'krw-usd': '원→달러', 'usd-krw': '달러→원' },
+    /** '약 4,967,000원 → $3,568.24 · 환율 1,392.0원'. */
+    fxManualAmount: (from: string, to: string, rate: string) => `${from} → ${to} · 환율 ${rate}`,
+    fxManualBy: (at: string) => `${at} 미국 매수 전까지 바꿔 주세요`,
+    fxManualNoBy: '토스 API는 환전을 못 해서 직접 바꿔 주세요',
+    fxManualResult: '바뀐 돈이 보이면 다음 확인이 이어서 주문해요',
+    /** The won side is an estimate until Toss fills it: '약 4,967,000원'. */
+    fxApprox: (amount: string) => `약 ${amount}`,
     /** Small result line, by effect. */
     effect: {
       'orders-zero-live-blocked': '그동안 주문 0건 · 실전 켜기 막힘',
@@ -231,6 +258,9 @@ export const healthCopy = {
     maintenanceStop: (market: string) => `${market} 공시 감시 멈춤`,
     /** NEW — the AI runner found no Claude CLI (extra.cli 'missing'). */
     cliMissing: 'Claude CLI 없음',
+    /** NEW (3단계) — 토스 연결 row: '계좌 끝 8901 · 16:05 확인'. */
+    account: (tail: string) => `계좌 끝 ${tail}`,
+    checked: (time: string) => `${time} 확인`,
     noValue: '—',
     /** NEW — accessible name of the push row button. */
     devicesToggle: '알림 기기 목록',
@@ -293,5 +323,48 @@ export const healthCopy = {
     grid: '최근 14일 확인 달력',
     lastRun: '마지막 확인',
     selected: '고른 날',
+  },
+
+  /** 토스 연결이 실전 주문을 못 싣는 이유 (CONTRACT TossLinkCause) — NEW, 3단계. */
+  toss: {
+    cause: {
+      never: '아직 확인 전',
+      'env-off': '주문 열쇠 꺼짐',
+      'no-key': '서버에 키 없음',
+      auth: '키 거부',
+      ip: '허용 IP 아님',
+      account: '계좌 못 찾음',
+      unreachable: '응답 없음',
+      maintenance: '토스 점검 중',
+      error: '토스 오류',
+      old: '확인 늦음',
+      conflict: '다른 프로그램과 키 겹침',
+      'not-tradable': '거래 안 되는 종목',
+      mismatch: '잔고 불일치',
+      expired: '키 만료',
+    },
+    /** Two lines per cause: what happened · what to do (할 일 카드, 점검 줄은 둘째 줄만). */
+    lines: {
+      never: ['주문 실행기가 아직 토스를 보지 않았어요', '서버 cron 줄 확인 요청'],
+      'env-off': [
+        '주문 실행기에 AUTOTRADE_LIVE_ORDERS=1이 없어요',
+        'Claude에게 서버 cron 줄 수정 요청',
+      ],
+      'no-key': ['서버 키 파일에 토스 키가 없어요', 'Claude에게 키 파일 확인 요청'],
+      auth: ['토스가 서버의 키를 받지 않았어요', '토스 WTS에서 키 확인 뒤 Claude에게 교체 요청'],
+      ip: ['토스가 서버 IP를 막았어요', '토스 WTS 허용 IP에 서버 주소 추가'],
+      account: ['키에 묶인 계좌를 못 찾았어요', '토스 WTS에서 계좌 확인'],
+      unreachable: ['토스가 응답하지 않아요', '다음 확인 때 다시 봐요'],
+      maintenance: ['토스가 점검 중이에요', '끝나면 다음 확인 때 다시 봐요'],
+      error: ['토스가 오류를 냈어요', '다음 확인 때 다시 봐요'],
+      old: ['마지막 확인이 15분보다 오래됐어요', '다음 확인 때 다시 봐요'],
+      conflict: [
+        '다른 프로그램이 같은 키로 토큰을 받아요',
+        'Claude에게 옛 quant cron 줄 삭제 요청',
+      ],
+      'not-tradable': ['규칙 종목이 지금 거래되지 않아요', '토스 앱에서 종목 상태 확인'],
+      mismatch: ['토스 잔고가 장부와 달라요', '토스 잔고 대조 카드 확인'],
+      expired: ['알려 준 키 만료일이 지났어요', '토스 WTS에서 새 키를 받아 Claude에게 교체 요청'],
+    },
   },
 } as const;

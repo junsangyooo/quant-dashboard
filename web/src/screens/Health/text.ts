@@ -9,10 +9,12 @@ import { calendarCell, marketName, sideName } from '../../api/adapters';
 import {
   formatDateTime,
   formatFxRate,
+  formatKrw,
   formatMonthDay,
   formatMonthDayWeekday,
   formatNumber,
   formatTime,
+  formatUsd,
   kstDateKey,
 } from '../../lib/format';
 
@@ -207,7 +209,17 @@ export function unknownView(attemptAt: string, lastKnown: string | null): Summar
 
 export interface TodoView {
   tone: 'error' | 'warn';
-  icon: 'stale' | 'failed' | 'expiring' | 'push' | 'ai' | 'filings' | 'pin';
+  icon:
+    | 'stale'
+    | 'failed'
+    | 'expiring'
+    | 'push'
+    | 'ai'
+    | 'filings'
+    | 'pin'
+    | 'link'
+    | 'mismatch'
+    | 'fx';
   title: string;
   chip: string;
   lines: readonly string[];
@@ -438,7 +450,90 @@ export function todoView(todo: Todo, now: string | null): TodoView {
         result: t.todo.pinFailuresResult,
       };
     }
+    case 'toss-link': {
+      const cause = tossCause(f.cause);
+      return {
+        tone,
+        icon: 'link',
+        title: t.todo.tossLinkTitle(cause ? t.toss.cause[cause] : t.sources.noValue),
+        chip,
+        lines: cause ? t.toss.lines[cause] : [],
+        result: effectLine(todo.effect),
+      };
+    }
+    case 'broker-mismatch': {
+      const reason = str(f.reason);
+      if (reason === 'order-unknown') {
+        return {
+          tone,
+          icon: 'mismatch',
+          title: t.todo.orderUnknownTitle(market(f.market), side(f.side)),
+          chip,
+          lines: t.todo.orderUnknownLines,
+          result: effectLine(todo.effect),
+        };
+      }
+      const name = str(f.instrument) ?? '';
+      const first =
+        reason === 'positions'
+          ? t.todo.brokerMismatchQty(
+              name,
+              str(f.ledgerQty) ?? '0',
+              str(f.brokerQty) ?? '0',
+              Math.max(0, (num(f.count) ?? 1) - 1),
+            )
+          : reason === 'cash'
+            ? t.todo.brokerMismatchCash(market(f.currency) || (str(f.currency) ?? ''))
+            : name
+              ? t.todo.brokerMismatchFill(name)
+              : t.todo.brokerMismatchOther;
+      return {
+        tone,
+        icon: 'mismatch',
+        title: t.todo.brokerMismatchTitle,
+        chip,
+        lines: [first, t.todo.brokerMismatchAction],
+        result: effectLine(todo.effect),
+      };
+    }
+    case 'fx-manual': {
+      const toUsd = str(f.direction) !== 'usd-krw';
+      const krw = num(f.krw);
+      const usd = num(f.usd);
+      const krwText = krw === undefined ? t.sources.noValue : formatKrw(krw);
+      const usdText = usd === undefined ? t.sources.noValue : formatUsd(usd);
+      const rate = num(f.rate);
+      const by = str(f.by);
+      return {
+        tone,
+        icon: 'fx',
+        title: t.todo.fxManualTitle(t.todo.fxDirection[toUsd ? 'krw-usd' : 'usd-krw']),
+        chip,
+        lines: [
+          t.todo.fxManualAmount(
+            toUsd ? approx(krwText) : usdText,
+            toUsd ? usdText : approx(krwText),
+            rate === undefined ? t.sources.noValue : formatFxRate(rate),
+          ),
+          by ? t.todo.fxManualBy(atTime(by, now)) : t.todo.fxManualNoBy,
+        ],
+        result: t.todo.fxManualResult,
+      };
+    }
   }
+}
+
+/** '약 4,967,000원' — the won side of a conversion is an estimate until Toss fills it. */
+function approx(amount: string): string {
+  return t.todo.fxApprox(amount);
+}
+
+type TossCause = keyof typeof t.toss.cause;
+
+/** A TossLinkCause from facts or extra; unknown words are dropped, not shown raw. */
+export function tossCause(v: string | number | undefined): TossCause | null {
+  const c = str(v);
+  return c !== undefined && c in t.toss.cause ? (c as TossCause) : null;
 }
 
 // ── 자료별 ───────────────────────────────────────────────────────────────────
@@ -510,7 +605,11 @@ export function sourceView(src: Source, now: string | null): SourceView {
       ? t.sources.expiresIn(daysLeft)
       : t.sources.state[src.state];
   const fill =
-    src.state === 'unknown' ? 0 : src.id === 'toss-link' ? tossFill(src.age) : ageFill(src.age);
+    src.state === 'unknown'
+      ? 0
+      : src.id === 'toss-link' && src.cadence === '90d'
+        ? tossFill(src.age)
+        : ageFill(src.age);
   const received = src.receivedAt ? t.sources.received(atTime(src.receivedAt, now)) : null;
   const cadence = t.sources.cadence[src.cadence];
   const join = (...parts: (string | null)[]) =>
@@ -535,13 +634,36 @@ export function sourceView(src: Source, now: string | null): SourceView {
       line = join(rate === undefined ? null : formatFxRate(rate), received, cadence);
       break;
     }
-    case 'toss-link':
-      line = join(
-        src.basis ? t.sources.expires(formatMonthDay(src.basis)) : null,
-        daysLeft === undefined ? null : t.sources.daysLeft(daysLeft),
-        cadence,
-      );
+    case 'toss-link': {
+      if (src.cadence === '90d') {
+        line = join(
+          src.basis ? t.sources.expires(formatMonthDay(src.basis)) : null,
+          daysLeft === undefined ? null : t.sources.daysLeft(daysLeft),
+          cadence,
+        );
+        break;
+      }
+      // 3단계: the tick's last look at Toss (per check). A cause says why it cannot carry orders.
+      const cause = tossCause(extra.cause);
+      const account = str(extra.account);
+      line = cause
+        ? join(
+            t.toss.cause[cause],
+            src.receivedAt ? t.sources.lastSuccess(atTime(src.receivedAt, now)) : null,
+            cadence,
+          )
+        : join(
+            src.basis
+              ? t.sources.expires(formatMonthDay(src.basis))
+              : account
+                ? t.sources.account(account)
+                : null,
+            daysLeft === undefined ? null : t.sources.daysLeft(daysLeft),
+            src.receivedAt ? t.sources.checked(atTime(src.receivedAt, now)) : null,
+            cadence,
+          );
       break;
+    }
     case 'toss-balance': {
       const time = src.receivedAt ? atTime(src.receivedAt, now) : t.sources.noValue;
       line = join(

@@ -27,7 +27,7 @@ const bundle = {
       $after: shell({ modeChangedAt: OFF_AT }),
     },
     '/api/mode': { $afterWrite: 'POST /api/mode/paper', $before: modeLive(), $after: afterOff },
-    'POST /api/mode/paper': { mode: 'paper', cancelFailed: [] },
+    'POST /api/mode/paper': { mode: 'paper', cancelFailed: [], cancelPending: [] },
   },
 } satisfies FixtureBundle;
 

@@ -72,6 +72,10 @@ export const modeCopy = {
     staleCause: (source: string) => `${source} 낡음`,
     tossLink: '토스 연결',
     tossLinkLine: (date: string, days: number) => `만료 ${date} · ${String(days)}일 남음`,
+    /** NEW (3단계) — no expiry known: '계좌 끝 8901 · 16:05 확인'. */
+    tossLinkOk: (account: string, time: string) => `계좌 끝 ${account} · ${time} 확인`,
+    /** NEW (3단계) — ✕: the cause and what to do ('주문 열쇠 꺼짐 · Claude에게 서버 cron 줄 수정 요청'). */
+    tossLinkCause: (cause: string, action: string) => `${cause} · ${action}`,
     freshness: '자료 최신',
     freshLine: (balance: string, price: string, fx: string) =>
       `잔고 ${balance} · 현재가 ${price} · 환율 ${fx}`,
@@ -148,6 +152,8 @@ export const modeCopy = {
     blockedPreview: '첫 주문을 계산한 뒤 켤 수 있어요',
     /** NEW — phase 1: the live executor is not connected (409 live-not-available). */
     blockedNotAvailable: '토스 주문 연결 뒤 켤 수 있어요',
+    /** NEW (3단계) — an order of the last live period is still being cancelled. */
+    blockedCancelPending: '지난 실전 주문의 취소가 끝나면 켤 수 있어요',
     /** Spec: '켜지 않았어요 · [이유]'. */
     failed: (reason: string) => `켜지 않았어요 · ${reason}`,
     // NEW: notAvailable · checks · preview · inProgress · pinFormat ('서버 오류' · '연결 안 됨' are
@@ -160,6 +166,8 @@ export const modeCopy = {
       server: '서버 오류',
       network: '연결 안 됨',
       pinFormat: 'PIN 6자리 숫자',
+      /** NEW (3단계) */
+      cancelPending: '취소 중인 주문 있음',
     },
   },
 
@@ -201,6 +209,13 @@ export const modeCopy = {
     /** NEW */
     retryFailed: '취소하지 못했어요 · 토스 앱에서 확인',
     stateLabel: '취소 안 됨',
+  },
+
+  /** NEW (3단계) — cancels asked of Toss that the next check (5분 안) carries out. */
+  cancelPending: {
+    title: '취소 요청한 주문',
+    note: '다음 확인 때 토스에서 취소해요 · 5분 안',
+    stateLabel: '취소 요청',
   },
 
   /** Particles the screen picks by the last sound: '$125.67은' · '시세는' · '미국 시세가' · '환율이'. */

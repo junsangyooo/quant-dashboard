@@ -14,7 +14,7 @@ const failed: ModeResponse = modePaper({
   preflight: null,
   preview: null,
   cancelFailed: [{ ...LIVE_PENDING_BUY, failure: { reason: 'cancel-failed' } }],
-  canTurnOn: { ok: false, cause: 'checks' },
+  canTurnOn: { ok: false, cause: 'cancel-pending' },
 });
 
 const cleared: ModeResponse = { ...failed, cancelFailed: null };
@@ -34,7 +34,7 @@ const bundle = {
       $after: shell({ now: NOW, modeChangedAt: NOW }),
     },
     '/api/mode': { $afterWrite: 'POST /api/mode/cancel-retry', $before: failed, $after: cleared },
-    'POST /api/mode/cancel-retry': { cancelFailed: [] },
+    'POST /api/mode/cancel-retry': { cancelFailed: [], cancelPending: [] },
   },
 } satisfies FixtureBundle;
 

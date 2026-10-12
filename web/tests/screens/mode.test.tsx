@@ -475,3 +475,112 @@ describe('모의투자·실전 (SCR-MODE)', () => {
     expect(shell().now).toBe(NOW);
   });
 });
+
+describe('모의투자·실전 · 실전 연결 (3단계)', () => {
+  it('names the toss-link cause and what to do, and counts it as the blocking check', async () => {
+    const preflight: NonNullable<ModeResponse['preflight']> = PREFLIGHT_OK.map((row) =>
+      row.id === 'toss-link' ? { id: 'toss-link', ok: false, facts: { cause: 'env-off' } } : row,
+    );
+    const bundle = {
+      ...modePaper,
+      responses: {
+        ...modePaper.responses,
+        '/api/mode': paperMode({ preflight, canTurnOn: { ok: false, cause: 'checks' } }),
+      },
+    } satisfies FixtureBundle;
+    await openMode(bundle);
+    const row = within(region(modeCopy.preflight.title)).getByRole('link', { name: /토스 연결/ });
+    expect(row).toHaveAttribute('href', '/health');
+    expect(row).toHaveTextContent('주문 열쇠 꺼짐 · Claude에게 서버 cron 줄 수정 요청');
+    const card = region(TURN_ON.title);
+    expect(within(card).getByText('점검 1개(토스 연결) 해결 뒤 켤 수 있어요')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: TURN_ON.button })).toBeDisabled();
+  });
+
+  it('shows the account and the last check when no key expiry is known', async () => {
+    const preflight: NonNullable<ModeResponse['preflight']> = PREFLIGHT_OK.map((row) =>
+      row.id === 'toss-link'
+        ? {
+            id: 'toss-link',
+            ok: true,
+            facts: { checkedAt: '2026-10-07T16:05:00+09:00', account: '8901' },
+          }
+        : row,
+    );
+    const bundle = {
+      ...modePaper,
+      responses: { ...modePaper.responses, '/api/mode': paperMode({ preflight }) },
+    } satisfies FixtureBundle;
+    await openMode(bundle);
+    expect(
+      within(region(modeCopy.preflight.title)).getByText('계좌 끝 8901 · 16:05 확인'),
+    ).toBeInTheDocument();
+  });
+
+  it('lists the cancels Toss still has to carry out and keeps 켜기 closed until they end', async () => {
+    const pending = paperMode({
+      liveOff: { from: '2026-09-01', to: '2026-10-07', offAt: NOW },
+      twoLedgers: TWO_LEDGERS,
+      cancelPending: [LIVE_PENDING_BUY],
+      canTurnOn: { ok: false, cause: 'cancel-pending' },
+    });
+    const bundle = {
+      ...modePaper,
+      responses: { ...modePaper.responses, '/api/mode': pending },
+    } satisfies FixtureBundle;
+    await openMode(bundle);
+    const card = region(modeCopy.cancelPending.title);
+    expect(within(card).getByText('매수·미국 S&P 500 ETF 2주 · 약 $124.80')).toBeInTheDocument();
+    expect(within(card).getByText('22:30 대기')).toBeInTheDocument();
+    expect(within(card).getByText(modeCopy.cancelPending.note)).toBeInTheDocument();
+    // Not the red card: nothing failed yet.
+    expect(screen.queryByRole('region', { name: modeCopy.cancelFailed.title })).toBeNull();
+    const turnOn = region(TURN_ON.title);
+    expect(
+      within(turnOn).getByText('지난 실전 주문의 취소가 끝나면 켤 수 있어요'),
+    ).toBeInTheDocument();
+    expect(within(turnOn).getByRole('button', { name: TURN_ON.button })).toBeDisabled();
+  });
+
+  it('words a 409 blocked cancel-pending under the button', async () => {
+    const bundle = {
+      ...modePaper,
+      responses: {
+        ...modePaper.responses,
+        'POST /api/mode/live': {
+          $status: 409,
+          $body: { error: 'blocked', detail: { cause: 'cancel-pending' } },
+        },
+      },
+    } satisfies FixtureBundle;
+    await openMode(bundle);
+    const { user, card } = await fillTurnOn();
+    await user.click(within(card).getByRole('button', { name: TURN_ON.button }));
+    expect(
+      await within(card).findByText('켜지 않았어요 · 취소 중인 주문 있음'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the order on the screen as a pending cancel after 취소 다시 시도', async () => {
+    // 3단계: the retry asks Toss again; until the next check carries it out the order is a
+    // pending cancel (the server's /api/mode says so too).
+    const script = modeOffFailed.responses['/api/mode'];
+    const bundle = {
+      ...modeOffFailed,
+      responses: {
+        ...modeOffFailed.responses,
+        '/api/mode': {
+          ...script,
+          $after: { ...script.$after, cancelPending: [LIVE_PENDING_BUY] },
+        },
+        'POST /api/mode/cancel-retry': { cancelFailed: [], cancelPending: [LIVE_PENDING_BUY] },
+      },
+    } satisfies FixtureBundle;
+    await openMode(bundle);
+    const card = region(modeCopy.cancelFailed.title);
+    await userEvent.click(within(card).getByRole('button', { name: modeCopy.cancelFailed.retry }));
+    expect(
+      await screen.findByRole('region', { name: modeCopy.cancelPending.title }),
+    ).toBeInTheDocument();
+  });
+});

@@ -3,6 +3,7 @@
 import { modeCopy as t } from '../../copy/mode';
 import { healthCopy } from '../../copy/health';
 import { marketName, sideName } from '../../api/adapters';
+import { tossCause } from '../Health/text';
 import type { Instrument, Market, ModeResponse, Order, Stage } from '../../api/types';
 import {
   formatDateTime,
@@ -153,15 +154,24 @@ export function preflightRow(item: Preflight, now: string | null): PreflightRowV
     case 'toss-link': {
       const date = str(f.expiresAt);
       const days = num(f.daysLeft);
-      return {
-        id: item.id,
-        state,
-        name: t.preflight.tossLink,
-        description:
-          date && days !== undefined
-            ? t.preflight.tossLinkLine(formatMonthDay(date), days) + same
-            : t.preflight.blocked + same,
-      };
+      const cause = tossCause(f.cause);
+      const checked = str(f.checkedAt);
+      const account = str(f.account);
+      let description: string;
+      if (!item.ok && cause) {
+        // 3단계: why the link cannot carry orders, and what to do (the to-do card's second line).
+        description = t.preflight.tossLinkCause(
+          healthCopy.toss.cause[cause],
+          healthCopy.toss.lines[cause][1],
+        );
+      } else if (date && days !== undefined) {
+        description = t.preflight.tossLinkLine(formatMonthDay(date), days);
+      } else if (item.ok && account && checked) {
+        description = t.preflight.tossLinkOk(account, atTime(checked, now));
+      } else {
+        description = item.ok ? '' : t.preflight.blocked;
+      }
+      return { id: item.id, state, name: t.preflight.tossLink, description: description + same };
     }
     case 'freshness': {
       if (item.ok) {
@@ -235,6 +245,8 @@ export function blockedLine(m: Mode): string | null {
       return t.turnOn.blockedPreview;
     case 'live-not-available':
       return t.turnOn.blockedNotAvailable;
+    case 'cancel-pending':
+      return t.turnOn.blockedCancelPending;
   }
 }
 
