@@ -236,9 +236,7 @@ class Accounts:
         """The moment `values` are of: now, or the last snapshot's when they come from it. What
         came in after that snapshot is not in its values, so P&L and returns stop there too (else
         a conversion since would show as a gain in one account and a loss in the other)."""
-        if self.ctx.from_snapshot:
-            return self.ctx.snapshots[-1].valued_at
-        return self.ctx.now
+        return self.ctx.as_of
 
     @property
     def rate(self) -> Decimal:

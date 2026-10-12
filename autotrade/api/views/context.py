@@ -235,19 +235,27 @@ class LedgerContext:
 
     @cached_property
     def contributions(self) -> Decimal:
-        """Money in by the moment `total` is of: now, or the last snapshot's when the total comes
-        from it (money that came in after that snapshot is not in its total, so subtracting it
-        would show a deposit as a loss)."""
+        """Money in by `as_of`, the moment `total` is of (money that came in after it is not in
+        the total, so subtracting it would show a deposit as a loss)."""
         if not self.started:
             return self.start_amount
-        if self.valuation is None and self.snapshots:
+        if self.from_snapshot:
             return self.snapshots[-1].contributions
         return repo.load_state(self.conn, self.ledger_id).contributions_krw
 
     @property
     def from_snapshot(self) -> bool:
-        """The stored prices cannot value the ledger now, so its figures are the last snapshot's."""
-        return self.valuation is None and bool(self.snapshots)
+        """Started, but the stored prices cannot value the ledger now (no rate, or no close of a
+        holding): its figures are the last snapshot's. (Before the first snapshot they stay the
+        start amount netted as before, a state the first day can only reach with no data.)"""
+        return self.started and self.valuation is None and bool(self.snapshots)
+
+    @cached_property
+    def as_of(self) -> datetime:
+        """The moment the ledger's figures are of: now, or the last snapshot's while they come
+        from it. Views that net money in or out of a value count it only up to here, so money
+        moved after it never reads as a gain or a loss."""
+        return self.snapshots[-1].valued_at if self.from_snapshot else self.now
 
     @cached_property
     def has_fills(self) -> bool:
@@ -259,6 +267,16 @@ class LedgerContext:
 
     def basis(self) -> dict[str, Any]:
         val = self.valuation
+        if val is None and self.from_snapshot:
+            # The figures are the last snapshot's: so is their basis.
+            last = self.snapshots[-1]
+            return {
+                "valuedAt": fmt.iso(last.valued_at),
+                "krClose": None if last.kr_close_date is None else fmt.day(last.kr_close_date),
+                "usClose": None if last.us_close_date is None else fmt.day(last.us_close_date),
+                "fxRate": fmt.rate(last.fx_rate) if last.fx_rate > 0 else None,
+                "fxAt": fmt.iso(last.fx_at),
+            }
         if val is None:
             return {
                 "valuedAt": fmt.iso(self.valued_at or self.now),

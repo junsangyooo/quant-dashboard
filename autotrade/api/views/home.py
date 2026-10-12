@@ -247,8 +247,10 @@ def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None
         start_value = value_on(ctx, since) or ZERO
         after = since
     deposit = withdrawal = dividend = ZERO
-    for ev in ctx.events:
-        if ev.amount is None or (after is not None and ev.event_date <= after):
+    for ev in ctx.events:  # up to the moment `end` is of (ctx.as_of)
+        if ev.amount is None or ev.occurred_at > ctx.as_of:
+            continue
+        if after is not None and ev.event_date <= after:
             continue
         if ev.kind == "deposit":
             deposit += ev.amount
@@ -260,7 +262,7 @@ def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None
         (
             f.fee_krw
             for f in repo.fills_of_ledger(ctx.conn, ctx.ledger_id)
-            if f.filled_at <= ctx.now and (after is None or kst_date(f.filled_at) > after)
+            if f.filled_at <= ctx.as_of and (after is None or kst_date(f.filled_at) > after)
         ),
         ZERO,
     )
