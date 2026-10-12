@@ -531,6 +531,7 @@ interface HealthResponse {
     id: string
     severity: 'red' | 'yellow'
     kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'order-failed' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings' | 'pin-failures'
+        | 'toss-link' | 'broker-mismatch' | 'fx-manual'   // 3단계 실전 연결(autotrade/PHASE3.md 2.7)
     // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
     facts: Record<string, string | number>      // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' }
@@ -574,7 +575,26 @@ interface HealthResponse {
 //   pin-failures: 빨강, 직접 할 일, 목록 맨 앞 { since, count, lastAt?, closed: 0 | 1 }('PIN 실패 급증': 24시간에 틀린 PIN
 //           10회부터 서버의 unlock·set-pin까지. since = 생긴 시각, count = 그때부터 센 틀린 PIN 수, lastAt = 기록에 남은
 //           마지막 틀린 PIN, closed 1 = 새 로그인이 닫힘(30회)). 헤더 status는 이것도 'todo' 수로 세고, '첫 확인 전'보다 앞선다
+//   toss-link(3단계): { cause: TossLinkCause }. 실전이면 빨강, 아니면 노랑. 사람이 고칠 원인(env-off·no-key·auth·ip·account·
+//           not-tradable·conflict·never·expired)은 직접 할 일, 나머지(unreachable·maintenance·error·old)는 다음 확인(5분 뒤) 자동.
+//           effect 'orders-zero-live-blocked'. 실전이 아니고 켜려는 기미도 없으면(env-off·never) 카드를 만들지 않는다.
+//           mismatch는 이 카드 대신 broker-mismatch가 말한다
+//   broker-mismatch(3단계, 빨강·직접): { reason, instrument?(이름), ledgerQty?, brokerQty?, count?(다른 종목 수), currency? }
+//           reason 'positions' | 'cash'(설명 안 되는 현금 변화, currency) | 'external-fill' | 'fractional' | 'sleeves' | 'other'.
+//           id 'broker-mismatch:order:<id>'는 결과를 가를 수 없는 우리 주문 { reason: 'order-unknown', market, side }.
+//           effect 'orders-zero-live-blocked'(대조가 맞을 때까지 실전 주문 0건)
+//   fx-manual(3단계, 노랑·직접): { direction: 'krw-usd' | 'usd-krw', krw, usd, rate, orderId, by? }(토스 API는 환전을 못 한다:
+//           주인이 토스 앱에서 바꾸면 다음 대조가 그 금액을 환전 주문의 체결로 적고 미국 매수가 이어진다. by = 기다리는 매수 시각)
+//   cancel-failed(3단계 facts): { at(대기 시각), market, side }
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
+//   3단계 실제 연결은 cadence 'per-check'다(토스 API에 키 만료가 없다, PHASE3.md 1.6):
+//   toss-link: state는 tick이 마지막으로 본 토스(fresh | 15분 넘게 못 봄 'late' | 원인이 있으면 'stale' | 아직 모르면 'unknown'),
+//              주인이 알려 준 키 만료일(`AUTOTRADE_TOSS_KEY_EXPIRES`)이 14일 안이면 'late'. basis = 그 만료일(없으면 null),
+//              receivedAt = 마지막 성공, age = 마지막 확인 뒤 ÷ 15분, extra { cause?: TossLinkCause, account?(끝 4자리), daysLeft? }
+//   toss-balance: basis 'match' | 'mismatch' | null(대조 결과), receivedAt = 마지막 대조, age = ÷ 15분
+// type TossLinkCause = 'never' | 'env-off'(주문 실행기에 AUTOTRADE_LIVE_ORDERS 없음) | 'no-key' | 'auth' | 'ip' | 'account'
+//   | 'unreachable' | 'maintenance' | 'error' | 'old'(마지막 확인 15분 넘음) | 'conflict'(다른 프로그램이 같은 키로 토큰을 받음)
+//   | 'not-tradable'(규칙 종목이 거래 안 됨) | 'mismatch'(잔고가 장부와 다름) | 'expired'(알려 준 키 만료일 지남)
 ```
 
 ### `GET /api/mode` — SCR-MODE
@@ -596,7 +616,10 @@ interface ModeResponse {
     baselinePct: number | null
   }
   preflight: null | Array<{ id: 'health' | 'toss-link' | 'freshness' | 'push'; ok: boolean; warn?: boolean; facts: Record<string, string | number>; sameCauseAs?: string }>
-  // facts 키: health ok면 { lastCheckAt }, 아니면 { count, source }(원인 수와 첫 원인의 출처 id) · toss-link { expiresAt, daysLeft }
+  // facts 키: health ok면 { lastCheckAt }, 아니면 { count, source }(원인 수와 첫 원인의 출처 id)
+  //          toss-link ok면 { checkedAt, account }(tick이 마지막으로 본 시각, 계좌 끝 4자리), 아니면 { cause: TossLinkCause };
+  //          주인이 키 만료일을 알려 줬으면 둘 다 { expiresAt, daysLeft }를 더한다. 웹은 서버 cron에 열쇠가 있고(env-off 아님)
+  //          15분 안에 본 결과로만 켤 수 있다: 웹 서비스는 토스를 부르지 않는다
   //          freshness ok면 { balanceAt, priceAt, fxAt }, 아니면 { source, basisDate } · push { devices, lastDelivery }
   preview: null
     | { kind: 'ok'; computedAt: string; hash: string; basis: { balanceAt: string; priceAt: string; fxRate: number; fxAt: string };
@@ -605,7 +628,10 @@ interface ModeResponse {
         stages: Stage[]; outside: Array<{ instrument: Instrument; qty: number; approxKrw: number }> }
     | { kind: 'not-computable'; at: string; cause: 'stale' | 'other' }
   cancelFailed: Order[] | null
-  canTurnOn: { ok: true } | { ok: false; cause: 'checks' | 'preview' | 'live-not-available' }   // 1단계는 항상 live-not-available
+  cancelPending: Order[] | null          // 3단계: 끄기·계획 종료로 토스에 취소를 요청했고 다음 확인(5분 안)이 처리할 주문(실패하면 cancelFailed로)
+  canTurnOn: { ok: true } | { ok: false; cause: 'checks' | 'preview' | 'live-not-available' | 'cancel-pending' }
+  // 1단계는 항상 live-not-available. 3단계: 지난 실전 주문의 취소가 안 끝났으면 'cancel-pending'(점검보다 먼저), 점검 ✕면 'checks',
+  // 첫 주문을 계산할 수 없으면 'preview'
   offPreview: null | {                   // 실전이 켜져 있을 때만: 끄면 취소될 주문과 계좌에 남는 현금(실전 끄기 모달)
     cancel: Order[]                      // 실전 장부의 열린 계획에서 아직 대기 중인 주문
     cash: Array<{ currency: 'KRW'; krw: number } | { currency: 'USD'; usd: number; krw: number }>   // 0보다 큰 현금만. 달러의 krw는 지금 환율로
@@ -645,9 +671,9 @@ type NotifyEvent =
 | `POST /api/auth/logout` | — | 204, 쿠키 지움 |
 | `POST /api/auth/logout-others` | — | 204, 이 세션만 남김 |
 | `POST /api/account/pin` | `{current, next}` | 204, 다른 세션 모두 끊김. 403 `{error:'current-pin'}`(틀린 PIN으로 셈). 이 접속 위치가 잠기면 403 `{error:'locked', until, scope:'ip'}`(1시간 상한과 'hold'는 PIN 바꾸기에 걸지 않는다). 한 세션에서 5회 연속 틀리면 그 세션을 끊고 403 `{error:'session'}`. `next`가 6자리 숫자가 아니면 400 `{error:'invalid-pin'}` |
-| `POST /api/mode/live` | `{pin, confirm:true, previewHash}` | 200 `{mode:'live'}`. 다시 계산한 미리보기 금액이 1% 이상 다르면 409 `{error:'preview-changed', preview}`. 점검 ✕면 409 `{error:'blocked', detail:{cause}}`. **1단계는 항상 409 `{error:'blocked', detail:{cause:'live-not-available'}}`** |
-| `POST /api/mode/paper` | — | 200 `{mode:'paper', cancelFailed: Order[]}` (PIN 없음, 세션만) |
-| `POST /api/mode/cancel-retry` | — | 200 `{cancelFailed: Order[]}` |
+| `POST /api/mode/live` | `{pin, confirm:true, previewHash}` | 200 `{mode:'live'}`. 다시 계산한 미리보기 금액이 1% 이상 다르면 409 `{error:'preview-changed', preview}`. 켤 수 없으면 409 `{error:'blocked', detail:{cause}}`(cause는 `canTurnOn.cause`: 3단계는 'cancel-pending' · 'checks' · 'preview'). 이미 실전이면 200(멱등). **1단계는 항상 409 `{error:'blocked', detail:{cause:'live-not-available'}}`** |
+| `POST /api/mode/paper` | — | 200 `{mode:'paper', cancelFailed: Order[], cancelPending: Order[]}` (PIN 없음, 세션만). 토스에 가지 않은 주문은 바로 취소, 토스에 있는 주문은 취소 요청(다음 확인이 처리: `cancelPending`) |
+| `POST /api/mode/cancel-retry` | — | 200 `{cancelFailed: Order[], cancelPending: Order[]}`(실패한 취소를 다시 요청, 다음 확인이 처리) |
 | `PUT /api/account/notifications` | `{events?: {[id]: boolean}, hideAmounts?}` | 200 `{savedAt}`. 보낸 것만 바뀐다. 없는 id는 400 `{error:'unknown-event', detail:{event}}`, 잠긴 id(check-failed)를 끄면 400 `{error:'locked-event', detail:{event}}` |
 | `POST /api/account/push` | `{subscription}` | 204. **1·2단계는 501 `{error:'not-implemented', detail:{feature:'push'}}`** |
 | `DELETE /api/account/push` | — | 204, 이 기기의 구독을 끊음. **1·2단계는 501(위와 같음)** |
@@ -725,3 +751,4 @@ type NotifyEvent =
 - 2026-10-10: 점검 고침(엔진 세션). 사는 판단도 두 번 묻는다: 사기 확인의 `votes`에 'buy'·'skip'(두 답)을 더했고, 입력 줄에 `filings`(꾸러미의 최근 공시 수)와 분기 발굴이 새로 고른 종목이면 `checks` 대신 `month`가 온다. 분기 발굴 판단의 `action`은 늘 'none'이다(새 종목은 사기 확인 두 번 뒤에 산다). 작동 화면의 ai-cli 줄은 웹 서비스의 환경이 아니라 AI 실행기의 심장 박동을 읽는다: `extra.enabled`는 실행기가 본 값이고 `cli`·`lastRunAt`·`running`·`runningSince`를 더했으며, CLI를 못 찾으면 줄이 'stale'이다. ai-cli 할 일에 빨강 'cli-missing', 노랑 'call-running'·'queue-waiting'(`cause`)을, filings 할 일에 실행기에 DART 키가 없을 때의 state 'no-key'(action 'manual')를 더했다. 헤더 '점검 n'은 실행기가 CLI를 1거래일 넘게 못 찾을 때도 센다.
 - 2026-10-10: 보안 감사 수정(API 세션). 쿠키 이름 `__Host-qsess`(개발용만 Secure 없는 `qsess`). 쓰기 요청의 출처 검사와 403 `origin`. 세션이 필요한 경로는 본문보다 세션을 먼저 본다. 스키마 판이 코드와 다르면 모든 `/api`가 503 `schema {stored, code}`(API는 이전하지 않음, `/api/healthz` 포함), DB를 못 읽으면 어디서나 503 `db`. PIN 잠금: IPv6는 /64로 묶고, 24시간에 10회면 할 일 `pin-failures`('PIN 실패 급증'), 30회면 `scope:'hold'`(서버 `unlock`까지, `since`). PIN 바꾸기에는 접속 위치 잠금만 걸고, 한 세션에서 5회 연속 틀리면 그 세션을 끊는다(403 `session`). 고정 자료 `pin.hold`(그림 없음)를 더했다. 제어 문자·너무 긴 경로는 404 text, 깨진 쿠키는 403 `session`.
 - 2026-10-12: 계좌별 보기와 설정 정리(웹 세션, 주인 요청 '국장과 미장은 엄연히 다른 화폐단위'). `HomeResponse.accounts`(한국 계좌·미국 계좌를 각 통화로: 값·손익·선·구성, 선의 점마다 원금 `netIn`, 30거래일 규칙은 계좌 기록으로, 리밸런싱 표식은 그 계획이 닿은 계좌에만)와 `split`(전체 손익 = 한국 + 미국 원화 환산 + 환율 효과, 원 단위까지 맞음)을 더했다. 환전은 계좌 사이를 옮기는 돈이고 손익이 아니다. '손대지 않았을 때'는 전체에만 둔다. `/api/home/breakdown?account=`(`Breakdown.currency`·`transfer`)를 더했다. 설정의 알림은 `notifications.available`이 false인 동안(1·2단계) 화면이 한 줄로 접는다(API는 그대로). 고정 자료 home.account-kr·home.account-us·home.before-fill·home.us-cash·home.us-empty를 더했다.
+- 2026-10-13: 3단계 실전 연결(토스 세션, autotrade/PHASE3.md). 작동 화면 할 일에 `toss-link`(원인 `TossLinkCause`, 실전이면 빨강, 사람이 고칠 원인만 직접 할 일)·`broker-mismatch`(대조가 맞지 않음: 보유 수량·현금·결과를 모르는 주문, 그동안 실전 주문 0건)·`fx-manual`(토스 앱에서 할 환전: 방향·원화·달러·환율·기다리는 매수 시각)을 더하고 `cancel-failed`의 facts를 정했다. 토스 연결 줄은 'per-check'다(토스 API에 키 만료가 없다): tick이 마지막으로 본 결과, `extra.cause`·`account`, 주인이 알려 준 키 만료일이 있을 때만 basis·`daysLeft`(14일 안이면 'late'). '90d'는 1·2단계 그림의 값으로 남는다. `/api/mode`에 `cancelPending`(토스에 요청한 취소, 다음 확인이 처리)과 `canTurnOn.cause` 'cancel-pending'을, 켜기 전 점검 toss-link의 facts(`checkedAt`·`account` 또는 `cause`)를 더했다. `POST /api/mode/paper`·`/cancel-retry`가 `cancelPending`을 준다. 실전 장부는 계좌별 보기가 읽는 대로 적는다: 계획의 환전은 그 환전 주문의 fx 체결(주문의 `executed_at`은 계좌가 보여 준 시각), 실전 체결 주문의 `executed_at`은 브로커 시각, 대조가 찾은 입·출금·배당은 그 통화의 사건(`occurred_at` = 계좌에서 처음 보인 시각). 달러가 있는 시작과 adopt-broker는 payload `by_currency`(통화마다 들어온 돈, 부호 있음)를, 계획에 없던 환전(주인이 앱에서)은 'conversion' 표시가 붙은 출금·입금 사건 둘을 남기고 계좌별 보기는 이를 계좌 사이의 이동으로 읽는다.
