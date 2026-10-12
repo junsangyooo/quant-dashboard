@@ -61,10 +61,11 @@ def ret(value: Decimal, base: Decimal) -> float:
 
 
 def contributions_by_date(ctx: LedgerContext) -> dict[date, Decimal]:
-    """Net money in per day: start and deposits in, withdrawals out (dividends are income)."""
+    """Net money in per day: start and deposits in, withdrawals out (dividends are income). Only
+    up to `ctx.as_of`, the moment the ledger's figures are of."""
     out: dict[date, Decimal] = {}
     for ev in ctx.events:
-        if ev.amount is None:
+        if ev.amount is None or ev.occurred_at > ctx.as_of:
             continue
         if ev.kind in ("start", "deposit"):
             out[ev.event_date] = out.get(ev.event_date, ZERO) + ev.amount

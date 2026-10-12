@@ -688,3 +688,19 @@ def test_a_deposit_after_the_last_snapshot_is_not_a_loss_while_it_shows(
     assert abs(split["fx"]) < 10_000  # what the rate did, not the deposit
     for acc in home["accounts"]["list"]:
         assert acc["stale"] is True
+    # Its basis is the snapshot's, not this morning's check.
+    assert home["basis"]["valuedAt"] == "2026-07-01T16:00:00+09:00"
+    assert home["basis"]["fxRate"] == float(snap.fx_rate)
+    # Every view nets money in only up to that snapshot, so they agree with the P&L.
+    whole = logged_in.get("/api/home/breakdown").json()
+    assert whole["deposit"] == 0
+    assert whole["end"] - whole["start"] == sum(
+        whole[k] for k in ("deposit", "withdrawal", "market", "dividend", "fees")
+    )
+    assert (
+        whole["end"] - whole["start"] - whole["deposit"] - whole["withdrawal"]
+        == (home["pnl"]["amount"])
+    )
+    history = logged_in.get("/api/history").json()
+    assert history["trend"]["pnl"]["amount"] == home["pnl"]["amount"]
+    assert sum(m["change"] for m in history["months"]) == home["pnl"]["amount"]
