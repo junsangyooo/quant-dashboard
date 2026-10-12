@@ -715,12 +715,124 @@ CREATE TABLE ai_runner (
 )
 """
 
+# V6: phase 3, live orders through Toss (autotrade/PHASE3.md).
+# - broker_status: one row, what the tick last saw of the Toss link. The web service cannot reach
+#   Toss (sandbox), so the mode and health screens read this.
+# - broker_snapshots: what the account held when the tick looked (cash = buying power per
+#   currency, holdings, the closed orders read with it); the reconciliation and the live preview
+#   start from it. A tick that finds the same account only moves confirmed_at.
+# - broker_orders: the broker side of each live order: the client order id (idempotency key),
+#   the broker's order id and status, the fill as the broker reported it, cancel requests.
+#   The intent row is committed before the order is sent.
+# - external_fills: fills and conversions in the account that the engine did not send (the
+#   owner's trades in the Toss app, conversions); 'ledger' ones are part of the live ledger.
+# - live_previews: the first-order previews shown on the mode screen, by hash (turning live on
+#   compares the approved one with a fresh one).
+V6 = """
+CREATE TABLE broker_status (
+    id                INTEGER PRIMARY KEY CHECK (id = 1),
+    state             TEXT NOT NULL CHECK (state IN ('ok', 'off', 'no-key', 'auth', 'ip',
+                                                     'account', 'unreachable', 'maintenance',
+                                                     'error')),
+    env_live          INTEGER NOT NULL DEFAULT 0,
+    checked_at        TEXT NOT NULL,
+    ok_at             TEXT,
+    account_seq       INTEGER,
+    account_tail      TEXT,
+    tradable          TEXT NOT NULL DEFAULT '{}',
+    tradable_at       TEXT,
+    commissions       TEXT NOT NULL DEFAULT '{}',
+    revoked           INTEGER NOT NULL DEFAULT 0,
+    revoked_at        TEXT,
+    key_expires       TEXT,
+    detail            TEXT,
+    reconcile_state   TEXT CHECK (reconcile_state IN ('match', 'mismatch', 'busy')),
+    reconciled_at     TEXT,
+    reconcile_detail  TEXT NOT NULL DEFAULT '{}',
+    updated_at        TEXT NOT NULL
+);
+
+CREATE TABLE broker_snapshots (
+    snapshot_id     INTEGER PRIMARY KEY,
+    taken_at        TEXT NOT NULL,
+    confirmed_at    TEXT NOT NULL,
+    cash_krw        TEXT NOT NULL,
+    cash_usd        TEXT NOT NULL,
+    holdings        TEXT NOT NULL,
+    closed_orders   TEXT NOT NULL DEFAULT '[]',
+    quiet           INTEGER NOT NULL
+);
+CREATE INDEX broker_snapshots_time ON broker_snapshots(taken_at);
+
+CREATE TABLE broker_orders (
+    order_id             INTEGER PRIMARY KEY REFERENCES orders(order_id),
+    ledger_id            TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    client_order_id      TEXT NOT NULL UNIQUE,
+    broker_order_id      TEXT UNIQUE,
+    state                TEXT NOT NULL CHECK (state IN ('sending', 'sent', 'unknown', 'done',
+                                                        'rejected', 'not-sent')),
+    request              TEXT NOT NULL DEFAULT '{}',
+    sent_at              TEXT,
+    status               TEXT,
+    filled_qty           TEXT,
+    filled_amount        TEXT,
+    avg_price            TEXT,
+    commission           TEXT,
+    tax                  TEXT,
+    filled_at            TEXT,
+    settlement_date      TEXT,
+    error_code           TEXT,
+    error_detail         TEXT,
+    retry_after          TEXT,
+    cancel_state         TEXT CHECK (cancel_state IN ('requested', 'failed', 'done')),
+    cancel_requested_at  TEXT,
+    cancel_error         TEXT,
+    cancel_attempts      INTEGER NOT NULL DEFAULT 0,
+    updated_at           TEXT NOT NULL
+);
+CREATE INDEX broker_orders_state ON broker_orders(ledger_id, state);
+
+CREATE TABLE external_fills (
+    ext_id           INTEGER PRIMARY KEY,
+    ledger_id        TEXT NOT NULL REFERENCES ledgers(ledger_id),
+    broker_order_id  TEXT UNIQUE,
+    kind             TEXT NOT NULL CHECK (kind IN ('trade', 'fx')),
+    treatment        TEXT NOT NULL CHECK (treatment IN ('ledger', 'outside')),
+    instrument_id    TEXT,
+    symbol           TEXT,
+    name             TEXT,
+    side             TEXT NOT NULL,
+    currency         TEXT NOT NULL CHECK (currency IN ('KRW', 'USD')),
+    qty              INTEGER,
+    gross            TEXT NOT NULL,
+    fee              TEXT NOT NULL,
+    fee_krw          TEXT NOT NULL,
+    krw_rate         TEXT,
+    received         TEXT,
+    filled_at        TEXT NOT NULL,
+    settlement_date  TEXT,
+    event_id         INTEGER,
+    recorded_at      TEXT NOT NULL
+);
+CREATE INDEX external_fills_ledger ON external_fills(ledger_id, filled_at);
+
+CREATE TABLE live_previews (
+    hash         TEXT PRIMARY KEY,
+    computed_at  TEXT NOT NULL,
+    snapshot_id  INTEGER,
+    total_krw    TEXT NOT NULL,
+    signature    TEXT NOT NULL,
+    payload      TEXT NOT NULL
+)
+"""
+
 MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (1, "initial schema", V1),
     (2, "pin, sessions, lockout, notification preferences", V2),
     (3, "event refs, todo resolutions, dividends, baseline dividend cash", V3),
     (4, "the AI rule: shares, sleeves, picks, metrics, filings, AI tasks and calls", V4),
     (5, "the AI runner: source tries, kept answers, heartbeat", V5),
+    (6, "live orders: Toss link, account snapshots, broker orders, external fills", V6),
 )
 LATEST_VERSION = MIGRATIONS[-1][0]  # the schema this code reads and writes
 
