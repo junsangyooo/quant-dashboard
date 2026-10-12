@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from autotrade.api.views import fmt
+from autotrade.api.views.accounts import Accounts, home_accounts
 from autotrade.api.views.context import CompRow, LedgerContext, event_krw
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import (
@@ -200,6 +201,7 @@ def trend(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
 
 def home(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
     stale = ["hero", "plan", "composition"] if ctx.stale_series else []
+    ledger_pnl = pnl(ctx)
     return {
         "ledger": ctx.ledger_id,
         "example": False,
@@ -207,7 +209,7 @@ def home(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
         "basis": ctx.basis(),
         "stale": stale,
         "total": fmt.krw(ctx.total),
-        "pnl": pnl(ctx),
+        "pnl": ledger_pnl,
         "baseline": baseline(ctx),
         "planChip": {
             "ruleId": ctx.rule.rule_id,
@@ -217,14 +219,22 @@ def home(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
         "trend": trend(ctx, period),
         "planCard": plan_card(ctx),
         "composition": composition(ctx),
+        # 한국 계좌 · 미국 계좌 in their own money, and the split of the won P&L (accounts.py).
+        "accounts": home_accounts(
+            ctx, period, None if ledger_pnl is None else ledger_pnl["amount"]
+        ),
     }
 
 
-def breakdown(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
+def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None) -> dict[str, Any]:
     """Change over the period split into money in/out, market, dividends and fees.
 
     Every part is signed (withdrawals and fees are negative), so they add up to end - start.
+    With `account` ('kr' | 'us') it is that account's change in its own currency, conversions
+    included as money in or out (accounts.py).
     """
+    if account is not None:
+        return Accounts(ctx).breakdown(account, period)
     long = long_record(ctx)
     chosen = period if (long and period in HOME_PERIODS) else "all"
     since = period_start(chosen, ctx.today, ctx.start_date)

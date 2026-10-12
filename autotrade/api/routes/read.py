@@ -62,9 +62,10 @@ def breakdown(
     request: Request,
     ledger: LedgerParam | None = None,
     period: Literal["1m", "3m", "1y", "all"] | None = None,
+    account: Literal["kr", "us"] | None = None,
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
-    return home_view.breakdown(context(request, conn, ledger), period)
+    return home_view.breakdown(context(request, conn, ledger), period, account)
 
 
 @router.get("/plan")
