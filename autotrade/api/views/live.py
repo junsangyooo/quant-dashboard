@@ -44,7 +44,9 @@ def link_source(conn: sqlite3.Connection, cfg: Config, now: datetime) -> dict[st
     status = live_repo.get_status(conn)
     on = live.mode_of(conn) == live.LIVE
     if check.ok:
-        state = "fresh"
+        # A key the owner said expires within two weeks reads 'late' ('만료 12일 전').
+        soon = check.days_left is not None and check.days_left <= KEY_EXPIRY_WARN_DAYS
+        state = "late" if soon else "fresh"
     elif check.cause == "old":
         state = "late"
     elif check.cause in ("env-off", "never") and not on:
@@ -102,6 +104,14 @@ def _instruments(conn: sqlite3.Connection) -> dict[str, Instrument]:
     return dict(live.rule_instruments(conn))
 
 
+def _name(conn: sqlite3.Connection, instrument_id: str) -> str:
+    """The display name of an instrument the to-do names (its id when the rules never had it)."""
+    try:
+        return repo.get_instrument(conn, instrument_id).name
+    except repo.NotFoundError:
+        return instrument_id
+
+
 def order_of(conn: sqlite3.Connection, order_id: int) -> dict[str, Any]:
     """One live order as CONTRACT Order (approximate until it fills)."""
     order = repo.get_order(conn, order_id)
@@ -137,6 +147,8 @@ def _link_todo(
         return None
     if check.cause in ("env-off", "never") and not on:
         return None
+    if check.cause == "mismatch":
+        return None  # the broker-mismatch card says it, with what differs
     manual = check.cause in MANUAL_CAUSES
     return {
         "id": "toss-link",
@@ -146,7 +158,7 @@ def _link_todo(
         "action": {"kind": "manual"}
         if manual
         else {"kind": "auto-retry", "at": fmt.iso(now + TICK)},
-        "effect": "orders-and-reconcile-stop",
+        "effect": "orders-zero-live-blocked",  # no live order goes while it lasts
     }
 
 
@@ -181,12 +193,14 @@ def todos(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[dict[str
             first = positions[0]
             facts.update(
                 {
-                    "instrument": str(first.get("instrument_id")),
+                    "instrument": _name(conn, str(first.get("instrument_id"))),
                     "ledgerQty": str(first.get("ledger")),
                     "brokerQty": str(first.get("broker")),
                     "count": len(positions),
                 }
             )
+        elif detail.get("instrument_id"):
+            facts["instrument"] = _name(conn, str(detail["instrument_id"]))
         if detail.get("currency"):
             facts["currency"] = str(detail["currency"])
         out.append(

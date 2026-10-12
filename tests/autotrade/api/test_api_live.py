@@ -189,7 +189,7 @@ def test_turning_off_cancels_at_the_broker_through_the_tick(lw: Live, web: TestC
     assert todo["facts"] == {"at": "2026-07-01T09:05:00+09:00", "market": "KR", "side": "buy"}
     mode = web.get("/api/mode").json()
     assert [o["status"] for o in mode["cancelFailed"]] == ["pending"]
-    assert mode["canTurnOn"]["ok"] is False
+    assert mode["canTurnOn"] == {"ok": False, "cause": "cancel-pending"}
     assert mode["liveOff"] == {
         "from": "2026-06-30",
         "to": "2026-07-01",
@@ -252,12 +252,14 @@ def test_a_mismatch_is_a_red_manual_todo(lw: Live, web: TestClient) -> None:
     todo = next(t for t in health["todos"] if t["kind"] == "broker-mismatch")
     assert todo["facts"] == {
         "reason": "positions",
-        "instrument": "KR:069500",
+        "instrument": "KOSPI200 ETF",
         "ledgerQty": "0",
         "brokerQty": "3",
         "count": 1,
     }
     assert todo["effect"] == "orders-zero-live-blocked"
+    # One card for one cause: the link's own to-do does not repeat the mismatch.
+    assert [t["kind"] for t in health["todos"]] == ["broker-mismatch"]
     source = next(s for s in health["sources"] if s["id"] == "toss-balance")
     assert (source["state"], source["basis"]) == ("stale", "mismatch")
     assert web.get("/api/shell").json()["status"]["kind"] == "todo"
@@ -273,4 +275,4 @@ def test_the_key_expiry_warns_when_the_owner_gave_it(lw: Live, web: TestClient) 
     todo = next(t for t in health["todos"] if t["kind"] == "toss-expiring")
     assert todo["facts"] == {"expiresAt": "2026-07-10", "daysLeft": 10}
     link = next(s for s in health["sources"] if s["id"] == "toss-link")
-    assert (link["basis"], link["extra"]["daysLeft"]) == ("2026-07-10", 10)
+    assert (link["state"], link["basis"], link["extra"]["daysLeft"]) == ("late", "2026-07-10", 10)

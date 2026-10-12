@@ -23,6 +23,7 @@ from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import long_record
 from autotrade.config import Config
 from autotrade.db import live_repo, repo
+from autotrade.db.connection import transaction
 from autotrade.domain.instruments import Currency, Instrument, Kind, Market
 from autotrade.domain.money import usd_in_krw
 from autotrade.domain.planner import Plan, StageKind
@@ -289,12 +290,14 @@ def checks(paper: LedgerContext, now: datetime) -> Checks:
         fresh["sameCauseAs"] = "health"
     push = {"id": "push", "ok": True, "warn": True, "facts": {"devices": 0}}
     preflight = [health, link, fresh, push]
-    if any(not r["ok"] for r in preflight):
-        can: dict[str, Any] = {"ok": False, "cause": "checks"}
+    if live.cancel_failed(conn) or live.cancel_pending(conn):
+        # An order of the last live period may still fill: its cancel must finish first (the
+        # open order also keeps the account busy, so the freshness row fails with it).
+        can: dict[str, Any] = {"ok": False, "cause": "cancel-pending"}
+    elif any(not r["ok"] for r in preflight):
+        can = {"ok": False, "cause": "checks"}
     elif isinstance(data, NotComputable):
         can = {"ok": False, "cause": "preview"}
-    elif live.cancel_failed(conn) or live.cancel_pending(conn):
-        can = {"ok": False, "cause": "checks"}  # an order of the last live period is still open
     else:
         can = {"ok": True}
     return Checks(preflight, data, can)
@@ -349,8 +352,6 @@ def mode(ctx: LedgerContext) -> dict[str, Any]:
         out["preview"] = preview_json(found.preview)
         out["canTurnOn"] = found.can_turn_on
         if isinstance(found.preview, PreviewData):
-            from autotrade.db.connection import transaction
-
             with transaction(conn):
                 store(conn, found.preview, out["preview"])
     return out
