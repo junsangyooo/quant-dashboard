@@ -1,9 +1,11 @@
-"""Executors: one engine, two executors (paper now, Toss in phase 3).
+"""Executors: one engine, two executors (paper, and Toss for the live ledger).
 
 An executor turns one order into an outcome: filled, still waiting for its price, or failed.
 It never touches the ledger; the stage runner applies outcomes.
 
-Live orders need both AUTOTRADE_LIVE_ORDERS=1 and the stored mode 'live' (ops notes 안전).
+Live orders need both AUTOTRADE_LIVE_ORDERS=1 and the stored mode 'live' (ops notes 안전). The
+Toss executor (autotrade/broker/toss.py) only reads what the tick's Toss sync recorded; sending
+happens there, behind both keys (autotrade/PHASE3.md 2.3).
 """
 
 from __future__ import annotations
@@ -60,6 +62,7 @@ class TradeFilled:
     gross: Decimal
     fee: Decimal
     price_source: str
+    filled_at: datetime | None = None  # live: the broker's time (paper: the stage time)
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class FxFilled:
     to_amount: Decimal
     rate: Decimal
     price_source: str
+    filled_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -105,13 +109,13 @@ def live_orders_allowed(mode: str, env: Mapping[str, str] | None = None) -> bool
     return mode == "live" and source.get(LIVE_ENV) == "1"
 
 
-def executor_for(ledger_id: str, paper: Executor) -> Executor:
-    """Phase 1 runs the paper ledger only; the live ledger has no executor yet."""
+def executor_for(ledger_id: str, paper: Executor, live: Executor | None = None) -> Executor:
+    """The paper ledger's executor, or the live ledger's (Toss)."""
     if ledger_id == "paper":
         return paper
-    raise LiveOrdersBlockedError(
-        f"ledger {ledger_id!r} has no executor in phase 1 (Toss comes in phase 3)"
-    )
+    if ledger_id == "live" and live is not None:
+        return live
+    raise LiveOrdersBlockedError(f"ledger {ledger_id!r} has no executor")
 
 
 SIDE_FOR_STAGE: Mapping[str, Side] = {"sell": Side.SELL, "buy": Side.BUY, "fx": Side.FX}

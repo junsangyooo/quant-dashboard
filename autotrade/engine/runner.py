@@ -35,8 +35,12 @@ from autotrade.domain.money import ZERO
 from autotrade.domain.planner import FxDirection, Side
 from autotrade.domain.stages import StageMarket
 from autotrade.engine import sleeves
-from autotrade.engine.check import idem_key
-from autotrade.engine.common import refresh_cash_parts, slotter_for, withdraw_wait_amounts
+from autotrade.engine.common import (
+    idem_key,
+    refresh_cash_parts,
+    slotter_for,
+    withdraw_wait_amounts,
+)
 from autotrade.market.calendar import KRX, calendar_for
 from autotrade.market.service import FetchErrors
 from autotrade.timeutil import et_date, kst_date
@@ -153,7 +157,7 @@ def _apply_trade_fill(
     stage: StageRow,
     order: OrderRow,
     filled: TradeFilled,
-    executor: Executor,
+    executor_name: str,
     at: datetime,
 ) -> dict[str, Any]:
     if order.instrument_id is None:
@@ -175,6 +179,7 @@ def _apply_trade_fill(
         price=filled.price,
         fee=filled.fee,
         krw_rate=krw_rate,
+        gross_amount=filled.gross,
     )
     state = apply_trade(repo.load_state(conn, ledger_id), fill)
     repo.save_state(conn, ledger_id, state, at)
@@ -197,12 +202,12 @@ def _apply_trade_fill(
             fee_krw=fee_krw,
             krw_rate=krw_rate,
             received=None,
-            filled_at=stage.due_at,
+            filled_at=filled.filled_at or stage.due_at,
             price_source=filled.price_source,
-            executor=executor.name,
+            executor=executor_name,
         ),
     )
-    repo.mark_order_filled(conn, order.order_id, executor.name, at)
+    repo.mark_order_filled(conn, order.order_id, executor_name, at)
     return {
         "order_id": order.order_id,
         "outcome": "filled",
@@ -222,7 +227,7 @@ def _apply_fx_fill(
     stage: StageRow,
     order: OrderRow,
     filled: FxFilled,
-    executor: Executor,
+    executor_name: str,
     at: datetime,
 ) -> dict[str, Any]:
     if order.fx_direction is None:
@@ -249,12 +254,12 @@ def _apply_fx_fill(
             fee_krw=ZERO,
             krw_rate=filled.rate,
             received=filled.to_amount,
-            filled_at=stage.due_at,
+            filled_at=filled.filled_at or stage.due_at,
             price_source=filled.price_source,
-            executor=executor.name,
+            executor=executor_name,
         ),
     )
-    repo.mark_order_filled(conn, order.order_id, executor.name, at)
+    repo.mark_order_filled(conn, order.order_id, executor_name, at)
     return {
         "order_id": order.order_id,
         "outcome": "filled",
@@ -437,11 +442,11 @@ def execute_stage(
         outcome = _execute(conn, cfg, ledger_id, stage, order, at, executor, fetch)
         if isinstance(outcome, TradeFilled):
             result.orders.append(
-                _apply_trade_fill(conn, ledger_id, plan, stage, order, outcome, executor, at)
+                _apply_trade_fill(conn, ledger_id, plan, stage, order, outcome, executor.name, at)
             )
         elif isinstance(outcome, FxFilled):
             result.orders.append(
-                _apply_fx_fill(conn, ledger_id, stage, order, outcome, executor, at)
+                _apply_fx_fill(conn, ledger_id, stage, order, outcome, executor.name, at)
             )
         elif isinstance(outcome, Waiting):
             waiting = True
@@ -486,3 +491,37 @@ def run_due_stages(
         stage = due[0]
         tried.add(stage.stage_id)
         results.append(execute_stage(conn, cfg, ledger_id, stage, at, executor, errors))
+
+
+def book_fill(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    ledger_id: str,
+    order: OrderRow,
+    filled: TradeFilled | FxFilled,
+    executor_name: str,
+    at: datetime,
+) -> dict[str, Any] | None:
+    """Book a fill the broker reported for `order` outside the stage loop: a conversion the
+    reconciliation saw in the balances, or a fill that came after its plan was closed (live off,
+    a resolved to-do). Once per order (fills.order_id is unique): None when already booked.
+    A stage whose orders are all settled then completes as usual."""
+    if repo.fill_of_order(conn, order.order_id) is not None:
+        return None
+    plan = repo.get_plan(conn, order.plan_id)
+    stage = repo.get_stage(conn, order.stage_id)
+    if isinstance(filled, FxFilled):
+        out = _apply_fx_fill(conn, ledger_id, stage, order, filled, executor_name, at)
+    else:
+        out = _apply_trade_fill(conn, ledger_id, plan, stage, order, filled, executor_name, at)
+    if (
+        stage.status == PENDING
+        and stage.due_at <= at
+        and not repo.orders_of_stage(conn, stage.stage_id, [PENDING])
+    ):
+        done = {s.seq for s in repo.stages_of(conn, stage.plan_id) if s.status == DONE}
+        if all(dep in done for dep in stage.depends_on):
+            _complete_stage(conn, cfg, stage, at)
+        # otherwise the runner completes it in its turn (its earlier stages first)
+    refresh_cash_parts(conn, ledger_id, at)
+    return out

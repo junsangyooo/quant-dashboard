@@ -73,15 +73,11 @@ def test_failure_exit_code(tmp_path: Path, world: World) -> None:
     assert out["result"] == "failed"
 
 
-def test_live_ledger_is_refused(
-    tmp_path: Path, world: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_the_live_ledger_does_nothing_while_the_mode_is_paper(tmp_path: Path, world: World) -> None:
     code, out = run(
         ["check", "--ledger", "live", "--at", "2026-07-01T08:30"], world, tmp_path / "b.db"
     )
-    assert code == 2
-    assert out == {}
-    assert "ledger-blocked" in capsys.readouterr().err
+    assert (code, out["result"], out.get("run_id")) == (0, "not-live", None)
 
 
 def test_clock_defaults_to_now(tmp_path: Path, world: World) -> None:

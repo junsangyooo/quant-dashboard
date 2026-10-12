@@ -760,6 +760,14 @@ def mark_order_failed(
     )
 
 
+def cancel_order(conn: sqlite3.Connection, order_id: int) -> None:
+    """Cancel one order that has not been sent (or that ended at the broker with nothing)."""
+    conn.execute(
+        "UPDATE orders SET status = 'cancelled' WHERE order_id = ? AND status = 'pending'",
+        (order_id,),
+    )
+
+
 def cancel_orders_of_stage(conn: sqlite3.Connection, stage_id: int) -> None:
     conn.execute(
         "UPDATE orders SET status = 'cancelled' WHERE stage_id = ? AND status = 'pending'",
@@ -872,6 +880,11 @@ def fills_of_plan(conn: sqlite3.Connection, plan_id: int) -> list[FillRow]:
             (plan_id,),
         )
     ]
+
+
+def fill_of_order(conn: sqlite3.Connection, order_id: int) -> FillRow | None:
+    row = _one(conn, "SELECT * FROM fills WHERE order_id = ?", (order_id,))
+    return None if row is None else FillRow.from_row(row)
 
 
 # ── events ───────────────────────────────────────────────────────────────────────────────

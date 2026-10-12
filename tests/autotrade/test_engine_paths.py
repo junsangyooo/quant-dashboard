@@ -191,6 +191,10 @@ def test_check_edge_cases(ctx: JobContext, conn: sqlite3.Connection, world: Worl
     late = check_job(ctx, "paper", kst("2026-07-01 09:45"))
     assert late["result"] == "todo"
     # No start amount configured: a configuration error, raised (the job records it as a crash).
+    with transaction(conn):  # the live ledger's check waits for the live mode
+        assert run_check(conn, ctx.cfg, "live", kst("2026-07-01 10:00")).result == "not-live"
+    with transaction(conn):
+        repo.set_setting(conn, "mode", "live", kst("2026-07-01 10:00"))
     with pytest.raises(CheckFailedError, match="no start amount"), transaction(conn):
         run_check(conn, ctx.cfg, "live", kst("2026-07-01 10:00"), fetch=FetchErrors())
 

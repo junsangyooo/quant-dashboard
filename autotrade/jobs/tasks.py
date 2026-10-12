@@ -17,6 +17,8 @@ from typing import Any
 
 from autotrade.broker.base import Executor, executor_for
 from autotrade.broker.paper import DbMarketReader, PaperExecutor
+from autotrade.broker.toss import TossExecutor
+from autotrade.broker.toss_api import Transport
 from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.db.connection import transaction
@@ -54,10 +56,15 @@ class JobContext:
     cfg: Config
     sources: MarketSources
     clock: Callable[[], float] = field(default=time.monotonic)
+    # The live ledger (PHASE3.md): how the tick reaches Toss (tests pass a fake), the wall clock
+    # its orders are stamped with (None: the job's time), and how it waits on rate limits.
+    toss_transport: Transport | None = None
+    wall: Callable[[], datetime] | None = None
+    sleep: Callable[[float], None] = field(default=time.sleep)
 
     def executor(self, ledger_id: str) -> Executor:
         paper = PaperExecutor(DbMarketReader(self.conn), self.cfg.fees, self.cfg.fx_fill_max_age)
-        return executor_for(ledger_id, paper)
+        return executor_for(ledger_id, paper, TossExecutor(self.conn))
 
 
 def _rule_instruments(conn: sqlite3.Connection) -> list[Instrument]:
@@ -192,6 +199,8 @@ def stage_job(
     due = [s for s in repo.pending_stages(ctx.conn, ledger_id) if s.due_at <= at]
     if not due:
         return {**base, "result": "nothing-due"}
+    if _live_wait(ctx, ledger_id, at):
+        return {**base, "result": "quiet"}
     errors = FetchErrors()
     sessions: dict[str, set[date]] = {}
     fx_times: set[datetime] = set()
@@ -246,6 +255,28 @@ def stage_job(
             "error": _record_crash(ctx, ledger_id, "stage", d, at, exc, 1),
         }
     return {**base, "result": result, "stages": [r.__dict__ for r in results]}
+
+
+def _live_wait(ctx: JobContext, ledger_id: str, at: datetime) -> bool:
+    """A live stage pass that can only wait: every due order is open at the broker (the Toss
+    sync reads it) or is a conversion the owner has not made. Nothing would change, so the pass
+    is skipped and not logged; a manual conversion that waits hours would otherwise write a run
+    every 5 minutes."""
+    if ledger_id != "live":
+        return False
+    from autotrade.db import live_repo
+    from autotrade.engine.runner import eligible_stages
+
+    for stage in eligible_stages(ctx.conn, ledger_id, at):
+        for order in repo.orders_of_stage(ctx.conn, stage.stage_id, ["pending"]):
+            if order.side == "fx":
+                if stage.status != "pending":
+                    return False
+                continue
+            row = live_repo.get_broker_order(ctx.conn, order.order_id)
+            if row is None or not row.open:
+                return False
+    return True
 
 
 def snapshot_job(
@@ -428,5 +459,21 @@ def ai_retry_job(
     return {**base, **outcome}
 
 
+def adopt_job(
+    ctx: JobContext, at: datetime, *, note: str | None, dry_run: bool = False
+) -> dict[str, Any]:
+    """`adopt-broker`: make the live ledger the account's after a mismatch the owner checked
+    (engine/live.py adopt_broker). Uses the latest snapshot; run `broker` first if it is old."""
+    from autotrade.engine import live
+
+    require_aware(at)
+    base: dict[str, Any] = {"job": "adopt-broker", "ledger": "live", "at": at, "dry_run": dry_run}
+    with transaction(ctx.conn, rollback=dry_run):
+        outcome = live.adopt_broker(ctx.conn, ctx.cfg, at, note)
+        if outcome.get("result") == "adopted":
+            live.reconcile(ctx.conn, ctx.cfg, at)  # the status shows the match at once
+    return {**base, **outcome}
+
+
 # Results that make the CLI exit with 1 ('failed', a manual action, a todo that cannot be closed).
-FAILING_RESULTS = (FAILED, TODO, "bad-id", "not-found", "not-a-todo")
+FAILING_RESULTS = (FAILED, TODO, "bad-id", "not-found", "not-a-todo", "busy", "refused", "mismatch")

@@ -95,6 +95,9 @@ class PlanInput:
     free_usd: Decimal
     fees: FeeRates
     fx_step_krw: Decimal = Decimal("1000")
+    # Live (PHASE3.md 2.4): the owner converts by hand, so the plan asks only for what the cash
+    # already in the target currency does not cover. Paper keeps its dollars as a buffer (4.).
+    net_free_cash: bool = False
 
     def __post_init__(self) -> None:
         total = sum((it.target for it in self.items), ZERO)
@@ -209,16 +212,18 @@ def _cash_need(
             usd_short -= net
 
     fx: FxOrder | None = None
-    if usd_short > 0:
-        from_krw = fx_krw_needed(usd_short, rate, inp.fx_step_krw)
+    usd_need = usd_short - (inp.free_usd if inp.net_free_cash else ZERO)
+    krw_need = krw_short - (inp.free_krw if inp.net_free_cash else ZERO)
+    if usd_short > 0 and usd_need > 0:
+        from_krw = fx_krw_needed(usd_need, rate, inp.fx_step_krw)
         to_usd = krw_to_usd(from_krw, rate)
         funds = tuple(i for i in buys if items[i].instrument.currency is Currency.USD)
         fx = FxOrder(FxDirection.KRW_TO_USD, from_krw, rate, to_usd, funds)
         krw_short += from_krw
         usd_short -= to_usd
-    elif krw_short > 0 and usd_short < 0:
+    elif krw_need > 0 and usd_short < 0:
         # Dollars from US sells pay for Korean buys: convert what the buys need.
-        to_krw_target = ceil_to_step(krw_short, inp.fx_step_krw)
+        to_krw_target = ceil_to_step(krw_need, inp.fx_step_krw)
         from_usd = ceil_cents(to_krw_target / rate)
         to_krw = usd_to_krw(from_usd, rate)
         funds = tuple(i for i in buys if items[i].instrument.currency is Currency.KRW)

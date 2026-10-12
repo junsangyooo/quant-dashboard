@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from autotrade.config import Config
@@ -21,6 +21,12 @@ from autotrade.rules.model import RuleDef
 
 PAPER = "paper"
 LIVE = "live"
+
+
+def idem_key(
+    ledger_id: str, d: date, rule_id: str, stage: str, market: str, target: str, attempt: int
+) -> str:
+    return f"{ledger_id}:{d.isoformat()}:{rule_id}:{stage}:{market}:{target}:a{attempt}"
 
 
 def slotter_for(cfg: Config) -> Slotter:

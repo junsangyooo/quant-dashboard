@@ -72,10 +72,13 @@ class TradeFill:
     price: Decimal
     fee: Decimal  # instrument currency
     krw_rate: Decimal | None = None  # US trades: rate used for the won cost basis
+    # The broker's total for the fill (live). Its average price times the quantity need not be
+    # exact (several partial fills), and the account's cash moves by this total.
+    gross_amount: Decimal | None = None
 
     @property
     def gross(self) -> Decimal:
-        return self.price * self.qty
+        return self.price * self.qty if self.gross_amount is None else self.gross_amount
 
     def to_krw(self, amount: Decimal) -> Decimal:
         if self.currency is Currency.KRW:
@@ -99,6 +102,23 @@ def _with_cash(state: LedgerState, currency: Currency, delta: Decimal) -> dict[C
     if cash[currency] < 0:
         raise LedgerError(f"{currency.value} cash would go negative: {cash[currency]}")
     return cash
+
+
+def opening_state(
+    cash: Mapping[Currency, Decimal],
+    positions: Mapping[str, Position],
+    contributions_krw: Decimal,
+) -> LedgerState:
+    """A ledger that starts from an account as it is (the live ledger, PHASE3.md 2.6): its cash
+    and the positions it adopts. What it holds is its contribution, so it starts at no gain."""
+    if any(v < 0 for v in cash.values()):
+        raise LedgerError("opening cash must not be negative")
+    if any(p.qty <= 0 for p in positions.values()):
+        raise LedgerError("opening positions must hold shares")
+    if contributions_krw <= 0:
+        raise LedgerError("an opening must bring something in")
+    full = {c: cash.get(c, ZERO) for c in Currency}
+    return LedgerState(cash=full, positions=dict(positions), contributions_krw=contributions_krw)
 
 
 def apply_cash_flow(

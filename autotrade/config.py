@@ -25,6 +25,17 @@ The AI runner (phase 2) reads these on every run:
                                 (on the server: /home/ubuntu/dotclaude/secrets/.env). The tick
                                 and the AI runner both need it: the watch lists Korean filings,
                                 the runner reads their texts. Neither passes it to the CLI.
+
+Live orders (phase 3, autotrade/PHASE3.md) — read by the tick only:
+
+  AUTOTRADE_LIVE_ORDERS         '1' = this process may use the Toss account: it reads the account
+                                and, while the stored mode is 'live', sends orders (the first of
+                                the two keys, ops notes 안전). Without it the tick never calls Toss.
+                                The Toss keys (TOSS_CLIENT_ID, TOSS_CLIENT_SECRET,
+                                TOSS_ACCOUNT_NO) are read from the AUTOTRADE_SECRETS_ENV file
+                                only, one line each, never from the environment.
+  AUTOTRADE_TOSS_KEY_EXPIRES    YYYY-MM-DD, the Toss client key's expiry if WTS shows one (the API
+                                has none: PHASE3.md 1.6); the health screen warns 14 days before
 """
 
 from __future__ import annotations
@@ -106,6 +117,30 @@ class Config:
     # US stocks (D36): 22% on the year's foreign gains above the 2,500,000 won deduction.
     us_gains_tax: Decimal = Decimal("0.22")
     us_gains_deduction: Decimal = Decimal("2500000")
+    # Live orders (phase 3, PHASE3.md 2.3-2.5).
+    live_orders: bool = False  # AUTOTRADE_LIVE_ORDERS=1, the first key
+    secrets_env: Path | None = None  # AUTOTRADE_SECRETS_ENV: the Toss keys are read from it
+    toss_key_expires: date | None = None  # AUTOTRADE_TOSS_KEY_EXPIRES
+    # A limit order's cap over the current price (buys) or under it (sells); fills are at market.
+    live_limit_slippage: Decimal = Decimal("0.005")
+    # Orders at or above this (won; dollars valued in won) are not sent: Toss asks a separate
+    # confirmation from 100,000,000 won, which the engine never gives (a manual action instead).
+    live_max_order_krw: Decimal = Decimal("100000000")
+    # How old the account snapshot and the Toss check may be for the check, the preview and
+    # turning live on.
+    broker_max_age: timedelta = timedelta(minutes=15)
+    # A won and a dollar change in opposite directions is a conversion when its rate is within
+    # this of the market rate (the owner converts in the app, PHASE3.md 2.4).
+    live_fx_tolerance: Decimal = Decimal("0.03")
+    # A broker order whose outcome is unknown is sent again with the same client order id only
+    # within this time; Toss keeps the key 10 minutes (PHASE3.md 1.7).
+    resend_window: timedelta = timedelta(minutes=9)
+
+    @property
+    def toss_dir(self) -> Path:
+        """Where the tick keeps the Toss token: 0700, ignored by version control, hidden from the
+        web service (deploy/autotrade.service InaccessiblePaths)."""
+        return self.db_path.parent / "autotrade-toss"
 
 
 def parse_shares(text: str) -> dict[str, Decimal]:
@@ -150,6 +185,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     if dart is None and secrets_file:
         dart = read_env_key(Path(secrets_file), "DART_API_KEY")
     budget = source.get("AUTOTRADE_AI_BUDGET")
+    expires = source.get("AUTOTRADE_TOSS_KEY_EXPIRES")
     return Config(
         db_path=Path(db) if db else cfg.db_path,
         paper_start_date=date.fromisoformat(start_date) if start_date else None,
@@ -160,4 +196,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         claude_bin=source.get("AUTOTRADE_CLAUDE_BIN") or None,
         ai_monthly_budget=int(budget) if budget else cfg.ai_monthly_budget,
         dart_api_key=dart,
+        live_orders=source.get("AUTOTRADE_LIVE_ORDERS") == "1",
+        secrets_env=Path(secrets_file) if secrets_file else None,
+        toss_key_expires=date.fromisoformat(expires) if expires else None,
     )

@@ -10,6 +10,8 @@ from typing import Any
 
 from autotrade.db.connection import loads
 from autotrade.domain.instruments import Currency, Instrument, Kind, Market
+from autotrade.domain.ledger import TradeFill
+from autotrade.domain.planner import Side
 from autotrade.market.types import Bar, FxQuote
 from autotrade.timeutil import from_iso
 
@@ -289,6 +291,24 @@ class FillRow:
             filled_at=from_iso(str(row["filled_at"])),
             price_source=str(row["price_source"]),
             executor=str(row["executor"]),
+        )
+
+    def trade(self) -> TradeFill:
+        """The trade this fill records, with its stored total (a live fill's gross is the
+        broker's, which its average price times the quantity need not give exactly)."""
+        if self.kind != "trade" or self.instrument_id is None or self.qty is None:
+            raise ValueError(f"fill {self.fill_id}: not a trade")
+        if self.price is None:
+            raise ValueError(f"fill {self.fill_id}: incomplete trade")
+        return TradeFill(
+            instrument_id=self.instrument_id,
+            currency=self.currency,
+            side=Side(self.side),
+            qty=self.qty,
+            price=self.price,
+            fee=self.fee,
+            krw_rate=self.krw_rate,
+            gross_amount=self.gross,
         )
 
 

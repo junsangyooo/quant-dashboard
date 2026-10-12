@@ -13,7 +13,7 @@ from decimal import Decimal
 from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.domain.instruments import Currency
-from autotrade.domain.ledger import LedgerState, TradeFill, apply_trade
+from autotrade.domain.ledger import LedgerState, apply_trade
 from autotrade.domain.planner import Side
 from autotrade.domain.tax import SoldLot, TaxNumbers, numbers, realized_in
 from autotrade.timeutil import kst_date
@@ -27,15 +27,7 @@ def sold_lots(conn: sqlite3.Connection, ledger_id: str) -> list[SoldLot]:
             continue
         if fill.price is None:
             continue
-        trade = TradeFill(
-            fill.instrument_id,
-            fill.currency,
-            Side(fill.side),
-            fill.qty,
-            fill.price,
-            fill.fee,
-            fill.krw_rate,
-        )
+        trade = fill.trade()
         if trade.side is Side.SELL and fill.currency is Currency.USD:
             before = state.positions[fill.instrument_id]
             after = apply_trade(state, trade)

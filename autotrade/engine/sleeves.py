@@ -44,7 +44,7 @@ from autotrade.domain.ledger import (
     same_to_the_won,
 )
 from autotrade.domain.money import CENT, WON, ZERO, usd_in_krw
-from autotrade.domain.planner import FxDirection, Side
+from autotrade.domain.planner import FxDirection
 from autotrade.timeutil import et_date, kst_date
 
 BASE_RULE = "index_half"
@@ -109,15 +109,7 @@ def own_book(fills: Iterable[FillRow]) -> OwnBook:
             continue
         if fill.price is None or fill.instrument_id in gaps:
             continue
-        trade = TradeFill(
-            fill.instrument_id,
-            fill.currency,
-            Side(fill.side),
-            fill.qty,
-            fill.price,
-            fill.fee,
-            fill.krw_rate,
-        )
+        trade = fill.trade()
         try:
             state = apply_trade(state, trade)
         except LedgerError:
@@ -313,18 +305,7 @@ def rebuild_sleeve(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> Le
             continue
         if item.instrument_id is None or item.qty is None or item.price is None:
             raise ValueError(f"fill {item.fill_id}: incomplete trade")
-        state = apply_trade(
-            state,
-            TradeFill(
-                instrument_id=item.instrument_id,
-                currency=item.currency,
-                side=Side(item.side),
-                qty=item.qty,
-                price=item.price,
-                fee=item.fee,
-                krw_rate=item.krw_rate,
-            ),
-        )
+        state = apply_trade(state, item.trade())
     return state
 
 

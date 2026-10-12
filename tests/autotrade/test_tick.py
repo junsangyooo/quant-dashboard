@@ -388,12 +388,10 @@ def test_a_broken_task_is_logged_and_the_tick_goes_on(
     ]
 
 
-def test_a_ledger_without_an_executor_cannot_tick(
-    world: World, db: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_the_live_ledger_ticks_quietly_until_it_matters(world: World, db: Path) -> None:
+    # No AUTOTRADE_LIVE_ORDERS, never started, mode paper: Toss is never called, nothing logged.
     code, lines = tick(world, db, "2026-07-01T08:30", ledger="live")
-    assert (code, lines) == (2, [])
-    assert "ledger-blocked" in capsys.readouterr().err
+    assert (code, lines) == (0, [])
 
 
 def test_the_crontab_block(tmp_path: Path) -> None:

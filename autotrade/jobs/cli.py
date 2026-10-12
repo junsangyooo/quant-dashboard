@@ -1,10 +1,11 @@
 """python -m autotrade.jobs <command> [options]
 
-Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, ai-retry),
---predeploy (backup, migrate).
+Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, --db PATH,
+--note TEXT (resolve, ai-retry, adopt-broker), --predeploy (backup, migrate).
 
   tick       what cron runs every 5 minutes: decides what is due now and runs it (see
-             autotrade/jobs/schedule.py for the times and how late each may still run).
+             autotrade/jobs/schedule.py for the times and how late each may still run), for the
+             paper ledger, then the live ledger (autotrade/PHASE3.md 2.8), then the backup.
              One JSON line per task that ran; nothing when nothing is due.
   check      08:30 weekdays: data, weights, plan (sell -> FX -> buy)
   retry      09:30: runs the check again only if today's check failed or did not run
@@ -28,7 +29,16 @@ Options: --ledger paper, --dry-run, --at ISO, --db PATH, --note TEXT (resolve, a
              again, unless --ask-again). `resolve ai-cli:failed:<id>` gives it up instead
   todos      list the open '직접 할 일' (manual actions) with their ids
   resolve    resolve <todo-id> [--note TEXT]: close a manual action after handling it (e.g. in
-             the Toss app); the rule plans again at the next check
+             the Toss app); the rule plans again at the next check. `fx-manual:<order id>`
+             closes a conversion the owner will not make: the buys use the cash there is
+  broker     the live ledger's Toss sync once (what the tick runs; only with
+             AUTOTRADE_LIVE_ORDERS=1, it reads the account and sends due live orders)
+  reconcile  match the live ledger with the latest account snapshot
+  toss-check read the Toss account once and print what the engine relies on (token, account,
+             cash, holdings, commissions, whether 069500 and SPYM trade, calendars, rate).
+             Reads only; never orders. Needs AUTOTRADE_SECRETS_ENV (PHASE3.md 5)
+  adopt-broker  --note TEXT: after a mismatch the owner checked, make the live ledger's holdings
+             and cash the account's (the difference is booked as money in or out)
   status     read-only summary
   migrate    create or upgrade data/autotrade.db and write its fixed rows (deploy.sh runs it);
              the only command that changes the schema. The file is made 0600 (and -wal/-shm).
@@ -75,10 +85,12 @@ from autotrade.db.migrations import LATEST_VERSION, current_version, stored_vers
 from autotrade.engine.bootstrap import bootstrap
 from autotrade.jobs.ai_tasks import ai_job, plan_job, watch_job
 from autotrade.jobs.backup import BackupError, backup_dir_for, run_predeploy_backup
+from autotrade.jobs.live_tasks import broker_job, reconcile_job, toss_check
 from autotrade.jobs.lock import ai_lock_path, job_lock, lock_path
 from autotrade.jobs.tasks import (
     FAILING_RESULTS,
     JobContext,
+    adopt_job,
     ai_retry_job,
     backup_job,
     check_job,
@@ -89,7 +101,7 @@ from autotrade.jobs.tasks import (
     status_job,
     todos_job,
 )
-from autotrade.jobs.tick import run_tick
+from autotrade.jobs.tick import run_all, run_tick
 from autotrade.market.service import MarketSources, default_sources
 from autotrade.timeutil import KST, UTC, parse_cli_time
 
@@ -112,6 +124,10 @@ COMMANDS = (
     "set-pin",
     "unlock",
     "dev-seed",
+    "broker",
+    "reconcile",
+    "toss-check",
+    "adopt-broker",
 )
 LOCKED = (
     "tick",
@@ -125,6 +141,10 @@ LOCKED = (
     "ai-plan",
     "resolve",
     "ai-retry",
+    "broker",
+    "reconcile",
+    "toss-check",
+    "adopt-broker",
 )
 LOCK_WAIT_S = 120.0
 MIGRATE_AI_WAIT_S = 900.0  # an AI call has no time limit (as the rollback, api/release.py)
@@ -146,7 +166,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("command", choices=COMMANDS)
     parser.add_argument("todo_id", nargs="?", help="resolve, ai-retry: the id that 'todos' lists")
-    parser.add_argument("--ledger", default="paper", choices=("paper", "live"))
+    parser.add_argument(
+        "--ledger", choices=("paper", "live"), help="default paper; tick runs both when omitted"
+    )
     parser.add_argument("--dry-run", action="store_true", help="roll back every ledger change")
     parser.add_argument("--at", help="clock for testing, ISO 8601 (KST when no offset)")
     parser.add_argument("--db", help="database path (default: AUTOTRADE_DB or data/autotrade.db)")
@@ -247,7 +269,7 @@ def _dispatch(
     stdin: TextIO,
 ) -> dict[str, Any]:
     at = clock()
-    ledger, dry = args.ledger, args.dry_run
+    ledger, dry = args.ledger or "paper", args.dry_run
     if args.command == "migrate":
         report: dict[str, Any] = {
             "job": "migrate",
@@ -282,6 +304,14 @@ def _dispatch(
         return plan_job(ctx, ledger, at, dry_run=dry)
     if args.command == "todos":
         return todos_job(ctx, ledger, at)
+    if args.command == "broker":
+        return broker_job(ctx.conn, ctx.cfg, at, transport=ctx.toss_transport, now=ctx.wall)
+    if args.command == "reconcile":
+        return reconcile_job(ctx.conn, ctx.cfg, at, dry_run=dry)
+    if args.command == "toss-check":
+        return toss_check(ctx.cfg, ctx.conn, transport=ctx.toss_transport)
+    if args.command == "adopt-broker":
+        return adopt_job(ctx, at, note=args.note, dry_run=dry)
     if args.command in TAKES_ID and not args.todo_id:
         error = f"give the todo id: {args.command} <id>"
         return {"job": args.command, "result": "bad-id", "error": error}
@@ -300,13 +330,17 @@ def _tick(
     clock: Callable[[], datetime],
     out: Callable[[str], Any],
 ) -> int:
-    ctx.executor(args.ledger)  # a ledger without an executor cannot tick (exit 2)
+    ctx.executor(args.ledger or "paper")  # a ledger without an executor cannot tick (exit 2)
 
     def emit(line: dict[str, Any]) -> None:
         out(_dump(line, line=True))
         sys.stdout.flush()  # each line reaches the log even if the tick is killed later
 
-    lines = run_tick(ctx, args.ledger, clock, backup_dir_for(ctx.cfg.db_path), emit)
+    backup_dir = backup_dir_for(ctx.cfg.db_path)
+    if args.ledger is None:
+        lines = run_all(ctx, clock, backup_dir, emit)
+    else:
+        lines = run_tick(ctx, args.ledger, clock, backup_dir, emit)
     return 1 if any(line.get("result") in FAILING_RESULTS for line in lines) else 0
 
 
@@ -419,6 +453,8 @@ def main(
         parser.error("--predeploy is only for backup and migrate")
     if args.ask_again and args.command != "ai-retry":
         parser.error("--ask-again is only for ai-retry")
+    if args.command == "adopt-broker" and not args.note:
+        parser.error("adopt-broker needs --note (what you checked in the Toss app)")
     if args.command != "dev-seed" and (args.pin is not None or args.world is not None):
         # The owner PIN of a real ledger comes from standard input only (set-pin).
         parser.error("--pin and --world are only for dev-seed")

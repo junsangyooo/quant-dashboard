@@ -6,6 +6,8 @@
 2. Holidays per market: the check runs when one market is closed; that market's orders roll to its
    next session, and a plan whose first stage cannot run today is not made today ('holiday').
 3. A pending withdrawal means 0 orders.
+   The live ledger first matches the Toss account (engine/live.py reconcile, PHASE3.md 2.5):
+   an account it cannot read as the truth, or that does not match, fails the check (0 orders).
 4-5. In-rule weights and drift; a plan to target when the band is exceeded or free cash can buy.
 6. Stages sell -> FX -> buy with their times.
 8. One plan per rule per day (UNIQUE) and one order per idempotency key: running the same check
@@ -31,10 +33,11 @@ from autotrade.domain.ledger import CashFlowKind, apply_cash_flow
 from autotrade.domain.planner import Plan, PlanInput, PlanItem, StageKind, plan_rule
 from autotrade.domain.stages import StageMarket, schedule, stage_specs
 from autotrade.domain.weights import DriftReport
-from autotrade.engine import sleeves
-from autotrade.engine.bootstrap import start_amount_key, start_date_key
+from autotrade.engine import live, sleeves
+from autotrade.engine.bootstrap import MODE, start_amount_key, start_date_key
 from autotrade.engine.common import (
     buy_wait_krw,
+    idem_key,
     load_rule,
     refresh_cash_parts,
     slotter_for,
@@ -66,6 +69,7 @@ ALREADY_PLANNED = "already-planned"
 FAILED = "failed"
 WEEKEND = "weekend"
 NOT_STARTED = "not-started"
+NOT_LIVE = "not-live"  # the live ledger's check while the mode is paper: nothing runs
 
 
 class CheckFailedError(RuntimeError):
@@ -79,12 +83,6 @@ class CheckOutcome:
     plan_id: int | None
     error: str | None
     details: dict[str, Any] = field(default_factory=dict)
-
-
-def idem_key(
-    ledger_id: str, d: date, rule_id: str, stage: str, market: str, target: str, attempt: int
-) -> str:
-    return f"{ledger_id}:{d.isoformat()}:{rule_id}:{stage}:{market}:{target}:a{attempt}"
 
 
 def ensure_started(conn: sqlite3.Connection, ledger_id: str, d: date, at: datetime) -> bool:
@@ -406,6 +404,15 @@ def _check_body(
         details["stale"] = stale
         return QUOTE_WAIT, None
 
+    open_plans = repo.open_plans(conn, ledger_id, rule.rule_id)
+    if ledger_id == live.LIVE:
+        # The account is the truth: match it before anything is weighed (PHASE3.md 2.5).
+        outcome = live.reconcile(conn, cfg, at)
+        details["reconcile"] = {"state": outcome.state, "reason": outcome.reason}
+        if not outcome.ok and not open_plans:
+            kind = "mismatch" if outcome.state == "mismatch" else "broker"
+            raise CheckFailedError(f"{kind}: {outcome.reason}")
+
     # 2-4. Weights on what the rule holds, cash waiting to buy included.
     released = repo.expire_withdraw_waits(conn, ledger_id, d)
     if released:  # a withdrawal that did not come: its cash is free again
@@ -430,7 +437,6 @@ def _check_body(
             )
         )
 
-    open_plans = repo.open_plans(conn, ledger_id, rule.rule_id)
     free_krw = state.cash_of(Currency.KRW) - held.get(Currency.KRW, Decimal(0))
     free_usd = state.cash_of(Currency.USD) - held.get(Currency.USD, Decimal(0))
     if open_plans:
@@ -445,6 +451,8 @@ def _check_body(
             free_usd=max(free_usd, Decimal(0)),
             fees=cfg.fees,
             fx_step_krw=cfg.fx_step_krw,
+            # Live conversions are the owner's (PHASE3.md 2.4): ask only for what is missing.
+            net_free_cash=ledger_id == live.LIVE,
         )
     )
     details["drift"] = _report_json(plan.report)
@@ -508,6 +516,8 @@ def run_check(
     d = kst_date(at)
     if not is_weekday(d):
         return CheckOutcome(WEEKEND, None, None, None)
+    if ledger_id == live.LIVE and (repo.get_setting(conn, MODE) or "paper") != live.LIVE:
+        return CheckOutcome(NOT_LIVE, None, None, None)
     if not ensure_started(conn, ledger_id, d, at):
         return CheckOutcome(NOT_STARTED, None, None, None)
     started = clock()
