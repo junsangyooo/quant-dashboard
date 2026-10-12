@@ -14,6 +14,12 @@ Money into an account ('net in', in its currency)
 - A conversion moves money between the two accounts: won → dollars takes the won it cost out of
   한국 계좌 and puts the dollars it bought into 미국 계좌; dollars → won the other way. It is a
   transfer, never a gain or a loss of either account.
+- The live ledger (engine/live.py) records the same way: what the reconciliation finds coming in
+  or going out is a deposit or withdrawal event in its own currency, dated when it arrived; a
+  conversion a plan asked for (made by the owner in the Toss app) is the fx fill of its fx order.
+  Two cases have no paper twin: a start or adopt-broker that moved both currencies carries each
+  one's amount ('by_currency'), and a conversion no plan asked for is two events (out of one
+  currency, into the other) marked 'conversion', read here as a transfer.
 - Dividends (after tax), fees and taxes are not money in: they stay in the value of the account of
   their currency, so they are that account's P&L.
 - A fill counts from the moment the ledger took it: its order's execution time, which a snapshot
@@ -56,10 +62,11 @@ from autotrade.api.views.context import CompRow, LedgerContext, event_kind
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import MARKER_KINDS, MIN_RECORD_DAYS, period_start
 from autotrade.db import repo
-from autotrade.db.models import FillRow, OrderRow, SnapshotRow
+from autotrade.db.models import EventRow, FillRow, OrderRow, SnapshotRow
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, round_won
 from autotrade.domain.planner import FxDirection
+from autotrade.engine.live import CONVERSION
 from autotrade.rules.discovery import RULE_ID as AI_RULE
 
 ACCOUNTS: tuple[tuple[str, Currency], ...] = (("kr", Currency.KRW), ("us", Currency.USD))
@@ -91,6 +98,19 @@ class Point:
     snapshot: SnapshotRow
     value: Decimal
     net_in: Decimal
+
+
+def start_split(ev: EventRow) -> dict[Currency, Decimal] | None:
+    """The amount per currency of a live start or adopt-broker event that moved both (payload
+    'by_currency', signed: what came in), else None."""
+    split = ev.payload.get("by_currency")
+    if not isinstance(split, dict):
+        return None
+    return {Currency(str(k)): Decimal(str(v)) for k, v in split.items()}
+
+
+def _in_or_out(amount: Decimal) -> str:
+    return "deposit" if amount >= 0 else "withdrawal"
 
 
 def amount_of(currency: Currency, x: Decimal) -> int | float:
@@ -145,8 +165,19 @@ class Accounts:
         for ev in self.ctx.events:
             if ev.amount is None or ev.kind not in ("start", "deposit", "withdrawal"):
                 continue
+            split = start_split(ev)
+            if split is not None:
+                # A live start or adopt-broker that moved both currencies carries each
+                # currency's own amount, signed (engine/live.py).
+                for currency, amount in split.items():
+                    kind = ev.kind if ev.kind == "start" else _in_or_out(amount)
+                    out.append(Flow(ev.occurred_at, currency, amount, kind))
+                continue
             sign = -1 if ev.kind == "withdrawal" else 1
-            out.append(Flow(ev.occurred_at, ev.currency or Currency.KRW, sign * ev.amount, ev.kind))
+            # A conversion no plan asked for (the owner's, in the Toss app) is two events, one
+            # per currency: a transfer between the accounts like an fx fill, not money in or out.
+            kind = "transfer" if ev.payload.get("reason") == CONVERSION else ev.kind
+            out.append(Flow(ev.occurred_at, ev.currency or Currency.KRW, sign * ev.amount, kind))
         for applied, f in self.fills:
             if f.kind != "fx" or f.fx_direction is None or f.received is None:
                 continue
@@ -446,7 +477,10 @@ class Accounts:
             # From the start: 한국 계좌 began with the start amount (not a deposit), 미국 계좌 with
             # nothing (its dollars came by conversions).
             start_value = ZERO
-            if ctx.start is not None and (ctx.start.currency or Currency.KRW) is currency:
+            split = None if ctx.start is None else start_split(ctx.start)
+            if split is not None:  # a live start with dollars: each account its own part
+                start_value = split.get(currency, ZERO)
+            elif ctx.start is not None and (ctx.start.currency or Currency.KRW) is currency:
                 start_value = ctx.start_amount
             from_day = ctx.start_date
         else:

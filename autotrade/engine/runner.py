@@ -207,7 +207,8 @@ def _apply_trade_fill(
             executor=executor_name,
         ),
     )
-    repo.mark_order_filled(conn, order.order_id, executor_name, at)
+    # Live: the broker's time (paper has none: the time the runner took it).
+    repo.mark_order_filled(conn, order.order_id, executor_name, filled.filled_at or at)
     return {
         "order_id": order.order_id,
         "outcome": "filled",
@@ -259,7 +260,8 @@ def _apply_fx_fill(
             executor=executor_name,
         ),
     )
-    repo.mark_order_filled(conn, order.order_id, executor_name, at)
+    # Live: the broker's time (paper has none: the time the runner took it).
+    repo.mark_order_filled(conn, order.order_id, executor_name, filled.filled_at or at)
     return {
         "order_id": order.order_id,
         "outcome": "filled",

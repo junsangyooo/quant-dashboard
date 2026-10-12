@@ -17,7 +17,7 @@ from typing import Any
 
 from autotrade.config import Config
 from autotrade.db import repo
-from autotrade.db.models import SnapshotRow
+from autotrade.db.models import EventRow, SnapshotRow
 from autotrade.domain import baseline
 from autotrade.domain.cash import CashPart
 from autotrade.domain.dividends import after_tax
@@ -169,13 +169,27 @@ def _baseline(
     targets = {t.instrument_id: t.weight for t in rule.targets}
     for ev in repo.events_of_ledger(conn, ledger_id, ["deposit", "withdrawal"]):
         if since < ev.event_date <= d and ev.amount is not None:
-            change = baseline.units_for_amount(ev.amount, targets, unit_prices)
+            if ev.payload.get("reason") == "conversion":
+                continue  # the owner's own conversion (engine/live.py): no money came or went
+            change = baseline.units_for_amount(_won(ev), targets, unit_prices)
             units = baseline.add_units(units, change, 1 if ev.kind == "deposit" else -1)
     cash += _baseline_dividends(
         conn, cfg, ledger_id, rule, instruments, start.event_date, start.amount, since, d, fx_rate
     )
     value = baseline.value_krw(units, unit_prices) + cash
     return value, {k: str(v) for k, v in units.items()}, cash
+
+
+def _won(ev: EventRow) -> Decimal:
+    """A deposit or withdrawal in won: a live dollar one carries the won it was booked at."""
+    amount = ev.amount or ZERO
+    if ev.currency is not Currency.USD:
+        return amount
+    krw = ev.payload.get("amount_krw")
+    if krw is not None:
+        return Decimal(str(krw))
+    rate = ev.payload.get("krw_rate")
+    return ZERO if rate is None else usd_in_krw(amount, Decimal(str(rate)))
 
 
 def take_snapshot(

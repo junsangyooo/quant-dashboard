@@ -41,12 +41,10 @@ from autotrade.domain.dividends import after_tax
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.ledger import (
     CashFlowKind,
-    FxFill,
     LedgerError,
     Position,
     TradeFill,
     apply_cash_flow,
-    apply_fx,
     apply_trade,
     opening_state,
 )
@@ -77,6 +75,9 @@ DIVIDEND_WINDOW_AFTER = timedelta(days=3)  # an estimated pay date can be early
 DIVIDEND_MIN_SHARE = Decimal("0.5")  # cash of at least half the expected net is that dividend
 WITHDRAW_TRADING_DAYS = 2  # 인계 5: settlement date + 2 business days
 KEY_EXPIRY_WARN_DAYS = 14
+# The payload reason of the two events a conversion no plan asked for makes (api/views/accounts.py
+# reads them as a transfer between the accounts, not money in or out).
+CONVERSION = "conversion"
 
 
 # ── the start ────────────────────────────────────────────────────────────────────────────
@@ -104,6 +105,14 @@ class Opening:
     contributions_krw: Decimal
     rate: Decimal | None
     outside: list[BrokerHolding]
+
+    def by_currency(self) -> dict[Currency, Decimal]:
+        """The start in each currency: its cash and its holdings at their start value (won for
+        한국 계좌, dollars for 미국 계좌: api/views/accounts.py)."""
+        out = dict(self.cash)
+        for p in self.positions.values():
+            out[p.currency] = out.get(p.currency, ZERO) + p.cost_native
+        return out
 
 
 def opening_from(
@@ -187,6 +196,11 @@ def start_live(
     }
     if opening.rate is not None:
         payload["krw_rate"] = opening.rate
+    split = opening.by_currency()
+    if split.get(Currency.USD, ZERO) > 0:
+        # The start is in won (the ledger's start amount); the accounts need what each currency
+        # brought: 한국 계좌 its won, 미국 계좌 its dollars (api/views/accounts.py Accounts.flows).
+        payload["by_currency"] = {c.value: split.get(c, ZERO) for c in Currency}
     event_id = repo.insert_event(
         conn,
         ledger_id=LIVE,
@@ -355,20 +369,33 @@ def _reconcile_body(
     state = repo.load_state(conn, LIVE)
     residual = {c: snap.cash_of(c) - state.cash_of(c) for c in Currency}
     residual = _book_conversion(conn, cfg, at, snap, residual, result)
+    seen_at = snap.taken_at  # the best-known time the money arrived or left
     for currency in Currency:
         amount = residual[currency]
         if amount > 0:
-            amount = _book_dividends(conn, cfg, at, currency, amount, started_at, result)
+            amount = _book_dividends(conn, cfg, at, currency, amount, started_at, result, seen_at)
         if amount > 0:
             event_id = _flow(
-                conn, at, CashFlowKind.DEPOSIT, amount, currency, {"reason": "unexplained-in"}
+                conn,
+                at,
+                CashFlowKind.DEPOSIT,
+                amount,
+                currency,
+                {"reason": "unexplained-in"},
+                occurred_at=seen_at,
             )
             result.booked.append(
                 {"deposit": str(amount), "currency": currency.value, "event_id": event_id}
             )
         elif amount < 0:
             event_id = _flow(
-                conn, at, CashFlowKind.WITHDRAWAL, -amount, currency, {"reason": "unexplained-out"}
+                conn,
+                at,
+                CashFlowKind.WITHDRAWAL,
+                -amount,
+                currency,
+                {"reason": "unexplained-out"},
+                occurred_at=seen_at,
             )
             _consume_withdraw_waits(conn, currency, -amount, at)
             result.booked.append(
@@ -497,6 +524,7 @@ def _book_external_trade(
             currency,
             {"reason": "outside-buy", "instrument_id": iid, "broker_order_id": order.order_id},
             rate=rate,
+            occurred_at=when,
         )
         _consume_withdraw_waits(conn, currency, gross + fee, at)
     else:
@@ -508,6 +536,7 @@ def _book_external_trade(
             currency,
             {"reason": "outside-sell", "instrument_id": iid, "broker_order_id": order.order_id},
             rate=rate,
+            occurred_at=when,
         )
         until = withdraw_until(order.settlement_date, kst_date(when))
         repo.add_withdraw_wait(conn, LIVE, currency, gross - fee, until, at)
@@ -550,10 +579,14 @@ def _flow(
     extra: dict[str, Any],
     *,
     rate: Decimal | None = None,
+    occurred_at: datetime | None = None,
 ) -> int:
-    """A deposit or withdrawal the account shows (an event, as the screens list them)."""
+    """A deposit or withdrawal the account shows (an event, as the screens list them), in its
+    own currency, at the best-known time the money moved (`occurred_at`: the fill's time for a
+    trade in the app, else the account snapshot that first showed it); booked at `at`."""
+    when = occurred_at or at
     if currency is Currency.USD and rate is None:
-        rate = _rate(conn, at, at)
+        rate = _rate(conn, when, at)
     try:
         state = apply_cash_flow(repo.load_state(conn, LIVE), kind, amount, currency, rate)
     except LedgerError as exc:
@@ -569,8 +602,8 @@ def _flow(
         conn,
         ledger_id=LIVE,
         kind=kind.value,
-        event_date=kst_date(at),
-        occurred_at=at,
+        event_date=kst_date(when),
+        occurred_at=when,
         amount=amount,
         currency=currency,
         payload=payload,
@@ -622,8 +655,12 @@ def _book_conversion(
     result: ReconcileResult,
 ) -> dict[Currency, Decimal]:
     """Won and dollars that moved in opposite directions at about the market rate: the owner
-    converted in the app (PHASE3.md 2.4). The conversion the plan waits for gets it as its
-    fill; one nobody asked for is kept with the account's other outside fills."""
+    converted in the app (PHASE3.md 2.4). The conversion the plan waits for gets it as its fill
+    (an fx fill of its fx order, executed at the snapshot that showed it: exactly a paper
+    conversion). One no plan asked for is the owner's money moving between the two accounts:
+    a withdrawal from the source currency and a deposit into the target one, at the rate it
+    was made (so the ledger's P&L moves as for a fill), marked as a conversion (a fill needs an
+    order of a plan, and Toss's API never converts for an order of ours, PHASE3.md 1.1)."""
     krw, usd = residual[Currency.KRW], residual[Currency.USD]
     if not ((krw < 0 < usd) or (usd < 0 < krw)):
         return residual
@@ -659,33 +696,40 @@ def _book_conversion(
             }
         )
     else:
-        state = apply_fx(repo.load_state(conn, LIVE), FxFill(direction, source, target, rate))
-        repo.save_state(conn, LIVE, state, at)
-        live_repo.insert_external(
+        extra: dict[str, Any] = {
+            "reason": CONVERSION,
+            "direction": direction.value,
+            "from": source,
+            "to": target,
+            "rate": rate,
+        }
+        out_id = _flow(
             conn,
-            NewExternalFill(
-                ledger_id=LIVE,
-                broker_order_id=None,
-                kind="fx",
-                treatment="ledger",
-                instrument_id=None,
-                symbol=None,
-                name=None,
-                side=direction.value,
-                currency=direction.source,
-                qty=None,
-                gross=source,
-                fee=ZERO,
-                fee_krw=ZERO,
-                krw_rate=rate,
-                received=target,
-                filled_at=when,
-                settlement_date=None,
-            ),
             at,
+            CashFlowKind.WITHDRAWAL,
+            source,
+            direction.source,
+            extra,
+            rate=rate if direction.source is Currency.USD else None,
+            occurred_at=when,
+        )
+        in_id = _flow(
+            conn,
+            at,
+            CashFlowKind.DEPOSIT,
+            target,
+            direction.target,
+            extra,
+            rate=rate if direction.target is Currency.USD else None,
+            occurred_at=when,
         )
         result.booked.append(
-            {"conversion": direction.value, "from": str(source), "to": str(target)}
+            {
+                "conversion": direction.value,
+                "from": str(source),
+                "to": str(target),
+                "event_ids": [out_id, in_id],
+            }
         )
     return {Currency.KRW: ZERO, Currency.USD: ZERO}
 
@@ -735,10 +779,12 @@ def _book_dividends(
     amount: Decimal,
     started_at: datetime,
     result: ReconcileResult,
+    seen: datetime,
 ) -> Decimal:
     """Unexplained cash of `currency` that a dividend the ledger is owed explains. The broker's
     amount is what counts (taxes withheld differ from the 15.4% estimate on Korean ETFs); the
-    estimate only tells a dividend from a deposit. Returns what is left."""
+    estimate only tells a dividend from a deposit. Dated `seen`, the snapshot that showed it.
+    Returns what is left."""
     left = amount
     for due in due_dividends(conn, cfg, at, kst_date(started_at)):
         if due.inst.currency is not currency or left <= 0:
@@ -746,7 +792,7 @@ def _book_dividends(
         if left < due.net * DIVIDEND_MIN_SHARE:
             continue
         booked = min(left, due.gross)
-        rate = _rate(conn, at, at) if currency is Currency.USD else None
+        rate = _rate(conn, seen, at) if currency is Currency.USD else None
         state = apply_cash_flow(
             repo.load_state(conn, LIVE), CashFlowKind.DIVIDEND, booked, currency, rate
         )
@@ -770,8 +816,8 @@ def _book_dividends(
             conn,
             ledger_id=LIVE,
             kind="dividend",
-            event_date=kst_date(at),
-            occurred_at=at,
+            event_date=kst_date(seen),
+            occurred_at=seen,
             rule_id=RULE_ID if due.inst.instrument_id in rule_ids else None,
             amount=booked,
             currency=currency,
@@ -832,6 +878,7 @@ def adopt_broker(
     changes: list[dict[str, Any]] = []
     positions = dict(state.positions)
     value_in = ZERO
+    by_currency = dict.fromkeys(Currency, ZERO)  # money in per account, in its currency
     for iid in sorted(own):
         inst = instruments[iid]
         held = broker.get(iid)
@@ -873,6 +920,7 @@ def adopt_broker(
                 round_won(old.cost_krw * keep),
             )
         value_in += value_krw if delta > 0 else -value_krw
+        by_currency[inst.currency] += value if delta > 0 else -value
         changes.append({"instrument_id": iid, "from": old_qty, "to": new_qty, "krw": value_krw})
     cash_changes: dict[str, str] = {}
     new_cash = dict(state.cash)
@@ -887,6 +935,7 @@ def adopt_broker(
                 return {"result": "refused", "reason": "no rate"}
             diff_krw = usd_in_krw(diff, rate)
         value_in += diff_krw
+        by_currency[currency] += diff
         cash_changes[currency.value] = str(diff)
     if not changes and not cash_changes:
         return {"result": "nothing-to-adopt"}
@@ -900,24 +949,28 @@ def adopt_broker(
     )
     repo.save_state(conn, LIVE, adopted, at)
     kind = "deposit" if value_in >= 0 else "withdrawal"
+    payload: dict[str, Any] = {
+        "source": "adopt-broker",
+        "adopt": {
+            "positions": changes,
+            "cash": cash_changes,
+            "state": _state_json(adopted),
+        },
+        "note": note,
+        "snapshot_id": snap.snapshot_id,
+    }
+    if by_currency[Currency.USD] != 0:
+        # The event is the net won; the accounts need each currency's own (signed) amount.
+        payload["by_currency"] = {c.value: v for c, v in by_currency.items()}
     event_id = repo.insert_event(
         conn,
         ledger_id=LIVE,
         kind=kind,
-        event_date=kst_date(at),
-        occurred_at=at,
+        event_date=kst_date(snap.taken_at),
+        occurred_at=snap.taken_at,
         amount=abs(value_in),
         currency=Currency.KRW,
-        payload={
-            "source": "adopt-broker",
-            "adopt": {
-                "positions": changes,
-                "cash": cash_changes,
-                "state": _state_json(adopted),
-            },
-            "note": note,
-            "snapshot_id": snap.snapshot_id,
-        },
+        payload=payload,
     )
     refresh_cash_parts(conn, LIVE, at)
     return {"result": "adopted", "event_id": event_id, "positions": changes, "cash": cash_changes}

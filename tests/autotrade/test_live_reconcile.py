@@ -119,22 +119,37 @@ def test_the_owners_outside_trades_move_money_in_and_out(lw: Live) -> None:
     assert verify_ledger(lw.conn, "live") == []
 
 
-def test_a_conversion_nobody_asked_for_is_kept_as_the_accounts(lw: Live) -> None:
+def test_a_conversion_nobody_asked_for_moves_money_between_the_accounts(lw: Live) -> None:
     on(lw)
     lw.fake.convert(D("1392000"), D("999.80"))
     lw.sync("2026-06-30 22:00")
-    result = lw.reconcile()
+    seen = lw.now()
+    result = lw.reconcile("2026-06-30 22:01")
     assert result["booked"][0]["conversion"] == "krw_to_usd"
-    ext = live_repo.externals_of(lw.conn, "live")
-    assert [(e.kind, e.gross, e.received) for e in ext] == [("fx", D("1392000"), D("999.80"))]
-    assert lw.state().cash_of(Currency.USD) == D("999.80")
-    assert events(lw, "deposit", "withdrawal") == []
+    # The owner's own conversion: out of 한국 계좌, into 미국 계좌, each in its currency, dated
+    # when the account showed it, marked as a conversion (api/views/accounts.py: a transfer).
+    rows = repo.events_of_ledger(lw.conn, "live", ["deposit", "withdrawal"])
+    assert sorted((e.kind, e.amount, e.currency, e.occurred_at) for e in rows) == [
+        ("deposit", D("999.80"), Currency.USD, seen),
+        ("withdrawal", D("1392000"), Currency.KRW, seen),
+    ]
+    assert {e.payload["reason"] for e in rows} == {"conversion"}
+    assert live_repo.externals_of(lw.conn, "live") == []
+    state = lw.state()
+    assert state.cash_of(Currency.USD) == D("999.80")
+    # Booked at the rate it was made: the ledger's money in does not move (a won of rounding).
+    assert abs(state.contributions_krw - D("10000000")) <= 1
     assert verify_ledger(lw.conn, "live") == []
     # At a rate far from the market it is not a conversion: money out and money in.
     lw.fake.convert(D("100000"), D("999.80"))
     lw.sync("2026-06-30 22:05")
     lw.reconcile()
-    assert [k for k, _, _ in events(lw, "deposit", "withdrawal")] == ["withdrawal", "deposit"]
+    later = [
+        (e.kind, e.payload["reason"])
+        for e in repo.events_of_ledger(lw.conn, "live", ["deposit", "withdrawal"])
+        if e.payload["reason"] != "conversion"
+    ]
+    assert sorted(later) == [("deposit", "unexplained-in"), ("withdrawal", "unexplained-out")]
 
 
 def test_a_dividend_is_income_not_a_deposit(lw: Live, world: World) -> None:
