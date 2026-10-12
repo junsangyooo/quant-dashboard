@@ -73,21 +73,23 @@ export function waterfallGeometry(options: {
   const barLeft = labelWidth + columnGap;
   const barRight = width - valueWidth - columnGap;
 
-  // Running totals: anchors reset the total, deltas move it.
+  // Running totals: anchors reset the total, deltas move it. Steps that do not open with an
+  // anchor start from zero (손익 나눠 보기: 한국 → 미국 → 환율 효과 = 전체 손익), so zero is in range.
   const totals: number[] = [];
   let running = 0;
   for (const s of steps) {
     running = s.kind === 'anchor' ? s.value : running + s.value;
     totals.push(running);
   }
-  const lo = Math.min(...totals);
-  const hi = Math.max(...totals);
+  const fromZero = steps[0] !== undefined && steps[0].kind !== 'anchor';
+  const lo = Math.min(...totals, ...(fromZero ? [0] : []));
+  const hi = Math.max(...totals, ...(fromZero ? [0] : []));
   const pad = (hi - lo) * 0.08 || Math.max(Math.abs(hi) * 0.001, 1);
   const x = linear([lo - pad, hi + pad], [barLeft, barRight]);
 
   const rows = steps.map((s, i): WaterfallRow => {
     const total = totals[i] ?? 0;
-    const prev = i === 0 ? total : (totals[i - 1] ?? total);
+    const prev = i === 0 ? (fromZero ? 0 : total) : (totals[i - 1] ?? total);
     const y = i * rowHeight;
     if (s.kind === 'anchor') {
       return {
@@ -118,10 +120,8 @@ export function waterfallGeometry(options: {
   const first = steps[0];
   const last = steps.at(-1);
   const deltas = steps.filter((s) => s.kind !== 'anchor').reduce((sum, s) => sum + s.value, 0);
-  const balanced =
-    first?.kind === 'anchor' && last?.kind === 'anchor'
-      ? Math.abs(first.value + deltas - last.value) < 0.5
-      : true;
+  const start = first?.kind === 'anchor' ? first.value : 0;
+  const balanced = last?.kind === 'anchor' ? Math.abs(start + deltas - last.value) < 0.5 : true;
 
   return { barLeft, barRight, height: steps.length * rowHeight, rows, balanced };
 }

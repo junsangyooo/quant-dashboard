@@ -1,7 +1,7 @@
 // Fixture runtime and the invariants every bundle must keep (예시 값표 arithmetic). The
 // invariant checks run over every bundle in src/fixtures/bundles/, including future ones.
 import { describe, expect, it } from 'vitest';
-import type { Breakdown, HomeResponse, ShellResponse } from '../../src/api/types';
+import type { Breakdown, CompRow, HomeResponse, ShellResponse } from '../../src/api/types';
 import { bundleIds, loadBundle } from '../../src/fixtures/registry';
 import { fixtureFetch } from '../../src/fixtures/runtime';
 import type { FixtureBundle } from '../../src/fixtures/types';
@@ -105,4 +105,68 @@ describe.each(bundleIds())('bundle %s', (id) => {
     if (!b) return;
     expect(b.deposit + b.withdrawal + b.market + b.dividend + b.fees).toBe(b.end - b.start);
   });
+
+  it('splits into its accounts like the engine (accounts add up, each in its own money)', async () => {
+    const bundle = await loadBundle(id);
+    const responses = bundle?.responses as Record<string, unknown> | undefined;
+    const homes = Object.entries(responses ?? {})
+      .filter(([key]) => key === '/api/home' || key.startsWith('/api/home?'))
+      .map(([, script]) => firstStep(script) as HomeResponse | null);
+    for (const home of homes) if (home?.accounts) checkAccounts(home);
+  });
+
+  function checkAccounts(home: HomeResponse) {
+    if (!home.accounts) return;
+    // 전체 손익 = 한국 + 미국 in won + 환율 효과, to the won.
+    const { kr, us, fx } = home.accounts.split;
+    expect(kr + us + fx).toBe(home.pnl?.amount);
+    expect(home.accounts.list.map((a) => [a.id, a.currency])).toEqual([
+      ['kr', 'KRW'],
+      ['us', 'USD'],
+    ]);
+    for (const account of home.accounts.list) {
+      const dollars = account.currency === 'USD';
+      const amount = (r: CompRow) => (dollars ? cents(r.usd ?? Number.NaN) : r.krw);
+      const rows = account.composition.groups.flatMap((g) => g.rows);
+      expect(rows.reduce((s, r) => s + amount(r), 0)).toBe(
+        dollars ? cents(account.total) : account.total,
+      );
+      for (const group of account.composition.groups) {
+        expect(round1(group.rows.reduce((s, r) => s + r.pct, 0))).toBe(group.pct);
+        expect(group.target).toBeNull();
+      }
+      if (rows.length > 0) {
+        expect(round1(account.composition.groups.reduce((s, g) => s + g.pct, 0))).toBe(100);
+      }
+      const last = account.trend.series.at(-1);
+      if (last) expect(last.value).toBe(account.total);
+      for (const p of account.trend.series)
+        expect([p.baseline, p.baselineRet]).toEqual([null, null]);
+      if (account.id === 'kr' && account.pnl) expect(account.pnl.amount).toBe(kr);
+      if (account.pnl === null) expect(account.total).toBe(0);
+      // The period chips follow the account's own record; the period P&L only with chips.
+      if (account.trend.periods === null) expect(account.trend.periodPnl).toBeNull();
+    }
+  }
+
+  it('balances every account breakdown in its own money (transfers included)', async () => {
+    const bundle = await loadBundle(id);
+    const responses = bundle?.responses as Record<string, unknown> | undefined;
+    for (const [key, script] of Object.entries(responses ?? {})) {
+      if (!key.startsWith('/api/home/breakdown?') || !key.includes('account=')) continue;
+      const b = firstStep(script) as Breakdown | null;
+      if (!b) continue;
+      const parts = [b.deposit, b.withdrawal, b.transfer ?? 0, b.market, b.dividend, b.fees];
+      expect(
+        parts.reduce((s, v) => s + cents(v), 0),
+        key,
+      ).toBe(cents(b.end) - cents(b.start));
+      expect(b.currency, key).toBe(key.includes('account=us') ? 'USD' : 'KRW');
+    }
+  });
 });
+
+/** Dollars as whole cents (sums of dollar figures without float dust). */
+function cents(usd: number): number {
+  return Math.round(usd * 100);
+}

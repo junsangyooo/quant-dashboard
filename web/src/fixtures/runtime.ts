@@ -88,6 +88,19 @@ export function fixtureFetch(bundle: FixtureBundle): typeof fetch {
   };
 }
 
+/**
+ * A state chosen in the address (자산 `?account=us`): the bundle's `search` is added to the page
+ * address before the router starts, unless the address already says otherwise.
+ */
+export function applyFixtureSearch(bundle: FixtureBundle | null): void {
+  if (!bundle?.search) return;
+  const url = new URL(window.location.href);
+  for (const [key, value] of new URLSearchParams(bundle.search)) {
+    if (!url.searchParams.has(key)) url.searchParams.set(key, value);
+  }
+  window.history.replaceState(window.history.state, '', url);
+}
+
 let active: FixtureBundle | null = null;
 
 /** The bundle the app is answering from, or null outside fixture mode. */

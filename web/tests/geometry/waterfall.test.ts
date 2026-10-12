@@ -71,3 +71,31 @@ describe('waterfall geometry', () => {
     }
   });
 });
+
+describe('waterfall from zero (손익 나눠 보기: 한국 + 미국 + 환율 효과 = 전체 손익)', () => {
+  const split: WaterfallStep[] = [
+    { key: 'kr', label: '한국 계좌', kind: 'change', value: 484_683 },
+    { key: 'us', label: '미국 계좌', kind: 'change', value: -207_291 },
+    { key: 'fx', label: '환율 효과', kind: 'change', value: -33_592 },
+    { key: 'total', label: '전체 손익', kind: 'anchor', value: 243_800 },
+  ];
+  const g = waterfallGeometry({ width: 350, steps: split });
+
+  it('starts the first bar at zero, which is inside the range', () => {
+    // Range 0 … 484,683 padded 8% on both sides: zero sits 8/116 of the way along the column.
+    const zero = g.barLeft + ((g.barRight - g.barLeft) * 0.08) / 1.16;
+    const first = g.rows[0];
+    expect(first?.bar?.x).toBeCloseTo(zero, 1);
+    expect(first?.bar?.w).toBeGreaterThan(0);
+    expect(g.rows.map((r) => r.total)).toEqual([484_683, 277_392, 243_800, 243_800]);
+    expect(g.rows.map((r) => r.tone)).toEqual(['gain', 'loss', 'loss', 'anchor']);
+  });
+
+  it('balances from zero to the last anchor, and catches a wrong total', () => {
+    expect(g.balanced).toBe(true);
+    const wrong: WaterfallStep = { ...split[3], value: 243_801 } as WaterfallStep;
+    expect(waterfallGeometry({ width: 350, steps: [...split.slice(0, 3), wrong] }).balanced).toBe(
+      false,
+    );
+  });
+});

@@ -57,6 +57,39 @@ export const homeCopy = {
   breakdown: {
     title: '변동 분해',
     range: (from: string, to: string) => `${from}~${to}`,
+    /** NEW — one account: money the conversions moved in or out, and its own market move. */
+    transfer: '환전',
+    market: '시세',
+  },
+
+  /**
+   * NEW — 계좌별 보기 (the owner, 2026-10-12): '전체 · 한국 ₩ · 미국 $'. 전체 is the ledger in won;
+   * each account is shown in its own money.
+   */
+  accounts: {
+    switchLabel: '계좌',
+    tabs: { all: '전체', kr: '한국 ₩', us: '미국 $' },
+    name: { kr: '한국 계좌', us: '미국 계좌' },
+    /** Hero label of one account: '한국 계좌 · 7/1부터'. */
+    since: (name: string, date: string) => `${name} · ${date}부터`,
+    fxEffect: '환율 효과',
+    /** The tile of an account no money reached yet. */
+    emptyShort: '비어 있음',
+    /** In place of the graph and the rows: '미국 계좌는 비어 있어요'. */
+    empty: (name: string) => `${name}는 비어 있어요`,
+    /** 미국 계좌 gets its dollars only by conversion. */
+    fillsBy: '환전하면 채워져요',
+    /** Group head inside one account: '계좌의 81.4%'. */
+    share: (pct: string) => `계좌의 ${pct}`,
+    /** The dashed line of one account: money in by that day (start, deposits, conversions). */
+    netIn: '원금',
+    split: {
+      title: '손익 나눠 보기',
+      total: '전체 손익',
+      /** '−$149.95 × 1,382.4원' */
+      converted: (usd: string, rate: string) => `${usd} × ${rate}`,
+      fxNote: '달러로 바꾼 돈이 지금 환율로 늘거나 준 몫이에요',
+    },
   },
 
   /** ⓘ 표식 범례 시트 (시작 · 리밸런싱 · 일부 실패 · 진행 중 · 배당 · 입금 · 출금 · 실전 켬/끔). */

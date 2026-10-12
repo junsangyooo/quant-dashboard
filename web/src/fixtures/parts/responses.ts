@@ -2,6 +2,7 @@
 // the screens ask for (period and drift chips). home.* and plan.* bundles of the same world
 // share them, so moving between 자산 and 계획 inside one fixture shows one consistent state.
 import type { FixtureResponses } from '../types';
+import { paperAccountBreakdown } from './accounts';
 import { paperDays } from './day';
 import { historyPaper } from './history';
 import {
@@ -37,6 +38,15 @@ export function paperResponses(): FixtureResponses {
     '/api/home/breakdown': paperBreakdown('3m'),
     '/api/home/breakdown?ledger=paper&period=1m': paperBreakdown('1m'),
     '/api/home/breakdown?ledger=paper&period=1y': paperBreakdown('1y'),
+    // 한국 ₩ · 미국 $: each account's change in its own money, conversions as 환전.
+    ...Object.fromEntries(
+      (['kr', 'us'] as const).flatMap((id) =>
+        (['1m', '3m', '1y'] as const).map((period) => [
+          `/api/home/breakdown?ledger=paper&period=${period}&account=${id}`,
+          paperAccountBreakdown(id, period),
+        ]),
+      ),
+    ),
     '/api/plan': planPaper('3m'),
     '/api/plan?ledger=paper&drift=1y': planPaper('1y'),
     '/api/plan?ledger=paper&drift=all': { ...planPaper('all'), drift: paperDrift('all') },

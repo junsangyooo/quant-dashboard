@@ -122,6 +122,109 @@
   text-decoration: underline;
 }
 
+/* ── 계좌 스위치: 전체 · 한국 ₩ · 미국 $ (the 스위치/모드 look). Full width on 390, its own width
+   from 600. ── */
+.switch {
+  display: flex;
+  gap: var(--space-tight);
+  padding: var(--space-tight);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.switchCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 28px;
+  padding: var(--space-tight) var(--space-row);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 1.5px accent edge as an inset shadow (border widths are floored to whole px). */
+.switchCell[aria-checked='true'] {
+  background: var(--bg-default);
+  box-shadow: inset 0 0 0 1.5px var(--accent-default);
+  color: var(--accent-default);
+}
+
+@media (min-width: 600px) {
+  .switch {
+    align-self: flex-start;
+  }
+
+  .switchCell {
+    flex: none;
+    padding-inline: var(--space-block);
+  }
+}
+
+/* ── 계좌 칸: 한국 계좌 · 미국 계좌 side by side under the total ── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-inline);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  height: 100%;
+  padding: var(--space-inline) var(--space-row);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+/* '환율 효과 −33,592원 ›' under the P&L chips (the 버튼/링크 look; opens 손익 나눠 보기). */
+.fxLine {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-tight);
+  min-height: 24px;
+  color: var(--text-primary);
+  text-align: start;
+}
+
+.fxLine:hover > span:nth-child(2) {
+  text-decoration: underline;
+}
+
+.tile:hover .tileHead > span:nth-child(2) {
+  text-decoration: underline;
+}
+
+.tileHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.tileChevron {
+  margin-left: auto;
+}
+
+/* An account no money reached yet: a quiet card where its graph and rows would be. */
+.emptyAccount {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-tight);
+  min-height: 180px;
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+  text-align: center;
+}
+
 /* ── 자산 변동 ── */
 .trend {
   display: flex;
@@ -384,7 +487,8 @@
     'logo detail value';
 }
 
-/* A cash row with dollars: the $ amount ends the chip line, wrapping under it when long. */
+/* A cash row with dollars, or with a long 매수 대기 chip: the chip line (and the $ amount at its
+   end) takes the width under the figure, wrapping when long. */
 .rowCashUsd {
   grid-template-areas:
     'logo name value'

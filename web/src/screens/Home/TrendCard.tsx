@@ -1,18 +1,29 @@
 // 자산 변동 (Figma '자산 변동'): 기간 손익 › (변동 분해 시트) · 금액|수익률 / 기간 칩 (30거래일부터) /
 // 선 그래프 (내 자산 · 손대지 않았을 때) / 사건 띠 (표식 → 그날, '[n]' → 사건 목록, ⓘ → 범례) /
-// 범례 · 표로 보기. A card on 1440; plain on 390.
+// 범례 · 표로 보기. A card on 1440; plain on 390. One account (한국 ₩ · 미국 $) draws its own line in
+// its own money; its dashed line is 원금 (money in by that day), not 손대지 않았을 때 (that
+// comparison is the whole ledger's): a conversion moves both lines, the gap is the P&L.
 import clsx from 'clsx';
 import { useId, useState } from 'react';
 import { ChevronRight, ChevronUp } from 'lucide-react';
 import { markerKind } from '../../api/adapters';
 import { useBreakdown } from '../../api/queries';
-import type { Breakdown, EventKind, HomePeriod, HomeResponse } from '../../api/types';
+import type {
+  AccountId,
+  Breakdown,
+  Currency,
+  EventKind,
+  HomePeriod,
+  HomeResponse,
+  Trend,
+} from '../../api/types';
 import { ChartTable } from '../../charts/ChartTable';
 import { LineChart } from '../../charts/LineChart';
 import {
   LINE_HOME_1440,
   LINE_HOME_390,
   MARKER,
+  niceStep,
   niceYAxis,
   type ChartEvent,
   type YAxis,
@@ -24,14 +35,9 @@ import { ErrorBlock, SkeletonBlock } from '../../components/State';
 import { copy } from '../../copy';
 import { homeCopy } from '../../copy/home';
 import { eventLabel } from '../../lib/labels';
-import {
-  formatKrw,
-  formatKrwSigned,
-  formatMonthDay,
-  formatPercentSigned,
-  pnlDirection,
-} from '../../lib/format';
+import { formatMonthDay, formatPercentSigned } from '../../lib/format';
 import { EventListSheet, LegendSheet } from './EventListSheet';
+import { formatMoney, formatMoneySigned, moneyDirection, moneyTick } from './money';
 import { Sheet } from './Sheet';
 import styles from './Home.module.css';
 
@@ -68,10 +74,13 @@ export function trendEvents(events: HomeResponse['trend']['events']): ChartEvent
   });
 }
 
-/** One point (or none): 10만 steps above it, the point on the lowest line (Figma 1:55613). */
-function singlePointAxis(value: number, mode: Mode): YAxis {
+/**
+ * One point (or none): the point on the lowest line (Figma 1:55613) — 10만 steps in won, about
+ * 2% steps in dollars ($50 at $3,568).
+ */
+export function singlePointAxis(value: number, mode: Mode, currency: Currency = 'KRW'): YAxis {
   if (mode === 'rate') return niceYAxis([value - 1, value + 1]);
-  const step = 100_000;
+  const step = currency === 'USD' ? niceStep(Math.max(Math.abs(value) * 0.02, 1)) : 100_000;
   const base = Math.floor(value / step) * step;
   return { domain: [base - step, base + 2.75 * step], ticks: [base, base + step, base + 2 * step] };
 }
@@ -81,8 +90,16 @@ function rateTick(v: number): string {
   return formatPercentSigned(v, Number.isInteger(v) ? 0 : 1);
 }
 
-function BreakdownSheet({ period, onClose }: { period: HomePeriod; onClose: () => void }) {
-  const q = useBreakdown({ period });
+function BreakdownSheet({
+  period,
+  account,
+  onClose,
+}: {
+  period: HomePeriod;
+  account?: AccountId | undefined;
+  onClose: () => void;
+}) {
+  const q = useBreakdown({ period, account });
   const b = q.data;
   return (
     <Sheet
@@ -104,14 +121,40 @@ function BreakdownSheet({ period, onClose }: { period: HomePeriod; onClose: () =
   );
 }
 
-/** Waterfall steps: 기간 시작 → 입금 → 출금 → 시세·환율 → 배당 → 수수료 → 지금. */
+/**
+ * Waterfall steps: 기간 시작 → 입금 → 출금 → 시세·환율 → 배당 → 수수료 → 지금. One account
+ * (`currency` set) adds 환전 (money the conversions moved in or out) and its market move is 시세
+ * only; 미국 계좌 has no deposits or withdrawals, so those rows are left out.
+ */
 export function breakdownSteps(b: Breakdown): WaterfallStep[] {
   const w = copy.waterfall;
+  const account = b.currency !== undefined;
+  const flows: WaterfallStep[] =
+    b.currency === 'USD'
+      ? []
+      : [
+          { key: 'deposit', label: w.deposit, kind: 'cashflow', value: b.deposit },
+          { key: 'withdraw', label: w.withdraw, kind: 'cashflow', value: b.withdrawal },
+        ];
   return [
     { key: 'start', label: w.start, kind: 'anchor', value: b.start },
-    { key: 'deposit', label: w.deposit, kind: 'cashflow', value: b.deposit },
-    { key: 'withdraw', label: w.withdraw, kind: 'cashflow', value: b.withdrawal },
-    { key: 'market', label: w.market, kind: 'change', value: b.market },
+    ...flows,
+    ...(account
+      ? [
+          {
+            key: 'transfer',
+            label: homeCopy.breakdown.transfer,
+            kind: 'cashflow' as const,
+            value: b.transfer ?? 0,
+          },
+        ]
+      : []),
+    {
+      key: 'market',
+      label: account ? homeCopy.breakdown.market : w.market,
+      kind: 'change',
+      value: b.market,
+    },
     { key: 'dividend', label: w.dividend, kind: 'change', value: b.dividend },
     { key: 'fee', label: w.fee, kind: 'change', value: b.fees },
     { key: 'end', label: w.end, kind: 'anchor', value: b.end },
@@ -120,8 +163,9 @@ export function breakdownSteps(b: Breakdown): WaterfallStep[] {
 
 export function BreakdownBody({ breakdown: b }: { breakdown: Breakdown }) {
   const steps = breakdownSteps(b);
+  const currency = b.currency ?? 'KRW';
   const value = (s: WaterfallStep) =>
-    s.kind === 'anchor' ? formatKrw(s.value) : formatKrwSigned(s.value);
+    s.kind === 'anchor' ? formatMoney(s.value, currency) : formatMoneySigned(s.value, currency);
   const range = homeCopy.breakdown.range(formatMonthDay(b.from), formatMonthDay(b.to));
   return (
     <>
@@ -146,21 +190,36 @@ export interface TrendCardProps {
   home: HomeResponse;
   wide: boolean;
   onPeriod: (period: HomePeriod) => void;
+  /** One account's line in its own money (한국 ₩ · 미국 $); the whole ledger when absent. */
+  account?: { id: AccountId; currency: Currency; trend: Trend; total: number } | undefined;
 }
 
-export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
+export function TrendCard({ home, wide, onPeriod, account }: TrendCardProps) {
   const [mode, setMode] = useState<Mode>('amount');
   const [table, setTable] = useState(false);
   const [sheet, setSheet] = useState<'breakdown' | 'legend' | ChartEvent[] | null>(null);
   const tableId = useId();
-  const t = home.trend;
+  const t = account ? account.trend : home.trend;
+  const total = account ? account.total : home.total;
+  const currency = account?.currency ?? 'KRW';
+  const lineName = account ? homeCopy.accounts.name[account.id] : copy.chart.myAssets;
   const h = homeCopy.trend;
 
   const start = t.series[0]?.date ?? home.startDate;
   const end = t.series.at(-1)?.date ?? start;
   const pick = (p: (typeof t.series)[number]) => (mode === 'amount' ? p.value : p.ret);
+  // The dashed line: 손대지 않았을 때 for the whole ledger; for one account its 원금 (money in by
+  // that day), so a conversion that moves the value moves this line too and the gap stays the
+  // P&L. In 수익률 an account's line is already net of what came in: no second line.
   const pickBase = (p: (typeof t.series)[number]) =>
-    mode === 'amount' ? p.baseline : p.baselineRet;
+    account
+      ? mode === 'amount'
+        ? (p.netIn ?? null)
+        : null
+      : mode === 'amount'
+        ? p.baseline
+        : p.baselineRet;
+  const baseName = account ? homeCopy.accounts.netIn : copy.chart.untouched;
   const mine = { key: 'mine', points: t.series.map((p) => ({ date: p.date, value: pick(p) })) };
   const basePoints = t.series.map((p) => ({ date: p.date, value: pickBase(p) }));
   const hasBaseline = t.series.length >= 2 && basePoints.some((p) => p.value !== null);
@@ -171,9 +230,13 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
   const axis =
     t.series.length >= 2
       ? niceYAxis(values)
-      : singlePointAxis(t.series[0] ? pick(t.series[0]) : home.total, mode);
+      : singlePointAxis(t.series[0] ? pick(t.series[0]) : total, mode, currency);
   const formatTick =
-    t.empty === 'before-first-check' ? () => '' : mode === 'amount' ? undefined : rateTick;
+    t.empty === 'before-first-check'
+      ? () => ''
+      : mode === 'amount'
+        ? moneyTick(currency)
+        : rateTick;
   const emptyText =
     t.empty === 'before-first-check'
       ? h.emptyBeforeCheck
@@ -183,14 +246,14 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
           ? h.emptyFirstDay
           : undefined;
   const fmt = (v: number | null) =>
-    v === null ? '—' : mode === 'amount' ? formatKrw(v) : formatPercentSigned(v, 2);
+    v === null ? '—' : mode === 'amount' ? formatMoney(v, currency) : formatPercentSigned(v, 2);
   const label =
     mine.points.length > 0
-      ? `${copy.chart.myAssets} ${formatMonthDay(start)} ${fmt(mine.points[0]?.value ?? null)} → ${formatMonthDay(end)} ${fmt(mine.points.at(-1)?.value ?? null)}`
-      : `${copy.chart.myAssets} · ${emptyText ?? ''}`;
+      ? `${lineName} ${formatMonthDay(start)} ${fmt(mine.points[0]?.value ?? null)} → ${formatMonthDay(end)} ${fmt(mine.points.at(-1)?.value ?? null)}`
+      : `${lineName} · ${emptyText ?? ''}`;
 
   const pnl = t.periodPnl;
-  const dir = pnl ? pnlDirection(pnl.amount) : 'flat';
+  const dir = pnl ? moneyDirection(pnl.amount, currency) : 'flat';
   const arrow = dir === 'gain' ? homeCopy.hero.up : dir === 'loss' ? homeCopy.hero.down : '';
 
   const modeChips = (
@@ -223,7 +286,7 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
             >
               <span className={clsx('t-label', styles.muted)}>{h.periods[t.period]}</span>
               <span className={clsx('t-label', styles[dir])}>
-                {`${arrow ? `${arrow} ` : ''}${formatKrwSigned(pnl.amount)} (${formatPercentSigned(pnl.pct, 2)})`}
+                {`${arrow ? `${arrow} ` : ''}${formatMoneySigned(pnl.amount, currency)} (${formatPercentSigned(pnl.pct, 2)})`}
               </span>
               <ChevronRight size={14} className={styles.muted} aria-hidden />
             </button>
@@ -277,7 +340,7 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
               <svg className={styles.swatch} viewBox="0 0 16 8" aria-hidden>
                 <line className={styles.swatchMine} x1="0" y1="4" x2="16" y2="4" strokeWidth="2" />
               </svg>
-              <span className={clsx('t-caption', styles.muted)}>{copy.chart.myAssets}</span>
+              <span className={clsx('t-caption', styles.muted)}>{lineName}</span>
             </li>
             {hasBaseline ? (
               <li className={styles.legendItem}>
@@ -292,7 +355,7 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
                     strokeDasharray="5 4"
                   />
                 </svg>
-                <span className={clsx('t-caption', styles.muted)}>{copy.chart.untouched}</span>
+                <span className={clsx('t-caption', styles.muted)}>{baseName}</span>
               </li>
             ) : null}
           </ul>
@@ -315,11 +378,7 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
         <div id={tableId} className={styles.tableWrap}>
           <ChartTable
             caption={copy.chart.tableView}
-            columns={[
-              copy.chart.dateColumn,
-              copy.chart.myAssets,
-              ...(hasBaseline ? [copy.chart.untouched] : []),
-            ]}
+            columns={[copy.chart.dateColumn, lineName, ...(hasBaseline ? [baseName] : [])]}
             rows={t.series.map((p) => [
               formatMonthDay(p.date),
               fmt(pick(p)),
@@ -332,6 +391,7 @@ export function TrendCard({ home, wide, onPeriod }: TrendCardProps) {
       {sheet === 'breakdown' ? (
         <BreakdownSheet
           period={t.period}
+          account={account?.id}
           onClose={() => {
             setSheet(null);
           }}

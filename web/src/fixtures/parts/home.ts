@@ -46,6 +46,7 @@ import {
   stages1007,
 } from './common';
 import { liveDaily, liveUntouchedDaily } from './series';
+import { paperAccounts } from './accounts';
 
 type Series = Trend['series'];
 interface Point {
@@ -301,6 +302,7 @@ export function homePaper(period: HomePeriod = '3m'): HomeResponse {
     trend: paperTrend(period),
     planCard: PAPER_PLAN_CARD,
     composition: PAPER_COMPOSITION,
+    accounts: paperAccounts(period),
   };
 }
 
@@ -462,6 +464,8 @@ export function homeStale(): HomeResponse {
       others: { count: 1, status: 'quote-wait' },
     },
     composition: STALE_COMPOSITION,
+    // 계좌별 보기 is drawn in home.paper · home.account-* · home.us-* (the states with the split).
+    accounts: null,
   };
 }
 
@@ -615,6 +619,8 @@ export function homeLive(): HomeResponse {
     },
     planCard: LIVE_PLAN_CARD,
     composition: LIVE_COMPOSITION,
+    // 계좌별 보기 is drawn in home.paper · home.account-* · home.us-* (the states with the split).
+    accounts: null,
   };
 }
 
@@ -730,6 +736,8 @@ export function homeWithdraw(): HomeResponse {
       others: { count: 1, status: 'withdraw-wait' },
     },
     composition: WITHDRAW_COMPOSITION,
+    // 계좌별 보기 is drawn in home.paper · home.account-* · home.us-* (the states with the split).
+    accounts: null,
   };
 }
 
@@ -824,6 +832,8 @@ export function homeLiveFirst(): HomeResponse {
       pendingBar: null,
       outsideRules: null,
     },
+    // No fill yet: no P&L, so no account view (CONTRACT HomeResponse.accounts).
+    accounts: null,
   };
 }
 
@@ -890,6 +900,7 @@ export function homeEmpty(): HomeResponse {
       pendingBar: null,
       outsideRules: null,
     },
+    accounts: null,
   };
 }
 
@@ -1018,6 +1029,8 @@ export function homeHoliday(): HomeResponse {
       others: { count: 1, status: 'holiday' },
     },
     composition: HOLIDAY_COMPOSITION,
+    // 계좌별 보기 is drawn in home.paper · home.account-* · home.us-* (the states with the split).
+    accounts: null,
   };
 }
 
@@ -1166,6 +1179,8 @@ export function homeCheckFailed(): HomeResponse {
       others: { count: 1, status: 'in-range' },
     },
     composition: CHECK_FAILED_COMPOSITION,
+    // 계좌별 보기 is drawn in home.paper · home.account-* · home.us-* (the states with the split).
+    accounts: null,
   };
 }
 

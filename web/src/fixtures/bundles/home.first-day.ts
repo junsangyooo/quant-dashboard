@@ -5,6 +5,7 @@
 import type { Order } from '../../api/types';
 import type { FixtureBundle } from '../types';
 import { INDEX_HALF, KOSPI200, SP500, kst } from '../world';
+import { firstDayAccounts } from '../parts/accounts';
 import { planFirstDay } from '../parts/plan';
 
 const NOW = kst('2026-07-01', '16:10');
@@ -169,6 +170,8 @@ const bundle = {
         pendingBar: null,
         outsideRules: null,
       },
+      // 미국 계좌 holds only the dollars waiting for the 22:30 buy (home.us-cash opens it).
+      accounts: firstDayAccounts(),
     },
     '/api/plan': planFirstDay(),
   },

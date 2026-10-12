@@ -20,6 +20,12 @@ const STATES = [
   'home.check-failed',
   'home.live-todo',
   'home.push-undelivered',
+  // 계좌별 보기 (2026-10-12): the switch on 한국 ₩ · 미국 $, before the first fill, dollars only, empty
+  'home.account-kr',
+  'home.account-us',
+  'home.before-fill',
+  'home.us-cash',
+  'home.us-empty',
 ] as const;
 
 /** Console errors, page errors and CSP violations while the page runs. */
@@ -44,13 +50,28 @@ async function shoot(page: Page, info: TestInfo, name: string) {
   await info.attach(name, { path, contentType: 'image/png' });
 }
 
+/**
+ * axe over the whole page at once. At a scroll position the 390 tab bar (sticky) lies over
+ * whatever is under it, and target-size reads that overlap as crowding — it moved onto the
+ * 구성 rows and 표로 보기 once the 계좌 switch and tiles grew the hero. A viewport as tall as the
+ * page shows every target clear (the rule of the full run, e2e/full/checks.ts).
+ */
 async function axe(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
-    .analyze();
-  return results.violations.map(
-    (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`,
-  );
+  const size = page.viewportSize();
+  if (size) {
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    if (height > size.height) await page.setViewportSize({ width: size.width, height });
+  }
+  try {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    return results.violations.map(
+      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`,
+    );
+  } finally {
+    if (size) await page.setViewportSize(size);
+  }
 }
 
 const total = (page: Page, text: string) => page.locator('.t-display', { hasText: text });
@@ -226,6 +247,101 @@ test('sheets trap focus and close with Escape', async ({ page }) => {
   await expect(opener).toBeFocused();
 });
 
+// ── 계좌별 보기 (the owner, 2026-10-12): 전체 · 한국 ₩ · 미국 $ ───────────────────────────────
+
+/** The 자산 변동 card ends above the 390 tab bar (the whole graph without scrolling). */
+async function graphAboveTabs(page: Page) {
+  const trend = page.getByRole('region', { name: '자산 변동' });
+  await expect(trend.getByRole('img').first()).toBeInViewport({ ratio: 1 });
+  const tabs = page.getByRole('navigation').filter({ has: page.locator('svg') });
+  const box = await trend.boundingBox();
+  const bar = (await tabs.count()) > 0 ? await tabs.first().boundingBox() : null;
+  if (box && bar) expect(box.y + box.height).toBeLessThanOrEqual(bar.y);
+}
+
+test('the switch shows each account in its own money; the graph stays in view', async ({
+  page,
+}, info) => {
+  const problems = await watch(page);
+  await page.goto('/?fixture=home.paper');
+  const switcher = page.getByRole('radiogroup', { name: '계좌' });
+  await expect(switcher.getByRole('radio', { name: '전체' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(total(page, '10,243,800원')).toBeInViewport();
+  await expect(page.getByRole('button', { name: /환율 효과/ })).toBeInViewport();
+  await expect(page.getByRole('link', { name: /한국 계좌/ })).toBeInViewport();
+  await graphAboveTabs(page);
+
+  await switcher.getByRole('radio', { name: '한국 ₩' }).click();
+  await expect(page).toHaveURL(/[?&]account=kr(&|$)/);
+  await expect(total(page, '5,368,683원')).toBeVisible();
+  await expect(page.getByText('▲ +484,683원 · +9.92%')).toBeVisible();
+  await expect(page.getByRole('region', { name: '계획' })).toHaveCount(0);
+  await graphAboveTabs(page);
+  expect(await axe(page)).toEqual([]);
+  await shoot(page, info, 'home.switch-kr');
+
+  await switcher.getByRole('radio', { name: '미국 $' }).click();
+  await expect(page).toHaveURL(/[?&]account=us(&|$)/);
+  await expect(total(page, '$3,526.56')).toBeVisible();
+  await expect(page.getByText('▼ −$149.95 · −4.08%')).toBeVisible();
+  const comp = page.getByRole('region', { name: '구성' });
+  await expect(comp.getByText('$2,870.40')).toBeVisible();
+  await expect(comp.getByText('계좌의 85.0%')).toBeVisible();
+  await graphAboveTabs(page);
+  expect(await axe(page)).toEqual([]);
+
+  // Arrow keys move along the switch; 전체 drops the address' account.
+  await switcher.getByRole('radio', { name: '미국 $' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(switcher.getByRole('radio', { name: '전체' })).toBeFocused();
+  await expect(page).not.toHaveURL(/account=/);
+  await expect(total(page, '10,243,800원')).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
+test('a tile opens its account; back returns to 전체', async ({ page }) => {
+  await page.goto('/?fixture=home.paper');
+  await page.getByRole('link', { name: /미국 계좌/ }).click();
+  await expect(page).toHaveURL(/[?&]account=us(&|$)/);
+  await expect(total(page, '$3,526.56')).toBeVisible();
+  await page.goBack();
+  await expect(total(page, '10,243,800원')).toBeVisible();
+  await expect(page.getByRole('radio', { name: '전체' })).toHaveAttribute('aria-checked', 'true');
+});
+
+test('손익 나눠 보기 adds 한국 + 미국 + 환율 효과 up to the P&L; the sheet holds the focus', async ({
+  page,
+}, info) => {
+  await page.goto('/?fixture=home.paper');
+  const opener = page.getByRole('button', { name: /환율 효과/ });
+  await opener.click();
+  const sheet = page.getByRole('dialog', { name: '손익 나눠 보기' });
+  await expect(sheet).toBeVisible();
+  await expect(
+    sheet.getByRole('img', {
+      name: '한국 계좌 +484,683원 · 미국 계좌 −207,291원 · 환율 효과 −33,592원 · 전체 손익 +243,800원',
+    }),
+  ).toBeVisible();
+  await expect(sheet.getByText('미국 계좌 −$149.95 × 1,382.4원')).toBeVisible();
+  await expect(sheet.getByRole('button', { name: '닫기' })).toBeFocused();
+  expect(await axe(page)).toEqual([]);
+  await shoot(page, info, 'home.split-sheet');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test('미국 $ 변동 분해 counts 환전 as money in, in dollars', async ({ page }) => {
+  await page.goto('/?fixture=home.account-us');
+  await page.getByRole('button', { name: /3개월.*\$/ }).click();
+  const sheet = page.getByRole('dialog', { name: '변동 분해 · 3개월' });
+  await expect(sheet.getByRole('img', { name: /환전 \+\$251\.23/ })).toBeVisible();
+  await expect(sheet.getByRole('img', { name: /지금 \$3,526\.56$/ })).toBeVisible();
+});
+
 test('390 rows open their second line; 1440 shows it from the start', async ({ page }, info) => {
   await page.goto('/?fixture=home.paper');
   const detail = page.getByText('115주 · 평균 32,005원');
@@ -240,7 +356,15 @@ test('390 rows open their second line; 1440 shows it from the start', async ({ p
 });
 
 test('no 다 sentences; no 모의와 비교 or 실계좌 − 모의', async ({ page }) => {
-  for (const id of ['home.paper', 'home.live', 'home.empty', 'home.withdraw']) {
+  for (const id of [
+    'home.paper',
+    'home.live',
+    'home.empty',
+    'home.withdraw',
+    'home.account-kr',
+    'home.account-us',
+    'home.us-empty',
+  ]) {
     await page.goto(`/?fixture=${id}`);
     await expect(page.locator('.t-display')).toBeVisible();
     const text = await page.locator('body').innerText();
