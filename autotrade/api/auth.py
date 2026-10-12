@@ -317,6 +317,53 @@ def change_pin(
         raise refusal  # after the commit, so the failure is counted
 
 
+def confirm_pin(
+    conn: sqlite3.Connection,
+    settings: ApiSettings,
+    secret: bytes,
+    pin: str,
+    session_id: str,
+    ip: str,
+    at: datetime,
+) -> None:
+    """The PIN again inside a session (turning live on, PHASE3.md 2.6). The same guards as a PIN
+    change: the address lock, every wrong PIN counted, and 5 in a row on one session close it
+    (a stolen cookie cannot guess the PIN from many addresses). Raises on a wrong PIN:
+    403 pin {remaining}, 403 locked, or 403 session."""
+    if not is_valid_pin(pin):
+        raise ApiError(400, "invalid-pin")
+    key = address_key(ip, settings.ipv6_prefix)
+    tries_key = session_key(session_id)
+    refusal: ApiError | None = None
+    with transaction(conn):
+        _gate(conn, settings, key, at, login=False)
+        stored = auth_repo.get_pin_hash(conn)
+        if stored is None:
+            raise ApiError(403, "no-pin")
+        if verify_pin(pin, stored, secret):
+            auth_repo.clear_lock(conn, key)
+            auth_repo.clear_lock(conn, tries_key)
+            return
+        failures = _count_failure(conn, settings, key, at)
+        tries = auth_repo.get_lock(conn, tries_key).failures + 1
+        if tries >= settings.session_max_failures:
+            auth_repo.clear_lock(conn, tries_key)
+            auth_repo.revoke_session(conn, session_id, at, "pin-failures")
+            refusal = ApiError(403, "session")
+        else:
+            auth_repo.set_lock(conn, tries_key, tries, None, at)
+            try:
+                _gate(conn, settings, key, at, login=False)
+            except ApiError as lock:
+                refusal = lock
+            else:
+                left = min(
+                    settings.ip_max_failures - failures, settings.session_max_failures - tries
+                )
+                refusal = ApiError(403, "pin", extra={"remaining": left})
+    raise refusal  # after the commit, so the failure is counted
+
+
 def _clear_lockouts(conn: sqlite3.Connection) -> Unlocked:
     held = auth_repo.get_flag(conn, HOLD_KEY) is not None
     alerted = auth_repo.get_flag(conn, ALERT_KEY) is not None

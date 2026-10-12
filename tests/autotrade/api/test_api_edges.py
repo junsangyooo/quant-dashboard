@@ -173,7 +173,11 @@ def test_switching_back_to_paper_is_recorded(
 ) -> None:
     with transaction(db):
         repo.set_setting(db, "mode", "live", kst("2026-07-01 12:00"))
-    assert logged_in.post("/api/mode/paper").json() == {"mode": "paper", "cancelFailed": []}
+    assert logged_in.post("/api/mode/paper").json() == {
+        "mode": "paper",
+        "cancelFailed": [],
+        "cancelPending": [],
+    }
     shell = logged_in.get("/api/shell").json()
     assert (shell["mode"], shell["modeChangedAt"]) == ("paper", "2026-07-01T16:10:00+09:00")
 

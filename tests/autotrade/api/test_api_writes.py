@@ -69,19 +69,27 @@ def test_mode_switches(logged_in: TestClient) -> None:
     live = logged_in.post(
         "/api/mode/live", json={"pin": "123456", "confirm": True, "previewHash": "x"}
     )
+    # No Toss check was ever recorded (the tick has no AUTOTRADE_LIVE_ORDERS): the checks fail.
     assert (live.status_code, live.json()) == (
         409,
-        {"error": "blocked", "detail": {"cause": "live-not-available"}},
+        {"error": "blocked", "detail": {"cause": "checks"}},
     )
     paper = logged_in.post("/api/mode/paper")
-    assert (paper.status_code, paper.json()) == (200, {"mode": "paper", "cancelFailed": []})
-    assert logged_in.post("/api/mode/paper").json() == {"mode": "paper", "cancelFailed": []}
-    assert logged_in.post("/api/mode/cancel-retry").json() == {"cancelFailed": []}
+    empty = {"mode": "paper", "cancelFailed": [], "cancelPending": []}
+    assert (paper.status_code, paper.json()) == (200, empty)
+    assert logged_in.post("/api/mode/paper").json() == empty
+    assert logged_in.post("/api/mode/cancel-retry").json() == {
+        "cancelFailed": [],
+        "cancelPending": [],
+    }
     mode = logged_in.get("/api/mode").json()
     assert mode["mode"] == "paper"
-    assert mode["canTurnOn"] == {"ok": False, "cause": "live-not-available"}
+    assert mode["canTurnOn"] == {"ok": False, "cause": "checks"}
     assert (mode["live"], mode["liveOff"], mode["twoLedgers"]) == (None, None, None)
-    assert (mode["preflight"], mode["preview"], mode["cancelFailed"]) == (None, None, None)
+    link = next(r for r in mode["preflight"] if r["id"] == "toss-link")
+    assert link == {"id": "toss-link", "ok": False, "facts": {"cause": "never"}}
+    assert mode["preview"]["kind"] == "not-computable"
+    assert (mode["cancelFailed"], mode["cancelPending"]) == (None, None)
     shell = logged_in.get("/api/shell").json()
     assert (shell["mode"], shell["modeChangedAt"], shell["liveSince"]) == ("paper", None, None)
 

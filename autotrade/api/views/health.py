@@ -1,7 +1,9 @@
 """GET /api/shell (the header on every screen) and GET /api/health (SCR-HEALTH).
 
-Phase 1 has three data sources (Korean and US closes, the rate). Toss link, Toss balance and
-push devices do not exist yet, so they are not listed (no invented rows).
+Phase 1 has three data sources (Korean and US closes, the rate). The Toss link and the Toss
+balance check join them once the live link matters (autotrade/PHASE3.md 2.7, api/views/live.py),
+with the live to-dos (a cancel that failed, an account that does not match, a conversion to make,
+the link itself). Those show whatever the mode is. Push devices do not exist yet: no row.
 
 'PIN 실패 급증' (autotrade/api/auth.py) is a red manual to-do, first in the list and counted in
 the header's '할 일 n', from the moment it is raised until `python -m autotrade.jobs unlock`.
@@ -16,6 +18,7 @@ from typing import Any
 
 from autotrade.api.auth import pin_alert
 from autotrade.api.views import fmt
+from autotrade.api.views import live as live_view
 from autotrade.api.views.context import LedgerContext
 from autotrade.api.views.history import OK_RESULTS, DayData, failure_reason
 from autotrade.api.views.orders import waiting_retry
@@ -95,15 +98,24 @@ def shell(ctx: LedgerContext, mode_changed_at: datetime | None) -> dict[str, Any
     failure = _today_check_failure(ctx)
     todo = _todo_orders(ctx)
     pin_todo = 1 if _pin_todo(ctx.conn) is not None else 0
-    todo_count = len(todo) + (1 if failure is not None and failure[1] is None else 0) + pin_todo
+    live_manual, cancels = live_view.header_counts(ctx.conn, ctx.cfg, ctx.now)
+    todo_count = (
+        len(todo)
+        + (1 if failure is not None and failure[1] is None else 0)
+        + pin_todo
+        + live_manual
+    )
     stale = ctx.stale_source() if ctx.status.value == "quote-wait" else None
     retries = _retry_orders(ctx)
     # AI-rule sources (filings, the AI CLI) count once dead for more than a trading day.
     ai_dead = ctx.ai_rule.header_causes()
     status: dict[str, Any]
     # Before the first check there are no order to-dos or failed checks: only 'PIN 실패 급증'
-    # can make a count then, and it outranks '첫 확인 전'.
-    if todo_count:
+    # can make a count then, and it outranks '첫 확인 전'. A live order that could not be
+    # cancelled outranks everything: it may still fill.
+    if cancels:
+        status = {"kind": "cancel-failed", "count": cancels}
+    elif todo_count:
         status = {"kind": "todo", "count": todo_count}
     elif ctx.last_check is None:
         status = {"kind": "before-first", "firstCheckAt": fmt.iso(ctx.first_check_at)}
@@ -118,7 +130,16 @@ def shell(ctx: LedgerContext, mode_changed_at: datetime | None) -> dict[str, Any
 
     banner: dict[str, Any] | None = None
     plan_day = None if ctx.open_plan is None else fmt.day(ctx.open_plan.plan_date)
-    if failure is not None:
+    failed_cancels = live_view.cancel_failed_orders(ctx.conn) if cancels else []
+    if failed_cancels:
+        first = failed_cancels[0]
+        banner = {
+            "kind": "cancel-failed",
+            "market": first["market"],
+            "side": first["side"],
+            "link": "mode",
+        }
+    elif failure is not None:
         banner = {
             "kind": "check-failed",
             "at": fmt.iso(failure[0].started_at),
@@ -153,11 +174,12 @@ def shell(ctx: LedgerContext, mode_changed_at: datetime | None) -> dict[str, Any
             "retryAt": order["failure"]["retryAt"],
             "link": "plan",
         }
+    since = live_view.live_since(ctx.conn)
     return {
         "now": fmt.iso(ctx.now),
         "mode": ctx.mode,
         "modeChangedAt": None if mode_changed_at is None else fmt.iso(mode_changed_at),
-        "liveSince": None,
+        "liveSince": None if since is None else fmt.iso(since),
         "status": status,
         "banner": banner,
     }
@@ -238,9 +260,13 @@ def _run_json(run: RunRow) -> dict[str, Any]:
     return out
 
 
-def health(ctx: LedgerContext) -> dict[str, Any]:
+def health(ctx: LedgerContext, *, include_live: bool = True) -> dict[str, Any]:
+    """include_live=False leaves out the Toss rows and the live to-dos (the mode screen's
+    '작동' check judges the engine's own data; the Toss link has its own row there)."""
     rows = {r.series: r for r in repo.all_freshness(ctx.conn)}
     sources = [_source(ctx, s, rows.get(s)) for s in SOURCE_IDS]
+    if include_live:
+        sources += live_view.sources(ctx.conn, ctx.cfg, ctx.now)
     sources += ctx.ai_rule.sources()  # filings, ai-cli, metric-table where the AI rule runs
     todos: list[dict[str, Any]] = []
     pin_todo = _pin_todo(ctx.conn)
@@ -284,11 +310,13 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
             }
         )
     for order in _todo_orders(ctx):
+        # A live order the broker refused is 'order-rejected' (CONTRACT, phase 3).
+        rejected = ctx.ledger_id == "live" and order["failure"]["reason"] == "broker-rejected"
         todos.append(
             {
                 "id": f"order-failed:{order['id']}",
                 "severity": "red",
-                "kind": "order-failed",
+                "kind": "order-rejected" if rejected else "order-failed",
                 "facts": {
                     "date": fmt.day(ctx.open_plan.plan_date) if ctx.open_plan else "",
                     "market": order["market"],
@@ -300,6 +328,8 @@ def health(ctx: LedgerContext) -> dict[str, Any]:
             }
         )
     todos += ctx.ai_rule.todos()
+    if include_live:
+        todos += live_view.todos(ctx.conn, ctx.cfg, ctx.now)
     data = DayData(ctx)
     recent: list[dict[str, Any]] = []
     for i in range(13, -1, -1):

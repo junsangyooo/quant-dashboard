@@ -241,6 +241,7 @@ def test_unsafe_requests_from_another_site_are_refused(
     assert logged_in.post("/api/mode/paper", headers={"origin": "https://testserver"}).json() == {
         "mode": "paper",
         "cancelFailed": [],
+        "cancelPending": [],
     }
 
 
@@ -365,7 +366,11 @@ def test_body_errors_with_a_session_are_400(logged_in: TestClient) -> None:
     }
     missing = logged_in.post("/api/account/pin", json={"current": PIN})
     assert missing.json() == {"error": "bad-request", "detail": {"fields": ["body.next"]}}
-    assert logged_in.post("/api/mode/live", json={"pin": PIN}).json()["error"] == "blocked"
+    # Turning live on needs the confirmation and the preview's hash in the body.
+    assert logged_in.post("/api/mode/live", json={"pin": PIN}).json() == {
+        "error": "bad-request",
+        "detail": {"fields": ["confirm"]},
+    }
 
 
 def test_a_broken_schema_table_is_503_db(client: TestClient, db: sqlite3.Connection) -> None:
