@@ -654,7 +654,7 @@ type NotifyEvent =
 - 모든 응답에 `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`를 붙인다. `/api/*` 응답은 `Cache-Control: no-store`다.
 - 세션은 서버 DB에 남는다(id·만료·끊김). 쿠키 값은 `<세션 id>.<만료 unix 초>.<HMAC>`이고, 끊긴 세션의 쿠키는 서명이 맞아도 403이다.
 - 접속 위치(IP)는 요청이 127.0.0.1(nginx)에서 왔을 때만 `X-Forwarded-For`를 읽는다(nginx가 붙인 맨 오른쪽 값).
-- `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일(`/assets/*`)은 immutable이다. `/api`가 아닌 다른 경로는 모두 `index.html`(화면 라우팅)이고, 빌드가 없으면 `/`는 503 안내 페이지다. 어떤 파일도 가질 수 없는 경로(제어 문자, 255바이트를 넘는 경로 조각, 1,024자 넘는 경로)는 파일 시스템에 묻지 않고 404 text다.
+- `/docs`·`/redoc`·`/openapi.json`은 끈다. 정적 파일은 빌드 결과(`web/dist`)만 내준다. `index.html`은 no-cache, 해시 붙은 파일(`/assets/*`)은 immutable이다. 둘 다 `no-transform`을 붙인다: Cloudflare가 HTML에 Web Analytics 비컨을 끼워 넣지 못하게 한다(넣으면 CSP가 막아 페이지마다 콘솔 오류 둘, 2026-10-12 실서버에서 봄). `/api`가 아닌 다른 경로는 모두 `index.html`(화면 라우팅)이고, 빌드가 없으면 `/`는 503 안내 페이지다. 어떤 파일도 가질 수 없는 경로(제어 문자, 255바이트를 넘는 경로 조각, 1,024자 넘는 경로)는 파일 시스템에 묻지 않고 404 text다.
   - 서버의 `web/dist`는 지금 릴리스(`web/releases/<id>`)를 가리키는 심볼릭 링크다(배포가 원자적으로 바꾼다). 릴리스마다 이전 릴리스들의 해시 자산을 함께 두어, 배포 전에 연 화면도 청크를 찾는다.
 - 앞단(nginx, `deploy/nginx-quant.conf`): Cloudflare에서 온 연결만 받는다. `Strict-Transport-Security: max-age=31536000`(quant.jsyoo.dev만, includeSubDomains 없음), 서버 판 번호는 숨긴다.
 

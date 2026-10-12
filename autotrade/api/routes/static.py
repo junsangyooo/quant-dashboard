@@ -3,6 +3,10 @@
 - /assets/* are Vite's hashed files: cached for a year, immutable. A missing asset is 404.
 - Other files in web/dist: served with no-cache.
 - Any other path that is not /api: index.html (no-cache), so the app's own routes work.
+- Every one of them also says no-transform: Cloudflare (quant.jsyoo.dev is proxied) otherwise
+  rewrites the HTML to inject its Web Analytics beacon, which the CSP then blocks (seen on the
+  live site 2026-10-12: an external script and an inline one, two console errors per page).
+  no-transform tells any intermediary to pass the bytes as the app sent them.
 - A path no file can have — a control character (NUL included), a segment longer than a file name
   may be (255 bytes), or more than 1,024 characters — is a plain 404: the filesystem is never
   asked about it, so it cannot fail with a 500.
@@ -25,8 +29,8 @@ from autotrade.api.errors import ApiError
 
 router = APIRouter()
 
-IMMUTABLE = "public, max-age=31536000, immutable"
-NO_CACHE = "no-cache"
+IMMUTABLE = "public, max-age=31536000, immutable, no-transform"
+NO_CACHE = "no-cache, no-transform"
 MISSING_BUILD = (
     '<!doctype html><html lang="ko"><meta charset="utf-8"><title>quant</title>'
     "<p>quant: web/dist is not built.</p></html>"
@@ -80,7 +84,9 @@ def web_app(path: str, request: Request) -> Response:
     dist = app_state(request).settings.dist_dir.resolve()
     index = dist / "index.html"
     if not index.is_file():
-        return HTMLResponse(MISSING_BUILD, status_code=503, headers={"Cache-Control": "no-store"})
+        return HTMLResponse(
+            MISSING_BUILD, status_code=503, headers={"Cache-Control": "no-store, no-transform"}
+        )
     if path:
         target = _file(dist, path)
         if target is not None:

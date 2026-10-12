@@ -81,16 +81,16 @@ def test_web_app_files(tmp_path: Path, api_cfg: Config, settings: ApiSettings) -
     with TestClient(app, base_url="https://testserver") as c:
         index = c.get("/")
         assert index.status_code == 200
-        assert index.headers["cache-control"] == "no-cache"
+        assert index.headers["cache-control"] == "no-cache, no-transform"
         assert "<title>quant</title>" in index.text
         spa = c.get("/day/2026-08-21?ledger=paper")
         assert spa.status_code == 200
         assert spa.text == index.text
         asset = c.get("/assets/index-AbCd1234.js")
-        assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+        assert asset.headers["cache-control"] == "public, max-age=31536000, immutable, no-transform"
         assert asset.text == "console.log(1)"
         assert c.get("/assets/missing-00000000.js").status_code == 404
-        assert c.get("/favicon.ico").headers["cache-control"] == "no-cache"
+        assert c.get("/favicon.ico").headers["cache-control"] == "no-cache, no-transform"
         escaped = c.get("/..%2Fsecret.txt")
         assert "outside" not in escaped.text
         assert c.head("/").status_code == 200
