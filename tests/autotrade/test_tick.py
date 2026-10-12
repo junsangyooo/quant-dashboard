@@ -414,7 +414,8 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     )
     assert ".venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1" in ai
     assert "timeout" not in ai
-    assert "AUTOTRADE_AI_CALLS=1 " in ai and "AUTOTRADE_AI_CALLS" not in tick
+    assert "AUTOTRADE_AI_CALLS=1 " in ai
+    assert "AUTOTRADE_AI_CALLS" not in tick
     assert "ANTHROPIC_API_KEY" not in ai
     for line in (tick, ai):
         assert "%" not in line  # cron would cut the line at an unescaped %
