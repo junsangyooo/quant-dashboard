@@ -236,7 +236,7 @@ class Accounts:
         """The moment `values` are of: now, or the last snapshot's when they come from it. What
         came in after that snapshot is not in its values, so P&L and returns stop there too (else
         a conversion since would show as a gain in one account and a loss in the other)."""
-        if self.ctx.valuation is None and self.ctx.snapshots:
+        if self.ctx.from_snapshot:
             return self.ctx.snapshots[-1].valued_at
         return self.ctx.now
 
@@ -284,7 +284,7 @@ class Accounts:
             else {"amount": amount_of(currency, pnl), "pct": self.pct(currency)},
             # An account's money moves with its own market only: dollars stay dollars whatever
             # the rate (the rate shows in 전체). Values from the last snapshot are stale too.
-            "stale": STALE_SERIES[currency] in self.ctx.stale_series or self.ctx.valuation is None,
+            "stale": STALE_SERIES[currency] in self.ctx.stale_series or self.ctx.from_snapshot,
             "trend": self.trend(currency, period),
             "composition": self.composition(currency),
         }

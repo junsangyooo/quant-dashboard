@@ -649,3 +649,42 @@ def test_stale_quotes_of_one_market_mark_only_its_account(
         assert accounts.ctx.valuation is not None
         got = (accounts.account("kr", None)["stale"], accounts.account("us", None)["stale"])
         assert got == expected, stale
+
+
+def test_a_deposit_after_the_last_snapshot_is_not_a_loss_while_it_shows(
+    logged_in: TestClient,
+    clock: Clock,
+    db: sqlite3.Connection,
+    world: World,
+    jobs: JobContext,
+) -> None:
+    """Nothing values the ledger now, so the home shows the last snapshot. A deposit after it is
+    in neither that total nor its money in: the P&L, the accounts and 환율 효과 stay the
+    snapshot's (before, the deposit came out of the P&L and landed in 환율 효과), all marked
+    stale."""
+    rebalance_after_a_snapshot(world, jobs)
+    at = kst("2026-07-02 09:12")
+    with transaction(db):
+        state = apply_cash_flow(repo.load_state(db, "paper"), CashFlowKind.DEPOSIT, D("1000000"))
+        repo.save_state(db, "paper", state, at)
+        repo.insert_event(
+            db,
+            ledger_id="paper",
+            kind="deposit",
+            event_date=at.date(),
+            occurred_at=at,
+            amount=D("1000000"),
+            currency=Currency.KRW,
+        )
+        db.execute("DELETE FROM fx_rates")
+    [snap] = repo.snapshots_of_ledger(db, "paper")
+    relogin(logged_in, clock, "2026-07-02 09:15")
+    home = logged_in.get("/api/home").json()
+    assert home["total"] == int(snap.total_krw)
+    assert home["pnl"]["amount"] == int(snap.total_krw - snap.contributions)
+    assert home["stale"] == ["hero", "plan", "composition"]
+    split = home["accounts"]["split"]
+    assert sum(split.values()) == home["pnl"]["amount"]
+    assert abs(split["fx"]) < 10_000  # what the rate did, not the deposit
+    for acc in home["accounts"]["list"]:
+        assert acc["stale"] is True
