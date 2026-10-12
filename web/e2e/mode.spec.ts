@@ -174,6 +174,21 @@ test.describe('SCR-MODE', () => {
     await expect(page.getByRole('banner').getByText('취소 안 됨 1')).toHaveCount(0);
   });
 
+  test('mode.cancel-pending: the cancel Toss still has to carry out, and 켜기 closed until it ends', async ({
+    page,
+  }, info) => {
+    await open(page, 'mode.cancel-pending');
+    const pending = card(page, '취소 요청한 주문');
+    await expect(pending.getByText('매수·미국 S&P 500 ETF 2주 · 약 $124.80')).toBeVisible();
+    await expect(pending.getByText('다음 확인 때 토스에서 취소해요 · 5분 안')).toBeVisible();
+    await expect(card(page, '취소 안 된 주문 · 토스 앱에서 확인')).toHaveCount(0);
+    const turnOn = card(page, '실전으로 켜기');
+    await expect(turnOn.getByText('지난 실전 주문의 취소가 끝나면 켤 수 있어요')).toBeVisible();
+    await expect(turnOn.getByRole('button', { name: '실전 켜기' })).toBeDisabled();
+    await shoot(page, info, 'mode.cancel-pending');
+    expect(await axe(page)).toEqual([]);
+  });
+
   test('mode.blocked: ✕ checks link to 작동, one cause, preview not computable, closed 켜기', async ({
     page,
   }, info) => {
@@ -195,6 +210,8 @@ test.describe('SCR-MODE', () => {
     ['mode.empty', '아직 모의투자 기록 없음 · 첫 확인 7/1(수) 08:30'],
     ['mode.live-not-available', '토스 주문 연결 뒤 켤 수 있어요'],
     ['mode.live-stale', '미국 시세 10/2 기준 · 2거래일째 갱신 없음'],
+    // 3단계: the link's cause and what to do; the old picture counts as the same cause.
+    ['mode.link-off', '주문 열쇠 꺼짐 · Claude에게 서버 cron 줄 수정 요청'],
   ] as const) {
     test(`${id}: ${text}`, async ({ page }, info) => {
       await open(page, id);

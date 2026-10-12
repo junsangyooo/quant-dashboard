@@ -115,6 +115,26 @@ test.describe('SCR-HEALTH', () => {
     await shoot(page, info, 'health.loading');
   });
 
+  test('health.live: the live to-dos and the Toss rows say what is wrong and what to do', async ({
+    page,
+  }, info) => {
+    await page.goto('/health?fixture=health.live');
+    const mismatch = page.getByRole('article', { name: '토스 잔고와 장부가 달라요' });
+    await expect(mismatch.getByText(/KOSPI200 ETF 장부 156주 · 토스 160주/)).toBeVisible();
+    await expect(mismatch).toContainText('그동안 주문 0건 · 실전 켜기 막힘');
+    const link = page.getByRole('article', { name: '토스 연결 · 다른 프로그램과 키 겹침' });
+    await expect(link).toContainText('Claude에게 옛 quant cron 줄 삭제 요청');
+    const fx = page.getByRole('article', { name: '토스 앱에서 환전 · 원→달러' });
+    await expect(fx).toContainText('약 4,967,000원 → $3,568.24 · 환율 1,392.0원');
+    await expect(fx).toContainText('22:30 미국 매수 전까지 바꿔 주세요');
+    await expect(
+      page.getByText('다른 프로그램과 키 겹침 · 마지막 성공 15:50 · 확인마다'),
+    ).toBeVisible();
+    await expect(page.getByText('15:50 불일치 · 확인마다')).toBeVisible();
+    await shoot(page, info, 'health.live');
+    expect(await axe(page)).toEqual([]);
+  });
+
   test('health.phase2: 공시 · AI 호출 · 지표 표 rows when listed', async ({ page }, info) => {
     await page.goto('/health?fixture=health.phase2');
     const names = page.getByRole('region', { name: '자료별' }).locator('[class*="rowName"]');

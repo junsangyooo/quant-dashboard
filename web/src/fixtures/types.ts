@@ -102,6 +102,8 @@ export type StateId =
   | 'health.loading'
   | 'health.permission'
   | 'health.phase2'
+  // 3단계 실전 연결(그림 없음): 실전 할 일 셋
+  | 'health.live'
   | 'mode.paper'
   | 'mode.live'
   | 'mode.turning-on'
@@ -116,6 +118,9 @@ export type StateId =
   | 'mode.live-not-available'
   | 'mode.preview-changed'
   | 'mode.permission'
+  // 3단계 실전 연결(그림 없음): 취소 요청 중, 토스 연결 꺼짐
+  | 'mode.cancel-pending'
+  | 'mode.link-off'
   | 'account.default'
   | 'account.no-push'
   // SCR-ACCOUNT states drawn only in the spec, plus phase 1 (push 501)
