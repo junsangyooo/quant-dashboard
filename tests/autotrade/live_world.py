@@ -8,7 +8,7 @@ secrets file of its own (never the laptop's); the transport is the fake: nothing
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
@@ -32,15 +32,17 @@ from autotrade.jobs.tasks import (
     snapshot_job,
     stage_job,
 )
-from autotrade.timeutil import kst_date
 from autotrade.jobs.tick import run_tick
+from autotrade.timeutil import kst_date
 
 from .fake_toss import FakeToss
 from .fakes import KR, US, World
 from .helpers import PHASE1_SHARES, kst
 
 D = Decimal
-SECRETS = "TOSS_CLIENT_ID=tsck_live_test\nTOSS_CLIENT_SECRET=s3cret\nTOSS_ACCOUNT_NO=123-4567-8901\n"
+SECRETS = (
+    "TOSS_CLIENT_ID=tsck_live_test\nTOSS_CLIENT_SECRET=s3cret\nTOSS_ACCOUNT_NO=123-4567-8901\n"
+)
 
 
 def market(world: World) -> None:
@@ -84,7 +86,9 @@ class Live:
 
     def sync(self, text: str | None = None) -> dict[str, Any]:
         at = self.at(text) if text else self.now()
-        return broker_job(self.conn, self.cfg, at, transport=self.fake, now=self.now, sleep=lambda s: None)
+        return broker_job(
+            self.conn, self.cfg, at, transport=self.fake, now=self.now, sleep=lambda s: None
+        )
 
     def reconcile(self, text: str | None = None) -> dict[str, Any]:
         at = self.at(text) if text else self.now()
@@ -143,7 +147,9 @@ def live_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AUTOTRADE_LIVE_ORDERS", "1")
 
 
-def make_live(tmp_path: Path, world: World, *, with_key: bool = True) -> Iterator[Live]:
+def make_live(
+    tmp_path: Path, world: World, *, with_key: bool = True
+) -> Generator[Live, None, None]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     secrets = tmp_path / "secrets.env"
     secrets.write_text(SECRETS)
@@ -157,7 +163,9 @@ def make_live(tmp_path: Path, world: World, *, with_key: bool = True) -> Iterato
     bootstrap(conn, cfg, kst("2026-06-30 12:00"))
     market(world)
     holder = Live(JobContext(conn, cfg, world.sources()), FakeToss(lambda: holder.now()), world)
-    holder.ctx = replace(holder.ctx, toss_transport=holder.fake, wall=holder.now, sleep=lambda s: None)
+    holder.ctx = replace(
+        holder.ctx, toss_transport=holder.fake, wall=holder.now, sleep=lambda s: None
+    )
     holder.fake.cash["KRW"] = D("10000000")
     holder.fake.prices = {"069500": D("32000"), "SPYM": D("66.00")}
     holder.fake.rate = D("1392.0")

@@ -72,7 +72,13 @@ def test_the_first_day(lw: Live) -> None:
     sync = lw.sync("2026-07-01 09:05")
     sent = [c for c in sync["changes"] if "sent" in c]
     assert sent == [
-        {"order_id": orders[("buy", "KR")].order_id, "sent": "ord-0001", "qty": 156, "price": "32160", "resend": False}
+        {
+            "order_id": orders[("buy", "KR")].order_id,
+            "sent": "ord-0001",
+            "qty": 156,
+            "price": "32160",
+            "resend": False,
+        }
     ]
     assert lw.fake.ours()[0].body["price"] == "32160"
     stage = lw.stages()
@@ -111,8 +117,12 @@ def test_the_first_day(lw: Live) -> None:
         D("1392.2798"),  # 4,967,000 ÷ 3,567.53
     )
     assert live.fx_todos(lw.conn, lw.now()) == []
-    us_stage = [s for s in repo.stages_of(lw.conn, orders[("buy", "US")].plan_id) if s.market == "US"]
-    assert us_stage[0].due_at.astimezone(KST).strftime("%m-%d %H:%M") == "07-01 22:30"  # due already: the next sync sends it
+    us_stage = [
+        s for s in repo.stages_of(lw.conn, orders[("buy", "US")].plan_id) if s.market == "US"
+    ]
+    assert (
+        us_stage[0].due_at.astimezone(KST).strftime("%m-%d %H:%M") == "07-01 22:30"
+    )  # due already: the next sync sends it
 
     # The US buy: a dollar limit 0.5% over, cut to the dollars there are (53, not 54).
     lw.fake.slip = D("0.33")

@@ -1,5 +1,7 @@
-"""The mode switch and the Toss rows through the web API (PHASE3.md 2.6-2.7). The API only reads
-what the tick recorded; the tick's side runs against the fake Toss (tests/autotrade/live_world.py)."""
+"""The mode switch and the Toss rows through the web API (PHASE3.md 2.6-2.7).
+
+The API only reads what the tick recorded; the tick's side runs against the fake Toss
+(tests/autotrade/live_world.py)."""
 
 from __future__ import annotations
 
@@ -48,7 +50,9 @@ def ready(lw: Live, when: str = "2026-06-30 21:00") -> None:
 
 
 def turn_on(web: TestClient, preview_hash: str, pin: str = PIN) -> Any:
-    return web.post("/api/mode/live", json={"pin": pin, "confirm": True, "previewHash": preview_hash})
+    return web.post(
+        "/api/mode/live", json={"pin": pin, "confirm": True, "previewHash": preview_hash}
+    )
 
 
 def test_the_mode_screen_before_turning_on(lw: Live, web: TestClient) -> None:
@@ -84,7 +88,11 @@ def test_the_mode_screen_before_turning_on(lw: Live, web: TestClient) -> None:
     assert live_repo.get_preview(lw.conn, preview["hash"]) is not None
     health = web.get("/api/health").json()
     link = next(s for s in health["sources"] if s["id"] == "toss-link")
-    assert (link["state"], link["cadence"], link["extra"]) == ("fresh", "per-check", {"account": "8901"})
+    assert (link["state"], link["cadence"], link["extra"]) == (
+        "fresh",
+        "per-check",
+        {"account": "8901"},
+    )
 
 
 def test_turning_on_needs_the_pin_and_the_same_preview(lw: Live, web: TestClient) -> None:
@@ -92,9 +100,9 @@ def test_turning_on_needs_the_pin_and_the_same_preview(lw: Live, web: TestClient
     first = web.get("/api/mode").json()["preview"]["hash"]
     wrong = turn_on(web, first, pin="000000")
     assert (wrong.status_code, wrong.json()) == (403, {"error": "pin", "remaining": 4})
-    assert web.post("/api/mode/live", json={"pin": "12", "confirm": True, "previewHash": first}).json() == {
-        "error": "invalid-pin"
-    }
+    assert web.post(
+        "/api/mode/live", json={"pin": "12", "confirm": True, "previewHash": first}
+    ).json() == {"error": "invalid-pin"}
     # The account changed by more than 1% since the owner looked: a new preview, not live.
     lw.fake.deposit("KRW", D("500000"))
     lw.sync("2026-06-30 21:05")
@@ -156,7 +164,11 @@ def test_turning_off_cancels_at_the_broker_through_the_tick(lw: Live, web: TestC
     lw.sync("2026-07-01 09:05")
     mode = web.get("/api/mode").json()
     cancel = mode["offPreview"]["cancel"]
-    assert [(o["side"], o["market"]) for o in cancel] == [("fx", "KR"), ("buy", "KR"), ("buy", "US")]
+    assert [(o["side"], o["market"]) for o in cancel] == [
+        ("fx", "KR"),
+        ("buy", "KR"),
+        ("buy", "US"),
+    ]
     lw.at("2026-07-01 09:06")
     off = web.post("/api/mode/paper").json()
     assert off["mode"] == "paper"
@@ -166,14 +178,23 @@ def test_turning_off_cancels_at_the_broker_through_the_tick(lw: Live, web: TestC
     lw.sync("2026-07-01 09:07")
     shell = web.get("/api/shell").json()
     assert shell["status"] == {"kind": "cancel-failed", "count": 1}
-    assert shell["banner"] == {"kind": "cancel-failed", "market": "KR", "side": "buy", "link": "mode"}
+    assert shell["banner"] == {
+        "kind": "cancel-failed",
+        "market": "KR",
+        "side": "buy",
+        "link": "mode",
+    }
     health = web.get("/api/health").json()
     todo = next(t for t in health["todos"] if t["kind"] == "cancel-failed")
     assert todo["facts"] == {"at": "2026-07-01T09:05:00+09:00", "market": "KR", "side": "buy"}
     mode = web.get("/api/mode").json()
     assert [o["status"] for o in mode["cancelFailed"]] == ["pending"]
     assert mode["canTurnOn"]["ok"] is False
-    assert mode["liveOff"] == {"from": "2026-06-30", "to": "2026-07-01", "offAt": "2026-07-01T09:06:00+09:00"}
+    assert mode["liveOff"] == {
+        "from": "2026-06-30",
+        "to": "2026-07-01",
+        "offAt": "2026-07-01T09:06:00+09:00",
+    }
     retry = web.post("/api/mode/cancel-retry").json()
     assert retry["cancelFailed"] == []
     assert len(retry["cancelPending"]) == 1
@@ -183,7 +204,9 @@ def test_turning_off_cancels_at_the_broker_through_the_tick(lw: Live, web: TestC
     assert web.get("/api/mode").json()["cancelPending"] is None
 
 
-def test_health_shows_the_live_todos(lw: Live, web: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_health_shows_the_live_todos(
+    lw: Live, web: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ready(lw)
     assert turn_on(web, web.get("/api/mode").json()["preview"]["hash"]).json() == {"mode": "live"}
     lw.sync("2026-07-01 08:29")
@@ -196,7 +219,11 @@ def test_health_shows_the_live_todos(lw: Live, web: TestClient, monkeypatch: pyt
     assert kinds["order-rejected"]["facts"]["reason"] == "broker-rejected"
     fx = kinds["fx-manual"]
     assert fx["facts"]["direction"] == "krw-usd"
-    assert (fx["facts"]["krw"], fx["facts"]["usd"], fx["facts"]["rate"]) == (4967000, 3568.24, 1392.0)
+    assert (fx["facts"]["krw"], fx["facts"]["usd"], fx["facts"]["rate"]) == (
+        4967000,
+        3568.24,
+        1392.0,
+    )
     assert fx["facts"]["by"] == "2026-07-01T22:30:00+09:00"
     assert fx["action"] == {"kind": "manual"}
     balance = next(s for s in health["sources"] if s["id"] == "toss-balance")
@@ -206,7 +233,11 @@ def test_health_shows_the_live_todos(lw: Live, web: TestClient, monkeypatch: pyt
     lw.sync("2026-07-01 09:15")
     health = web.get("/api/health").json()
     link = next(t for t in health["todos"] if t["kind"] == "toss-link")
-    assert (link["severity"], link["facts"], link["action"]) == ("red", {"cause": "env-off"}, {"kind": "manual"})
+    assert (link["severity"], link["facts"], link["action"]) == (
+        "red",
+        {"cause": "env-off"},
+        {"kind": "manual"},
+    )
     source = next(s for s in health["sources"] if s["id"] == "toss-link")
     assert source["state"] == "stale"
 

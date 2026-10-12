@@ -50,7 +50,11 @@ def planned(lw: Live) -> dict[tuple[str, str], int]:
 
 
 def kr_rows(lw: Live) -> list[live_repo.BrokerOrderRow]:
-    return [r for r in live_repo.broker_orders_of(lw.conn, "live") if r.request and r.request.symbol == "069500"]
+    return [
+        r
+        for r in live_repo.broker_orders_of(lw.conn, "live")
+        if r.request and r.request.symbol == "069500"
+    ]
 
 
 # ── the two keys ─────────────────────────────────────────────────────────────────────────
@@ -94,7 +98,8 @@ def test_the_permit_needs_both_keys(lw: Live, monkeypatch: pytest.MonkeyPatch) -
 def test_no_order_leaves_once_the_mode_is_paper(lw: Live) -> None:
     planned(lw)
     off = lw.turn_off("2026-07-01 09:00")
-    assert off.changed and not off.cancel_requested
+    assert off.changed
+    assert not off.cancel_requested
     assert len(off.cancelled) == 3  # nothing had left: cancelled in the database
     lw.sync("2026-07-01 09:05")
     assert lw.fake.ours() == []
@@ -144,9 +149,17 @@ def test_a_lost_answer_is_resent_with_the_same_id_and_gives_the_first_order(lw: 
 def test_a_crash_before_the_request_left_is_found_and_sent_again_the_next_day(lw: Live) -> None:
     ids = planned(lw)
     order = repo.get_order(lw.conn, ids[("buy", "KR")])
-    request = OrderRequest(client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW)
+    request = OrderRequest(
+        client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW
+    )
     with transaction(lw.conn):  # the intent committed, then the process died
-        live_repo.insert_intent(lw.conn, order_id=order.order_id, ledger_id="live", request=request, at=lw.at("2026-07-01 09:05"))
+        live_repo.insert_intent(
+            lw.conn,
+            order_id=order.order_id,
+            ledger_id="live",
+            request=request,
+            at=lw.at("2026-07-01 09:05"),
+        )
     report = lw.sync("2026-07-01 09:20")  # past the 9 minutes: never resent blindly
     assert {"order_id": order.order_id, "lost": True} in report["changes"]
     assert lw.fake.ours() == []
@@ -164,10 +177,14 @@ def test_a_crash_after_the_broker_took_it_is_adopted_not_resent(lw: Live) -> Non
     ids = planned(lw)
     lw.fake.fill_mode = "open"
     order = repo.get_order(lw.conn, ids[("buy", "KR")])
-    request = OrderRequest(client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW)
+    request = OrderRequest(
+        client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW
+    )
     lw.at("2026-07-01 09:05")
     with transaction(lw.conn):
-        live_repo.insert_intent(lw.conn, order_id=order.order_id, ledger_id="live", request=request, at=lw.now())
+        live_repo.insert_intent(
+            lw.conn, order_id=order.order_id, ledger_id="live", request=request, at=lw.now()
+        )
     # The order reached Toss, the answer was lost and the server was down for 15 minutes.
     lw.fake._create(request.body())
     lw.sync("2026-07-01 09:20")
@@ -180,10 +197,14 @@ def test_two_candidates_wait_for_a_person(lw: Live) -> None:
     ids = planned(lw)
     lw.fake.fill_mode = "open"
     order = repo.get_order(lw.conn, ids[("buy", "KR")])
-    request = OrderRequest(client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW)
+    request = OrderRequest(
+        client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW
+    )
     lw.at("2026-07-01 09:05")
     with transaction(lw.conn):
-        live_repo.insert_intent(lw.conn, order_id=order.order_id, ledger_id="live", request=request, at=lw.now())
+        live_repo.insert_intent(
+            lw.conn, order_id=order.order_id, ledger_id="live", request=request, at=lw.now()
+        )
     body = {**request.body(), "clientOrderId": "app-1"}
     lw.fake._create(body)
     lw.fake._create({**body, "clientOrderId": "app-2"})
@@ -234,7 +255,11 @@ def test_a_refused_order_is_a_manual_action_never_retried(lw: Live) -> None:
     ids = planned(lw)
     lw.fake.refuse["069500"] = (422, "prerequisite-required", {})
     report = lw.sync("2026-07-01 09:05")
-    assert {"order_id": ids[("buy", "KR")], "refused": "prerequisite-required", "outcome": "rejected"} in report["changes"]
+    assert {
+        "order_id": ids[("buy", "KR")],
+        "refused": "prerequisite-required",
+        "outcome": "rejected",
+    } in report["changes"]
     assert lw.stages()["result"] == "failed"
     order = repo.get_order(lw.conn, ids[("buy", "KR")])
     assert (order.status, order.failure_reason, order.manual) == ("failed", "broker-rejected", True)
@@ -256,7 +281,9 @@ def test_a_rejection_after_acceptance_is_a_manual_action(lw: Live) -> None:
 
 def test_order_hours_closed_waits_for_the_time_toss_names(lw: Live) -> None:
     ids = planned(lw)
-    lw.fake.refuse_once = [(422, "order-hours-closed", {"retryAfterAt": "2026-07-01T09:10:00+09:00"})]
+    lw.fake.refuse_once = [
+        (422, "order-hours-closed", {"retryAfterAt": "2026-07-01T09:10:00+09:00"})
+    ]
     lw.sync("2026-07-01 09:05")
     row = kr_rows(lw)[0]
     assert (row.state, row.error_code) == ("not-sent", "order-hours-closed")
@@ -267,7 +294,9 @@ def test_order_hours_closed_waits_for_the_time_toss_names(lw: Live) -> None:
     lw.sync("2026-07-01 09:10")
     sent = lw.fake.ours()
     assert len(sent) == 1
-    assert sent[0].client_order_id != client_order_id(repo.get_order(lw.conn, ids[("buy", "KR")]).idem_key)
+    assert sent[0].client_order_id != client_order_id(
+        repo.get_order(lw.conn, ids[("buy", "KR")]).idem_key
+    )
     assert lw.stages()["result"] in ("done", "waiting")
 
 
@@ -295,12 +324,17 @@ def test_no_cash_at_all_is_not_sent_and_tried_again_the_next_day(lw: Live) -> No
 
 def test_an_order_over_the_limit_is_never_sent(lw: Live) -> None:
     planned(lw)
-    lw.ctx = type(lw.ctx)(**{**lw.ctx.__dict__, "cfg": lw.cfg.__class__(**{**lw.cfg.__dict__, "live_max_order_krw": D("1000000")})})
+    lw.ctx = type(lw.ctx)(
+        **{
+            **lw.ctx.__dict__,
+            "cfg": lw.cfg.__class__(**{**lw.cfg.__dict__, "live_max_order_krw": D("1000000")}),
+        }
+    )
     lw.sync("2026-07-01 09:05")
     assert lw.fake.ours() == []
     assert kr_rows(lw)[0].error_code == "over-limit"
     lw.stages()
-    order = [o for o in repo.orders_of_ledger(lw.conn, "live") if o.market == "KR"][0]
+    order = next(o for o in repo.orders_of_ledger(lw.conn, "live") if o.market == "KR")
     assert (order.failure_reason, order.manual) == ("broker-rejected", True)
 
 
@@ -311,7 +345,8 @@ def test_a_sell_respects_the_sellable_quantity(lw: Live) -> None:
     lw.sync("2026-07-01 08:29")
     assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
     sells = [o for o in repo.orders_of_ledger(lw.conn, "live") if o.side == "sell"]
-    assert sells and sells[0].instrument_id == "KR:069500"
+    assert sells
+    assert sells[0].instrument_id == "KR:069500"
     lw.fake.holdings["069500"].qty = D("300")
     lw.sync("2026-07-01 09:05")
     sold = [o for o in lw.fake.ours() if o.side == "SELL"]
@@ -330,11 +365,27 @@ def test_executor_outcomes_from_the_records(lw: Live) -> None:
     outcome = executor.trade(late)
     assert isinstance(outcome, Failed) and outcome.reason is FailureReason.OTHER  # noqa: PT018
     with transaction(lw.conn):
-        live_repo.record_not_sent(lw.conn, order_id=ids[("buy", "KR")], ledger_id="live", client_order_id="x", code="no-quote", detail="", at=at)
+        live_repo.record_not_sent(
+            lw.conn,
+            order_id=ids[("buy", "KR")],
+            ledger_id="live",
+            client_order_id="x",
+            code="no-quote",
+            detail="",
+            at=at,
+        )
     outcome = executor.trade(req)
     assert isinstance(outcome, Failed) and outcome.reason is FailureReason.NO_QUOTE  # noqa: PT018
     with transaction(lw.conn):
-        live_repo.record_not_sent(lw.conn, order_id=ids[("buy", "KR")], ledger_id="live", client_order_id="x", code="strange", detail="", at=at)
+        live_repo.record_not_sent(
+            lw.conn,
+            order_id=ids[("buy", "KR")],
+            ledger_id="live",
+            client_order_id="x",
+            code="strange",
+            detail="",
+            at=at,
+        )
     assert executor.trade(req) == Failed(FailureReason.BROKER_REJECTED, "not sent: strange")
     with transaction(lw.conn):
         live_repo.mark_rejected(lw.conn, ids[("buy", "KR")], "order-hours-closed", "late", at)
@@ -352,9 +403,9 @@ def test_ticks_and_limits() -> None:
     spym = us_etf("SPYM", "S&P 500 ETF")
     assert tick_size(etf, D("1999")) == D(1)
     assert tick_size(etf, D("105650")) == D(5)
-    assert [tick_size(stock, D(p)) for p in ("1500", "4000", "15000", "30000", "70000", "300000", "600000")] == [
-        D(1), D(5), D(10), D(50), D(100), D(500), D(1000)
-    ]  # fmt: skip
+    prices = ("1500", "4000", "15000", "30000", "70000", "300000", "600000")
+    steps = [D(1), D(5), D(10), D(50), D(100), D(500), D(1000)]
+    assert [tick_size(stock, D(p)) for p in prices] == steps
     assert tick_size(spym, D("0.5")) == D("0.0001")
     assert limit_price(etf, Side.BUY, D("105650"), D("0.005")) == D("106175")
     assert limit_price(etf, Side.SELL, D("105650"), D("0.005")) == D("105125")

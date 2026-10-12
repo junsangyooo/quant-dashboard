@@ -58,7 +58,11 @@ def test_a_deposit_and_a_withdrawal_are_seen_in_the_cash(lw: Live) -> None:
     lw.sync("2026-06-30 22:10")
     lw.reconcile()
     usd = repo.events_of_ledger(lw.conn, "live", ["deposit"])[-1]
-    assert (usd.amount, usd.currency, usd.payload["krw_rate"]) == (D("100.00"), Currency.USD, "1392.0")
+    assert (usd.amount, usd.currency, usd.payload["krw_rate"]) == (
+        D("100.00"),
+        Currency.USD,
+        "1392.0",
+    )
     assert verify_ledger(lw.conn, "live") == []
     assert lw.reconcile("2026-06-30 22:11")["result"] == "quiet"  # nothing new: nothing written
 
@@ -68,7 +72,9 @@ def test_a_sale_in_the_app_waits_for_its_withdrawal(lw: Live) -> None:
     on(lw)
     assert lw.state().qty_of(KR) == 20
     lw.at("2026-07-01 08:10")
-    lw.fake.app_trade("069500", "SELL", D("14"), D("32000"), commission=D("67"), settlement=date(2026, 7, 2))
+    lw.fake.app_trade(
+        "069500", "SELL", D("14"), D("32000"), commission=D("67"), settlement=date(2026, 7, 2)
+    )
     lw.sync("2026-07-01 08:20")
     result = lw.reconcile()
     assert result["result"] == "match"
@@ -137,7 +143,15 @@ def test_a_dividend_is_income_not_a_deposit(lw: Live, world: World) -> None:
     world.dividend(KR, "2026-07-01", "160", pay_date="2026-07-03")
     from autotrade.market.service import prefetch_dividends
 
-    prefetch_dividends(lw.conn, lw.cfg, lw.ctx.sources, [repo.get_instrument(lw.conn, KR)], date(2026, 6, 1), date(2026, 7, 3), lw.at("2026-07-03 08:00"))
+    prefetch_dividends(
+        lw.conn,
+        lw.cfg,
+        lw.ctx.sources,
+        [repo.get_instrument(lw.conn, KR)],
+        date(2026, 6, 1),
+        date(2026, 7, 3),
+        lw.at("2026-07-03 08:00"),
+    )
     lw.fake.deposit("KRW", D("13536"))  # the broker's net (its tax differs from the estimate)
     lw.sync("2026-07-03 08:10")
     lw.reconcile()
@@ -173,7 +187,9 @@ def test_a_mismatch_writes_nothing_and_stops_the_orders(lw: Live) -> None:
     assert lw.status().reconcile_state == "match"
     assert verify_ledger(lw.conn, "live") == []
     assert rebuild_state(lw.conn, "live").qty_of(KR) == 5
-    assert adopt_job(lw.ctx, lw.at("2026-07-01 09:01"), note="again")["result"] == "nothing-to-adopt"
+    assert (
+        adopt_job(lw.ctx, lw.at("2026-07-01 09:01"), note="again")["result"] == "nothing-to-adopt"
+    )
 
 
 def test_cash_that_vanished_beyond_the_ledgers_is_a_mismatch(lw: Live) -> None:
@@ -187,7 +203,9 @@ def test_cash_that_vanished_beyond_the_ledgers_is_a_mismatch(lw: Live) -> None:
 def test_an_open_order_anywhere_makes_the_account_busy(lw: Live) -> None:
     on(lw)
     lw.fake.fill_mode = "open"
-    lw.fake._create({"symbol": "069500", "side": "BUY", "orderType": "LIMIT", "quantity": "1", "price": "32000"})
+    lw.fake._create(
+        {"symbol": "069500", "side": "BUY", "orderType": "LIMIT", "quantity": "1", "price": "32000"}
+    )
     lw.sync("2026-07-01 08:20")
     assert live_repo.latest_snapshot(lw.conn) is not None
     assert lw.reconcile()["result"] == "quiet"  # busy is not news

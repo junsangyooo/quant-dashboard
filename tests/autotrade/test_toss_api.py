@@ -6,6 +6,7 @@ or a scripted function. The laptop's secrets hold a live account; nothing here r
 
 from __future__ import annotations
 
+import email.message
 import io
 import json
 import stat
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -131,7 +132,7 @@ def test_a_revoked_token_is_counted_and_replaced(fake: FakeToss, tmp_path: Path)
 def test_a_token_renewed_by_another_run_of_ours_is_reused(fake: FakeToss, tmp_path: Path) -> None:
     folder = tmp_path / "toss"
     b = client(fake, folder)
-    raced = []
+    raced: list[bool] = []
 
     def racing(request: HttpRequest) -> HttpResponse:
         # While a's request (with tok-1) is on its way, another run of the program renews.
@@ -182,9 +183,7 @@ def test_the_account_is_the_one_whose_number_matches(fake: FakeToss, tmp_path: P
         {"accountNo": "99999999999", "accountSeq": 9, "accountType": "PENSION_SAVINGS"},
     ]
     assert client(fake, tmp_path / "a").account() == (7, "8901")
-    other = TossClient(
-        creds("000-0000"), tmp_path / "b", transport=fake, sleep=lambda s: None
-    )
+    other = TossClient(creds("000-0000"), tmp_path / "b", transport=fake, sleep=lambda s: None)
     with pytest.raises(TossApiError) as caught:
         other.account()
     assert (caught.value.code, link_state(caught.value)) == ("account-not-found", "account")
@@ -275,8 +274,16 @@ def test_orders_need_a_granted_permit(fake: FakeToss, tmp_path: Path) -> None:
 
 def test_closed_orders_are_read_page_by_page(tmp_path: Path) -> None:
     pages = {
-        None: {"orders": [{"orderId": "a", "status": "FILLED"}], "nextCursor": "c2", "hasNext": True},
-        "c2": {"orders": [{"orderId": "b", "status": "CANCELED"}], "nextCursor": None, "hasNext": False},
+        None: {
+            "orders": [{"orderId": "a", "status": "FILLED"}],
+            "nextCursor": "c2",
+            "hasNext": True,
+        },
+        "c2": {
+            "orders": [{"orderId": "b", "status": "CANCELED"}],
+            "nextCursor": None,
+            "hasNext": False,
+        },
     }
 
     def transport(request: HttpRequest) -> HttpResponse:
@@ -297,7 +304,9 @@ def test_closed_orders_are_read_page_by_page(tmp_path: Path) -> None:
             return HttpResponse(200, {}, b'{"access_token": "t", "expires_in": 86400}')
         if "/accounts" in request.url:
             return HttpResponse(
-                200, {}, b'{"result": [{"accountNo": "1", "accountSeq": 1, "accountType": "BROKERAGE"}]}'
+                200,
+                {},
+                b'{"result": [{"accountNo": "1", "accountSeq": 1, "accountType": "BROKERAGE"}]}',
             )
         page = {"orders": [], "nextCursor": "again", "hasNext": True}
         return HttpResponse(200, {}, json.dumps({"result": page}).encode())
@@ -308,14 +317,18 @@ def test_closed_orders_are_read_page_by_page(tmp_path: Path) -> None:
 
 
 def test_both_error_shapes_are_read_and_never_raise_twice() -> None:
-    nested = {"error": {"code": "order-hours-closed", "message": "m", "data": {"retryAfterAt": "x"}}}
+    nested = {
+        "error": {"code": "order-hours-closed", "message": "m", "data": {"retryAfterAt": "x"}}
+    }
     err = error_of(422, nested, {"x-request-id": "r1"})
     assert (err.code, err.data["retryAfterAt"], err.request_id) == ("order-hours-closed", "x", "r1")
     flat = error_of(403, {"error": "access_denied", "error_description": "IP"}, {})
     assert (flat.code, flat.message) == ("access_denied", "IP")
     assert error_of(502, "<html>", {}).code == "http-502"
     assert error_of(500, {"message": "x"}, {}).code == "http-500"
-    assert str(error_of(400, {"error": {"code": "invalid-request"}}, {})) == "HTTP 400 invalid-request"
+    assert (
+        str(error_of(400, {"error": {"code": "invalid-request"}}, {})) == "HTTP 400 invalid-request"
+    )
 
 
 def test_a_non_json_answer_is_an_error_not_a_crash(tmp_path: Path) -> None:
@@ -342,7 +355,9 @@ def test_prices_on_the_wire() -> None:
         "quantity": "3",
         "price": "92.10",
     }
-    again = OrderRequest.from_json(OrderRequest("at-1", "SPYM", "BUY", 3, D("92.1"), Currency.USD).to_json())
+    again = OrderRequest.from_json(
+        OrderRequest("at-1", "SPYM", "BUY", 3, D("92.1"), Currency.USD).to_json()
+    )
     assert again.price == D("92.10") and again.currency is Currency.USD  # noqa: PT018
 
 
@@ -412,7 +427,7 @@ def test_credentials_come_from_the_secrets_file_only(tmp_path: Path) -> None:
 def test_the_urllib_transport_maps_answers_and_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     class Answer(io.BytesIO):
         status = 200
-        headers = {"X-Request-Id": "r9"}
+        headers: ClassVar[dict[str, str]] = {"X-Request-Id": "r9"}
 
         def __enter__(self) -> Answer:
             return self
@@ -429,8 +444,10 @@ def test_the_urllib_transport_maps_answers_and_failures(monkeypatch: pytest.Monk
     assert (resp.status, resp.headers["x-request-id"], resp.body) == (200, "r9", b'{"result": 1}')
 
     def http_error(req: Any, timeout: float) -> Any:
+        headers = email.message.Message()
+        headers["Retry-After"] = "1"
         raise urllib.error.HTTPError(
-            "https://example.test/x", 422, "no", {"Retry-After": "1"}, io.BytesIO(b"{}")  # type: ignore[arg-type]
+            "https://example.test/x", 422, "no", headers, io.BytesIO(b"{}")
         )
 
     monkeypatch.setattr("urllib.request.urlopen", http_error)

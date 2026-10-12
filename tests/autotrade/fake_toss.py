@@ -299,7 +299,7 @@ class FakeToss:
                 ]
             )
         if path == "/api/v1/prices":
-            out = []
+            out: list[dict[str, Any]] = []
             for sym in query["symbols"].split(","):
                 if sym in self.prices:
                     out.append(
