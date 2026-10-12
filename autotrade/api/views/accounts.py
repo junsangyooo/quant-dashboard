@@ -20,8 +20,16 @@ Money into an account ('net in', in its currency)
   taken at or after it includes. (A stage that runs late is stamped with its due time, so the
   stamp alone could fall before a snapshot that did not include the fill.)
 
-P&L of an account = value − net in, in its currency; % = P&L ÷ net in (hidden when net in ≤ 0).
-An account no money ever reached has no P&L (None: the screen shows it empty).
+P&L of an account = value − net in, in its currency. An account no money ever reached has no P&L
+(None: the screen shows it empty).
+
+Its % is the P&L over the money the account held on average: each flow weighted by the share of
+the time it was in the account (the modified Dietz return, `dietz`). P&L ÷ net in bent with every
+conversion: in the paper world (10/7) 한국 계좌 showed +14.55% while its only holding was up 13.3%,
+because the won it had sent to 미국 계좌 no longer counted, and monthly rebalancing would drive the
+base to zero. A time-weighted return was set aside: its sign can differ from the amount's, and a
+dividend paid into an account the rule has just emptied would make it explode. The same return,
+from a period's start, is the period %; each point of the 수익률 line is the return up to it.
 
 The ledger's won P&L splits exactly into three parts (all whole won):
 
@@ -98,8 +106,26 @@ def amount_of(currency: Currency, x: Decimal) -> int | float:
     return fmt.krw(x) if currency is Currency.KRW else fmt.usd(x)
 
 
-def _ret(value: Decimal, base: Decimal) -> float:
-    return fmt.ret2((value - base) / base) if base > 0 else 0.0
+def dietz(
+    start_value: Decimal,
+    end_value: Decimal,
+    flows: Iterable[Flow],
+    start_at: datetime,
+    end_at: datetime,
+) -> Decimal | None:
+    """The modified Dietz return of start_at → end_at: the gain (end − start − flows) over the
+    money held on average, the start value plus each flow weighted by the share of the span left
+    after it. None when that average is not positive (the account held nothing to earn on)."""
+    span = Decimal(int((end_at - start_at).total_seconds()))
+    moved = held = ZERO
+    for f in flows:
+        moved += f.amount
+        left = Decimal(int((end_at - f.applied_at).total_seconds()))
+        held += f.amount * (min(max(left / span, ZERO), Decimal(1)) if span > 0 else Decimal(1))
+    held += start_value
+    if held <= 0:
+        return None
+    return (end_value - start_value - moved) / held
 
 
 def snapshot_value(snap: SnapshotRow, currency: Currency) -> Decimal:
@@ -166,6 +192,18 @@ class Accounts:
             ZERO,
         )
 
+    def flows_of(
+        self, currency: Currency, until: datetime, after: datetime | None = None
+    ) -> list[Flow]:
+        """The account's flows in (after, until], oldest first."""
+        return [
+            f
+            for f in self.flows
+            if f.currency is currency
+            and f.applied_at <= until
+            and (after is None or f.applied_at > after)
+        ]
+
     def funded(self, currency: Currency) -> bool:
         """Money has reached the account, or it holds something (else it is empty: no P&L)."""
         if any(f.currency is currency and f.amount > 0 for f in self.flows):
@@ -193,6 +231,15 @@ class Accounts:
             return {c: snapshot_value(last, c) for c in Currency}
         return None
 
+    @cached_property
+    def at(self) -> datetime:
+        """The moment `values` are of: now, or the last snapshot's when they come from it. What
+        came in after that snapshot is not in its values, so P&L and returns stop there too (else
+        a conversion since would show as a gain in one account and a loss in the other)."""
+        if self.ctx.valuation is None and self.ctx.snapshots:
+            return self.ctx.snapshots[-1].valued_at
+        return self.ctx.now
+
     @property
     def rate(self) -> Decimal:
         """The rate that values dollars in won here (the hero's basis)."""
@@ -204,7 +251,17 @@ class Accounts:
         values = self.values
         if values is None or not self.funded(currency):
             return None
-        return values[currency] - self.net_in(currency)
+        return values[currency] - self.net_in(currency, self.at)
+
+    def pct(self, currency: Currency) -> float | None:
+        """The account's return since money first reached it (`dietz`); None while it is empty or
+        held nothing on average."""
+        values = self.values
+        flows = self.flows_of(currency, self.at)
+        if values is None or not flows or not self.funded(currency):
+            return None
+        r = dietz(ZERO, values[currency], flows, flows[0].applied_at, self.at)
+        return None if r is None else fmt.ret2(r)
 
     def split(self, ledger_pnl: int) -> dict[str, int]:
         """The ledger's won P&L in three parts that add up to it: 한국, 미국 in won, 환율 효과."""
@@ -218,20 +275,16 @@ class Accounts:
         currency = CURRENCY_OF[account_id]
         values = self.values or dict.fromkeys(Currency, ZERO)
         pnl = self.pnl(currency)
-        net_in = self.net_in(currency)
         return {
             "id": account_id,
             "currency": currency.value,
             "total": amount_of(currency, values[currency]),
             "pnl": None
             if pnl is None
-            else {
-                "amount": amount_of(currency, pnl),
-                "pct": fmt.ret2(pnl / net_in) if net_in > 0 else None,
-            },
+            else {"amount": amount_of(currency, pnl), "pct": self.pct(currency)},
             # An account's money moves with its own market only: dollars stay dollars whatever
-            # the rate (the rate shows in 전체).
-            "stale": STALE_SERIES[currency] in self.ctx.stale_series,
+            # the rate (the rate shows in 전체). Values from the last snapshot are stale too.
+            "stale": STALE_SERIES[currency] in self.ctx.stale_series or self.ctx.valuation is None,
             "trend": self.trend(currency, period),
             "composition": self.composition(currency),
         }
@@ -245,6 +298,20 @@ class Accounts:
             if not out and value == 0 and net_in == 0:
                 continue
             out.append(Point(snap, value, net_in))
+        return out
+
+    def returns(self, currency: Currency, points: list[Point]) -> list[float]:
+        """The account's return from when money first reached it up to each point (`dietz`). A
+        point where it held nothing on average keeps the return before it (0.0 at first)."""
+        out: list[float] = []
+        last = 0.0
+        for p in points:
+            at = p.snapshot.valued_at
+            flows = self.flows_of(currency, at)
+            r = dietz(ZERO, p.value, flows, flows[0].applied_at, at) if flows else None
+            if r is not None:
+                last = fmt.ret2(r)
+            out.append(last)
         return out
 
     def _period(self, points: list[Point], period: str | None, default: str) -> tuple[bool, str]:
@@ -265,11 +332,11 @@ class Accounts:
             before = [p for p in points if p.snapshot.date <= since]
             if before and before[-1].value > 0:
                 start = before[-1]
-                amount = values[currency] - start.value - (self.net_in(currency) - start.net_in)
-                period_pnl = {
-                    "amount": amount_of(currency, amount),
-                    "pct": fmt.ret2(amount / start.value),
-                }
+                came = self.flows_of(currency, self.at, after=start.snapshot.valued_at)
+                amount = values[currency] - start.value - sum((f.amount for f in came), ZERO)
+                r = dietz(start.value, values[currency], came, start.snapshot.valued_at, self.at)
+                if r is not None:
+                    period_pnl = {"amount": amount_of(currency, amount), "pct": fmt.ret2(r)}
         return {
             "periods": list(HOME_PERIODS) if long else None,
             "period": chosen,
@@ -278,14 +345,14 @@ class Accounts:
                 {
                     "date": fmt.day(p.snapshot.date),
                     "value": amount_of(currency, p.value),
-                    "ret": _ret(p.value, p.net_in),
+                    "ret": ret,
                     "baseline": None,
                     "baselineRet": None,
-                    # 원금: money in by that day. A conversion moves the value and this line
-                    # together, so the gap between them is the account's P&L.
+                    # 들어온 돈 by that day. A conversion moves the value and this line together,
+                    # so the gap between them is the account's P&L.
                     "netIn": amount_of(currency, p.net_in),
                 }
-                for p in shown
+                for p, ret in zip(shown, self.returns(currency, shown), strict=True)
             ],
             "events": self.markers(currency, shown[0].snapshot.date if shown else since),
             "empty": empty,
@@ -454,7 +521,7 @@ class Accounts:
             start_value, after, from_day = start.value, start.snapshot.valued_at, since
 
         def in_period(at: datetime) -> bool:
-            return at <= ctx.now and (after is None or at > after)
+            return at <= self.at and (after is None or at > after)
 
         parts = {"deposit": ZERO, "withdrawal": ZERO, "transfer": ZERO}
         for f in self.flows:
@@ -520,7 +587,9 @@ def _remainder(currency: Currency, end: int | float, parts: Iterable[int | float
 def home_accounts(
     ctx: LedgerContext, period: str | None, ledger_pnl: int | None
 ) -> dict[str, Any] | None:
-    """HomeResponse.accounts: None until the first fill (the ledger has no P&L before it)."""
+    """HomeResponse.accounts: None until the first fill (the ledger has no P&L before it), and
+    while nothing can value the accounts: no valuation now and no snapshot yet (the first day
+    before 16:00 with the rate missing). The hero still shows the ledger then."""
     if ledger_pnl is None:
         return None
     accounts = Accounts(ctx)

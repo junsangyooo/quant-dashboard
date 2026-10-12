@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from autotrade.api.app import create_app
-from autotrade.api.views.accounts import Accounts, snapshot_value
+from autotrade.api.views.accounts import Accounts, Flow, dietz, snapshot_value
 from autotrade.api.views.context import LedgerContext
 from autotrade.config import Config
 from autotrade.db import repo
@@ -91,7 +91,9 @@ def test_first_day_dollars_waiting_split_adds_up(
 
     # 한국: 156 × 32,050 + 40,252 = 5,040,052; in = 10,000,000 − 4,967,000 sent to buy dollars.
     assert (kr["currency"], kr["total"]) == ("KRW", 5040052)
-    assert kr["pnl"] == {"amount": 7052, "pct": 0.14}  # +7,800 on the ETF − 748 fee
+    # % over the money it held on average: 10,000,000 from 08:30, less the 4,967,000 sent at 09:10
+    # for 7 of the 7h40m to 16:10: 10,000,000 − 4,967,000 × 7/7.67 = 5,464,870; 7,052 ÷ it = 0.13%.
+    assert kr["pnl"] == {"amount": 7052, "pct": 0.13}  # +7,800 on the ETF − 748 fee
     # 미국: the $3,568.24 the 09:10 conversion bought, nothing else yet: no gain, no loss.
     assert (us["currency"], us["total"]) == ("USD", 3568.24)
     assert us["pnl"] == {"amount": 0.0, "pct": 0.0}
@@ -394,3 +396,256 @@ def test_the_ai_rule_s_korean_plan_marks_only_the_korean_line(
         assert_composition_adds_up(acc)
         rules = {g.get("rule", {}).get("id") for g in acc["composition"]["groups"]}
         assert {"index_half", "discovery_3y"} <= rules  # both rules hold money in both
+
+
+# ── the account's % (modified Dietz) ──────────────────────────────────────────────────────────
+
+
+def test_the_return_has_the_sign_of_the_amount() -> None:
+    """A gain on a small base, then a loss on a large one: the account lost money, so its % is
+    negative. A time-weighted return would show +90% (× 2.0, then × 0.95)."""
+    t0, t1, t2 = kst("2026-07-01 09:00"), kst("2026-07-11 09:00"), kst("2026-07-21 09:00")
+    flows = [Flow(t0, Currency.KRW, D(100), "start"), Flow(t1, Currency.KRW, D(10000), "deposit")]
+    r = dietz(D(0), D(9690), flows, t0, t2)  # 100 → 200, + 10,000, then −5%: −410 in all
+    assert r is not None
+    assert round(r * 100, 2) == D("-8.04")  # −410 ÷ (100 + 10,000 × ½)
+
+
+def test_a_dividend_paid_into_an_emptied_account_stays_small() -> None:
+    """The rule moved all but 1 out halfway; a dividend of 5 lands at the end. A time-weighted
+    return would show +500% (6 ÷ 1)."""
+    t0, t1, t2 = kst("2026-07-01 09:00"), kst("2026-07-11 09:00"), kst("2026-07-21 09:00")
+    flows = [Flow(t0, Currency.KRW, D(1000), "start"), Flow(t1, Currency.KRW, D(-999), "transfer")]
+    r = dietz(D(0), D(6), flows, t0, t2)
+    assert r is not None
+    assert round(r * 100, 2) == D("1.00")  # +5 ÷ (1,000 − 999 × ½)
+
+
+def test_nothing_held_on_average_has_no_return() -> None:
+    t0, t1 = kst("2026-07-01 09:00"), kst("2026-07-02 09:00")
+    assert dietz(D(0), D(0), [], t0, t1) is None
+    out_first = [Flow(t0, Currency.USD, D(-5), "transfer")]
+    assert dietz(D(0), D(0), out_first, t0, t1) is None
+    # A span of zero counts each flow whole.
+    assert dietz(D(0), D(110), [Flow(t0, Currency.KRW, D(100), "start")], t0, t0) == D("0.1")
+
+
+# ── money moved the other way, out, and values that stop at the last snapshot ────────────────
+
+
+def fx_moves(db: sqlite3.Connection) -> dict[str, D]:
+    """What the ledger's conversions moved: won out and dollars in, dollars out and won in."""
+    out = {"krw_out": D(0), "usd_in": D(0), "usd_out": D(0), "krw_in": D(0)}
+    for f in repo.fills_of_ledger(db, "paper"):
+        if f.kind != "fx":
+            continue
+        if f.fx_direction == FxDirection.KRW_TO_USD.value:
+            out["krw_out"] += f.gross
+            out["usd_in"] += f.received or 0
+        else:
+            out["usd_out"] += f.gross
+            out["krw_in"] += f.received or 0
+    return out
+
+
+def assert_signs_agree(acc: dict[str, Any]) -> None:
+    pnl = acc["pnl"]
+    if pnl is not None and pnl["pct"] is not None:
+        assert (pnl["amount"] > 0) == (pnl["pct"] > 0) or pnl["amount"] == 0
+
+
+def test_a_dollar_to_won_conversion_moves_money_not_gains(
+    db: sqlite3.Connection,
+    world: World,
+    jobs: JobContext,
+    logged_in: TestClient,
+    clock: Clock,
+    api_cfg: Config,
+) -> None:
+    """미국 rises and 한국 stays: the rule sells SPYM and converts the dollars back to won. The
+    money moves from 미국 계좌 to 한국 계좌 and neither books it as a gain or a loss."""
+    first_day(world, jobs)
+    world.rate(kst("2026-07-01 22:25"), "1391.0")
+    stage_job(jobs, "paper", kst("2026-07-01 23:59"))  # 54 SPYM at the 7/1 open
+    d, n = date(2026, 7, 2), 0
+    while fx_moves(db)["usd_out"] == 0:
+        assert n < 30, "no dollar-to-won conversion"
+        if d.weekday() < 5:
+            n += 1
+            for t in ("07:55", "08:25", "09:10", "16:00", "22:25"):
+                world.rate(kst(f"{d.isoformat()} {t}"), "1391.0")
+            if KRX.is_trading_day(d):
+                world.bar(KR, d.isoformat(), close="32050", open_="32050")
+            if NYSE.is_trading_day(d):
+                spym = D("66.20") + D("0.60") * n
+                world.bar(US, d.isoformat(), close=str(spym), open_=str(spym - D("0.30")))
+            check_job(jobs, "paper", kst(f"{d.isoformat()} 08:30"))
+            stage_job(jobs, "paper", kst(f"{d.isoformat()} 09:30"))
+            snapshot_job(jobs, "paper", kst(f"{d.isoformat()} 16:00"))
+            stage_job(jobs, "paper", kst(f"{d.isoformat()} 23:59"))
+        d += timedelta(days=1)
+    last = d - timedelta(days=1)
+    relogin(logged_in, clock, f"{last.isoformat()} 23:59")
+    home = logged_in.get("/api/home").json()
+    kr, us = account(home, "kr"), account(home, "us")
+    moved = fx_moves(db)
+    assert sum(home["accounts"]["split"].values()) == home["pnl"]["amount"]
+    b_kr = logged_in.get("/api/home/breakdown?period=all&account=kr").json()
+    b_us = logged_in.get("/api/home/breakdown?period=all&account=us").json()
+    assert b_kr["transfer"] == int(moved["krw_in"] - moved["krw_out"])
+    assert D(str(b_us["transfer"])) == moved["usd_in"] - moved["usd_out"]
+    for acc, b in ((kr, b_kr), (us, b_us)):
+        assert_breakdown_adds_up(b)
+        assert_signs_agree(acc)
+    # 미국 gained in dollars. 한국 kept what it made on 7/1 (+7,052) less the fees of what it has
+    # traded since: the won that came back moved none of 미국's gain into it.
+    assert us["pnl"]["amount"] > 0
+    later_fees = sum(
+        (
+            f.fee
+            for f in repo.fills_of_ledger(db, "paper")
+            if f.kind == "trade"
+            and f.currency is Currency.KRW
+            and f.filled_at > kst("2026-07-01 23:00")
+        ),
+        D(0),
+    )
+    assert later_fees > 0
+    assert kr["pnl"]["amount"] == 7052 - later_fees
+    ctx = LedgerContext(db, api_cfg, "paper", clock.now)
+    accounts = Accounts(ctx)
+    for snap in ctx.snapshots:
+        moved_then = {"krw_out": D(0), "krw_in": D(0)}
+        for applied, f in accounts.fills:
+            if f.kind == "fx" and applied <= snap.valued_at:
+                if f.fx_direction == FxDirection.KRW_TO_USD.value:
+                    moved_then["krw_out"] += f.gross
+                else:
+                    moved_then["krw_in"] += f.received or 0
+        kr_in = accounts.net_in(Currency.KRW, snap.valued_at)
+        assert kr_in + moved_then["krw_out"] - moved_then["krw_in"] == snap.contributions
+
+
+def test_a_withdrawal_leaves_the_account_s_gain_alone(
+    db: sqlite3.Connection, api_cfg: Config, world: World, jobs: JobContext
+) -> None:
+    first_day(world, jobs)
+    now = kst("2026-07-01 16:10")
+    before = Accounts(LedgerContext(db, api_cfg, "paper", now))
+    kr_pnl, kr_value = before.pnl(Currency.KRW), (before.values or {})[Currency.KRW]
+    at = kst("2026-07-01 16:05")
+    with transaction(db):
+        state = apply_cash_flow(repo.load_state(db, "paper"), CashFlowKind.WITHDRAWAL, D("30000"))
+        repo.save_state(db, "paper", state, at)
+        repo.insert_event(
+            db,
+            ledger_id="paper",
+            kind="withdrawal",
+            event_date=at.date(),
+            occurred_at=at,
+            amount=D("30000"),
+            currency=Currency.KRW,
+        )
+    after = Accounts(LedgerContext(db, api_cfg, "paper", now))
+    assert (after.values or {})[Currency.KRW] == kr_value - 30000
+    assert after.pnl(Currency.KRW) == kr_pnl
+    assert after.net_in(Currency.KRW) == before.net_in(Currency.KRW) - 30000
+    b = after.breakdown("kr", "all")
+    assert b["withdrawal"] == -30000
+    assert_breakdown_adds_up(b)
+    ledger_pnl = int(after.ctx.total - after.ctx.contributions)
+    assert sum(after.split(ledger_pnl).values()) == ledger_pnl
+
+
+def rebalance_after_a_snapshot(world: World, jobs: JobContext) -> None:
+    """7/1 as 예시-값표 §4 but 한국 closes at 36,000 (+12.5%): the 7/2 check sells KODEX 200 and
+    the 09:10 stage converts the won to dollars, after the 7/1 16:00 snapshot."""
+    world.bar(KR, "2026-06-30", close="32000", open_="31900")
+    world.bar(US, "2026-06-30", close="66.00", open_="65.80")
+    for t, rate in (
+        ("07-01 08:25", "1392.0"),
+        ("07-01 09:10", "1392.0"),
+        ("07-01 16:00", "1391.5"),
+    ):
+        world.rate(kst(f"2026-{t}"), rate)
+    for t in ("07-01 22:25", "07-02 07:55", "07-02 08:25", "07-02 09:10"):
+        world.rate(kst(f"2026-{t}"), "1391.0")
+    world.bar(KR, "2026-07-01", close="36000", open_="32000")
+    world.bar(US, "2026-07-01", close="66.20", open_="66.00")
+    world.bar(KR, "2026-07-02", close="36000", open_="36000")
+    check_job(jobs, "paper", kst("2026-07-01 08:30"))
+    stage_job(jobs, "paper", kst("2026-07-01 09:05"))
+    stage_job(jobs, "paper", kst("2026-07-01 09:10"))
+    snapshot_job(jobs, "paper", kst("2026-07-01 16:00"))
+    stage_job(jobs, "paper", kst("2026-07-01 23:59"))
+    assert check_job(jobs, "paper", kst("2026-07-02 08:30"))["result"] == "rebalance"
+    stage_job(jobs, "paper", kst("2026-07-02 09:05"))
+    stage_job(jobs, "paper", kst("2026-07-02 09:10"))
+
+
+def test_values_from_the_last_snapshot_count_no_money_moved_after_it(
+    db: sqlite3.Connection, api_cfg: Config, world: World, jobs: JobContext
+) -> None:
+    """When the stored prices cannot value the ledger now, the accounts show the last snapshot.
+    A conversion after it is in neither account's values, so it is in neither's money in (the
+    paper world at 8/21 09:15 showed a phantom +176,000원 in 한국 and the loss in 미국)."""
+    rebalance_after_a_snapshot(world, jobs)
+    with transaction(db):
+        db.execute("DELETE FROM fx_rates")  # nothing can value the dollars now
+    ctx = LedgerContext(db, api_cfg, "paper", kst("2026-07-02 09:15"))
+    assert ctx.valuation is None
+    accounts = Accounts(ctx)
+    [snap] = ctx.snapshots
+    assert accounts.at == snap.valued_at
+    assert accounts.net_in(Currency.KRW) != accounts.net_in(Currency.KRW, snap.valued_at)
+    for currency in Currency:
+        expected = snapshot_value(snap, currency) - accounts.net_in(currency, snap.valued_at)
+        assert accounts.pnl(currency) == expected
+    ledger_pnl = int(ctx.total - ctx.contributions)
+    assert ledger_pnl == int(snap.total_krw - snap.contributions)
+    split = accounts.split(ledger_pnl)
+    assert sum(split.values()) == ledger_pnl
+    for account_id, _ in (("kr", 0), ("us", 0)):
+        assert accounts.account(account_id, None)["stale"] is True
+
+
+def test_with_nothing_to_value_the_accounts_there_is_no_switch(
+    logged_in: TestClient, world: World, jobs: JobContext, clock: Clock, db: sqlite3.Connection
+) -> None:
+    """The first day before 16:00 with the rate gone: no valuation and no snapshot yet. The hero
+    still shows the ledger; the switch waits (CONTRACT HomeResponse.accounts)."""
+    world.bar(KR, "2026-06-30", close="32000", open_="31900")
+    world.bar(US, "2026-06-30", close="66.00", open_="65.80")
+    world.rate(kst("2026-07-01 08:25"), "1392.0")
+    world.rate(kst("2026-07-01 09:10"), "1392.0")
+    world.bar(KR, "2026-07-01", close="32050", open_="32000")
+    check_job(jobs, "paper", kst("2026-07-01 08:30"))
+    stage_job(jobs, "paper", kst("2026-07-01 09:05"))
+    stage_job(jobs, "paper", kst("2026-07-01 09:10"))
+    with transaction(db):
+        db.execute("DELETE FROM fx_rates")
+    relogin(logged_in, clock, "2026-07-01 09:15")
+    home = logged_in.get("/api/home").json()
+    assert home["pnl"] is not None
+    assert home["accounts"] is None
+
+
+def test_stale_quotes_of_one_market_mark_only_its_account(
+    db: sqlite3.Connection,
+    api_cfg: Config,
+    world: World,
+    jobs: JobContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An account follows its own market's quotes only; the rate is in neither's own money."""
+    first_day(world, jobs)
+    for stale, expected in (
+        (["us-quotes"], (False, True)),
+        (["kr-quotes"], (True, False)),
+        (["fx"], (False, False)),
+    ):
+        monkeypatch.setattr(LedgerContext, "stale_series", stale)
+        accounts = Accounts(LedgerContext(db, api_cfg, "paper", kst("2026-07-01 16:10")))
+        assert accounts.ctx.valuation is not None
+        got = (accounts.account("kr", None)["stale"], accounts.account("us", None)["stale"])
+        assert got == expected, stale

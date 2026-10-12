@@ -156,14 +156,17 @@ interface HomeResponse {
   trend: Trend
   planCard: PlanCard                 // 첫 확인 전에도 준다(바늘·단계 없음)
   composition: Composition
-  accounts: HomeAccounts | null      // 계좌별 보기('전체 · 한국 ₩ · 미국 $'). pnl이 null이면(첫 체결 전) null
+  accounts: HomeAccounts | null      // 계좌별 보기('전체 · 한국 ₩ · 미국 $'). pnl이 null이면(첫 체결 전) null. 지금 평가도 스냅숏도 없을 때(첫날 16:00 전에 환율이 빠짐)도 null
 }
 
 // 계좌는 통화로 가른다: 한국 계좌 = 원화 종목(원화 가격) + 원화 현금, 미국 계좌 = 달러 종목(달러 가격) + 달러 현금.
 // 계좌에 들어온 돈(그 통화): 시작 금액·입금(+)·출금(−)은 그 통화의 계좌(지금은 모두 원화라 한국 계좌), 환전은 두 계좌
 // 사이를 옮기는 돈이다(원→달러: 한국 계좌에서 낸 원만큼 빠지고 미국 계좌에 산 달러만큼 들어옴). 환전은 손익이 아니다.
 // 배당(세후)·수수료·세금은 들어온 돈이 아니라 그 통화 계좌의 손익이다. 환전은 장부가 받아들인 때(주문 실행 시각)부터 센다.
-// 계좌 손익 = 계좌 값 − 들어온 돈(그 통화), pct = 손익 ÷ 들어온 돈(0 이하면 null).
+// 계좌 손익 = 계좌 값 − 들어온 돈(그 통화). pct = 손익 ÷ 그 계좌에 평균으로 머문 돈(수정 디츠: 시작 금액·입출금·환전을
+// 계좌에 있던 시간의 몫만큼 센다). 손익 ÷ 들어온 돈은 환전마다 휘었다(10/7 모의 세계: 한국 계좌 +14.55%, 그 계좌의 유일한 보유
+// KOSPI200 ETF는 +13.3%). 이 pct는 늘 금액과 부호가 같다. 평균이 0 이하면 null.
+// 평가가 실패해 값이 마지막 스냅숏이면, 그 뒤에 옮긴 돈도 세지 않는다(값도 들어온 돈도 그 스냅숏 시각까지).
 interface HomeAccounts {
   list: HomeAccount[]                // 한국 계좌('kr'), 미국 계좌('us') 순. 둘 다 늘 있다
   split: { kr: number; us: number; fx: number }
@@ -176,10 +179,12 @@ interface HomeAccount {
   currency: Currency                 // kr 'KRW' · us 'USD'
   total: number                      // 그 통화(krw 정수 · usd 센트)
   pnl: { amount: number; pct: number | null } | null   // 그 통화. null = 돈이 들어온 적 없는 빈 계좌(화면은 빈 상태)
-  stale: boolean                     // 그 계좌 시세가 낡음(한국은 kr-quotes, 미국은 us-quotes. 환율은 달러 값에 들어가지 않는다)
+  stale: boolean                     // 그 계좌 시세가 낡음(한국은 kr-quotes, 미국은 us-quotes. 환율은 달러 값에 들어가지 않는다). 값이 마지막 스냅숏에서 왔어도 true
   trend: Trend
-  // 그 통화. ret = (값 − 그날까지 들어온 돈) ÷ 들어온 돈. 선은 돈이 처음 들어온 스냅숏부터다.
-  // series[].netIn(계좌만): 그날까지 들어온 돈('원금', 그 통화). 환전 날 값과 같이 움직여서 둘의 차가 그 계좌 손익이다.
+  // 그 통화. ret = 돈이 처음 들어온 때부터 그 점까지의 pct(위와 같은 수정 디츠). 선은 돈이 처음 들어온 스냅숏부터다.
+  // periodPnl.pct = 기간 시작 스냅숏의 값에서 지금까지의 수정 디츠(평균이 0 이하면 periodPnl null). amount는 그대로
+  // 지금 값 − 시작 값 − 그 사이 들어온 돈.
+  // series[].netIn(계좌만): 그날까지 들어온 돈(화면 '들어온 돈', 그 통화). 환전 날 값과 같이 움직여서 둘의 차가 그 계좌 손익이다.
   // 30거래일 규칙은 그 계좌 기록(점 수)으로 정한다: 짧으면 periods null·period 'all'. 길면 요청한 period.
   // baseline·baselineRet는 늘 null: '손대지 않았을 때'는 전체만이다(규칙이 두 계좌 사이로 돈을 옮겨서, 한 계좌만 견주면
   // 차이가 대부분 옮긴 돈이 된다). events: 시작·실전 켬/끔은 두 계좌 모두, 리밸런싱(일부 실패·진행 중 포함)은 그 계획의
@@ -725,3 +730,4 @@ type NotifyEvent =
 - 2026-10-10: 점검 고침(엔진 세션). 사는 판단도 두 번 묻는다: 사기 확인의 `votes`에 'buy'·'skip'(두 답)을 더했고, 입력 줄에 `filings`(꾸러미의 최근 공시 수)와 분기 발굴이 새로 고른 종목이면 `checks` 대신 `month`가 온다. 분기 발굴 판단의 `action`은 늘 'none'이다(새 종목은 사기 확인 두 번 뒤에 산다). 작동 화면의 ai-cli 줄은 웹 서비스의 환경이 아니라 AI 실행기의 심장 박동을 읽는다: `extra.enabled`는 실행기가 본 값이고 `cli`·`lastRunAt`·`running`·`runningSince`를 더했으며, CLI를 못 찾으면 줄이 'stale'이다. ai-cli 할 일에 빨강 'cli-missing', 노랑 'call-running'·'queue-waiting'(`cause`)을, filings 할 일에 실행기에 DART 키가 없을 때의 state 'no-key'(action 'manual')를 더했다. 헤더 '점검 n'은 실행기가 CLI를 1거래일 넘게 못 찾을 때도 센다.
 - 2026-10-10: 보안 감사 수정(API 세션). 쿠키 이름 `__Host-qsess`(개발용만 Secure 없는 `qsess`). 쓰기 요청의 출처 검사와 403 `origin`. 세션이 필요한 경로는 본문보다 세션을 먼저 본다. 스키마 판이 코드와 다르면 모든 `/api`가 503 `schema {stored, code}`(API는 이전하지 않음, `/api/healthz` 포함), DB를 못 읽으면 어디서나 503 `db`. PIN 잠금: IPv6는 /64로 묶고, 24시간에 10회면 할 일 `pin-failures`('PIN 실패 급증'), 30회면 `scope:'hold'`(서버 `unlock`까지, `since`). PIN 바꾸기에는 접속 위치 잠금만 걸고, 한 세션에서 5회 연속 틀리면 그 세션을 끊는다(403 `session`). 고정 자료 `pin.hold`(그림 없음)를 더했다. 제어 문자·너무 긴 경로는 404 text, 깨진 쿠키는 403 `session`.
 - 2026-10-12: 계좌별 보기와 설정 정리(웹 세션, 주인 요청 '국장과 미장은 엄연히 다른 화폐단위'). `HomeResponse.accounts`(한국 계좌·미국 계좌를 각 통화로: 값·손익·선·구성, 선의 점마다 원금 `netIn`, 30거래일 규칙은 계좌 기록으로, 리밸런싱 표식은 그 계획이 닿은 계좌에만)와 `split`(전체 손익 = 한국 + 미국 원화 환산 + 환율 효과, 원 단위까지 맞음)을 더했다. 환전은 계좌 사이를 옮기는 돈이고 손익이 아니다. '손대지 않았을 때'는 전체에만 둔다. `/api/home/breakdown?account=`(`Breakdown.currency`·`transfer`)를 더했다. 설정의 알림은 `notifications.available`이 false인 동안(1·2단계) 화면이 한 줄로 접는다(API는 그대로). 고정 자료 home.account-kr·home.account-us·home.before-fill·home.us-cash·home.us-empty를 더했다.
+- 2026-10-13: 계좌 pct·ret·periodPnl.pct를 수정 디츠(평균으로 머문 돈 대비)로 바꿨다(가벼운 확인: 손익 ÷ 들어온 돈은 환전마다 휘었다). 평가가 실패해 값이 마지막 스냅숏일 때는 그 뒤 옮긴 돈을 세지 않고 stale을 켠다. accounts가 null인 경우에 '평가도 스냅숏도 없을 때'를 적었다. 화면: 점선 이름 '원금' → '들어온 돈'과 한 줄 설명, 설정 알림 줄 문구, 미국 계좌 변동 분해의 입금·출금 줄은 값이 있을 때만, 전체에서 연 계좌 보기는 뒤로 가기가 전체로(스위치도).
