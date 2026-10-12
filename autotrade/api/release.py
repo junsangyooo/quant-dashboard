@@ -321,9 +321,49 @@ def install_release(paths: Paths, built: Path, commit: str, now: datetime) -> st
     return rid
 
 
-def npm(args: Sequence[str], cwd: Path) -> None:
-    """npm with its output on stderr (stdout is this command's JSON)."""
-    done = subprocess.run(["npm", *args], cwd=cwd, stdout=sys.stderr, stderr=sys.stderr)
+NODE_MAJOR = 24  # web/package.json "engines": {"node": ">=24"}
+NODE_VERSION = re.compile(r"v(\d+)\.(\d+)\.(\d+)")
+
+
+def node_bin(home: Path | None = None) -> Path | None:
+    """The newest nvm node's bin folder (~/.nvm/versions/node/v<x.y.z>/bin), picked the way the
+    server's /usr/local/bin/claude wrapper picks it. A non-interactive ssh command (deploy.sh)
+    gets only the system node on PATH, Ubuntu's v20 on the server, which cannot run the web build
+    (it runs .ts scripts directly, and its packages want node >= 24). None without nvm."""
+    root = (home or Path.home()) / ".nvm" / "versions" / "node"
+    found: list[tuple[tuple[int, int, int], Path]] = []
+    for folder in root.glob("v*/bin") if root.is_dir() else ():
+        m = NODE_VERSION.fullmatch(folder.parent.name)
+        if m and (folder / "node").is_file() and (folder / "npm").exists():
+            found.append(((int(m[1]), int(m[2]), int(m[3])), folder))
+    return max(found)[1] if found else None
+
+
+def npm(args: Sequence[str], cwd: Path, home: Path | None = None) -> None:
+    """npm of the newest nvm node (else PATH's), with its output on stderr (stdout is this
+    command's JSON). A node older than the web's engines stops here with a plain reason instead of
+    a build error deep in the toolchain."""
+    env = dict(os.environ)
+    folder = node_bin(home)
+    if folder is not None:
+        env["PATH"] = f"{folder}{os.pathsep}{env.get('PATH', '')}"
+    node = str(folder / "node") if folder is not None else "node"
+    try:
+        version = subprocess.run(
+            [node, "-v"], capture_output=True, text=True, env=env, check=False
+        ).stdout.strip()
+    except OSError as exc:
+        raise ReleaseError(f"no node to build the web with: {exc}") from None
+    m = NODE_VERSION.fullmatch(version)
+    if m is None or int(m[1]) < NODE_MAJOR:
+        raise ReleaseError(
+            f"node {version or '?'} is older than the web needs (>= {NODE_MAJOR}): install a"
+            " newer one with nvm on the server"
+        )
+    npm_cmd = str(folder / "npm") if folder is not None else "npm"
+    done = subprocess.run(
+        [npm_cmd, *args], cwd=cwd, stdout=sys.stderr, stderr=sys.stderr, env=env, check=False
+    )
     if done.returncode != 0:
         raise ReleaseError(f"npm {' '.join(args)} failed (exit {done.returncode})")
 

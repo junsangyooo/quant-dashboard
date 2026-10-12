@@ -292,13 +292,49 @@ def test_a_build_needs_web_and_an_index(repo: Path, two_commits: tuple[str, str]
     assert rel.releases(paths)[0].id == first
 
 
+def _nvm(home: Path, *versions: str) -> None:
+    for v in versions:
+        folder = home / ".nvm" / "versions" / "node" / v / "bin"
+        folder.mkdir(parents=True)
+        (folder / "node").write_text("")
+        (folder / "npm").write_text("")
+
+
 def test_npm_failures_are_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+    seen: list[list[str]] = []
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        seen.append(list(args[0]))
+        if args[0][-1] == "-v":
+            return subprocess.CompletedProcess(args[0], 0, stdout="v24.14.1\n")
         return subprocess.CompletedProcess(args[0], 1)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    _nvm(tmp_path, "v20.20.2", "v24.14.1", "v24.9.0")
     with pytest.raises(rel.ReleaseError, match="npm ci failed"):
-        rel.npm(["ci"], tmp_path)
+        rel.npm(["ci"], tmp_path, home=tmp_path)
+    newest = tmp_path / ".nvm" / "versions" / "node" / "v24.14.1" / "bin"
+    assert seen == [[str(newest / "node"), "-v"], [str(newest / "npm"), "ci"]]
+
+
+def test_the_web_build_needs_a_new_enough_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The server's system node (v20) cannot build the web (it ran .ts scripts as
+    ERR_UNKNOWN_FILE_EXTENSION on 2026-10-12): stop with the reason before npm runs."""
+    calls: list[list[str]] = []
+
+    def system_node(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(list(args[0]))
+        return subprocess.CompletedProcess(args[0], 0, stdout="v20.20.2\n")
+
+    monkeypatch.setattr(subprocess, "run", system_node)
+    with pytest.raises(rel.ReleaseError, match=r"node v20\.20\.2 is older"):
+        rel.npm(["ci"], tmp_path, home=tmp_path)  # no nvm under this home: PATH's node
+    assert calls == [["node", "-v"]]  # npm itself never ran
+    assert rel.node_bin(tmp_path) is None
+    _nvm(tmp_path, "v24.12.0", "not-a-version")
+    assert rel.node_bin(tmp_path) == tmp_path / ".nvm/versions/node/v24.12.0/bin"
 
 
 # ── restore, locks, rollback ─────────────────────────────────────────────────────────────
