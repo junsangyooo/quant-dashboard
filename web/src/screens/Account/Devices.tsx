@@ -1,5 +1,6 @@
-// 기기 (Figma 1:65384): this device (icon · name · 들어온 시각 · '이 기기'), 로그아웃, then for a lost
-// phone '다른 기기 모두 로그아웃' behind a confirm modal (no drawing).
+// 기기 (Figma 1:65384): this device (icon · name · 들어온 시각 · '이 기기'), '이 기기 로그아웃', then for a
+// lost phone '다른 기기 모두 로그아웃' behind a confirm modal (no drawing). Each button has one line
+// above it saying what it does (the owner, 2026-10-12).
 import clsx from 'clsx';
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -52,6 +53,8 @@ export function DevicesCard({ device }: { device: ThisDevice }) {
         </div>
         <InfoChip>{t.devices.thisDevice}</InfoChip>
       </div>
+      <hr className={styles.divider} />
+      <p className={clsx('t-caption', styles.muted)}>{t.devices.logoutWhat}</p>
       <Button
         kind="default"
         className={styles.wide}
@@ -75,7 +78,7 @@ export function DevicesCard({ device }: { device: ThisDevice }) {
         </p>
       ) : null}
       <hr className={styles.divider} />
-      <p className={clsx('t-caption', styles.muted)}>{t.devices.lost}</p>
+      <p className={clsx('t-caption', styles.muted)}>{t.devices.othersWhat}</p>
       <Button
         kind="danger"
         className={styles.wide}

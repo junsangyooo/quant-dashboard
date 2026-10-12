@@ -132,6 +132,23 @@
   scroll-margin-top: calc(var(--space-section) * 4);
 }
 
+/* 1·2단계: the whole section is one quiet row (no web push yet). */
+.notificationsLater {
+  scroll-margin-top: calc(var(--space-section) * 4);
+}
+
+.laterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-row);
+  color: var(--text-primary);
+}
+
+/* Off and out of reach: the switch is drawn faded so it does not read as one to press. */
+.toggleLater {
+  opacity: 0.45;
+}
+
 .switchList {
   display: flex;
   flex-direction: column;
