@@ -21,7 +21,6 @@ import hashlib
 import os
 import sqlite3
 from collections.abc import Mapping
-from dataclasses import replace
 from datetime import datetime
 from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
@@ -220,7 +219,3 @@ def fill_of(row: live_repo.BrokerOrderRow) -> TradeFilled | None:
     """The fill a finished broker order carries, if any (for fills booked outside the runner)."""
     outcome = _done(row) if row.state == "done" else None
     return outcome if isinstance(outcome, TradeFilled) else None
-
-
-def with_qty(req: TradeRequest, qty: int) -> TradeRequest:
-    return replace(req, qty=qty)

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import replace
 from datetime import date, datetime, timedelta
 from decimal import ROUND_FLOOR, Decimal
 from typing import Any
@@ -745,13 +744,3 @@ def toss_check(cfg: Config, conn: Any, *, transport: Transport | None = None) ->
         out["cause"] = link_state(exc)
         out["error"] = str(exc)
     return out
-
-
-def tradable_rate(status: BrokerStatus | None, market: Market) -> Decimal | None:
-    if status is None:
-        return None
-    return status.commissions.get(market.value)
-
-
-def status_with(status: BrokerStatus, **changes: Any) -> BrokerStatus:
-    return replace(status, **changes)
