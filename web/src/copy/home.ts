@@ -82,7 +82,9 @@ export const homeCopy = {
     /** Group head inside one account: '계좌의 81.4%'. */
     share: (pct: string) => `계좌의 ${pct}`,
     /** The dashed line of one account: money in by that day (start, deposits, conversions). */
-    netIn: '원금',
+    netIn: '들어온 돈',
+    /** Under the legend of one account's line: why 들어온 돈 steps on a conversion day. */
+    netInNote: '들어온 돈은 환전하면 두 계좌 사이로 옮겨가요',
     split: {
       title: '손익 나눠 보기',
       total: '전체 손익',

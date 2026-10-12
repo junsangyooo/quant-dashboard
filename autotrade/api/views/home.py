@@ -200,7 +200,8 @@ def trend(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
 
 
 def home(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
-    stale = ["hero", "plan", "composition"] if ctx.stale_series else []
+    # Figures from the last snapshot (nothing values the ledger now) are stale as a whole.
+    stale = ["hero", "plan", "composition"] if ctx.stale_series or ctx.from_snapshot else []
     ledger_pnl = pnl(ctx)
     return {
         "ledger": ctx.ledger_id,

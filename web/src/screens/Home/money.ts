@@ -15,7 +15,7 @@ import {
   type PnlDirection,
 } from '../../lib/format';
 
-/** '▲ +243,800원 · +2.44%', '▼ −$149.95 · −4.08%' (pct hidden when its base is 0 or less). */
+/** '▲ +243,800원 · +2.44%', '▼ −$149.95 · −4.30%' (no % when the server sends none). */
 export function pnlText(
   pnl: { amount: number; pct: number | null },
   currency: Currency = 'KRW',

@@ -277,7 +277,7 @@ test('the switch shows each account in its own money; the graph stays in view', 
   await switcher.getByRole('radio', { name: '한국 ₩' }).click();
   await expect(page).toHaveURL(/[?&]account=kr(&|$)/);
   await expect(total(page, '5,368,683원')).toBeVisible();
-  await expect(page.getByText('▲ +484,683원 · +9.92%')).toBeVisible();
+  await expect(page.getByText('▲ +484,683원 · +9.41%')).toBeVisible();
   await expect(page.getByRole('region', { name: '계획' })).toHaveCount(0);
   await graphAboveTabs(page);
   expect(await axe(page)).toEqual([]);
@@ -286,7 +286,7 @@ test('the switch shows each account in its own money; the graph stays in view', 
   await switcher.getByRole('radio', { name: '미국 $' }).click();
   await expect(page).toHaveURL(/[?&]account=us(&|$)/);
   await expect(total(page, '$3,526.56')).toBeVisible();
-  await expect(page.getByText('▼ −$149.95 · −4.08%')).toBeVisible();
+  await expect(page.getByText('▼ −$149.95 · −4.30%')).toBeVisible();
   const comp = page.getByRole('region', { name: '구성' });
   await expect(comp.getByText('$2,870.40')).toBeVisible();
   await expect(comp.getByText('계좌의 85.0%')).toBeVisible();
@@ -310,6 +310,22 @@ test('a tile opens its account; back returns to 전체', async ({ page }) => {
   await page.goBack();
   await expect(total(page, '10,243,800원')).toBeVisible();
   await expect(page.getByRole('radio', { name: '전체' })).toHaveAttribute('aria-checked', 'true');
+});
+
+test('the switch opens an account one entry above 전체: back returns there', async ({ page }) => {
+  await page.goto('/?fixture=home.paper');
+  const switcher = page.getByRole('radiogroup', { name: '계좌' });
+  await switcher.getByRole('radio', { name: '한국 ₩' }).click();
+  await expect(page).toHaveURL(/[?&]account=kr(&|$)/);
+  await switcher.getByRole('radio', { name: '미국 $' }).click();
+  await expect(page).toHaveURL(/[?&]account=us(&|$)/);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/account=/);
+  await expect(total(page, '10,243,800원')).toBeVisible();
+  await expect(switcher.getByRole('radio', { name: '전체' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 });
 
 test('손익 나눠 보기 adds 한국 + 미국 + 환율 효과 up to the P&L; the sheet holds the focus', async ({

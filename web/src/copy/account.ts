@@ -52,10 +52,11 @@ export const accountCopy = {
   notifications: {
     title: '알림',
     /**
-     * NEW — while the server has no web push (`available` false, 1·2단계) the section is one
-     * disabled row: nothing would be sent, so no switch pretends to work.
+     * NEW — while the server has no web push (`available` false) the section is one disabled
+     * row: nothing would be sent, so no switch pretends to work. The line says what 알림 will do
+     * and that it is not ready, without the internal stage name.
      */
-    later: '3단계에서 켤 수 있어요',
+    later: '매매·문제를 휴대폰으로 알려줘요 · 아직 준비 중이에요',
     thisDevice: '이 기기에서 알림 받기',
     iphoneOnly: 'iPhone은 홈 화면 앱에서만 받아요',
     /** Empty state (0 devices): above the switch. */

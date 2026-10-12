@@ -5,7 +5,10 @@
 // - money in: the start amount into 한국; each conversion moves its won out of 한국 and its dollars
 //   into 미국 (값표 §1.4: 7/1 4,768,000원 → $3,425.28 · 8/21 175,000원 → $125.93 · 10/7 173,000원 →
 //   $125.30, each at 09:10, so in that day's 16:00 value);
-// - 전체 손익 = 한국 + 미국 in won (× 1,382.4, rounded) + 환율 효과 (the remainder).
+// - 전체 손익 = 한국 + 미국 in won (× 1,382.4, rounded) + 환율 효과 (the remainder);
+// - an account's % is its P&L over the money it held on average (`dietzPct`, the server's
+//   modified Dietz return): the start at 7/1 08:30 and each conversion at 09:10 weighted by the
+//   share of the time they were in the account.
 // The table has no per-account daily values: the dollar line is the table's holdings at prices that
 // run from the buys ($66.00 · $172.00) to the 10/6 closes ($62.40 · $176.40), the rate from 1,392.0
 // (7/1) through 1,389.6 (8/21) to 1,382.4 (10/7); 한국 is the day's total minus 미국 in won. The
@@ -37,8 +40,6 @@ export function allocatePct1(values: readonly number[]): number[] {
   return floors.map((f) => f / 10);
 }
 
-const ret2 = (value: number, base: number) =>
-  base > 0 ? Math.round(((value - base) / base) * 10_000) / 100 : 0;
 const won = (cents: number, rateTenths: number) => Math.round((cents * rateTenths) / 1000);
 const dollars = (cents: number) => Math.round(cents) / 100;
 
@@ -53,6 +54,47 @@ const CONVERSIONS = [
 
 const LAST = '2026-10-07';
 const DAYS = paperDailySinceStart.map((p) => p.date);
+
+/** Minutes from the start (7/1 08:30 KST) to a moment of a day. */
+const minutes = (date: string, hhmm: string) =>
+  (Date.parse(`${date}T${hhmm}:00+09:00`) - Date.parse('2026-07-01T08:30:00+09:00')) / 60_000;
+/** 16:00 (the day's value) and now (10/7 16:10). */
+const VALUED = '16:00';
+const NOW = minutes(LAST, '16:10');
+
+/** Money into an account and when: the start into 한국, each conversion out of 한국 into 미국. */
+function flowsOf(id: 'kr' | 'us'): { at: number; amount: number }[] {
+  const moved = CONVERSIONS.map((c) => ({
+    at: minutes(c.date, '09:10'),
+    amount: id === 'kr' ? -c.krw : dollars(c.cents),
+  }));
+  return id === 'kr' ? [{ at: 0, amount: START_CAPITAL }, ...moved] : moved;
+}
+
+/**
+ * The account's % from `start` (its value then, or nothing before its first money) to `end`: the
+ * gain over the money held on average (autotrade/api/views/accounts.py `dietz`). null when it held
+ * nothing on average.
+ */
+function dietzPct(
+  id: 'kr' | 'us',
+  end: { at: number; value: number },
+  start: { at: number; value: number } | null,
+): number | null {
+  const all = flowsOf(id);
+  const from = start?.at ?? all[0]?.at ?? 0;
+  const flows = all.filter((f) => f.at <= end.at && (start === null || f.at > start.at));
+  const span = end.at - from;
+  const moved = flows.reduce((s, f) => s + f.amount, 0);
+  const held =
+    (start?.value ?? 0) +
+    flows.reduce(
+      (s, f) => s + f.amount * (span > 0 ? Math.min(Math.max((end.at - f.at) / span, 0), 1) : 1),
+      0,
+    );
+  if (held <= 0) return null;
+  return Math.round(((end.value - (start?.value ?? 0) - moved) / held) * 10_000) / 100;
+}
 
 /** 미국 계좌 holdings in a day's 16:00 value (the US buys come at 22:30, after it). */
 function usHoldings(date: string): { spym: number; nvda: number; cash: number } {
@@ -153,8 +195,13 @@ function trendOf(id: 'kr' | 'us', period: HomePeriod): Trend {
       id === 'kr'
         ? last.kr - first.kr - (endIn.krw - startIn.krw)
         : dollars(last.usCents - first.usCents - (endIn.cents - startIn.cents));
-    // pct = amount ÷ the account's value at the period start
-    periodPnl = { amount, pct: Math.round((amount / value(first)) * 10_000) / 100 };
+    // pct: the account's return from the period start (its value at that day's 16:00) to now
+    const pct = dietzPct(
+      id,
+      { at: NOW, value: value(last) },
+      { at: minutes(first.date, VALUED), value: value(first) },
+    );
+    periodPnl = pct === null ? null : { amount, pct };
   }
   const markers = id === 'kr' ? KR_MARKERS : US_MARKERS;
   return {
@@ -164,7 +211,7 @@ function trendOf(id: 'kr' | 'us', period: HomePeriod): Trend {
     series: points.map((p) => ({
       date: p.date,
       value: value(p),
-      ret: ret2(value(p), base(p.date)),
+      ret: dietzPct(id, { at: minutes(p.date, VALUED), value: value(p) }, null) ?? 0,
       baseline: null,
       baselineRet: null,
       netIn: base(p.date),
@@ -307,7 +354,7 @@ export function paperAccounts(period: HomePeriod = '3m'): HomeAccounts {
     id: 'kr',
     currency: 'KRW',
     total: 5_368_683,
-    pnl: { amount: 484_683, pct: 9.92 },
+    pnl: { amount: 484_683, pct: dietzPct('kr', { at: NOW, value: 5_368_683 }, null) },
     stale: false,
     trend: trendOf('kr', period),
     composition: PAPER_KR_COMPOSITION,
@@ -316,7 +363,7 @@ export function paperAccounts(period: HomePeriod = '3m'): HomeAccounts {
     id: 'us',
     currency: 'USD',
     total: 3_526.56,
-    pnl: { amount: -149.95, pct: -4.08 },
+    pnl: { amount: -149.95, pct: dietzPct('us', { at: NOW, value: 3_526.56 }, null) },
     stale: false,
     trend: trendOf('us', period),
     composition: PAPER_US_COMPOSITION,
@@ -395,9 +442,10 @@ export function firstDayAccounts(): HomeAccounts {
         id: 'kr',
         currency: 'KRW',
         total: 5_040_052,
-        pnl: { amount: 7_052, pct: 0.14 },
+        // 7,052 over 10,000,000 from 08:30 less 4,967,000 from 09:10 (16:10: 5,464,870): 0.13%.
+        pnl: { amount: 7_052, pct: 0.13 },
         stale: false,
-        trend: single(5_040_052, 0.14, 5_033_000),
+        trend: single(5_040_052, 0.13, 5_033_000), // at 16:00: 5,474,583 held, 0.13%
         composition: {
           groupBy: [],
           groups: [

@@ -213,7 +213,7 @@ export interface Trend {
     ret: number;
     baseline: number | null;
     baselineRet: number | null;
-    netIn?: number; // HomeAccount.trend만: 그날까지 들어온 돈('원금', 그 통화)
+    netIn?: number; // HomeAccount.trend만: 그날까지 들어온 돈(그 통화)
   }>;
   events: Array<{ date: string; kind: EventKind; kinds: EventKind[]; count?: number }>;
   // 하루에 표식 하나. kind는 그날 첫 사건, kinds는 그날 사건 전부(순서대로), 둘 이상이면 count(묶음 표식)

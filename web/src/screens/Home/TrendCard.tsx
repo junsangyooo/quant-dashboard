@@ -1,7 +1,7 @@
 // 자산 변동 (Figma '자산 변동'): 기간 손익 › (변동 분해 시트) · 금액|수익률 / 기간 칩 (30거래일부터) /
 // 선 그래프 (내 자산 · 손대지 않았을 때) / 사건 띠 (표식 → 그날, '[n]' → 사건 목록, ⓘ → 범례) /
 // 범례 · 표로 보기. A card on 1440; plain on 390. One account (한국 ₩ · 미국 $) draws its own line in
-// its own money; its dashed line is 원금 (money in by that day), not 손대지 않았을 때 (that
+// its own money; its dashed line is 들어온 돈 (money in by that day), not 손대지 않았을 때 (that
 // comparison is the whole ledger's): a conversion moves both lines, the gap is the P&L.
 import clsx from 'clsx';
 import { useId, useState } from 'react';
@@ -124,18 +124,17 @@ function BreakdownSheet({
 /**
  * Waterfall steps: 기간 시작 → 입금 → 출금 → 시세·환율 → 배당 → 수수료 → 지금. One account
  * (`currency` set) adds 환전 (money the conversions moved in or out) and its market move is 시세
- * only; 미국 계좌 has no deposits or withdrawals, so those rows are left out.
+ * only. 미국 계좌 gets its dollars by conversion, so its 입금 · 출금 rows show only when a dollar
+ * deposit or withdrawal happened (else the steps would not add up to 지금).
  */
 export function breakdownSteps(b: Breakdown): WaterfallStep[] {
   const w = copy.waterfall;
   const account = b.currency !== undefined;
-  const flows: WaterfallStep[] =
-    b.currency === 'USD'
-      ? []
-      : [
-          { key: 'deposit', label: w.deposit, kind: 'cashflow', value: b.deposit },
-          { key: 'withdraw', label: w.withdraw, kind: 'cashflow', value: b.withdrawal },
-        ];
+  const both: WaterfallStep[] = [
+    { key: 'deposit', label: w.deposit, kind: 'cashflow', value: b.deposit },
+    { key: 'withdraw', label: w.withdraw, kind: 'cashflow', value: b.withdrawal },
+  ];
+  const flows = b.currency === 'USD' ? both.filter((s) => s.value !== 0) : both;
   return [
     { key: 'start', label: w.start, kind: 'anchor', value: b.start },
     ...flows,
@@ -208,7 +207,7 @@ export function TrendCard({ home, wide, onPeriod, account }: TrendCardProps) {
   const start = t.series[0]?.date ?? home.startDate;
   const end = t.series.at(-1)?.date ?? start;
   const pick = (p: (typeof t.series)[number]) => (mode === 'amount' ? p.value : p.ret);
-  // The dashed line: 손대지 않았을 때 for the whole ledger; for one account its 원금 (money in by
+  // The dashed line: 손대지 않았을 때 for the whole ledger; for one account its 들어온 돈 (money in by
   // that day), so a conversion that moves the value moves this line too and the gap stays the
   // P&L. In 수익률 an account's line is already net of what came in: no second line.
   const pickBase = (p: (typeof t.series)[number]) =>
@@ -372,6 +371,9 @@ export function TrendCard({ home, wide, onPeriod, account }: TrendCardProps) {
             {table ? <ChevronUp size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
           </button>
         </div>
+      ) : null}
+      {account && hasBaseline ? (
+        <p className={clsx('t-caption', styles.muted)}>{homeCopy.accounts.netInNote}</p>
       ) : null}
 
       {table ? (

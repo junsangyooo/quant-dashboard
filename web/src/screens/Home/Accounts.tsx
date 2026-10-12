@@ -35,20 +35,29 @@ export function accountHref(id: AccountId): string {
   return `?account=${id}`;
 }
 
-/** '▲ +484,683원 · +9.92%', '▼ −$149.95 · −4.08%'; the tile of an empty account says so. */
+/** History state of an account view opened from 전체: 전체 then steps back instead of pushing. */
+export const FROM_ALL = { fromAll: true } as const;
+
+export function isFromAll(state: unknown): boolean {
+  return (
+    typeof state === 'object' && state !== null && 'fromAll' in state && state.fromAll === true
+  );
+}
+
+/** '▲ +484,683원 · +9.41%', '▼ −$149.95 · −4.30%'; the tile of an empty account says so. */
 export function accountPnlText(account: HomeAccount): string {
   return account.pnl ? pnlText(account.pnl, account.currency) : a.emptyShort;
 }
 
 /**
- * '[국기] 한국 계좌  +9.92%' / '5,368,683원' / '▲ +484,683원'. The % sits on the name line so the
+ * '[국기] 한국 계좌  +9.41%' / '5,368,683원' / '▲ +484,683원'. The % sits on the name line so the
  * amount line never wraps at 390 (two tiles share 350px; '▲ +668,698원 · +14.55%' is 151px of 147).
  */
 function AccountTile({ account }: { account: HomeAccount }) {
   const pnl = account.pnl;
   const dir = pnl ? moneyDirection(pnl.amount, account.currency) : 'flat';
   return (
-    <Link to={accountHref(account.id)} className={styles.tile}>
+    <Link to={accountHref(account.id)} state={FROM_ALL} className={styles.tile}>
       <span className={styles.tileHead}>
         <Flag country={account.id} decorative />
         <span className="t-label">{a.name[account.id]}</span>

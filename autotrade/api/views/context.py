@@ -235,8 +235,19 @@ class LedgerContext:
 
     @cached_property
     def contributions(self) -> Decimal:
-        state = repo.load_state(self.conn, self.ledger_id)
-        return state.contributions_krw if self.started else self.start_amount
+        """Money in by the moment `total` is of: now, or the last snapshot's when the total comes
+        from it (money that came in after that snapshot is not in its total, so subtracting it
+        would show a deposit as a loss)."""
+        if not self.started:
+            return self.start_amount
+        if self.valuation is None and self.snapshots:
+            return self.snapshots[-1].contributions
+        return repo.load_state(self.conn, self.ledger_id).contributions_krw
+
+    @property
+    def from_snapshot(self) -> bool:
+        """The stored prices cannot value the ledger now, so its figures are the last snapshot's."""
+        return self.valuation is None and bool(self.snapshots)
 
     @cached_property
     def has_fills(self) -> bool:
