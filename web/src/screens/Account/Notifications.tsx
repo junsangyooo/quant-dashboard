@@ -109,7 +109,7 @@ interface Saved {
   savedAt: string | null;
 }
 
-/** 1·2단계: one disabled row — 알림 · '3단계에서 켤 수 있어요' · a switch that cannot be turned on. */
+/** Before web push: one disabled row — 알림 · what it will do · a switch that cannot be turned on. */
 export function NotificationsLater() {
   const titleId = useId();
   return (

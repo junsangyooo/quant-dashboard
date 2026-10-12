@@ -225,7 +225,9 @@ test('real API: PIN, the nine screens and their links, logout', async ({ page, b
     await visit('설정', 'account');
     // The server has no web push yet (1·2단계): 알림 is one disabled row, nothing pretends to work.
     const notes = page.getByRole('region', { name: '알림' });
-    await expect(notes.getByText('3단계에서 켤 수 있어요')).toBeVisible();
+    await expect(
+      notes.getByText('매매·문제를 휴대폰으로 알려줘요 · 아직 준비 중이에요'),
+    ).toBeVisible();
     await expect(notes.getByRole('switch')).toHaveCount(1);
     await expect(notes.getByRole('switch')).toBeDisabled();
 

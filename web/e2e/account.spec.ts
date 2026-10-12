@@ -236,7 +236,9 @@ test.describe('SCR-ACCOUNT', () => {
   }, info) => {
     await open(page, 'account.push-not-ready');
     const card = notifications(page);
-    await expect(card.getByText('3단계에서 켤 수 있어요')).toBeVisible();
+    await expect(
+      card.getByText('매매·문제를 휴대폰으로 알려줘요 · 아직 준비 중이에요'),
+    ).toBeVisible();
     await expect(card.getByRole('switch')).toHaveCount(1);
     await expect(card.getByRole('switch', { name: '알림' })).toBeDisabled();
     await expect(card.getByRole('switch', { name: '알림' })).not.toBeChecked();

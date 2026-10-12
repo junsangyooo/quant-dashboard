@@ -3,10 +3,11 @@
 // From the first fill a switch on top shows 전체 · 한국 ₩ · 미국 $ (the owner, 2026-10-12): 전체 is
 // the ledger in won with the two account tiles; an account shows its value, P&L, line and rows in
 // its own money (the plan is the whole ledger's and stays in 전체). The choice is in the address
-// (`?account=kr|us`), so back returns to 전체 and a tile is a link.
+// (`?account=kr|us`). An account opened from 전체, by a tile (a link) or the switch, is one entry
+// above it: back returns to 전체, and the switch moves within that entry instead of piling up.
 import clsx from 'clsx';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useHome, useLedger, useNow } from '../../api/queries';
 import type { HomeAccount, HomePeriod, HomeResponse } from '../../api/types';
 import { Gauge } from '../../charts/Gauge';
@@ -18,7 +19,7 @@ import { homeCopy } from '../../copy/home';
 import { planCopy } from '../../copy/plan';
 import { pageTitle, useDocumentTitle } from '../../shell/page';
 import { toneMap } from '../Plan/words';
-import { AccountEmpty, AccountHero } from './Accounts';
+import { AccountEmpty, AccountHero, FROM_ALL, isFromAll } from './Accounts';
 import { AccountSwitch, type HomeView } from './AccountSwitch';
 import { CompositionCard } from './CompositionCard';
 import { Hero } from './Hero';
@@ -205,7 +206,9 @@ export function HomeScreen() {
   const ledger = useLedger();
   const now = useNow();
   const wide = useMediaQuery(WIDE);
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Keep the previous answer of the same ledger while another period loads (no flash); a
   // ledger switch (another device) drops it so the skeleton shows.
@@ -214,16 +217,24 @@ export function HomeScreen() {
   const data = home.data ?? (kept !== null && kept.ledger === ledger ? kept : null);
   const view = viewOf(params.get('account'), data);
   const onView = (next: HomeView) => {
-    // The switch replaces the entry (a tile pushes one): back leaves 자산 rather than stepping
-    // through every switch press.
-    setParams(
-      (p) => {
-        const out = new URLSearchParams(p);
-        if (next === 'all') out.delete('account');
-        else out.set('account', next);
-        return out;
+    if (next === view) return;
+    // From 전체 an account is pushed (back returns to 전체); between the accounts the entry is
+    // replaced; 전체 steps back to the entry it came from, so presses never pile up.
+    const fromAll = isFromAll(location.state);
+    if (next === 'all' && fromAll) {
+      void navigate(-1);
+      return;
+    }
+    const out = new URLSearchParams(params);
+    if (next === 'all') out.delete('account');
+    else out.set('account', next);
+    const search = out.toString();
+    void navigate(
+      { search: search ? `?${search}` : '' },
+      {
+        replace: view !== 'all',
+        state: next !== 'all' && (view === 'all' || fromAll) ? FROM_ALL : null,
       },
-      { replace: true },
     );
   };
 
