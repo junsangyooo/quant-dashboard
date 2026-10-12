@@ -179,6 +179,7 @@ interface HomeAccount {
   stale: boolean                     // 그 계좌 시세가 낡음(한국은 kr-quotes, 미국은 us-quotes. 환율은 달러 값에 들어가지 않는다)
   trend: Trend
   // 그 통화. ret = (값 − 그날까지 들어온 돈) ÷ 들어온 돈. 선은 돈이 처음 들어온 스냅숏부터다.
+  // series[].netIn(계좌만): 그날까지 들어온 돈('원금', 그 통화). 환전 날 값과 같이 움직여서 둘의 차가 그 계좌 손익이다.
   // 30거래일 규칙은 그 계좌 기록(점 수)으로 정한다: 짧으면 periods null·period 'all'. 길면 요청한 period.
   // baseline·baselineRet는 늘 null: '손대지 않았을 때'는 전체만이다(규칙이 두 계좌 사이로 돈을 옮겨서, 한 계좌만 견주면
   // 차이가 대부분 옮긴 돈이 된다). events: 시작·실전 켬/끔은 두 계좌 모두, 리밸런싱(일부 실패·진행 중 포함)은 그 계획의

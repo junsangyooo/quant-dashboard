@@ -56,7 +56,7 @@ from autotrade.api.views.context import CompRow, LedgerContext, event_kind
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import MARKER_KINDS, MIN_RECORD_DAYS, period_start
 from autotrade.db import repo
-from autotrade.db.models import FillRow, SnapshotRow
+from autotrade.db.models import FillRow, OrderRow, SnapshotRow
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, round_won
 from autotrade.domain.planner import FxDirection
@@ -124,11 +124,14 @@ class Accounts:
     # ── what came in, and when the ledger took it ──────────────────────────────────────────
 
     @cached_property
+    def orders(self) -> list[OrderRow]:
+        return repo.orders_of_ledger(self.ctx.conn, self.ctx.ledger_id)
+
+    @cached_property
     def fills(self) -> list[tuple[datetime, FillRow]]:
         """(applied at, fill) of the ledger's fills taken by now."""
         ctx = self.ctx
-        orders = repo.orders_of_ledger(ctx.conn, ctx.ledger_id)
-        executed = {o.order_id: o.executed_at for o in orders}
+        executed = {o.order_id: o.executed_at for o in self.orders}
         out: list[tuple[datetime, FillRow]] = []
         for f in repo.fills_of_ledger(ctx.conn, ctx.ledger_id):
             applied = executed.get(f.order_id) or f.filled_at
@@ -278,6 +281,9 @@ class Accounts:
                     "ret": _ret(p.value, p.net_in),
                     "baseline": None,
                     "baselineRet": None,
+                    # 원금: money in by that day. A conversion moves the value and this line
+                    # together, so the gap between them is the account's P&L.
+                    "netIn": amount_of(currency, p.net_in),
                 }
                 for p in shown
             ],
@@ -285,12 +291,14 @@ class Accounts:
             "empty": empty,
         }
 
-    def plan_currencies(self, plan_id: int) -> set[Currency]:
-        """The accounts a plan's orders touched: a trade's currency, both for a conversion."""
-        out: set[Currency] = set()
-        for order in repo.orders_of_plan(self.ctx.conn, plan_id):
-            out |= set(Currency) if order.side == "fx" else {order.currency}
-        return out or set(Currency)
+    @cached_property
+    def plan_currencies(self) -> dict[int, set[Currency]]:
+        """The accounts each plan's orders touched: a trade's currency, both for a conversion."""
+        out: dict[int, set[Currency]] = {}
+        for order in self.orders:
+            touched = set(Currency) if order.side == "fx" else {order.currency}
+            out.setdefault(order.plan_id, set()).update(touched)
+        return out
 
     def markers(self, currency: Currency, since: date) -> list[dict[str, Any]]:
         """One marker per day, like the ledger's (CONTRACT Trend.events), for this account."""
@@ -300,7 +308,8 @@ class Accounts:
             if ev.event_date < since or kind not in MARKER_KINDS:
                 continue
             if kind in PLAN_MARKERS:
-                if ev.plan_id is not None and currency not in self.plan_currencies(ev.plan_id):
+                touched = None if ev.plan_id is None else self.plan_currencies.get(ev.plan_id)
+                if touched and currency not in touched:
                     continue
             elif kind not in LEDGER_MARKERS and (ev.currency or Currency.KRW) is not currency:
                 continue

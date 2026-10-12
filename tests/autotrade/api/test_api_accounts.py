@@ -120,6 +120,8 @@ def test_first_day_dollars_waiting_split_adds_up(
         [point] = trend["series"]
         assert point["value"] == acc["total"]
         assert (point["baseline"], point["baselineRet"]) == (None, None)  # 전체만
+        # 원금: money in by then — 10,000,000 − 4,967,000 won; the $3,568.24 the conversion bought.
+        assert point["netIn"] == (5033000 if acc["id"] == "kr" else 3568.24)
         assert [m["kind"] for m in trend["events"]] == ["start"]
         assert acc["stale"] is False
     assert kr["composition"]["groups"][0]["rule"]["id"] == "index_half"
