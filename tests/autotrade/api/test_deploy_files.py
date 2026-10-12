@@ -35,6 +35,10 @@ def test_the_unit_reads_no_secrets_and_keeps_live_orders_and_dev_mode_out() -> N
         "AUTOTRADE_DB",
         "ANTHROPIC_API_KEY",
         "DART_API_KEY",
+        # The web never calls Toss (autotrade/PHASE3.md 2.1): no broker keys in its environment.
+        "TOSS_CLIENT_ID",
+        "TOSS_CLIENT_SECRET",
+        "TOSS_ACCOUNT_NO",
     ):
         assert name in unset, name
     assert not [v for k, v in unit if k == "Environment" and v.startswith("AUTOTRADE_")]
@@ -61,6 +65,8 @@ def test_the_unit_is_sandboxed() -> None:
     for key, value in expected.items():
         assert unit.get(key) == value, key
     assert "RemoveIPC" not in unit  # it would remove the IPC objects of every ubuntu process
+    # The tick's Toss token cache is not the web's to read.
+    assert "-/home/ubuntu/portfolio-dashboard/data/autotrade-toss" in unit["InaccessiblePaths"]
     assert "ReadWritePaths" not in unit  # data/ (BindPaths) is the only writable place
     assert "--host 127.0.0.1" in unit["ExecStart"]
     assert unit["StandardError"].startswith("append:/home/ubuntu/portfolio-dashboard/data/logs/")

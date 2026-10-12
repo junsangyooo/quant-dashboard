@@ -31,12 +31,12 @@
 # applied last, over every source (the manager's environment, drop-ins, this file), so these
 # variables can never reach the process. The app also ignores AUTOTRADE_DEV for data/autotrade.db.
 #
-# Live orders (phase 3): the switch AUTOTRADE_LIVE_ORDERS=1 belongs to the process that sends
-# orders — the tick's cron line (or a timer unit of its own) — read from a file only that process
-# reads (e.g. /etc/autotrade/live.env, root:ubuntu 0640), never the shared secrets .env and never
-# this unit; the stored mode 'live' is the second key (ops notes 안전). If the web
-# process ever needs the broker (cancelling on 'live off'), give it a file with only the Toss keys
-# via its own EnvironmentFile= line, and keep AUTOTRADE_LIVE_ORDERS in UnsetEnvironment= below.
+# Live orders (phase 3, autotrade/PHASE3.md 2.1): the switch AUTOTRADE_LIVE_ORDERS=1 belongs to
+# the process that sends orders — the tick's cron line (deploy/autotrade.cron) — never this unit;
+# the stored mode 'live' (set here, with the PIN) is the second key. The web process never calls
+# Toss: it reads what the tick recorded (broker_status, broker_orders), and 'live off' writes
+# cancel requests that the next tick carries out. So the Toss keys (TOSS_*) are unset below, and
+# the tick's token cache (data/autotrade-toss/, 0700) is hidden from it.
 #
 # Sandbox — what the process touches: it reads the repository (code, the venv, web/dist and the
 # web/releases it links to) and /usr (python3.10, its libraries); it reads and writes only data/
@@ -75,7 +75,7 @@ StandardOutput=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
 StandardError=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
 
 Environment=PYTHONDONTWRITEBYTECODE=1
-UnsetEnvironment=AUTOTRADE_LIVE_ORDERS AUTOTRADE_DEV AUTOTRADE_FAKE_NOW AUTOTRADE_DB AUTOTRADE_SECRETS_ENV DART_API_KEY ANTHROPIC_API_KEY KRX_ID KRX_PW
+UnsetEnvironment=AUTOTRADE_LIVE_ORDERS AUTOTRADE_DEV AUTOTRADE_FAKE_NOW AUTOTRADE_DB AUTOTRADE_SECRETS_ENV DART_API_KEY ANTHROPIC_API_KEY KRX_ID KRX_PW TOSS_CLIENT_ID TOSS_CLIENT_SECRET TOSS_ACCOUNT_NO
 
 NoNewPrivileges=yes
 CapabilityBoundingSet=
@@ -83,7 +83,7 @@ ProtectSystem=strict
 ProtectHome=tmpfs
 BindReadOnlyPaths=/home/ubuntu/portfolio-dashboard
 BindPaths=/home/ubuntu/portfolio-dashboard/data
-InaccessiblePaths=-/home/ubuntu/portfolio-dashboard/data/quant -/home/ubuntu/portfolio-dashboard/data/.session_secret -/home/ubuntu/portfolio-dashboard/data/backup -/home/ubuntu/portfolio-dashboard/data/portfolio.db -/home/ubuntu/portfolio-dashboard/data/quant.db
+InaccessiblePaths=-/home/ubuntu/portfolio-dashboard/data/quant -/home/ubuntu/portfolio-dashboard/data/.session_secret -/home/ubuntu/portfolio-dashboard/data/backup -/home/ubuntu/portfolio-dashboard/data/portfolio.db -/home/ubuntu/portfolio-dashboard/data/quant.db -/home/ubuntu/portfolio-dashboard/data/autotrade-toss
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes

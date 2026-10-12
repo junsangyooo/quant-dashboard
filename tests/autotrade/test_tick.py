@@ -400,6 +400,8 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     assert tick.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && ")
     assert " flock -n data/autotrade.db-cron.lock timeout 10m " in tick
     assert "AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env" in tick  # DART key only
+    # Live orders wait for the owner's go: the first key is not on the line (PHASE3.md 4).
+    assert "AUTOTRADE_LIVE_ORDERS" not in tick
     assert ".venv/bin/python -m autotrade.jobs tick" in tick
     assert tick.endswith(">> data/logs/autotrade-jobs.log 2>&1")
     # The AI line: its own lock, no time limit, and AUTOTRADE_AI_CALLS=1 since the owner's go
