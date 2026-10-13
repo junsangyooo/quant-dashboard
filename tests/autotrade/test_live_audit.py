@@ -512,13 +512,9 @@ def test_the_fills_an_adoption_took_in_are_not_booked_again(
     assert held == (8 if symbol == "069500" else 5)
 
 
-@pytest.mark.parametrize("extra", [D("0"), D("20000000")])  # and with money it never booked
-def test_an_adoption_books_our_late_fill_first(lw: Live, extra: Decimal) -> None:
+def late_buy_then_mismatch(lw: Live, moved_in: Decimal, extra: Decimal | None = None) -> None:
     """Our buy filled after live was turned off; before the reconciliation booked it, shares
-    moved in from another broker (a mismatch, so that reconciliation rolled back with the fill).
-    The adoption books our fill as the trade it is, then takes the rest of the account: the next
-    reconciliations match and the fill is booked once (it used to come back on top of the
-    adopted numbers: 625 shares against 315, or a cash error that undid the adoption)."""
+    moved in from another broker (a mismatch, so that reconciliation rolled back with the fill)."""
     lw.turn_on("2026-06-30 21:00")
     lw.sync("2026-07-01 08:29")
     assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
@@ -530,12 +526,20 @@ def test_an_adoption_books_our_late_fill_first(lw: Live, extra: Decimal) -> None
     lw.fake.fill_open(ours, price=D("32000"))  # it fills before the cancel reaches Toss
     lw.at("2026-07-01 10:00")
     held = lw.fake.holdings["069500"].qty
-    lw.fake.hold("069500", held + D("5"), D("32000"), name="KODEX 200")
+    lw.fake.hold("069500", held + moved_in, D("32000"), name="KODEX 200")
     if extra:
         lw.fake.deposit("KRW", extra)
     lw.sync("2026-07-01 10:05")
     assert lw.reconcile()["result"] == "mismatch"
     lw.sync("2026-07-03 09:00")
+
+
+@pytest.mark.parametrize("extra", [D("0"), D("20000000")])  # and with money it never booked
+def test_an_adoption_books_our_late_fill_first(lw: Live, extra: Decimal) -> None:
+    """The adoption books our late fill as the trade it is, then takes the rest of the account:
+    the next reconciliations match and the fill is booked once (it used to come back on top of
+    the adopted numbers: 625 shares against 315, or a cash error that undid the adoption)."""
+    late_buy_then_mismatch(lw, D("5"), extra)
     adopted = adopt_job(lw.ctx, lw.now(), note="checked in the app")
     assert adopted["result"] == "adopted"
     assert [f["qty"] for f in adopted["lateFills"]] == [310]
@@ -633,6 +637,19 @@ def test_the_plan_screens_leave_out_an_order_that_bought_nothing(lw: Live) -> No
     assert [e.kind for e in ctx.events if e.event_date == date(2026, 7, 2)] == []
     assert all(m["date"] != "2026-07-02" for m in event_markers(ctx))
     assert history.DayData(ctx).calendar_state(date(2026, 7, 2)) == "normal"
+
+
+def test_a_refused_adoption_writes_nothing_not_even_our_late_fill(lw: Live) -> None:
+    """A refusal (here half a share on the account) undoes the late fill the adoption booked
+    first, so 'refused' means nothing changed; the reconciliation books the fill once the
+    account matches."""
+    late_buy_then_mismatch(lw, D("0.5"))
+    before = (lw.state(), [(o.order_id, o.status) for o in repo.orders_of_ledger(lw.conn, "live")])
+    out = adopt_job(lw.ctx, lw.now(), note="checked in the app")
+    assert (out["result"], out["reason"]) == ("refused", "fractional KR:069500 310.5")
+    assert repo.fills_of_ledger(lw.conn, "live") == []
+    after = (lw.state(), [(o.order_id, o.status) for o in repo.orders_of_ledger(lw.conn, "live")])
+    assert after == before
 
 
 def test_a_first_plan_that_bought_nothing_is_no_rebalance_day(lw: Live) -> None:

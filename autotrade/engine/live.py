@@ -1152,12 +1152,20 @@ def adopt_broker(
         return {"result": "busy", "reason": reason or "no-snapshot"}
     if repo.start_event(conn, LIVE) is None:
         return {"result": "not-started"}
+    conn.execute("SAVEPOINT live_adopt")
+
+    def refused(reason: str) -> dict[str, Any]:
+        # A refusal writes nothing, our late fills booked below included: the reconciliation
+        # books them once the account matches.
+        conn.execute("ROLLBACK TO live_adopt")
+        conn.execute("RELEASE live_adopt")
+        return {"result": "refused", "reason": reason}
+
     try:
         late = book_late_fills(conn, cfg, at)
     except LedgerError as exc:
-        # The ledger's cash cannot pay a fill it planned (money it never booked paid for it):
-        # nothing is adopted, and the owner sees why.
-        return {"result": "refused", "reason": f"late fill: {exc}"}
+        # The ledger's cash cannot pay a fill it planned (money it never booked paid for it).
+        return refused(f"late fill: {exc}")
     rate = _rate_or_none(conn, at)
     state = repo.load_state(conn, LIVE)
     own = ledger_instrument_ids(conn)
@@ -1172,7 +1180,7 @@ def adopt_broker(
         held = broker.get(iid)
         broker_qty = ZERO if held is None else held.qty
         if broker_qty != broker_qty.to_integral_value():
-            return {"result": "refused", "reason": f"fractional {iid} {broker_qty}"}
+            return refused(f"fractional {iid} {broker_qty}")
         new_qty = int(broker_qty)
         old = positions.get(iid)
         old_qty = 0 if old is None else old.qty
@@ -1182,14 +1190,14 @@ def adopt_broker(
         if price is None:
             close = latest_close(conn, cfg, inst, at)
             if close is None:
-                return {"result": "refused", "reason": f"no price for {iid}"}
+                return refused(f"no price for {iid}")
             price = close.price
         delta = new_qty - old_qty
         value = (price * abs(delta)).quantize(_unit(inst.currency), rounding=ROUND_HALF_UP)
         value_krw = value
         if inst.currency is Currency.USD:
             if rate is None:
-                return {"result": "refused", "reason": "no rate"}
+                return refused("no rate")
             value_krw = usd_in_krw(value, rate)
         if new_qty == 0:
             positions.pop(iid, None)
@@ -1220,13 +1228,14 @@ def adopt_broker(
         diff_krw = diff
         if currency is Currency.USD:
             if rate is None:
-                return {"result": "refused", "reason": "no rate"}
+                return refused("no rate")
             diff_krw = usd_in_krw(diff, rate)
         value_in += diff_krw
         by_currency[currency] += diff
         cash_changes[currency.value] = str(diff)
     if not changes and not cash_changes:
         # Booking our late fills may have been all it took.
+        conn.execute("RELEASE live_adopt")
         return {"result": "nothing-to-adopt", **({"lateFills": late} if late else {})}
     adopted = type(state)(
         cash=new_cash,
@@ -1263,6 +1272,7 @@ def adopt_broker(
         booked_at=at,
     )
     refresh_cash_parts(conn, LIVE, at)
+    conn.execute("RELEASE live_adopt")
     out = {"result": "adopted", "event_id": event_id, "positions": changes, "cash": cash_changes}
     return {**out, "lateFills": late} if late else out
 
