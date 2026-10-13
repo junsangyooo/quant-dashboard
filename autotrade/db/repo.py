@@ -924,7 +924,12 @@ def insert_event(
     currency: Currency | None = None,
     payload: Mapping[str, Any] | None = None,
     ref: str | None = None,
+    booked_at: datetime | None = None,
 ) -> int:
+    """`booked_at` (the row's created_at) is when the ledger learned of it, when that is later
+    than `occurred_at`: the live reconciliation books money at the time it moved
+    (engine/live.py)."""
+    booked = occurred_at if booked_at is None else booked_at
     cur = conn.execute(
         "INSERT INTO events (ledger_id, kind, event_date, occurred_at, rule_id, plan_id, status,"
         " amount, currency, ref, payload, created_at, updated_at)"
@@ -941,8 +946,8 @@ def insert_event(
             None if currency is None else currency.value,
             ref,
             dumps(dict(payload or {})),
-            to_iso(occurred_at),
-            to_iso(occurred_at),
+            to_iso(booked),
+            to_iso(booked),
         ),
     )
     return _lastrowid(cur)

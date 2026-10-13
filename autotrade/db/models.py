@@ -326,6 +326,7 @@ class EventRow:
     currency: Currency | None
     payload: dict[str, Any]
     ref: str | None = None  # natural key, unique per ledger ('dividend:KR:069500:2026-09-23')
+    created_at: datetime | None = None  # when it was booked (repo.insert_event booked_at)
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> EventRow:
@@ -343,6 +344,7 @@ class EventRow:
             currency=None if row["currency"] is None else Currency(str(row["currency"])),
             payload=payload if isinstance(payload, dict) else {},
             ref=_str(row["ref"]),
+            created_at=from_iso(str(row["created_at"])),
         )
 
 

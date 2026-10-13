@@ -11,6 +11,7 @@ Against the fake Toss only (tests/autotrade/live_world.py).
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -209,3 +210,49 @@ def test_a_live_start_after_its_days_snapshot(
         "fees": -1488,
         "end": 10014012,
     }
+
+
+def test_money_booked_late_with_an_earlier_time_enters_the_next_value_once(
+    lw: Live, world: World
+) -> None:
+    """The account is not read between an app buy and the day's value (Toss did not answer): the
+    next day's reconciliation books the money that paid for it at the buy's time, before that
+    value, dated the day the account showed it (engine/live.py _book_in_order). The value it first
+    enters takes it in its money in, and '손대지 않았을 때' moves by it there, once."""
+    world.rate(kst("2026-06-30 08:25"), "1392.0")
+    prefetch_fx(lw.conn, lw.ctx.sources, kst("2026-06-30 09:10"))
+    lw.turn_on("2026-06-30 21:00")
+    lw.tick("2026-06-30 21:05")
+    first_buy(lw)
+    lw.at("2026-07-01 15:00")
+    lw.fake.deposit("KRW", D("5000000"))
+    lw.fake.app_trade("005930", "BUY", D("70"), D("70000"), commission=D("735"))
+    assert lw.snapshot("2026-07-01 16:05")["result"] == "ok"
+    flat_thursday(world)
+    lw.sync("2026-07-02 09:00")
+    assert lw.reconcile("2026-07-02 09:01")["result"] == "match"
+    # Both at the buy's time, before the 7/1 value; the money in dated the day the account showed
+    # it (D48), the buy's money out its own day: neither date says it came after that value.
+    booked = repo.events_of_ledger(lw.conn, "live", ["deposit", "withdrawal"])
+    assert [(e.kind, e.occurred_at, e.event_date, e.created_at) for e in booked] == [
+        ("deposit", kst("2026-07-01 15:00"), date(2026, 7, 2), kst("2026-07-02 09:01")),
+        ("withdrawal", kst("2026-07-01 15:00"), date(2026, 7, 1), kst("2026-07-02 09:01")),
+    ]
+    assert lw.snapshot("2026-07-02 16:05")["result"] == "ok"
+    world.bar(KR, "2026-07-03", close="32050", open_="32050")
+    world.rate(kst("2026-07-03 16:00"), "1391.5")
+    assert lw.snapshot("2026-07-03 16:05")["result"] == "ok"
+
+    s1, s2, s3 = repo.snapshots_of_ledger(lw.conn, "live")[-3:]
+    # In 5,000,000원, out the 4,900,735원 of the buy outside the rules.
+    assert s2.contributions - s1.contributions == D("99265")
+    assert s1.baseline_units is not None and s2.baseline_units is not None  # noqa: PT018
+    prices = {"KR:069500": D("32050"), "US:SPYM": krw_unit_price(D("66.20"), USD, D("1391.5"))}
+    targets = {k: D("0.5") for k in prices}
+    before = {k: D(v) for k, v in s1.baseline_units.items()}
+    moved = add_units(before, units_for_amount(D("5000000"), targets, prices))
+    moved = add_units(moved, units_for_amount(D("4900735"), targets, prices), -1)
+    assert {k: D(v) for k, v in s2.baseline_units.items()} == moved
+    # 7/3: that money is the 7/2 value's already.
+    assert s3.contributions == s2.contributions
+    assert s3.baseline_units == s2.baseline_units

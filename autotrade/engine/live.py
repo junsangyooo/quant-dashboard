@@ -785,6 +785,7 @@ def _flow(
         amount=amount,
         currency=currency,
         payload=payload,
+        booked_at=at,
     )
     sleeves.split_inflow(conn, LIVE, kind, amount, currency, rate, event_id, at)
     return event_id
@@ -1233,6 +1234,7 @@ def adopt_broker(
         amount=abs(value_in),
         currency=Currency.KRW,
         payload=payload,
+        booked_at=at,
     )
     refresh_cash_parts(conn, LIVE, at)
     return {"result": "adopted", "event_id": event_id, "positions": changes, "cash": cash_changes}

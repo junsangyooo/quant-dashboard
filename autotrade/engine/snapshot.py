@@ -161,7 +161,7 @@ def _baseline(
     if previous is not None and previous.baseline_units:
         units = {k: Decimal(v) for k, v in previous.baseline_units.items()}
         cash = previous.baseline_cash_krw or ZERO
-        since, after = previous.date, previous.valued_at
+        since, after = previous.date, previous.valued_at  # it was written at its valued_at
     else:
         start_units = _start_units(conn, cfg, rule, instruments, start.event_date, start.amount)
         if start_units is None:
@@ -169,14 +169,20 @@ def _baseline(
         units, cash, since, after = start_units, ZERO, start.event_date, start.occurred_at
     targets = {t.instrument_id: t.weight for t in rule.targets}
     for ev in repo.events_of_ledger(conn, ledger_id, ["deposit", "withdrawal"]):
-        # Money that came after the last value and by this one, as the screens count it
-        # (api/views/series.py): a deposit on the evening of a day is in the next day's value,
-        # so it is the next day's (by date it fell between two values and was never added).
-        if after < ev.occurred_at <= at and ev.amount is not None:
-            if ev.payload.get("reason") == "conversion":
-                continue  # the owner's own conversion (engine/live.py): no money came or went
-            change = baseline.units_for_amount(_won(ev), targets, unit_prices)
-            units = baseline.add_units(units, change, 1 if ev.kind == "deposit" else -1)
+        if ev.amount is None or ev.occurred_at > at:
+            continue
+        # Money the last value had not counted, as its money in had not (the ledger's state when
+        # it was written; api/views/series.py reads values the same way): what came after it (a
+        # deposit on the evening of a day is the next day's; by date it fell between two values
+        # and was never added), and what was booked after it with an earlier time (a late
+        # reconciliation books money at the time it moved, engine/live.py).
+        booked = ev.occurred_at if ev.created_at is None else ev.created_at
+        if ev.occurred_at <= after and booked <= after:
+            continue
+        if ev.payload.get("reason") == "conversion":
+            continue  # the owner's own conversion (engine/live.py): no money came or went
+        change = baseline.units_for_amount(_won(ev), targets, unit_prices)
+        units = baseline.add_units(units, change, 1 if ev.kind == "deposit" else -1)
     cash += _baseline_dividends(
         conn, cfg, ledger_id, rule, instruments, start.event_date, start.amount, since, d, fx_rate
     )
