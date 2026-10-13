@@ -38,6 +38,11 @@ export const homeCopy = {
       '시작일에 두 ETF를 반반 사서 그대로 둔 경우예요',
       '입출금은 같은 날 같은 금액으로 넣고 빼요',
     ],
+    /**
+     * NEW (the owner, 2026-10-13) — 실전 only: the live ledger runs on the money as deposited
+     * (D47), so most of its gap to this half-and-half line is the won · dollar mix he chose.
+     */
+    live: '실전에서는 이 선과의 차이가 대부분 원화·달러 비율에서 나와요',
   },
 
   trend: {

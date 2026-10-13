@@ -61,11 +61,14 @@ function BasisSheet({ home, onClose }: { home: HomeResponse; onClose: () => void
   );
 }
 
-function BaselineSheet({ onClose }: { onClose: () => void }) {
+/** The live ledger adds why its gap to the line is mostly the won · dollar mix (D47). */
+function BaselineSheet({ live, onClose }: { live: boolean; onClose: () => void }) {
+  const s = homeCopy.baselineSheet;
+  const lines: readonly string[] = live ? [...s.lines, s.live] : s.lines;
   return (
-    <Sheet title={homeCopy.baselineSheet.title} onClose={onClose}>
+    <Sheet title={s.title} onClose={onClose}>
       <ul className={styles.sheetLines}>
-        {homeCopy.baselineSheet.lines.map((l) => (
+        {lines.map((l) => (
           <li key={l} className="t-body">
             {l}
           </li>
@@ -150,7 +153,9 @@ export function Hero({ home, now }: { home: HomeResponse; now: string | null }) 
       ) : null}
       <PlanChipLine home={home} now={now} />
       {sheet === 'basis' ? <BasisSheet home={home} onClose={close} /> : null}
-      {sheet === 'baseline' ? <BaselineSheet onClose={close} /> : null}
+      {sheet === 'baseline' ? (
+        <BaselineSheet live={home.ledger === 'live'} onClose={close} />
+      ) : null}
     </section>
   );
 }

@@ -1,6 +1,9 @@
-// SCR-HOME · 모의투자 기본 (기획 §5 완료 조건, 예시-값표 §1). Numbers are the table's.
+// SCR-HOME · 모의투자 기본 (기획 §5 완료 조건, 예시-값표 §1). Numbers are the table's. Last, the
+// line the live ledger's 손대지 않았을 때 sheet adds (D47).
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { homeCopy } from '../../src/copy/home';
+import homeLive from '../../src/fixtures/bundles/home.live';
 import homePaper from '../../src/fixtures/bundles/home.paper';
 import { PAPER_COMPOSITION } from '../../src/fixtures/parts/home';
 import { barSegments, viewGroups } from '../../src/screens/Home/CompositionCard';
@@ -88,6 +91,9 @@ describe('SCR-HOME 모의투자 기본', () => {
     const sheet = await screen.findByRole('dialog', { name: '손대지 않았을 때' });
     expect(within(sheet).getByText('시작일에 두 ETF를 반반 사서 그대로 둔 경우예요')).toBeVisible();
     expect(within(sheet).getByText('입출금은 같은 날 같은 금액으로 넣고 빼요')).toBeVisible();
+    // The live ledger's line about the won · dollar mix is not the paper ledger's.
+    expect(within(sheet).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(sheet).queryByText(homeCopy.baselineSheet.live)).toBeNull();
   });
 
   it('period chips change the graph and its PnL; 전체 hides the period PnL', async () => {
@@ -312,5 +318,22 @@ describe('SCR-HOME 모의투자 기본', () => {
     expect(text).not.toMatch(/다\.|니다|었다|한다|된다|이다(?![가-힣])/);
     expect(text).not.toContain('모의와 비교');
     expect(text).not.toContain('실계좌 − 모의');
+  });
+});
+
+describe('SCR-HOME · 실전 손대지 않았을 때 (D47)', () => {
+  it('the sheet adds that most of the gap to the line is the won · dollar mix', async () => {
+    renderState(homeLive);
+    fireEvent.click(await screen.findByRole('button', { name: '손대지 않았을 때 +1.75%' }));
+    const sheet = await screen.findByRole('dialog', { name: '손대지 않았을 때' });
+    expect(
+      within(sheet)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([
+      '시작일에 두 ETF를 반반 사서 그대로 둔 경우예요',
+      '입출금은 같은 날 같은 금액으로 넣고 빼요',
+      '실전에서는 이 선과의 차이가 대부분 원화·달러 비율에서 나와요',
+    ]);
   });
 });
