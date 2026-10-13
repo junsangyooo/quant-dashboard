@@ -7,13 +7,16 @@ recorded (broker_status, broker_snapshots, broker_orders); it never calls Toss:
   (its cash, and the rule's instruments it holds, at their price then: no gain at the start).
 - reconcile: before every plan (and whenever the account is quiet), the ledger is matched with
   the snapshot. What the broker did for our orders is booked first (late fills); then the
-  account's fills the engine did not send (the owner's trades in the app, PHASE3.md 2.5); then
-  the cash nothing explains: the owner's conversion (won and dollars in opposite directions at
-  about the market rate), a dividend the ledger is owed, a conversion that came with a deposit
-  or a withdrawal in the same five minutes, a deposit, a withdrawal. Last, the rule's holdings
-  must equal the broker's. Anything that does not fit is a mismatch: nothing is written
-  (savepoint), a red manual to-do shows it and no plan is made until it is fixed or
-  `adopt-broker` accepts the broker's numbers.
+  account's fills the engine did not send (the owner's trades in the app, PHASE3.md 2.5) and
+  the cash they do not explain: the owner's conversion (won and dollars in opposite directions
+  at about the market rate), a dividend the ledger is owed (its net, within the rounding of the
+  tax), a conversion that came with a deposit or a withdrawal in the same five minutes, a
+  deposit, a withdrawal. All of it is worked out first and booked in time order: money that
+  came in before an app buy it paid for, the fills, then the rest (_book_in_order). Last, the
+  rule's holdings must equal the broker's. Anything that does not fit is a mismatch: nothing
+  is written (savepoint), a red manual to-do shows it and no plan is made until it is fixed or
+  `adopt-broker` accepts the broker's numbers. An order more than one of the account's orders
+  could be waits for the owner's word (settle_ambiguous).
 - preview: the first orders the rule would send for the account as it is, for the mode screen;
   the hash and total are kept so that turning live on can tell a changed preview (인계 13).
   Like the check, it plans per currency (D47), sizes buys as the send pays them (the limit
@@ -1694,6 +1697,51 @@ def cancel_failed(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
 
 def cancel_pending(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
     return [r for r in live_repo.cancel_rows(conn, LIVE, ["requested"]) if r.open]
+
+
+def settle_ambiguous(
+    conn: sqlite3.Connection, row: live_repo.BrokerOrderRow, pick: str | None, at: datetime
+) -> str:
+    """An order whose sending was cut off and that more than one of the account's orders could
+    be, settled with what the owner saw in the Toss app (engine/todos.py, `resolve
+    broker-mismatch:order:<id> --pick`): `pick`, the candidate that is ours, or None, none is.
+
+    - Ours is `pick`: the order is that one ('sent' with its id, or 'done' when the search saw
+      it over); the next sync reads it and its fill is booked as usual (by the stage, or as a
+      late fill when its plan was closed meanwhile).
+    - None is ours: our order never reached Toss ('not-sent', lost). Its stage fails and is sent
+      again the next trading day like any order that did not go; when its plan was closed
+      meanwhile (live off), the order is cancelled.
+    Either way the other candidates are the owner's: the reconciliation books what they filled.
+    The row stops keeping the account busy, and a cancel asked for it meanwhile (live off) is
+    carried out on the chosen order by the next tick, or has nothing left to cancel. The caller
+    owns the transaction. Returns what it became: the order id, or 'none'."""
+    if pick is None:
+        live_repo.record_not_sent(
+            conn,
+            order_id=row.order_id,
+            ledger_id=LIVE,
+            client_order_id=row.client_order_id,
+            code="lost",
+            detail="the owner checked the Toss app: none of the candidates is ours",
+            at=at,
+            request=row.request,
+        )
+        if row.cancel_state in ("requested", "failed"):
+            live_repo.record_cancel(conn, row.order_id, "done", None, at)
+        order = repo.get_order(conn, row.order_id)
+        plan = repo.get_plan(conn, order.plan_id)
+        if order.status == "pending" and plan.status not in repo.OPEN_PLAN_STATUSES:
+            repo.cancel_order(conn, order.order_id)
+        return "none"
+    found = [c for c in row.candidates if str(c.get("order", {}).get("order_id")) == pick]
+    if not found:
+        raise ValueError(f"{pick} is not a candidate of order {row.order_id}")
+    view = BrokerOrder.from_json(found[0]["order"])
+    live_repo.mark_sent(conn, row.order_id, view.order_id, at)
+    over = view.terminal or bool(found[0].get("closed"))
+    live_repo.record_broker_view(conn, row.order_id, view, at, finished=over)
+    return view.order_id
 
 
 def unknown_orders(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:

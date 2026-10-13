@@ -725,7 +725,8 @@ CREATE TABLE ai_runner (
 #   start from it. A tick that finds the same account only moves confirmed_at.
 # - broker_orders: the broker side of each live order: the client order id (idempotency key),
 #   the broker's order id and status, the fill as the broker reported it, cancel requests.
-#   The intent row is committed before the order is sent.
+#   The intent row is committed before the order is sent. candidates: the account's orders that
+#   matched one whose sending was cut off when more than one did (a person picks, `resolve`).
 # - external_fills: fills and conversions in the account that the engine did not send (the
 #   owner's trades in the Toss app, conversions); 'ledger' ones are part of the live ledger.
 # - live_previews: the first-order previews shown on the mode screen, by hash (turning live on
@@ -792,6 +793,7 @@ CREATE TABLE broker_orders (
     cancel_requested_at  TEXT,
     cancel_error         TEXT,
     cancel_attempts      INTEGER NOT NULL DEFAULT 0,
+    candidates           TEXT NOT NULL DEFAULT '[]',
     updated_at           TEXT NOT NULL
 );
 CREATE INDEX broker_orders_state ON broker_orders(ledger_id, state);

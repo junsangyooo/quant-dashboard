@@ -1,6 +1,6 @@
 """'직접 할 일' (manual actions): list them, and close one after the owner has handled it.
 
-Three kinds, with the ids the web API shows (autotrade/api/views/health.py, discovery.py):
+Four kinds, with the ids the web API shows (autotrade/api/views/health.py, discovery.py, live.py):
 
 - 'order-failed:<order id>': an order of a plan in 'todo' status. It failed again on its retry,
   the broker rejected it (인계 11), or it waited on a stage that did (it was cancelled). The id is
@@ -10,6 +10,10 @@ Three kinds, with the ids the web API shows (autotrade/api/views/health.py, disc
 - 'ai-cli:failed:<task id>': an AI task that failed Config.ai_max_attempts times (or gave up at
   once on a fault that would only repeat). It waits for a person and blocks nothing meanwhile:
   a new hit asks a new confirmation (engine/watch.py).
+- 'broker-mismatch:order:<order id>' (live): an order whose sending was cut off and that more
+  than one of the account's orders could be (jobs/live_tasks.py Sync._search). Until a person
+  says which, the account cannot be read as the truth: no reconciliation, no live order. The
+  facts list the candidates as the search saw them.
 
 resolve() closes one after the owner has dealt with it (in the Toss app, for a live order):
 
@@ -18,7 +22,9 @@ resolve() closes one after the owner has dealt with it (in the Toss app, for a l
   as it is (fills that happened stay; nothing is invented for the order that did not fill);
 - a check todo marks that day's failure as handled;
 - an AI todo cancels the task (`python -m autotrade.jobs ai-retry <id>` asks it again instead:
-  retry_ai, attempts back to 0; a complete answer it already got is applied, not asked again).
+  retry_ai, attempts back to 0; a complete answer it already got is applied, not asked again);
+- an unknown order is settled with the owner's pick (`--pick <Toss order id>` or `--pick none`,
+  engine/live.py settle_ambiguous): ours is that order, or none is and ours never reached Toss.
 
 Either way an event 'todo-resolved' records it (with the owner's note), under a natural key so
 that resolving twice changes nothing.
@@ -32,7 +38,7 @@ from datetime import date, datetime
 from typing import Any
 
 from autotrade.config import Config
-from autotrade.db import ai_repo, repo
+from autotrade.db import ai_repo, live_repo, repo
 from autotrade.db.models import OrderRow, PlanRow
 from autotrade.engine.common import refresh_cash_parts
 from autotrade.engine.runner import untraded
@@ -41,7 +47,10 @@ from autotrade.timeutil import kst_date, require_aware
 ORDER_TODO = "order-failed"
 CHECK_TODO = "check-failed"
 AI_TODO = "ai-cli:failed"
+UNKNOWN_TODO = "broker-mismatch:order"  # the id the health screen shows (api/views/live.py)
+NO_PICK = "none"
 FAILED_RESULTS = ("failed", "todo")
+LIVE = "live"
 
 
 def _max(max_attempts: int | None) -> int:
@@ -59,7 +68,7 @@ class TodoError(ValueError):
 @dataclass(frozen=True)
 class Todo:
     todo_id: str
-    kind: str  # ORDER_TODO | CHECK_TODO | AI_TODO
+    kind: str  # ORDER_TODO | CHECK_TODO | AI_TODO | UNKNOWN_TODO
     day: date  # the plan's date, or the failed check's date
     plan_id: int | None = None
     facts: dict[str, Any] = field(default_factory=dict)
@@ -160,6 +169,51 @@ def _ai_todos(conn: sqlite3.Connection, ledger_id: str, max_attempts: int) -> li
     return out
 
 
+def _unknown_todos(conn: sqlite3.Connection, ledger_id: str) -> list[Todo]:
+    """One per live order that more than one of the account's orders could be."""
+    if ledger_id != LIVE:
+        return []
+    out: list[Todo] = []
+    for row in live_repo.broker_orders_of(conn, ledger_id, ["unknown"]):
+        if row.error_code != "ambiguous":
+            continue
+        order = repo.get_order(conn, row.order_id)
+        plan = repo.get_plan(conn, order.plan_id)
+        request = row.request
+        candidates = []
+        for c in row.candidates:
+            found = c.get("order")
+            seen: dict[str, Any] = found if isinstance(found, dict) else {}
+            candidates.append(
+                {
+                    "id": seen.get("order_id"),
+                    "status": seen.get("status"),
+                    "filled": seen.get("filled_qty"),
+                    "ordered_at": seen.get("ordered_at"),
+                    "closed": bool(c.get("closed")),
+                }
+            )
+        out.append(
+            Todo(
+                todo_id=f"{UNKNOWN_TODO}:{row.order_id}",
+                kind=UNKNOWN_TODO,
+                day=plan.plan_date,
+                plan_id=plan.plan_id,
+                facts={
+                    "market": order.market,
+                    "side": order.side,
+                    "instrument_id": order.instrument_id,
+                    "qty": None if request is None else request.quantity,
+                    "price": None if request is None else request.price,
+                    "sent_at": row.sent_at,
+                    "candidates": candidates,
+                    "pick": "--pick <candidate id> (ours) or --pick none (ours never reached Toss)",
+                },
+            )
+        )
+    return out
+
+
 def open_todos(
     conn: sqlite3.Connection, ledger_id: str, max_attempts: int | None = None
 ) -> list[Todo]:
@@ -170,6 +224,7 @@ def open_todos(
     if check is not None:
         out.append(check)
     out.extend(_ai_todos(conn, ledger_id, _max(max_attempts)))
+    out.extend(_unknown_todos(conn, ledger_id))
     return out
 
 
@@ -179,12 +234,17 @@ def _parse(todo_id: str) -> tuple[str, str]:
         if not value.isdigit():
             raise TodoError("bad-id", f"not a task id: {value!r}")
         return AI_TODO, value
+    if todo_id.startswith(f"{UNKNOWN_TODO}:"):
+        value = todo_id[len(UNKNOWN_TODO) + 1 :]
+        if not value.isdigit():
+            raise TodoError("bad-id", f"not an order id: {value!r}")
+        return UNKNOWN_TODO, value
     kind, sep, value = todo_id.partition(":")
     if not sep or kind not in (ORDER_TODO, CHECK_TODO) or not value:
         raise TodoError(
             "bad-id",
             f"not a todo id: {todo_id!r} (order-failed:<id>, check-failed:<date>,"
-            " ai-cli:failed:<task id>)",
+            " ai-cli:failed:<task id>, broker-mismatch:order:<id>)",
         )
     return kind, value
 
@@ -196,15 +256,82 @@ def resolve(
     at: datetime,
     note: str | None = None,
     max_attempts: int | None = None,
+    pick: str | None = None,
 ) -> dict[str, Any]:
-    """Close one manual action. The caller owns the transaction. Raises TodoError."""
+    """Close one manual action. The caller owns the transaction. Raises TodoError. `pick`: an
+    unknown order's settlement (the Toss order id that is ours, or 'none')."""
     require_aware(at)
     kind, value = _parse(todo_id)
+    if pick is not None and kind != UNKNOWN_TODO:
+        raise TodoError("bad-id", f"--pick settles {UNKNOWN_TODO}:<id> only, not {todo_id!r}")
     if kind == ORDER_TODO:
         return _resolve_plan(conn, ledger_id, todo_id, value, at, note)
     if kind == AI_TODO:
         return _cancel_ai(conn, ledger_id, todo_id, int(value), at, note, _max(max_attempts))
+    if kind == UNKNOWN_TODO:
+        return _settle_unknown(conn, ledger_id, todo_id, int(value), at, note, pick)
     return _resolve_check(conn, ledger_id, todo_id, value, at, note)
+
+
+def _settle_unknown(
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    todo_id: str,
+    order_id: int,
+    at: datetime,
+    note: str | None,
+    pick: str | None,
+) -> dict[str, Any]:
+    """The owner looked in the Toss app and tells which candidate is our order, or that none is
+    (engine/live.py settle_ambiguous). An event 'todo-resolved' records it."""
+    from autotrade.engine import live
+
+    ref = f"todo-resolved:broker-order:{order_id}"
+    done = repo.event_by_ref(conn, ledger_id, ref)
+    if done is not None:
+        return {"result": "already-resolved", "order_id": order_id, "event_id": done.event_id}
+    if ledger_id != LIVE:
+        raise TodoError("not-found", f"{todo_id} is a live order: --ledger live")
+    row = live_repo.get_broker_order(conn, order_id)
+    if row is None or row.ledger_id != ledger_id:
+        raise TodoError("not-found", f"no live order {order_id} at the broker")
+    if row.state != "unknown" or row.error_code != "ambiguous":
+        raise TodoError("not-a-todo", f"{todo_id} is not an open manual action ({row.state})")
+    ids = [str(c["order"]["order_id"]) for c in row.candidates if isinstance(c.get("order"), dict)]
+    if pick is None or (pick != NO_PICK and pick not in ids):
+        raise TodoError(
+            "bad-pick",
+            f"--pick one of {', '.join(ids)} (the Toss order that is ours) or {NO_PICK}",
+        )
+    settled = live.settle_ambiguous(conn, row, None if pick == NO_PICK else pick, at)
+    order = repo.get_order(conn, order_id)
+    event_id = repo.insert_event(
+        conn,
+        ledger_id=ledger_id,
+        kind="todo-resolved",
+        event_date=kst_date(at),
+        occurred_at=at,
+        rule_id=repo.get_plan(conn, order.plan_id).rule_id,
+        ref=ref,
+        payload={
+            "todo_id": todo_id,
+            "order_id": order_id,
+            "pick": pick,
+            "candidates": ids,
+            "settled": settled,
+            "closed": [todo_id],
+            "note": note,
+        },
+    )
+    refresh_cash_parts(conn, ledger_id, at)
+    return {
+        "result": "resolved",
+        "order_id": order_id,
+        "pick": pick,
+        "settled": settled,
+        "closed": [todo_id],
+        "event_id": event_id,
+    }
 
 
 def _ai_task(conn: sqlite3.Connection, ledger_id: str, task_id: int) -> ai_repo.TaskRow:
@@ -389,8 +516,6 @@ def _close_orders(conn: sqlite3.Connection, plan_id: int, at: datetime) -> list[
     """Cancel what the plan still had to send. A live order already at the broker gets a cancel
     request the tick carries out; it stays pending until the broker ends it, so a fill that
     comes meanwhile is still booked (engine/live.py book_late_fills)."""
-    from autotrade.db import live_repo
-
     out: list[int] = []
     for order in repo.orders_of_plan(conn, plan_id):
         if order.status != "pending":

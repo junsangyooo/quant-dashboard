@@ -4,6 +4,7 @@ asserting the right behavior. Against the fake Toss (tests/autotrade/live_world.
 1. Money that came in and an app buy it paid for, in one look at the account.
 2. Live turned on in the day runs no check before the next weekday's 08:30.
 3. A partly filled order that ends in the CLOSED list with PARTIAL_FILLED.
+4. An order two of the account's orders could be: settled with the owner's pick.
 5. The closed orders the reconciliation reads start at its last match, not its last attempt.
 6. A one-share top-up the send's limit price cannot pay.
 7. A conversion caps the cash waiting for a withdrawal; a live wait holds its own money only.
@@ -290,6 +291,142 @@ def test_a_cancel_of_a_partial_fill_that_closed_meanwhile_finishes(lw: Live) -> 
     assert {"late_fill": order_id, "qty": 100} in result["booked"]
     assert lw.state().qty_of(KR) == 100
     assert verify_ledger(lw.conn, "live") == []
+
+
+# ── 4. an order two of the account's orders could be ─────────────────────────────────────
+
+
+def ambiguous(lw: Live) -> int:
+    """09:05: our intent is committed, the request is lost, and two orders of the owner's with
+    the same symbol, side, quantity and price are in the account. At 09:20, past the resend
+    window, the search finds both: our order waits for a person. Returns its id."""
+    from autotrade.broker.toss import client_order_id
+    from autotrade.broker.toss_api import OrderRequest
+
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-07-01 08:29")
+    assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
+    order = repo.orders_of_ledger(lw.conn, "live")[0]
+    lw.fake.fill_mode = "open"
+    request = OrderRequest(
+        client_order_id(order.idem_key), "069500", "BUY", 156, D("32160"), Currency.KRW
+    )
+    lw.at("2026-07-01 09:05")
+    with transaction(lw.conn):
+        live_repo.insert_intent(
+            lw.conn, order_id=order.order_id, ledger_id="live", request=request, at=lw.now()
+        )
+    body = {**request.body(), "clientOrderId": "app-1"}
+    lw.fake._create(body)
+    lw.fake._create({**body, "clientOrderId": "app-2"})
+    lw.sync("2026-07-01 09:20")
+    row = live_repo.get_broker_order(lw.conn, order.order_id)
+    assert row is not None and (row.state, row.error_code) == ("unknown", "ambiguous")  # noqa: PT018
+    assert [c["order"]["order_id"] for c in row.candidates] == ["ord-0001", "ord-0002"]
+    return order.order_id
+
+
+def settle(lw: Live, order_id: int, pick: str | None) -> dict[str, object]:
+    from autotrade.jobs.tasks import resolve_job
+
+    return resolve_job(
+        lw.ctx, "live", f"broker-mismatch:order:{order_id}", lw.now(), note="앱 확인", pick=pick
+    )
+
+
+def test_an_ambiguous_order_none_of_whose_candidates_is_ours(lw: Live) -> None:
+    from autotrade.engine.todos import open_todos
+
+    order_id = ambiguous(lw)
+    lw.fake.expire_open()  # the session ends: both of the owner's orders lapse unfilled
+    lw.sync("2026-07-01 16:30")
+    assert lw.reconcile()["result"] == "quiet"
+    assert lw.status().reconcile_state == "busy"  # it keeps the account busy until settled
+    [todo] = open_todos(lw.conn, "live")
+    assert todo.todo_id == f"broker-mismatch:order:{order_id}"
+    assert [c["id"] for c in todo.facts["candidates"]] == ["ord-0001", "ord-0002"]
+    # A pick is needed, and it must be one of the candidates (or none).
+    assert settle(lw, order_id, None)["result"] == "bad-pick"
+    assert settle(lw, order_id, "ord-9999")["result"] == "bad-pick"
+    done = settle(lw, order_id, "none")
+    assert (done["result"], done["settled"]) == ("resolved", "none")
+    assert settle(lw, order_id, "none")["result"] == "already-resolved"
+    row = live_repo.get_broker_order(lw.conn, order_id)
+    assert row is not None and (row.state, row.error_code) == ("not-sent", "lost")  # noqa: PT018
+    assert live.unknown_orders(lw.conn) == [] and open_todos(lw.conn, "live") == []  # noqa: PT018
+    # Our order never reached Toss: its stage fails and goes again the next trading day.
+    assert lw.stages()["result"] == "failed"
+    assert [o.attempt for o in repo.orders_of_ledger(lw.conn, "live")] == [1, 2]
+    assert lw.reconcile()["result"] in ("match", "quiet")
+    assert lw.status().reconcile_state == "match"
+    assert verify_ledger(lw.conn, "live") == []
+
+
+def test_an_ambiguous_order_whose_candidate_is_ours(lw: Live) -> None:
+    order_id = ambiguous(lw)
+    lw.fake.fill_open("ord-0002", price=D("32000"))  # the one that is ours fills
+    lw.fake.expire_open()
+    lw.sync("2026-07-01 16:30")
+    assert settle(lw, order_id, "ord-0002")["settled"] == "ord-0002"
+    row = live_repo.get_broker_order(lw.conn, order_id)
+    assert row is not None and (row.state, row.broker_order_id) == ("sent", "ord-0002")  # noqa: PT018
+    lw.sync("2026-07-01 16:35")  # the next sync reads it: filled
+    assert lw.stages()["result"] == "done"
+    fill = repo.fill_of_order(lw.conn, order_id)
+    assert fill is not None and (fill.qty, fill.gross) == (156, D("4992000"))  # noqa: PT018
+    assert lw.reconcile()["result"] in ("match", "quiet")
+    assert lw.status().reconcile_state == "match"
+    assert lw.state().qty_of(KR) == 156
+    assert verify_ledger(lw.conn, "live") == []
+
+
+def test_turning_live_off_with_an_ambiguous_order_settles_the_cancel_too(lw: Live) -> None:
+    from autotrade.api.views import mode as mode_view
+    from autotrade.api.views.context import LedgerContext
+
+    order_id = ambiguous(lw)
+    lw.fake.expire_open()  # 15:30: the owner's two orders lapse
+    off = lw.turn_off("2026-07-01 16:40")
+    assert off.cancel_requested == [order_id]
+    for t in ("2026-07-01 16:45", "2026-07-02 08:30"):
+        lw.sync(t)
+    assert [r.order_id for r in live.cancel_pending(lw.conn)] == [order_id]  # nothing to cancel yet
+    settle(lw, order_id, "none")
+    assert live.cancel_pending(lw.conn) == []
+    assert repo.get_order(lw.conn, order_id).status == "cancelled"  # its plan was closed
+    lw.sync("2026-07-02 08:35")
+    lw.market_data()
+    found = mode_view.checks(LedgerContext(lw.conn, lw.cfg, "paper", lw.now()), lw.now())
+    assert found.can_turn_on == {"ok": True}
+
+
+def test_the_owners_pick_through_the_cli(lw: Live, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    from autotrade.jobs import cli
+
+    order_id = ambiguous(lw)
+    lw.fake.expire_open()
+    lines: list[str] = []
+    env = {"AUTOTRADE_SECRETS_ENV": str(lw.cfg.secrets_env)}
+    base = ["--db", str(lw.cfg.db_path), "--at", "2026-07-01T16:30", "--ledger", "live"]
+    code = cli.main(["todos", *base], env=env, out=lines.append)
+    [todo] = json.loads(lines[-1])["todos"]
+    assert (code, todo["id"], [c["id"] for c in todo["candidates"]]) == (
+        0,
+        f"broker-mismatch:order:{order_id}",
+        ["ord-0001", "ord-0002"],
+    )
+    code = cli.main(["resolve", todo["id"], *base], env=env, out=lines.append)
+    assert (code, json.loads(lines[-1])["result"]) == (1, "bad-pick")
+    code = cli.main(
+        ["resolve", todo["id"], "--pick", "none", "--note", "앱 확인", *base],
+        env=env,
+        out=lines.append,
+    )
+    assert (code, json.loads(lines[-1])["result"]) == (0, "resolved")
+    with pytest.raises(SystemExit):
+        cli.main(["todos", "--pick", "none", *base], env=env, out=lines.append)
 
 
 # ── 5. the closed orders start at the last match ─────────────────────────────────────────

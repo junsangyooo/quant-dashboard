@@ -218,12 +218,19 @@ class Sync:
                 )
                 self.changes.append({"order_id": row.order_id, "found": view.order_id})
             elif len(unique) > 1:
+                # A person tells which is ours (`resolve broker-mismatch:order:<id> --pick`):
+                # keep what each looked like, and from which list it came.
+                candidates = [
+                    {"order": o.to_json(), "closed": o.order_id in closed_ids}
+                    for o in sorted(unique.values(), key=lambda o: o.order_id)
+                ]
                 live_repo.mark_unknown(
                     self.conn,
                     row.order_id,
                     "ambiguous",
                     f"{len(unique)} orders match; check the Toss app",
                     self.now(),
+                    candidates,
                 )
                 self.changes.append({"order_id": row.order_id, "ambiguous": len(unique)})
             elif final:

@@ -184,11 +184,12 @@ export const healthCopy = {
     brokerMismatchFill: (name: string) => `${name} 체결을 장부에 맞출 수 없어요`,
     brokerMismatchOther: '장부로 설명되지 않는 차이가 있어요',
     brokerMismatchAction: '토스 앱에서 확인 뒤 Claude에게 장부 맞추기 요청',
-    // 결과를 모르는 주문: facts { reason: 'order-unknown', market, side }.
+    // 결과를 모르는 주문: facts { reason: 'order-unknown', market, side }. 서버에서만 정리된다
+    // (resolve broker-mismatch:order:<id> --pick, autotrade/PHASE3.md 2.3).
     orderUnknownTitle: (market: string, side: string) => `${market} ${side} 주문 결과 모름`,
     orderUnknownLines: [
-      '토스에 이 주문으로 보이는 것이 둘이에요',
-      '토스 앱에서 확인 뒤 Claude에게 요청',
+      '토스에 이 주문으로 보이는 주문이 여럿이라 어느 것인지 몰라요',
+      '토스 앱에서 어느 주문인지 확인 뒤 Claude에게 서버에서 정리 요청',
     ],
     /** Small result line, by effect. */
     effect: {

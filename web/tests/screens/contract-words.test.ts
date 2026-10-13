@@ -457,8 +457,8 @@ describe('작동 cards of the live link (3단계, autotrade/PHASE3.md 2.7)', () 
     );
     expect(unknown.title).toBe('한국 매수 주문 결과 모름');
     expect(unknown.lines).toEqual([
-      '토스에 이 주문으로 보이는 것이 둘이에요',
-      '토스 앱에서 확인 뒤 Claude에게 요청',
+      '토스에 이 주문으로 보이는 주문이 여럿이라 어느 것인지 몰라요',
+      '토스 앱에서 어느 주문인지 확인 뒤 Claude에게 서버에서 정리 요청',
     ]);
   });
 

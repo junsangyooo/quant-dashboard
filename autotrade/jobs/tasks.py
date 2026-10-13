@@ -410,9 +410,11 @@ def resolve_job(
     at: datetime,
     *,
     note: str | None = None,
+    pick: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Close a '직접 할 일' after the owner handled it; the rule plans again at the next check."""
+    """Close a '직접 할 일' after the owner handled it; the rule plans again at the next check.
+    `pick` settles an unknown live order (engine/todos.py UNKNOWN_TODO)."""
     require_aware(at)
     base: dict[str, Any] = {
         "job": "resolve",
@@ -423,7 +425,7 @@ def resolve_job(
     }
     try:
         with transaction(ctx.conn, rollback=dry_run):
-            outcome = resolve(ctx.conn, ledger_id, todo_id, at, note, ctx.cfg.ai_max_attempts)
+            outcome = resolve(ctx.conn, ledger_id, todo_id, at, note, ctx.cfg.ai_max_attempts, pick)
     except TodoError as exc:
         return {**base, "result": exc.code, "error": str(exc)}
     return {**base, **outcome, "next_check_at": next_check_at(ctx.cfg, at)}
@@ -476,4 +478,14 @@ def adopt_job(
 
 
 # Results that make the CLI exit with 1 ('failed', a manual action, a todo that cannot be closed).
-FAILING_RESULTS = (FAILED, TODO, "bad-id", "not-found", "not-a-todo", "busy", "refused", "mismatch")
+FAILING_RESULTS = (
+    FAILED,
+    TODO,
+    "bad-id",
+    "bad-pick",
+    "not-found",
+    "not-a-todo",
+    "busy",
+    "refused",
+    "mismatch",
+)

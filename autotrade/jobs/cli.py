@@ -1,7 +1,8 @@
 """python -m autotrade.jobs <command> [options]
 
 Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, --db PATH,
---note TEXT (resolve, ai-retry, adopt-broker), --predeploy (backup, migrate).
+--note TEXT (resolve, ai-retry, adopt-broker), --pick ID|none (resolve of an unknown live order),
+--predeploy (backup, migrate).
 
   tick       what cron runs every 5 minutes: decides what is due now and runs it (see
              autotrade/jobs/schedule.py for the times and how late each may still run), for the
@@ -30,7 +31,10 @@ Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, -
              again, unless --ask-again). `resolve ai-cli:failed:<id>` gives it up instead
   todos      list the open '직접 할 일' (manual actions) with their ids
   resolve    resolve <todo-id> [--note TEXT]: close a manual action after handling it (e.g. in
-             the Toss app); the rule plans again at the next check
+             the Toss app); the rule plans again at the next check. An unknown live order
+             (broker-mismatch:order:<id>, --ledger live) needs --pick: the Toss order id that is
+             ours (one of the candidates `todos --ledger live` lists), or none (ours never
+             reached Toss: its stage is retried the next day)
   broker     the live ledger's Toss sync once (what the tick runs; only with
              AUTOTRADE_LIVE_ORDERS=1, it reads the account and sends due live orders)
   reconcile  match the live ledger with the latest account snapshot
@@ -174,6 +178,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", help="database path (default: AUTOTRADE_DB or data/autotrade.db)")
     parser.add_argument("--note", help="resolve, ai-retry: what the owner did (kept in the event)")
     parser.add_argument(
+        "--pick",
+        help="resolve broker-mismatch:order:<id>: the Toss order id that is ours, or 'none'",
+    )
+    parser.add_argument(
         "--predeploy",
         action="store_true",
         help="backup: the copy deploy.sh makes before migrate; migrate: make it first, under the"
@@ -316,7 +324,9 @@ def _dispatch(
         error = f"give the todo id: {args.command} <id>"
         return {"job": args.command, "result": "bad-id", "error": error}
     if args.command == "resolve":
-        return resolve_job(ctx, ledger, args.todo_id, at, note=args.note, dry_run=dry)
+        return resolve_job(
+            ctx, ledger, args.todo_id, at, note=args.note, pick=args.pick, dry_run=dry
+        )
     if args.command == "ai-retry":
         return ai_retry_job(
             ctx, ledger, args.todo_id, at, note=args.note, ask_again=args.ask_again, dry_run=dry
@@ -453,6 +463,8 @@ def main(
         parser.error("--predeploy is only for backup and migrate")
     if args.ask_again and args.command != "ai-retry":
         parser.error("--ask-again is only for ai-retry")
+    if args.pick is not None and args.command != "resolve":
+        parser.error("--pick is only for resolve")
     if args.command == "adopt-broker" and not args.note:
         parser.error("adopt-broker needs --note (what you checked in the Toss app)")
     if args.command != "dev-seed" and (args.pin is not None or args.world is not None):

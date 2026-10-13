@@ -291,6 +291,9 @@ class BrokerOrderRow:
     cancel_error: str | None
     cancel_attempts: int
     updated_at: datetime
+    # 'unknown'/'ambiguous': the account's orders that matched it, as the search saw them:
+    # {"order": BrokerOrder.to_json(), "closed": bool (from the CLOSED list)}.
+    candidates: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def open(self) -> bool:
@@ -304,6 +307,7 @@ class BrokerOrderRow:
     def from_row(cls, row: sqlite3.Row) -> BrokerOrderRow:
         request = loads(str(row["request"])) or {}
         settlement = row["settlement_date"]
+        candidates = loads(str(row["candidates"])) or []
         return cls(
             order_id=int(row["order_id"]),
             ledger_id=str(row["ledger_id"]),
@@ -328,6 +332,9 @@ class BrokerOrderRow:
             cancel_error=None if row["cancel_error"] is None else str(row["cancel_error"]),
             cancel_attempts=int(row["cancel_attempts"]),
             updated_at=from_iso(str(row["updated_at"])),
+            candidates=[dict(c) for c in candidates if isinstance(c, dict)]
+            if isinstance(candidates, list)
+            else [],
         )
 
 
@@ -369,7 +376,7 @@ def insert_intent(
         " sent_at, updated_at) VALUES (?, ?, ?, 'sending', ?, ?, ?)"
         " ON CONFLICT(order_id) DO UPDATE SET state = 'sending', request = excluded.request,"
         " sent_at = excluded.sent_at, error_code = NULL, error_detail = NULL,"
-        " retry_after = NULL, updated_at = excluded.updated_at",
+        " retry_after = NULL, candidates = '[]', updated_at = excluded.updated_at",
         (
             order_id,
             ledger_id,
@@ -424,12 +431,17 @@ def mark_sent(conn: sqlite3.Connection, order_id: int, broker_order_id: str, at:
 
 
 def mark_unknown(
-    conn: sqlite3.Connection, order_id: int, code: str, detail: str, at: datetime
+    conn: sqlite3.Connection,
+    order_id: int,
+    code: str,
+    detail: str,
+    at: datetime,
+    candidates: Sequence[Mapping[str, Any]] = (),
 ) -> None:
     conn.execute(
         "UPDATE broker_orders SET state = 'unknown', error_code = ?, error_detail = ?,"
-        " updated_at = ? WHERE order_id = ?",
-        (code, detail[:400], to_iso(at), order_id),
+        " candidates = ?, updated_at = ? WHERE order_id = ?",
+        (code, detail[:400], dumps([dict(c) for c in candidates]), to_iso(at), order_id),
     )
 
 
