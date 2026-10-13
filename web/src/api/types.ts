@@ -1020,7 +1020,7 @@ export type TossLinkCause =
   | 'unreachable' // 토스 응답 없음
   | 'maintenance' // 토스 점검 중
   | 'error' // 토스 오류
-  | 'old' // 마지막 확인이 15분보다 오래됨
+  | 'old' // 마지막 확인이 한도보다 오래됨(장 중 15분, 밤·주말 45분)
   | 'conflict' // 다른 프로그램이 같은 키로 토큰을 받음(옛 quant)
   | 'conditional' // 계좌에 열린 조건주문(옛 quant·앱): 실전 켜기 막힘, 켜진 동안은 할 일만
   | 'not-tradable' // 규칙 종목이 지금 거래 안 됨

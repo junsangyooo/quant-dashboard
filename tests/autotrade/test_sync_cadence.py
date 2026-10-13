@@ -135,21 +135,21 @@ def test_live_off_cancels_on_the_next_tick_and_a_change_keeps_every_tick(lw: Liv
 
 
 def test_money_seen_on_a_closed_evening_is_dated_that_day(lw: Live) -> None:
-    """D48: money the account shows on day D is used from the next weekday's check. From 23:50
+    """D48: money the account shows on day D is used from the next weekday's check. From 23:30
     KST the tick looks every time, so a Sunday-evening deposit is Sunday's (Monday's check uses
     it), not Monday's after midnight (Tuesday's)."""
     lw.turn_on("2026-06-30 21:00")
-    assert looked(lw, "2026-07-05 23:30")  # Sunday night: the 30-minute look
+    assert looked(lw, "2026-07-05 23:00")  # Sunday night: the 30-minute look
     lw.fake.deposit("KRW", D("3000000"))
-    assert not looked(lw, "2026-07-05 23:45")
-    assert live.fast_sync_reason(lw.conn, lw.cfg, kst("2026-07-05 23:50")) == "day-end"
-    assert looked(lw, "2026-07-05 23:50")
+    assert not looked(lw, "2026-07-05 23:15")
+    assert live.fast_sync_reason(lw.conn, lw.cfg, kst("2026-07-05 23:30")) == "day-end"
+    assert looked(lw, "2026-07-05 23:30")
     deposits = repo.events_of_ledger(lw.conn, "live", ["deposit"])
     assert [(e.event_date, e.amount) for e in deposits] == [(date(2026, 7, 5), D("3000000"))]
     assert new_money_waiting(lw.conn, "live", kst("2026-07-06 08:30")) == {}
     # Seen at the check's own look it would be that day's money, kept from that check (D48).
     lw.fake.deposit("KRW", D("1000000"))
-    assert looked(lw, "2026-07-06 00:20")  # Monday after midnight: 30 minutes after 23:50
+    assert looked(lw, "2026-07-06 00:00")  # Monday after midnight: 30 minutes after 23:30
     assert new_money_waiting(lw.conn, "live", kst("2026-07-06 08:30")) == {
         Currency.KRW: D("1000000")
     }
@@ -173,3 +173,18 @@ def test_without_the_first_key_every_tick_only_records_off(
         lw.tick("2026-06-30 21:00")
         lw.tick("2026-06-30 21:05")
         assert lw.fake.calls == []  # nothing reaches Toss
+
+
+def test_the_check_matches_only_a_fresh_account_even_at_night(lw: Live) -> None:
+    """08:30 is a closed-market time, where the night cadence takes a snapshot up to 45 minutes
+    old. The check's reconciliation keeps the strict 15 minutes: its tick looks at Toss first, so
+    a look that failed means the account is not known now, and the check fails (retried at 09:30)
+    instead of planning on the account as it was at 08:00."""
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-07-01 08:00")  # the last look: the night's 30-minute one
+    report = lw.check("2026-07-01 08:30")  # this tick's own look did not happen (Toss down)
+    assert report["result"] == "failed", report
+    assert repo.open_plans(lw.conn, "live") == []
+    assert lw.status().reconcile_state == "busy"
+    # The screens still read the 08:00 look as current (the night cadence's 45 minutes).
+    assert live.sync_max_age(lw.cfg, kst("2026-07-01 08:30")) == timedelta(minutes=45)

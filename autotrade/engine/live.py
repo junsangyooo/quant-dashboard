@@ -298,15 +298,17 @@ def reconcile(
     at: datetime,
     *,
     snapshot: AccountSnapshot | None = None,
+    max_age: timedelta | None = None,
 ) -> ReconcileResult:
     """Match the live ledger with the account. The caller owns the transaction; on a mismatch
-    nothing is written but the status (savepoint)."""
+    nothing is written but the status (savepoint). `max_age`: how old the snapshot may be, by
+    default the tick's cadence (sync_max_age); the check passes the strict broker_max_age."""
     require_aware(at)
     start = repo.start_event(conn, LIVE)
     if start is None:
         return ReconcileResult("skipped", "not-started")
     snap = snapshot or live_repo.latest_snapshot(conn)
-    reason = busy_reason(conn, cfg, snap, at, sync_max_age(cfg, at))
+    reason = busy_reason(conn, cfg, snap, at, max_age or sync_max_age(cfg, at))
     if reason is not None or snap is None:
         result = ReconcileResult("busy", reason or "no-snapshot")
         _record(conn, at, result)
@@ -1756,8 +1758,9 @@ def cancel_pending(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
 SYNC_WANTED_AT = "broker.sync_wanted_at"
 # From here to midnight KST the tick looks every time: money the account shows on day D is
 # used from the next weekday (D48), so a deposit made late in the evening is still seen, and
-# dated, the day it arrived, as with the 5-minute look.
-DAY_END = time(23, 50)
+# dated, the day it arrived, as with the 5-minute look. Half an hour: six looks, so a few
+# minutes of Toss not answering do not move a late deposit to the next day.
+DAY_END = time(23, 30)
 # Half a tick: a sync due every 30 minutes runs on the tick near the 30-minute mark, not the one
 # after it (the last look's time is when the previous sync finished).
 SYNC_TOLERANCE = timedelta(minutes=2, seconds=30)

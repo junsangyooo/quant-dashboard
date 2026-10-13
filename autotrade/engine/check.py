@@ -426,8 +426,11 @@ def _check_body(
 
     open_plans = repo.open_plans(conn, ledger_id, rule.rule_id)
     if ledger_id == live.LIVE:
-        # The account is the truth: match it before anything is weighed (PHASE3.md 2.5).
-        outcome = live.reconcile(conn, cfg, at)
+        # The account is the truth: match it before anything is weighed (PHASE3.md 2.5). On a
+        # snapshot within broker_max_age even at 08:30, when both markets are closed and the
+        # night cadence would accept an older one: the check's tick looks at Toss first, so a
+        # failed look fails the check (retried at 09:30) instead of planning on a stale account.
+        outcome = live.reconcile(conn, cfg, at, max_age=cfg.broker_max_age)
         details["reconcile"] = {"state": outcome.state, "reason": outcome.reason}
         if not outcome.ok and not open_plans:
             kind = "mismatch" if outcome.state == "mismatch" else "broker"

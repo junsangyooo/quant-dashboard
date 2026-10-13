@@ -123,7 +123,7 @@ test.describe('SCR-HEALTH', () => {
     await expect(mismatch.getByText(/KOSPI200 ETF 장부 156주 · 토스 160주/)).toBeVisible();
     await expect(mismatch).toContainText('그동안 주문 0건 · 실전 켜기 막힘');
     const link = page.getByRole('article', { name: '토스 연결 · 다른 프로그램과 키 겹침' });
-    await expect(link).toContainText('Claude에게 옛 quant cron 줄 삭제 요청');
+    await expect(link).toContainText('같은 키를 쓰는 다른 프로그램 멈추기(Claude에게 요청)');
     // No conversion to-do (D47): the 원화 · 달러 card sits beside the to-dos, not among them.
     await expect(page.getByRole('article')).toHaveCount(2);
     const money = page.getByRole('region', { name: '원화 · 달러' });
