@@ -100,7 +100,9 @@ def ledger_status(
         quote_wait=last_today == "quote-wait" or any(f.state == "stale" for f in freshness),
         partial_failed=any(p.status in ("partial-failed", "todo") for p in open_plans),
         in_progress=any(p.status == "in-progress" for p in open_plans),
-        withdraw_wait=any(p.purpose.value == "withdraw_wait" for p in parts),
+        # The live ledger's wait holds its own money and stops no order (PHASE3.md 2.5).
+        withdraw_wait=ledger_id != "live"
+        and any(p.purpose.value == "withdraw_wait" for p in parts),
         holiday=last_today == "holiday",
         scheduled=last is None,
     )

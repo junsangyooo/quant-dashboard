@@ -18,12 +18,13 @@ The live ledger's dividends will come from the broker (phase 3), not from this m
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from autotrade.config import Config
-from autotrade.db import repo
+from autotrade.db import live_repo, repo
 from autotrade.db.models import DividendRow
 from autotrade.domain.dividends import HeldFill, after_tax, qty_before_ex_date
 from autotrade.domain.instruments import Currency, Instrument, Market
@@ -53,18 +54,34 @@ def watched_instruments(conn: sqlite3.Connection, ledger_id: str) -> list[Instru
     return list(out.values())
 
 
+def session_of(inst: Instrument, at: datetime) -> date:
+    """The session date of a fill at `at` on the instrument's own exchange."""
+    return et_date(at) if inst.market is Market.US else kst_date(at)
+
+
 def shares_before_ex_date(
-    conn: sqlite3.Connection, ledger_id: str, inst: Instrument, ex_date: date
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    inst: Instrument,
+    ex_date: date,
+    unbooked: Sequence[HeldFill] = (),
 ) -> int:
-    """Shares of `inst` the ledger held before the ex-date session (its own exchange's dates)."""
+    """Shares of `inst` the ledger held before the ex-date session (its own exchange's dates):
+    its fills, the owner's app trades of it (live, external_fills 'ledger'), and `unbooked`
+    trades not in the ledger yet (the reconciliation's, engine/live.py)."""
     fills: list[HeldFill] = []
     for f in repo.fills_of_ledger(conn, ledger_id):
         if f.kind != "trade" or f.instrument_id != inst.instrument_id or not f.qty:
             continue
-        session = et_date(f.filled_at) if inst.market is Market.US else kst_date(f.filled_at)
-        fills.append(HeldFill(session, f.qty if f.side == "buy" else -f.qty))
+        fills.append(HeldFill(session_of(inst, f.filled_at), f.qty if f.side == "buy" else -f.qty))
+    for ext in live_repo.externals_of(conn, ledger_id, "ledger"):
+        if ext.kind != "trade" or ext.instrument_id != inst.instrument_id or not ext.qty:
+            continue
+        held = ext.qty if ext.side == "buy" else -ext.qty
+        fills.append(HeldFill(session_of(inst, ext.filled_at), held))
+    fills.extend(unbooked)
     qty_now = repo.load_state(conn, ledger_id).qty_of(inst.instrument_id)
-    return qty_before_ex_date(qty_now, fills, ex_date)
+    return qty_before_ex_date(qty_now + sum(f.qty for f in unbooked), fills, ex_date)
 
 
 def _book_one(

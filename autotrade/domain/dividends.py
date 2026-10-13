@@ -61,6 +61,16 @@ def estimated_pay_date(ex_date: date, calendar: TradingDays, lag_days: int) -> d
     return d
 
 
+def tax_slack(currency: Currency) -> Decimal:
+    """How far a broker's net may lie from after_tax()'s by the rounding of the tax alone (the
+    live reconciliation tells a dividend from a deposit with it, engine/live.py). Korea withholds
+    income tax (14%) and local tax (a tenth of it), each cut below 10 won, where after_tax rounds
+    the whole 15.4% up to the won: the broker's tax may be up to 10 + 10 + 1 won below it (16,000
+    won: 2,240 + 220 = 2,460 withheld, 2,464 estimated). The US withholds 15% to the cent, which
+    after_tax rounds up, and the gross may be cut instead of rounded: a cent each way."""
+    return Decimal(21) if currency is Currency.KRW else Decimal("0.03")
+
+
 @dataclass(frozen=True)
 class HeldFill:
     """A filled trade of one instrument, by its session date (exchange-local)."""

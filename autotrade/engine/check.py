@@ -5,7 +5,8 @@
    09:30, then '직접 할 일'); data that is merely old means 'quote-wait' and 0 orders.
 2. Holidays per market: the check runs when one market is closed; that market's orders roll to its
    next session, and a plan whose first stage cannot run today is not made today ('holiday').
-3. A pending withdrawal means 0 orders.
+3. A pending withdrawal means 0 orders on the paper ledger. On the live ledger it holds its own
+   money only: that cash is never invested, the rest is planned as usual (PHASE3.md 2.5).
    The live ledger first matches the Toss account (engine/live.py reconcile, PHASE3.md 2.5):
    an account it cannot read as the truth, or that does not match, fails the check (0 orders).
 4-5. In-rule weights and drift; a plan to target when the band is exceeded or free cash can buy.
@@ -495,7 +496,14 @@ def _check_body(
         if latest.status in ("partial-failed", "todo"):
             return PARTIAL_FAILED, None
         return IN_PROGRESS, None
-    if waits:
+    if waits and ledger_id == live.LIVE:
+        # The live ledger's wait holds its own money only (the owner sold in the app to take the
+        # money out, or to convert it): it was left out of the free cash above, and the rest of
+        # the money is planned as usual. A wait that stopped every order would stop them for
+        # days whenever he follows a conversion suggestion by selling the Korean ETF (D47).
+        details["withdraw_held"] = {c.value: v for c, v in held.items()}
+        details["withdraw_held_until"] = max(w.until for w in waits)
+    elif waits:
         details["withdraw_wait_until"] = max(w.until for w in waits)
         return WITHDRAW_WAIT, None
     if repo.plan_on(conn, ledger_id, rule.rule_id, d) is not None:

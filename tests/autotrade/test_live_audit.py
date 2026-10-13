@@ -1,9 +1,12 @@
 """The live money path after the audit of 2026-10-13: each finding as the auditor found it, now
 asserting the right behavior. Against the fake Toss (tests/autotrade/live_world.py).
 
+1. Money that came in and an app buy it paid for, in one look at the account.
 3. A partly filled order that ends in the CLOSED list with PARTIAL_FILLED.
 5. The closed orders the reconciliation reads start at its last match, not its last attempt.
 6. A one-share top-up the send's limit price cannot pay.
+7. A conversion caps the cash waiting for a withdrawal; a live wait holds its own money only.
+8. A deposit made while a dividend is due stays a deposit.
 9. The commission rate a buy is sized with is the one in force.
 10. An armed 조건주문 on the account blocks turning live on.
 """
@@ -22,6 +25,7 @@ from autotrade.domain.instruments import Currency
 from autotrade.engine import live
 from autotrade.engine.common import new_money_waiting
 from autotrade.engine.rebuild import verify_ledger
+from autotrade.market.service import prefetch_dividends
 
 from .fakes import KR, US, World
 from .helpers import kst
@@ -58,6 +62,92 @@ def invested(lw: Live) -> None:
 def events(lw: Live, *kinds: str) -> list[tuple[str, Decimal | None, Currency | None, str]]:
     rows = repo.events_of_ledger(lw.conn, "live", list(kinds))
     return [(e.kind, e.amount, e.currency, str(e.payload.get("reason"))) for e in rows]
+
+
+# ── 1. money in and an app buy in one look ───────────────────────────────────────────────
+
+
+def test_a_deposit_that_paid_for_an_app_buy_is_booked_before_it(lw: Live) -> None:
+    invested(lw)
+    lw.at("2026-07-01 10:01")
+    lw.fake.deposit("KRW", D("5000000"))
+    lw.fake.app_trade("005930", "BUY", D("70"), D("70000"), commission=D("735"))
+    lw.sync("2026-07-01 10:05")
+    result = lw.reconcile()
+    assert result["result"] == "match", result
+    # The deposit comes first, dated the fill's time (it paid for it); the buy outside the rules
+    # takes its money out of the ledger.
+    assert events(lw, "deposit", "withdrawal") == [
+        ("deposit", D("5000000"), KRW, "unexplained-in"),
+        ("withdrawal", D("4900735"), KRW, "outside-buy"),
+    ]
+    deposit = repo.events_of_ledger(lw.conn, "live", ["deposit"])[0]
+    assert (deposit.occurred_at, deposit.event_date) == (kst("2026-07-01 10:01"), date(2026, 7, 1))
+    assert lw.state().cash_of(KRW) == lw.fake.cash["KRW"] == D("128170")
+    assert verify_ledger(lw.conn, "live") == []  # the rebuild takes the same steps
+    assert lw.status().reconcile_state == "match"
+    # D48: the owner's money of the day, held back from today's checks and sends.
+    assert new_money_waiting(lw.conn, "live", lw.now()) == {KRW: D("5000000")}
+
+
+def test_dollars_converted_to_pay_for_an_app_buy_of_the_us_etf(lw: Live) -> None:
+    invested(lw)
+    lw.fake.deposit("KRW", D("2000000"))
+    lw.sync("2026-07-01 22:00")
+    assert lw.reconcile()["result"] == "match"
+    lw.at("2026-07-01 23:31")
+    lw.fake.convert(D("1392000"), D("999.80"))  # the owner converts in the app ...
+    lw.fake.app_trade("SPYM", "BUY", D("15"), D("66.00"), market="US", commission=D("0.99"))
+    lw.sync("2026-07-01 23:35")  # ... and buys the rule's US ETF with it before the tick looks
+    result = lw.reconcile()
+    assert result["result"] == "match", result
+    assert [b.get("conversion") for b in result["booked"] if "conversion" in b] == ["krw_to_usd"]
+    state = lw.state()
+    assert (state.qty_of("US:SPYM"), state.cash_of(USD)) == (15, D("8.81"))
+    assert state.cash_of(KRW) == lw.fake.cash["KRW"] == D("636905")
+    # The dollars came in before the buy they paid for (its fill time); the won left when the
+    # account showed it.
+    dollars = next(
+        e for e in repo.events_of_ledger(lw.conn, "live", ["deposit"]) if e.currency is USD
+    )
+    assert dollars.occurred_at == kst("2026-07-01 23:31")
+    assert verify_ledger(lw.conn, "live") == []
+
+
+def test_money_in_is_dated_before_a_late_fill_of_ours_it_paid_for(lw: Live) -> None:
+    """Our 09:05 order is still open when the owner deposits 8,000,000 won (09:58) and buys
+    outside the rules in the app (09:59); ours fills at 10:05 and is booked late, in this same
+    pass. Followed in time order, the cash runs short at our fill: the deposit is dated just
+    before it, and the rebuild (time order) agrees with the ledger."""
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-07-01 08:29")
+    assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
+    lw.fake.fill_mode = "open"
+    lw.sync("2026-07-01 09:05")
+    lw.at("2026-07-01 09:58")
+    lw.fake.deposit("KRW", D("8000000"))
+    lw.at("2026-07-01 09:59")
+    lw.fake.app_trade("005930", "BUY", D("100"), D("70000"), commission=D("1050"))
+    lw.at("2026-07-01 10:05")
+    lw.fake.fill_open(lw.fake.ours()[0].order_id, price=D("32000"))
+    lw.sync("2026-07-01 10:10")
+    result = lw.reconcile()
+    assert result["result"] == "match", result
+    assert result["booked"][0]["late_fill"] == repo.orders_of_ledger(lw.conn, "live")[0].order_id
+    deposit = repo.events_of_ledger(lw.conn, "live", ["deposit"])[0]
+    assert (deposit.amount, deposit.occurred_at) == (D("8000000"), kst("2026-07-01 10:05"))
+    assert lw.state().cash_of(KRW) == lw.fake.cash["KRW"]
+    assert verify_ledger(lw.conn, "live") == []
+
+
+def test_an_app_buy_nothing_paid_for_is_still_a_mismatch(lw: Live) -> None:
+    invested(lw)
+    lw.at("2026-07-01 10:01")
+    lw.fake.app_trade("005930", "BUY", D("70"), D("70000"), commission=D("735"))
+    lw.sync("2026-07-01 10:05")
+    result = lw.reconcile()
+    assert (result["result"], result["reason"]) == ("mismatch", "cash")
+    assert events(lw, "deposit", "withdrawal") == []  # nothing written
 
 
 # ── 3. a partial fill that ends PARTIAL_FILLED in the CLOSED list ────────────────────────
@@ -250,6 +340,152 @@ def test_the_plan_screens_leave_out_an_order_that_bought_nothing(lw: Live) -> No
     lw.stages()
     instruments = live.rule_instruments(lw.conn)
     assert plan_stages(lw.conn, plan_id, instruments, "live") == []  # no '직접 할 일' on screen
+
+
+# ── 7. withdraw waits: a conversion caps them, a live wait holds its own money ───────────
+
+
+def sold_in_the_app(lw: Live, cash: str = "10000000") -> None:
+    """The account: 20 KODEX 200 and `cash` won. Wednesday 08:10 the owner sells 14 in the app
+    to withdraw 447,933 won on settlement (7/2 + 2 trading days = 7/6)."""
+    lw.fake.cash["KRW"] = D(cash)
+    lw.fake.hold("069500", D("20"), D("30000"), name="KODEX 200")
+    lw.turn_on("2026-06-30 21:00")
+    lw.at("2026-07-01 08:10")
+    lw.fake.app_trade(
+        "069500", "SELL", D("14"), D("32000"), commission=D("67"), settlement=date(2026, 7, 2)
+    )
+    lw.sync("2026-07-01 08:20")
+    assert lw.reconcile()["result"] == "match"
+    assert [(w.amount, w.until) for w in repo.withdraw_waits(lw.conn, "live")] == [
+        (D("447933"), date(2026, 7, 6))
+    ]
+
+
+def test_converting_money_that_was_already_there_keeps_the_sale_waiting(lw: Live) -> None:
+    sold_in_the_app(lw)
+    lw.at("2026-07-01 11:00")
+    lw.fake.convert(D("500000"), D("359.19"))  # 500,000 of the 10,447,933 won, not the proceeds
+    lw.sync("2026-07-01 11:05")
+    assert lw.reconcile()["booked"][0]["conversion"] == "krw_to_usd"
+    # 9,947,933 won are left beyond the day's new money (none): the wait stays whole.
+    assert [w.amount for w in repo.withdraw_waits(lw.conn, "live")] == [D("447933")]
+    # Thursday: the wait holds its own money only; the rest is planned, the proceeds are not:
+    # floor(9,500,000 / (32,210 x 1.00015)) = 294, and the dollars floor(359.19 / (66.53 x
+    # 1.001)) = 5.
+    lw.sync("2026-07-02 08:29")
+    report = lw.check("2026-07-02 08:30")
+    assert report["result"] == "rebalance"
+    assert report["details"]["withdraw_held"] == {"KRW": D("447933")}
+    assert report["details"]["planned"]["buys"] == [("KR:069500", 294), ("US:SPYM", 5)]
+    lw.sync("2026-07-02 09:05")
+    lw.stages()
+    assert lw.state().cash_of(KRW) >= D("447933")  # the proceeds were not spent
+    assert [w.amount for w in repo.withdraw_waits(lw.conn, "live")] == [D("447933")]
+
+
+def test_converting_the_proceeds_releases_what_was_converted(lw: Live) -> None:
+    sold_in_the_app(lw, cash="0")  # the proceeds are the only won
+    lw.fake.convert(D("200000"), D("143.67"))
+    lw.sync("2026-07-01 08:25")
+    lw.reconcile()
+    # 247,933 won are left: the wait is capped at them.
+    assert [w.amount for w in repo.withdraw_waits(lw.conn, "live")] == [D("247933")]
+    lw.fake.convert(D("247933"), D("178.11"))
+    lw.sync("2026-07-01 08:28")
+    lw.reconcile()
+    assert repo.withdraw_waits(lw.conn, "live") == []
+
+
+def test_converting_the_days_deposit_keeps_the_sale_waiting(lw: Live) -> None:
+    sold_in_the_app(lw, cash="0")
+    lw.fake.deposit("KRW", D("1000000"))
+    lw.sync("2026-07-01 08:25")
+    lw.reconcile()
+    lw.fake.convert(D("1000000"), D("718.39"))  # he converts what he has just deposited
+    lw.sync("2026-07-01 08:28")
+    lw.reconcile()
+    assert [w.amount for w in repo.withdraw_waits(lw.conn, "live")] == [D("447933")]
+
+
+def test_a_live_wait_shows_on_the_money_not_as_stopped_orders(lw: Live) -> None:
+    from autotrade.api.views import plan as plan_view
+    from autotrade.api.views.context import LedgerContext
+    from autotrade.domain.status import RuleStatus
+
+    sold_in_the_app(lw)
+    lw.sync("2026-07-01 08:29")
+    assert lw.check("2026-07-01 08:30")["result"] == "rebalance"  # not 'withdraw-wait'
+    ctx = LedgerContext(lw.conn, lw.cfg, "live", lw.at("2026-07-01 08:31"))
+    assert ctx.status is not RuleStatus.WITHDRAW_WAIT
+    assert ctx.next_action["kind"] != "withdraw-wait"
+    chips = [r.chip for r in ctx.composition.rows if r.chip]
+    assert {"kind": "withdraw-wait", "until": "2026-07-06"} in chips  # the money and its date
+    items = plan_view.schedule(ctx)["items"]
+    assert "withdraw-wait" not in [i["kind"] for i in items]  # no '주문 0건' line
+
+
+# ── 8. a deposit made while a dividend is due ────────────────────────────────────────────
+
+
+def dividend_due(lw: Live, world: World) -> None:
+    """100 KODEX 200 held before the 7/1 ex-date of a 160-won distribution paid 7/3: gross
+    16,000, 15.4% tax 2,464 estimated, net 13,536."""
+    lw.fake.hold("069500", D("100"), D("30000"), name="KODEX 200")
+    lw.turn_on("2026-06-30 21:00")
+    world.dividend(KR, "2026-07-01", "160", pay_date="2026-07-03")
+    prefetch_dividends(
+        lw.conn,
+        lw.cfg,
+        lw.ctx.sources,
+        [repo.get_instrument(lw.conn, KR)],
+        date(2026, 6, 1),
+        date(2026, 7, 3),
+        lw.at("2026-07-02 08:00"),
+    )
+
+
+def test_a_deposit_while_a_dividend_is_due_stays_a_deposit(lw: Live, world: World) -> None:
+    dividend_due(lw, world)
+    lw.at("2026-07-02 10:00")
+    lw.fake.deposit("KRW", D("1000000"))  # the owner adds money
+    lw.sync("2026-07-02 10:05")
+    lw.reconcile()
+    lw.at("2026-07-03 08:00")
+    lw.fake.deposit("KRW", D("13536"))  # the dividend, net of tax
+    lw.sync("2026-07-03 08:05")
+    lw.reconcile()
+    assert [(e.kind, e.amount) for e in repo.events_of_ledger(lw.conn, "live", ["deposit"])] == [
+        ("deposit", D("1000000"))
+    ]
+    assert [(e.kind, e.amount) for e in repo.events_of_ledger(lw.conn, "live", ["dividend"])] == [
+        ("dividend", D("13536"))
+    ]
+    state = lw.state()
+    assert state.income_krw == D("13536")
+    assert verify_ledger(lw.conn, "live") == []
+
+
+@pytest.mark.parametrize(
+    ("paid", "kind"),
+    [
+        ("13540", "dividend"),  # the broker cuts each part of the tax to 10 won: 2,240 + 220
+        ("13515", "dividend"),  # within the 21-won rounding of the tax
+        ("13514", "deposit"),
+        ("13558", "deposit"),
+        ("16000", "deposit"),  # the gross is no longer taken for the dividend
+    ],
+)
+def test_a_dividend_is_its_net_within_the_rounding_of_the_tax(
+    lw: Live, world: World, paid: str, kind: str
+) -> None:
+    dividend_due(lw, world)
+    lw.at("2026-07-03 08:00")
+    lw.fake.deposit("KRW", D(paid))
+    lw.sync("2026-07-03 08:05")
+    lw.reconcile()
+    rows = repo.events_of_ledger(lw.conn, "live", ["deposit", "dividend"])
+    assert [(e.kind, e.amount) for e in rows] == [(kind, D(paid))]
 
 
 # ── 9. the commission in force ───────────────────────────────────────────────────────────

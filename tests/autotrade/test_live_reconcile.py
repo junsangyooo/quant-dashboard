@@ -87,13 +87,17 @@ def test_a_sale_in_the_app_waits_for_its_withdrawal(lw: Live) -> None:
         ("trade", "ledger", "sell", 14, D("448000"), D("67"))
     ]
     assert verify_ledger(lw.conn, "live") == []
-    # Withdraw-pending cash means no order today (ops notes 매일 확인 3).
+    # On the live ledger the wait holds its own money only (audit 2026-10-13): the check plans
+    # the rest as usual, floor(10,000,000 / (32,160 x 1.00015)) = 310 shares, and the 447,933
+    # won stay for the withdrawal (the paper ledger still stops: test_engine_invariants).
     report = lw.check("2026-07-01 08:30")
-    assert report["result"] == "withdraw-wait"
-    assert repo.open_plans(lw.conn, "live") == []
+    assert report["result"] == "rebalance"
+    assert report["details"]["withdraw_held"] == {"KRW": D("447933")}
+    assert report["details"]["withdraw_held_until"] == date(2026, 7, 6)
+    assert [o.qty for o in repo.orders_of_ledger(lw.conn, "live")] == [310]
     # The owner withdraws the proceeds: a net withdrawal that takes the waiting cash first.
     lw.fake.withdraw("KRW", D("447933"))
-    lw.sync("2026-07-01 12:00")
+    lw.sync("2026-07-01 08:45")
     lw.reconcile()
     assert repo.withdraw_waits(lw.conn, "live") == []
     assert events(lw, "withdrawal") == [("withdrawal", D("447933"), "KRW")]

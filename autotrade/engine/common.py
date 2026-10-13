@@ -90,10 +90,10 @@ def new_money_waiting(
     weekday 08:30 check after it, so the owner can convert won he has just deposited at any
     time of the day before the Korean ETF is bought with it. Live ledger only (paper: {}).
 
-    'Arrived' is when the account first showed it (the event's time, engine/live.py). A
-    withdrawal does not shorten the wait (it may be the proceeds of a sale leaving): money
-    already there may then wait a day too, never the other way. The caller caps the amounts at
-    the free cash."""
+    'Arrived' is the day the account first showed it (the event's date, engine/live.py; money
+    dated earlier because an app buy spent it keeps that day). A withdrawal does not shorten the
+    wait (it may be the proceeds of a sale leaving): money already there may then wait a day
+    too, never the other way. The caller caps the amounts at the free cash."""
     if ledger_id != LIVE:
         return {}
     out: dict[Currency, Decimal] = {}
