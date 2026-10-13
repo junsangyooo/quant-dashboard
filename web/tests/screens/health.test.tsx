@@ -38,7 +38,10 @@ describe('작동 (SCR-HEALTH)', () => {
   it('has the ‹ 작동 title and no bottom tabs', async () => {
     serve(healthTodo);
     renderApp('/health');
-    expect(screen.getByRole('heading', { level: 1, name: copy.pages.health })).toBeInTheDocument();
+    // The screen is a lazy chunk (routes.tsx): its title comes when the chunk is in.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: copy.pages.health }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: copy.back })).toHaveAttribute('href', '/');
     await screen.findByRole('heading', { level: 2, name: '정상' });
     expect(screen.getAllByRole('navigation')).toHaveLength(1);

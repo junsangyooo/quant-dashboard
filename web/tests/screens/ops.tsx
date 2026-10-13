@@ -4,7 +4,7 @@
 import { configureClient, pinPath } from '../../src/api/client';
 import { fixtureFetch } from '../../src/fixtures/runtime';
 import type { FixtureBundle } from '../../src/fixtures/types';
-import { routes } from '../../src/routes';
+import { prefetchScreens, routes } from '../../src/routes';
 import { renderRoutes } from '../helpers';
 
 export interface Call {
@@ -32,6 +32,10 @@ export function serve(bundle: FixtureBundle): Call[] {
   });
   return calls;
 }
+
+// The screens are lazy chunks (routes.tsx): load them once before the tests, so a test waits for
+// a render, not for the first transform of a screen's module graph.
+await prefetchScreens();
 
 /**
  * The app's routes at `path`; 403 session redirects inside the memory router. The client reads

@@ -50,6 +50,22 @@ export default defineConfig({
     target: 'es2023',
     // No data: URIs — every asset is a same-origin file.
     assetsInlineLimit: 0,
+    rolldownOptions: {
+      output: {
+        // React, the router and React Query change only on an upgrade: one chunk the browser
+        // keeps across deploys. The icons the screens share go together instead of one tiny
+        // chunk per icon. The screens are split by route (routes.tsx).
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|cookie|set-cookie-parser|@tanstack)[\\/]/,
+            },
+            { name: 'icons', test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+          ],
+        },
+      },
+    },
   },
   preview: {
     headers: { 'Content-Security-Policy': CONTENT_SECURITY_POLICY },

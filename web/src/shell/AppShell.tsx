@@ -1,6 +1,6 @@
 // Frame for every signed-in page: skip link → header → main → bottom tabs (tab pages, 390).
 import clsx from 'clsx';
-import { useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { Outlet, ScrollRestoration, useLocation, useMatches } from 'react-router';
 import { copy } from '../copy';
 import { Header } from '../components/Header';
@@ -68,7 +68,12 @@ export function AppShell() {
         <div className={styles.modeChange}>
           <ModeChangedChip />
         </div>
-        <Outlet />
+        {/* The screens are chunks (routes.tsx). The first one is loaded before the first render;
+            a screen not loaded yet suspends here, and a move keeps the old screen up meanwhile
+            (the router's transition), so this empty fallback shows only after a failed preload. */}
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
       {page.kind === 'tab' ? <BottomTabs current={page.tab ?? null} /> : null}
       <ScrollRestoration />

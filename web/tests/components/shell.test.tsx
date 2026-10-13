@@ -1,13 +1,18 @@
 import { screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { copy } from '../../src/copy';
 import homePaper from '../../src/fixtures/bundles/home.paper';
-import { routes } from '../../src/routes';
+import { prefetchScreens, routes } from '../../src/routes';
 import { answerFrom, renderRoutes } from '../helpers';
 
 function renderAt(path: string) {
   return renderRoutes(routes, path);
 }
+
+// The screens are lazy chunks: load their modules once, so each test waits for a render only.
+beforeAll(async () => {
+  await prefetchScreens();
+});
 
 beforeEach(() => {
   answerFrom(homePaper);
@@ -45,12 +50,16 @@ describe('app shell', () => {
     ['/history', copy.nav.history],
     ['/rules', copy.nav.rules],
     ['/rules/index-half', copy.nav.rules],
-  ])('marks the current tab on %s', (path, label) => {
+  ])('marks the current tab on %s', async (path, label) => {
     renderAt(path);
     const current = screen.getAllByRole('link', { current: 'page' });
     expect(current.length).toBeGreaterThan(0);
     for (const link of current) expect(link).toHaveTextContent(label);
-    expect(screen.getByRole('heading', { level: 1, name: label })).toBeInTheDocument();
+    // The screen is a lazy chunk (routes.tsx): its title comes when the chunk is in, by when the
+    // fixture's data may be there too ('모의투자 기록 · 2026' on 기록).
+    expect(
+      await screen.findByRole('heading', { level: 1, name: new RegExp(label) }),
+    ).toBeInTheDocument();
   });
 
   it('renders the four bottom tabs on tab pages', () => {
@@ -66,17 +75,17 @@ describe('app shell', () => {
     ['/health', copy.pages.health],
     ['/mode', copy.pages.mode],
     ['/account', copy.pages.account],
-  ])('renders %s as a sub-page: ‹ title, no bottom tabs', (path, title) => {
+  ])('renders %s as a sub-page: ‹ title, no bottom tabs', async (path, title) => {
     renderAt(path);
-    expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: copy.back })).toHaveAttribute('href', '/');
     // Only the header nav remains (bottom tab bar is not rendered).
     expect(screen.getAllByRole('navigation')).toHaveLength(1);
   });
 
-  it('renders the day panel with the date as its title and × back to 기록', () => {
+  it('renders the day panel with the date as its title and × back to 기록', async () => {
     renderAt('/day/2026-08-21');
-    expect(screen.getByRole('heading', { level: 1, name: '8/21(금)' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: '8/21(금)' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: copy.close })).toHaveAttribute('href', '/history');
     // 그날 opens over 기록 (1440 panel; below 1100px a modal sheet over the frame), so the frame
     // stays that of the 기록 tab.
