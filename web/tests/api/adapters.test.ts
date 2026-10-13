@@ -65,7 +65,19 @@ describe('banner', () => {
     ],
     [{ kind: 'push-undelivered', days: 3, link: 'account' }, '알림이 3일째 기기에 안 닿아요'],
   ])('%o', (banner, text) => {
-    expect(bannerText(banner)).toBe(text);
+    expect(bannerText(banner, 'paper')).toBe(text);
+  });
+
+  it('says 모의투자로 바뀜 for a failed cancel only once live is off (3단계)', () => {
+    const cancel: Banner = { kind: 'cancel-failed', market: 'US', side: 'buy', link: 'mode' };
+    expect(bannerText(cancel, 'paper')).toBe('모의투자로 바뀜 · 미국 매수 주문 취소 안 됨');
+    // A cancel the tick asked for while live is still on: nothing switched.
+    expect(bannerText(cancel, 'live')).toBe('미국 매수 주문 취소 안 됨');
+    // Either way the link is the mode screen's 취소 다시 시도 (hidden on that screen).
+    expect(bannerLink(cancel, '/')).toEqual({ to: '/mode', label: '다시 시도' });
+    expect(bannerLink(cancel, '/mode')).toBeNull();
+    // The other banners read the same in both modes.
+    expect(bannerText(stale, 'live')).toBe(bannerText(stale, 'paper'));
   });
 
   it('never links to the page the user is on', () => {

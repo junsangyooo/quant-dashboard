@@ -73,15 +73,16 @@ export function OfflineChip() {
 export function ShellBanner({ className }: { className?: string | undefined }) {
   const shell = useShell();
   const { pathname } = useLocation();
-  const banner = shell.data?.banner ?? null;
-  if (!banner) return null;
+  const data = shell.data;
+  const banner = data?.banner ?? null;
+  if (!data || !banner) return null;
   const link = bannerLink(banner, pathname);
   return (
     <AlertBanner
       className={className}
       action={link ? <LinkButton to={link.to}>{link.label}</LinkButton> : null}
     >
-      {bannerText(banner)}
+      {bannerText(banner, data.mode)}
     </AlertBanner>
   );
 }

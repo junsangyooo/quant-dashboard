@@ -20,6 +20,7 @@ import type {
   CalendarState,
   EventKind,
   FxSuggestion,
+  Ledger,
   Margin,
   Market,
   MetricRef,
@@ -232,8 +233,11 @@ function retryTime(at: string, retryAt: string): string {
   return kstDateKey(at) === kstDateKey(retryAt) ? formatTime(retryAt) : formatDateTime(retryAt);
 }
 
-/** The banner's fact line, e.g. '미국 시세 10/2 기준 · 2거래일째 갱신 없음'. */
-export function bannerText(banner: Banner): string {
+/**
+ * The banner's fact line, e.g. '미국 시세 10/2 기준 · 2거래일째 갱신 없음'. `mode` is the shell's: a
+ * cancel can also fail while live is still on (3단계), and then nothing switched to 모의투자.
+ */
+export function bannerText(banner: Banner, mode: Ledger): string {
   switch (banner.kind) {
     case 'stale':
       return banner.market === 'FX'
@@ -263,7 +267,10 @@ export function bannerText(banner: Banner): string {
         banner.retryAt === null ? null : retryTime(banner.at, banner.retryAt),
       );
     case 'cancel-failed':
-      return copy.banner.cancelFailed(marketName(banner.market), sideName(banner.side));
+      return (mode === 'live' ? copy.banner.cancelFailedLive : copy.banner.cancelFailed)(
+        marketName(banner.market),
+        sideName(banner.side),
+      );
     case 'push-undelivered':
       return copy.banner.pushUndelivered(banner.days);
   }

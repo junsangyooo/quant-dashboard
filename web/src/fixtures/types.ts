@@ -123,6 +123,8 @@ export type StateId =
   | 'mode.cancel-pending'
   | 'mode.live-cash'
   | 'mode.link-off'
+  // 실전이 켜진 채로 취소 실패(그림 없음): 빨간 카드 + 실전 끄기
+  | 'mode.live-cancel-failed'
   | 'account.default'
   | 'account.no-push'
   // SCR-ACCOUNT states drawn only in the spec, plus phase 1 (push 501)

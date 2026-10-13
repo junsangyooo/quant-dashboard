@@ -8,6 +8,7 @@ import type { ModeResponse } from '../../src/api/types';
 import modeBlocked from '../../src/fixtures/bundles/mode.blocked';
 import modeEmpty from '../../src/fixtures/bundles/mode.empty';
 import modeLive from '../../src/fixtures/bundles/mode.live';
+import modeLiveCancelFailed from '../../src/fixtures/bundles/mode.live-cancel-failed';
 import modeLiveStale from '../../src/fixtures/bundles/mode.live-stale';
 import modeLoading from '../../src/fixtures/bundles/mode.loading';
 import modeNotAvailable from '../../src/fixtures/bundles/mode.live-not-available';
@@ -236,6 +237,10 @@ describe('모의투자·실전 (SCR-MODE)', () => {
     // The red card comes first; no 켜기 card while an order is left.
     expect(document.querySelector('main h2')?.textContent).toBe(modeCopy.cancelFailed.title);
     expect(screen.queryByRole('region', { name: TURN_ON.title })).toBeNull();
+    // Paper after 끄기: then 두 장부 and 성적 only (no 실전 끄기, no 원화 · 달러).
+    expect(sectionOrder()).toEqual([modeCopy.twoLedgers.title, modeCopy.performance.title]);
+    expect(screen.queryByRole('button', { name: modeCopy.turnOff.button })).toBeNull();
+    expect(screen.queryByRole('region', { name: copy.liveMoney.title })).toBeNull();
     await userEvent.click(within(card).getByRole('button', { name: modeCopy.cancelFailed.retry }));
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: modeCopy.cancelFailed.title })).toBeNull();
@@ -585,5 +590,57 @@ describe('모의투자·실전 · 실전 연결 (3단계)', () => {
     expect(
       await screen.findByRole('region', { name: modeCopy.cancelPending.title }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps 실전 끄기 and 원화 · 달러 under the red card while live is still on', async () => {
+    // A cancel can fail while live is on (the tick also cancels an order left at Toss when its
+    // session ended): the red card leads, and turning off stays one tap away.
+    await openMode(modeLiveCancelFailed);
+    const header = screen.getByRole('banner');
+    expect(await within(header).findByText('취소 안 됨 1')).toBeInTheDocument();
+    // Live is still on: the banner says what failed, not '모의투자로 바뀜'.
+    expect(screen.getByText('미국 매수 주문 취소 안 됨')).toBeInTheDocument();
+    expect(screen.queryByText(/모의투자로 바뀜/)).toBeNull();
+    expect(screen.getByRole('radio', { name: '실전' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('실전 · 규칙이 내는 주문이 실계좌로 나가요')).toBeInTheDocument();
+    expect(
+      within(region(modeCopy.cancelFailed.title)).getByText(
+        '매수·미국 S&P 500 ETF 2주 · 약 $124.80',
+      ),
+    ).toBeInTheDocument();
+    // Last comes 실전 끄기, whose closed modal keeps its heading in the page.
+    expect([...document.querySelectorAll('main h2')].map((h) => h.textContent)).toEqual([
+      modeCopy.cancelFailed.title,
+      copy.liveMoney.title,
+      modeCopy.twoLedgers.title,
+      modeCopy.performance.title,
+      modeCopy.turnOff.title,
+    ]);
+    expect(
+      within(region(copy.liveMoney.title)).getByText('약 1,500,000원을 달러로 바꾸면 50:50'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: TURN_ON.title })).toBeNull();
+    // The 모의투자 cell goes to 실전 끄기 (it does not switch by itself).
+    const off = screen.getByRole('button', { name: modeCopy.turnOff.button });
+    await userEvent.click(screen.getByRole('radio', { name: '모의투자' }));
+    expect(screen.getByRole('radio', { name: '실전' })).toHaveAttribute('aria-checked', 'true');
+    expect(off).toHaveFocus();
+    await userEvent.click(off);
+    const dialog = await screen.findByRole('dialog', { name: modeCopy.turnOff.title });
+    expect(within(dialog).getByText('S&P 500 ETF 2주 · 약 $124.80')).toBeInTheDocument();
+  });
+
+  it('turns the failed cancel of a live order into a pending one after 취소 다시 시도', async () => {
+    const { calls } = await openMode(modeLiveCancelFailed);
+    const card = region(modeCopy.cancelFailed.title);
+    await userEvent.click(within(card).getByRole('button', { name: modeCopy.cancelFailed.retry }));
+    expect(
+      await screen.findByRole('region', { name: modeCopy.cancelPending.title }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: modeCopy.cancelFailed.title })).toBeNull();
+    expect(screen.getByRole('button', { name: modeCopy.turnOff.button })).toBeInTheDocument();
+    expect(writes(calls)).toEqual([
+      { method: 'POST', path: '/api/mode/cancel-retry', body: undefined },
+    ]);
   });
 });

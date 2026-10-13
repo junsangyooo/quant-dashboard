@@ -142,6 +142,8 @@ export const copy = {
       retryAt === null ? `${at} 확인 실패` : `${at} 확인 실패 · ${retryAt} 자동 재시도`,
     cancelFailed: (market: string, side: string) =>
       `모의투자로 바뀜 · ${market} ${side} 주문 취소 안 됨`,
+    /** NEW (3단계) — a cancel that failed while live is still on: nothing switched to 모의투자. */
+    cancelFailedLive: (market: string, side: string) => `${market} ${side} 주문 취소 안 됨`,
     pushUndelivered: (days: number) => `알림이 ${String(days)}일째 기기에 안 닿아요`,
     link: {
       health: '작동 보기',

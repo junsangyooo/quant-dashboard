@@ -184,11 +184,48 @@ test.describe('SCR-MODE', () => {
     const red = card(page, '취소 안 된 주문 · 토스 앱에서 확인');
     await expect(red.getByText('매수·미국 S&P 500 ETF 2주 · 약 $124.80')).toBeVisible();
     await expect(red.getByText('그대로 두면 22:30에 체결될 수 있어요')).toBeVisible();
+    await expect(page.getByRole('button', { name: '실전 끄기' })).toHaveCount(0);
     await shoot(page, info, 'mode.off-failed');
     expect(await axe(page)).toEqual([]);
     await red.getByRole('button', { name: '취소 다시 시도' }).click();
     await expect(red).toHaveCount(0);
     await expect(page.getByRole('banner').getByText('취소 안 됨 1')).toHaveCount(0);
+  });
+
+  test('mode.live-cancel-failed: red card first, 원화 · 달러 and 실전 끄기 stay while live is on', async ({
+    page,
+    isMobile,
+  }, info) => {
+    const problems = await watch(page);
+    await open(page, 'mode.live-cancel-failed');
+    await expect(page.getByRole('banner').getByText('취소 안 됨 1')).toBeVisible();
+    // Live is still on: the banner names the failed cancel without '모의투자로 바뀜'.
+    await expect(page.getByText('미국 매수 주문 취소 안 됨', { exact: true })).toBeVisible();
+    await expect(page.getByText(/모의투자로 바뀜/)).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: '실전' })).toHaveAttribute('aria-checked', 'true');
+    const red = card(page, '취소 안 된 주문 · 토스 앱에서 확인');
+    await expect(red.getByText('매수·미국 S&P 500 ETF 2주 · 약 $124.80')).toBeVisible();
+    await expect(
+      card(page, '원화 · 달러').getByText('약 1,500,000원을 달러로 바꾸면 50:50'),
+    ).toBeVisible();
+    const off = page.getByRole('button', { name: '실전 끄기' });
+    await expect(off).toBeVisible();
+    await expect(card(page, '실전으로 켜기')).toHaveCount(0);
+    if (!isMobile) {
+      // 1440: the red card heads the left column, 실전 끄기 sits in the right one.
+      const left = await red.boundingBox();
+      const right = await off.boundingBox();
+      expect(right?.x ?? 0).toBeGreaterThan((left?.x ?? 0) + (left?.width ?? 0));
+    }
+    await shoot(page, info, 'mode.live-cancel-failed');
+    expect(await axe(page)).toEqual([]);
+    // The 모의투자 cell goes to 실전 끄기 (focused) without switching; 끄기 asks first.
+    await page.getByRole('radio', { name: '모의투자' }).click();
+    await expect(off).toBeFocused();
+    await expect(page.getByRole('radio', { name: '실전' })).toHaveAttribute('aria-checked', 'true');
+    await off.click();
+    await expect(page.getByRole('dialog', { name: '실전을 끌까요?' })).toBeVisible();
+    expect(problems).toEqual([]);
   });
 
   test('mode.cancel-pending: the cancel Toss still has to carry out, and 켜기 closed until it ends', async ({

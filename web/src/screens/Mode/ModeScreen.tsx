@@ -4,6 +4,7 @@
 //   모의투자 · 점검 ✕ 세그먼트 → 점검 → 미리보기 → 켜기(비활성) → (두 장부) → 성적
 //   실전              세그먼트 + 기간 칩 → (원화 · 달러, D47·D48) → 두 장부 → 성적 → 실전 끄기
 //   끄기 실패         빨간 카드 → 세그먼트 → 두 장부(실전 기간) → 성적
+//   실전 · 취소 실패  빨간 카드 → 세그먼트 + 기간 칩 → (원화 · 달러) → 두 장부 → 성적 → 실전 끄기
 // From 900px: left 7 of 12 (세그먼트 · 두 장부 · 성적 · 점검), right 5 (미리보기 · 켜기 · 끄기).
 import clsx from 'clsx';
 import { useRef, useState, type ReactNode } from 'react';
@@ -192,7 +193,12 @@ export function ModeScreen() {
 
     let left: ReactNode[];
     let right: ReactNode[];
-    if (cancelCard) {
+    if (cancelCard && m.mode === 'live') {
+      // A cancel can fail while live is still on (an order left at Toss when its session ended):
+      // the red card leads, and 원화 · 달러 and 실전 끄기 stay (the segment scrolls to it).
+      left = [cancelCard, modeSection, pendingCard, liveMoney, twoLedgers, performance];
+      right = [turnOff];
+    } else if (cancelCard) {
       left = [cancelCard, modeSection, pendingCard, twoLedgers, performance];
       right = [];
     } else if (m.mode === 'live') {
