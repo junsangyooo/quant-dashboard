@@ -37,8 +37,10 @@ import {
   stageView,
   topicParticle,
   usdWhole,
+  visibleStages,
   withSubject,
 } from '../../src/screens/Mode/text';
+import { SP500 } from '../../src/fixtures/world';
 import { retAxis } from '../../src/screens/Mode/TwoLedgers';
 import { deviceLabel } from '../../src/screens/Account/Devices';
 
@@ -79,6 +81,7 @@ describe('예시-값표 numbers in the bundles', () => {
         'mode.live-not-available',
         'mode.preview-changed',
         'mode.permission',
+        'mode.live-cash',
         'account.default',
         'account.no-push',
         'account.empty',
@@ -118,22 +121,32 @@ describe('예시-값표 numbers in the bundles', () => {
     expect(PERFORMANCE.rebalances).toBe(history.tiles.rebalances.count);
   });
 
-  it('keeps the preview at 10,000,000원 → 환전 약 4,705,000원 → $3,403 · 매수 4,775,700원 · $3,399.60', () => {
+  it('keeps the preview at 10,000,000원 → 매수 KOSPI200 ETF 275주, and 약 5,000,000원 → $3,616.90 to convert (D47)', () => {
     expect(PREVIEW_OK.current).toEqual([{ label: 'krw-cash', krw: 10_000_000 }]);
-    const [fx, buy] = PREVIEW_OK.stages;
-    expect(fx?.orders[0]?.fx).toEqual({ krw: 4_705_000, usd: 3403, rate: 1382.4 });
-    const krw = (buy?.orders ?? []).reduce((s, o) => s + (o.amountKrw ?? 0), 0);
-    const usd = (buy?.orders ?? []).reduce((s, o) => s + (o.amountUsd ?? 0), 0);
-    expect(krw).toBe(4_775_700);
-    expect(Math.round(usd * 100) / 100).toBe(3399.6);
-    // The 환전 covers the US buys plus their 0.1% fee.
-    expect(Math.round(usd * 1.001)).toBe(3403);
+    // Won only: all of it to the Korean ETF; no 환전 leg (Toss converts nothing for an order).
+    expect(PREVIEW_OK.stages.map((s) => s.kind)).toEqual(['buy']);
+    const [buy] = PREVIEW_OK.stages;
+    expect(buy?.orders.map((o) => [o.instrument?.id, o.qty, o.amountKrw])).toEqual([
+      ['KR:069500', 275, 9_968_750],
+    ]);
+    // floor(10,000,000 ÷ (36,250 × 1.00015)) = 275.
+    expect(Math.floor(10_000_000 / (36_250 * 1.00015))).toBe(275);
+    // Half of the won at 1,382.4원 would make it 50:50.
+    expect(PREVIEW_OK.fxSuggestion).toEqual({
+      direction: 'krw-usd',
+      krw: 5_000_000,
+      usd: 3616.9,
+      rate: 1382.4,
+      now: { kr: 100, us: 0 },
+      target: { kr: 50, us: 50 },
+    });
+    expect(Math.round((5_000_000 / 1382.4) * 100) / 100).toBe(3616.9);
+    expect(PREVIEW_OK.newMoney).toBeNull();
     expect(PREVIEW_OK.outside).toEqual([
       expect.objectContaining({ qty: 0.0027, approxKrw: 355_000 }),
     ]);
-    // Targets: 지수 반반 80% (40 · 40), 모멘텀 20% (42 · 40 · 18 of it).
-    expect(PREVIEW_OK.target.map((t) => t.pct)).toEqual([40, 40, 8.4, 8, 3.6]);
-    expect(Math.round(PREVIEW_OK.target.reduce((s, t) => s + t.pct, 0) * 10) / 10).toBe(100);
+    // The live ledger is 지수 반반 alone (live shares 100 · 0).
+    expect(PREVIEW_OK.target.map((t) => t.pct)).toEqual([50, 50]);
   });
 
   it('ends the two ledgers on +1.13% · +1.28% · +1.75% with a −0.15%p breakdown', () => {
@@ -297,23 +310,45 @@ describe('모의투자·실전 text', () => {
     expect(usdWhole(3403)).toBe('$3,403');
   });
 
-  it('words each stage', () => {
-    const [fx, buy] = PREVIEW_OK.stages;
-    if (!fx || !buy) throw new Error('stages');
+  it('words each stage (sell and buy only: the live ledger never converts, D47)', () => {
+    const [buy] = PREVIEW_OK.stages;
+    if (!buy) throw new Error('stages');
     const now = '2026-10-07T16:10:00+09:00';
-    expect(stageView(fx, now)).toMatchObject({
-      label: '환전 · 원→달러',
-      time: '10/8 09:10 예상',
-      body: ['약 4,705,000원'],
-      amount: '→ 약 $3,403',
-      note: '환율 1,382.4원',
+    expect(visibleStages(PREVIEW_OK.stages).map((s) => s.kind)).toEqual(['buy']);
+    expect(stageView({ ...buy, kind: 'buy' }, now)).toMatchObject({
+      label: '매수 · 1건',
+      time: '10/8 09:05 예상',
+      body: ['KOSPI200 ETF 275주'],
+      amount: '약 9,968,750원',
     });
-    expect(stageView(buy, now)).toMatchObject({
-      label: '매수 · 4건',
+    // Won and dollars each buy their own market: one leg, two markets.
+    const both = {
+      ...buy,
+      kind: 'buy' as const,
+      orders: [
+        ...buy.orders,
+        {
+          id: 'preview-buy-2',
+          market: 'US' as const,
+          side: 'buy' as const,
+          instrument: SP500,
+          qty: 21,
+          price: 66,
+          approx: true,
+          amountUsd: 1386,
+          at: '2026-10-08T22:30:00+09:00',
+          status: 'pending' as const,
+        },
+      ],
+    };
+    expect(stageView(both, now)).toMatchObject({
+      label: '매수 · 2건',
       time: '한국 09:05 · 미국 22:30',
-      body: ['한국 · KOSPI200 ETF 110주 · 삼성전자 14주', '미국 · S&P 500 ETF 46주 · NVDA 3주'],
-      amount: '약 4,775,700원 · 약 $3,400',
+      body: ['한국 · KOSPI200 ETF 275주', '미국 · S&P 500 ETF 21주'],
+      amount: '약 9,968,750원 · 약 $1,386',
     });
+    // A conversion leg (paper's) is never drawn in the preview.
+    expect(visibleStages([{ ...buy, kind: 'fx' }])).toEqual([]);
   });
 
   it('counts the blocking causes once and words the closed card', async () => {

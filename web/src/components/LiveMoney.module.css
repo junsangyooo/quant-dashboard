@@ -1,0 +1,32 @@
+/* 원화 · 달러 (실전, D47·D48): an information card, never a to-do card (no red, no yellow). */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  padding: var(--space-block);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.icon {
+  color: var(--accent-default);
+  flex: none;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.muted {
+  color: var(--text-muted);
+}

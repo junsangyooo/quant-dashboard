@@ -57,6 +57,7 @@ const health: HealthResponse = {
   }),
   lastRun: { at: LAST_CHECK, result: 'failed', seconds: 12, reason: 'no-quote' },
   devices: PUSH_DEVICES,
+  liveCash: null,
 };
 
 const bundle = {

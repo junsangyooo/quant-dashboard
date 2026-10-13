@@ -12,7 +12,7 @@ import type {
   ShellResponse,
 } from '../api/types';
 import { paperDailySinceStart } from './charts';
-import { BTC, INDEX_HALF, KOSPI200, MOMENTUM, NVDA, SAMSUNG, SP500, kst, ret2 } from './world';
+import { BTC, INDEX_HALF, KOSPI200, SP500, kst, ret2 } from './world';
 
 /** 화면 시각 (예시-값표 §0). */
 export const NOW = kst('2026-10-07', '16:10');
@@ -196,6 +196,7 @@ export function healthTodo(): HealthResponse {
     recent14: recent14(),
     lastRun: LAST_RUN,
     devices: PUSH_DEVICES,
+    liveCash: null,
   };
 }
 
@@ -316,9 +317,11 @@ function previewBuy(id: string, inst: typeof KOSPI200, qty: number, price: numbe
 }
 
 /**
- * 첫 주문 미리보기 (예시-값표 §1.6, 10/07 16:00): 원화 현금 10,000,000원 → 환전 약 4,705,000원 →
- * 약 $3,403 (1,382.4원) · 매수 KOSPI200 ETF 110주 · 삼성전자 14주 (4,775,700원) / S&P 500 ETF 46주
- * · NVDA 3주 ($3,399.60 → 약 $3,400). $3,403 = the US buys plus their 0.1% fee. BTC is outside Toss.
+ * 첫 주문 미리보기 (10/07 16:00, D47 2026-10-13): 원화 현금 10,000,000원뿐인 토스 계좌. 실전은
+ * 넣은 돈 그대로 굴려서(환전하지 않음) 원화는 모두 한국 매수: KOSPI200 ETF
+ * floor(10,000,000 ÷ (36,250 × 1.00015)) = 275주 · 약 9,968,750원. 미국 쪽은 주인이 토스 앱에서
+ * 바꿀 때만: 50:50이면 약 5,000,000원 → $3,616.90 (1,382.4원). 예시-값표 §1.6의 환전 단계는 이제 없다.
+ * BTC is outside Toss.
  */
 export const PREVIEW_OK: Extract<NonNullable<ModeResponse['preview']>, { kind: 'ok' }> = {
   kind: 'ok',
@@ -332,43 +335,27 @@ export const PREVIEW_OK: Extract<NonNullable<ModeResponse['preview']>, { kind: '
   },
   current: [{ label: 'krw-cash', krw: 10_000_000 }],
   target: [
-    { ruleId: INDEX_HALF.id, instrument: KOSPI200, pct: 40 },
-    { ruleId: INDEX_HALF.id, instrument: SP500, pct: 40 },
-    { ruleId: MOMENTUM.id, instrument: SAMSUNG, pct: 8.4 },
-    { ruleId: MOMENTUM.id, instrument: NVDA, pct: 8 },
-    { ruleId: MOMENTUM.id, instrument: BTC, pct: 3.6 },
+    { ruleId: INDEX_HALF.id, instrument: KOSPI200, pct: 50 },
+    { ruleId: INDEX_HALF.id, instrument: SP500, pct: 50 },
   ],
   stages: [
-    {
-      kind: 'fx',
-      status: 'pending',
-      at: tomorrow('09:10'),
-      orders: [
-        {
-          id: 'preview-fx-1',
-          market: 'KR',
-          side: 'fx',
-          direction: 'krw-usd',
-          fx: { krw: 4_705_000, usd: 3403, rate: 1382.4 },
-          approx: true,
-          at: tomorrow('09:10'),
-          status: 'pending',
-        },
-      ],
-    },
     {
       kind: 'buy',
       status: 'pending',
       at: tomorrow('09:05'),
-      orders: [
-        previewBuy('preview-buy-1', KOSPI200, 110, 36_250),
-        previewBuy('preview-buy-2', SAMSUNG, 14, 56_300),
-        previewBuy('preview-buy-3', SP500, 46, 62.4),
-        previewBuy('preview-buy-4', NVDA, 3, 176.4),
-      ],
+      orders: [previewBuy('preview-buy-1', KOSPI200, 275, 36_250)],
     },
   ],
   outside: [{ instrument: BTC, qty: 0.0027, approxKrw: 355_000 }],
+  newMoney: null,
+  fxSuggestion: {
+    direction: 'krw-usd',
+    krw: 5_000_000,
+    usd: 3616.9,
+    rate: 1382.4,
+    now: { kr: 100, us: 0 },
+    target: { kr: 50, us: 50 },
+  },
 };
 
 /** SCR-MODE paper (1:37871 · 1:38094): checks pass, preview computed, ready to turn on. */
@@ -385,6 +372,7 @@ export function modePaper(overrides: Partial<ModeResponse> = {}): ModeResponse {
     cancelPending: null,
     canTurnOn: { ok: true },
     offPreview: null,
+    liveCash: null,
     ...overrides,
   };
 }
@@ -465,9 +453,28 @@ export function modeLive(overrides: Partial<ModeResponse> = {}): ModeResponse {
     cancelPending: null,
     canTurnOn: { ok: true },
     offPreview: LIVE_OFF_PREVIEW,
+    liveCash: null,
     ...overrides,
   };
 }
+
+/**
+ * 원화 · 달러 (D47·D48, 그림 없음) while live is on, 10/7 16:10: the live ledger (10,112,670원,
+ * about half in each market) and 3,000,000원 the owner deposited at 14:20, which the checks use
+ * from 10/8 08:30. With it 한국 is 61.4% of 13,112,670원: about 1,500,000원 to dollars
+ * ($1,085.07 at 1,382.4원) would make it 50:50.
+ */
+export const LIVE_CASH: NonNullable<ModeResponse['liveCash']> = {
+  newMoney: { krw: 3_000_000, usd: 0, from: kst('2026-10-08', '08:30') },
+  fxSuggestion: {
+    direction: 'krw-usd',
+    krw: 1_500_000,
+    usd: 1085.07,
+    rate: 1382.4,
+    now: { kr: 61.4, us: 38.6 },
+    target: { kr: 50, us: 50 },
+  },
+};
 
 /** 10/7 실전 매수·미국 22:30 대기 S&P 500 ETF 2주 · 약 $124.80 (예시-값표 §2.2). */
 export const LIVE_PENDING_BUY: Order = {

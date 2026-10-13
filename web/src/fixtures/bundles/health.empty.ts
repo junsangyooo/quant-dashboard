@@ -48,6 +48,7 @@ const health: HealthResponse = {
   recent14: weekdays.map((date) => ({ date, state: 'before-record' })),
   lastRun: null,
   devices: [],
+  liveCash: null,
 };
 
 const bundle = {

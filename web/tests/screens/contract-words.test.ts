@@ -2,8 +2,21 @@
 // metric names and margins, AI judgment items, '지금' kv rows, and the 작동 cards whose facts
 // changed shape. Every copy string tested here is marked NEW in its copy file.
 import { describe, expect, it } from 'vitest';
-import { marginText, metricName } from '../../src/api/adapters';
-import type { HealthResponse, JudgmentItem, Margin, MetricRef } from '../../src/api/types';
+import {
+  fxMixText,
+  fxSuggestionText,
+  marginText,
+  metricName,
+  newMoneyText,
+  ruleStatusChip,
+} from '../../src/api/adapters';
+import type {
+  FxSuggestion,
+  HealthResponse,
+  JudgmentItem,
+  Margin,
+  MetricRef,
+} from '../../src/api/types';
 import { CELLTRION } from '../../src/fixtures/parts/day';
 import { NVDA, SAMSUNG } from '../../src/fixtures/world';
 import { judgmentItemText, judgmentLine, votesLabel } from '../../src/screens/Day/dayModel';
@@ -442,48 +455,9 @@ describe('작동 cards of the live link (3단계, autotrade/PHASE3.md 2.7)', () 
     ]);
   });
 
-  it('토스 앱에서 환전 gives the amounts, the rate and the time the buy waits for', () => {
-    const toUsd = todoView(
-      todo({
-        severity: 'yellow',
-        kind: 'fx-manual',
-        effect: 'other',
-        facts: {
-          direction: 'krw-usd',
-          krw: 4967000,
-          usd: 3568.24,
-          rate: 1392,
-          orderId: 12,
-          by: '2026-07-01T22:30:00+09:00',
-        },
-      }),
-      NOW,
-    );
-    expect(toUsd.title).toBe('토스 앱에서 환전 · 원→달러');
-    expect(toUsd.lines).toEqual([
-      '약 4,967,000원 → $3,568.24 · 환율 1,392.0원',
-      '22:30 미국 매수 전까지 바꿔 주세요',
-    ]);
-    expect([toUsd.tone, toUsd.icon, toUsd.chip, toUsd.result]).toEqual([
-      'warn',
-      'fx',
-      '직접 할 일',
-      '바뀐 돈이 보이면 다음 확인이 이어서 주문해요',
-    ]);
-    const toKrw = todoView(
-      todo({
-        severity: 'yellow',
-        kind: 'fx-manual',
-        effect: 'other',
-        facts: { direction: 'usd-krw', krw: 139200, usd: 100, rate: 1392, orderId: 13 },
-      }),
-      NOW,
-    );
-    expect(toKrw.title).toBe('토스 앱에서 환전 · 달러→원');
-    expect(toKrw.lines).toEqual([
-      '$100.00 → 약 139,200원 · 환율 1,392.0원',
-      '토스 API는 환전을 못 해서 직접 바꿔 주세요',
-    ]);
+  it('no 토스 앱 환전 to-do any more: the live ledger never converts (D47)', () => {
+    const kinds: HealthResponse['todos'][number]['kind'][] = ['toss-link', 'broker-mismatch'];
+    expect(kinds).not.toContain('fx-manual');
   });
 
   it('토스 연결 row: the account and the last check, or the cause and the last success', () => {
@@ -515,5 +489,45 @@ describe('작동 cards of the live link (3단계, autotrade/PHASE3.md 2.7)', () 
       '낡음',
       1,
     ]);
+  });
+});
+
+describe('원화 · 달러 (D47·D48: the money as deposited, information only)', () => {
+  const suggestion: FxSuggestion = {
+    direction: 'krw-usd',
+    krw: 5_000_000,
+    usd: 3591.95,
+    rate: 1392,
+    now: { kr: 100, us: 0 },
+    target: { kr: 50, us: 50 },
+  };
+
+  it('says how much to convert for the targets, in the currency the owner pays', () => {
+    expect(fxSuggestionText(suggestion)).toBe('약 5,000,000원을 달러로 바꾸면 50:50');
+    expect(fxMixText(suggestion)).toBe('지금 한국 100 : 미국 0');
+    const back: FxSuggestion = {
+      ...suggestion,
+      direction: 'usd-krw',
+      krw: 2_000_000,
+      usd: 1436.78,
+      now: { kr: 30.4, us: 69.6 },
+    };
+    expect(fxSuggestionText(back)).toBe('약 $1,437을 원화로 바꾸면 50:50');
+    expect(fxMixText(back)).toBe('지금 한국 30.4 : 미국 69.6');
+    expect(fxSuggestionText({ ...back, usd: 1432 })).toBe('약 $1,432를 원화로 바꾸면 50:50');
+  });
+
+  it('says when the money of today is used', () => {
+    const from = '2026-10-08T08:30:00+09:00';
+    expect(newMoneyText({ krw: 3_000_000, usd: 0, from })).toBe(
+      '새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요',
+    );
+    expect(newMoneyText({ krw: 1_000_000, usd: 718.39, from })).toBe(
+      '새로 들어온 돈 1,000,000원 · $718.39 · 다음 거래일 08:30부터 써요',
+    );
+  });
+
+  it('is a chip of its own, after 리밸런싱 예정 (a hollow accent dot)', () => {
+    expect(ruleStatusChip('fx-suggest')).toEqual({ state: 'fxSuggest', label: '환전 제안' });
   });
 });

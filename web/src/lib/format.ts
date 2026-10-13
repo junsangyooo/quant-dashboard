@@ -203,3 +203,15 @@ export function kstDateKey(input: string | Date): string {
   const p = kstParts(input);
   return `${String(p.year)}-${pad2(p.month)}-${pad2(p.day)}`;
 }
+
+/**
+ * Whether the last sound of a figure or word closes on a consonant (받침), for the particle
+ * after it: '7' 칠, '0' 영, '원', '율' do; '2' 이, '달러' do not. Latin letters count as closed.
+ */
+export function endsWithConsonant(text: string): boolean {
+  const last = text.trim().at(-1) ?? '';
+  if (/[0-9]/.test(last)) return '0136781'.includes(last);
+  const code = last.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 !== 0;
+  return true;
+}

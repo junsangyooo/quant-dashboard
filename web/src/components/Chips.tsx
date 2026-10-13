@@ -46,10 +46,10 @@ export function HeaderStatusChip({ status, children, to, className }: HeaderStat
   );
 }
 
-// ── 칩/리밸런싱 상태 (7 states) ──────────────────────────────────────────────
+// ── 칩/리밸런싱 상태 (7 states; 실전 adds 환전 제안, D47) ───────────────────────
 export type RebalanceState = keyof typeof copy.rebalance;
 
-const RING_STATES: ReadonlySet<RebalanceState> = new Set(['scheduled', 'holiday']);
+const RING_STATES: ReadonlySet<RebalanceState> = new Set(['scheduled', 'holiday', 'fxSuggest']);
 
 export interface RebalanceChipProps extends Base {
   state: RebalanceState;

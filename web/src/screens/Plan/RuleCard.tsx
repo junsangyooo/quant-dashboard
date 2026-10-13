@@ -1,6 +1,7 @@
 // 규칙 카드 (계획): head '이름 · 자산의 81.1% · 목표 80%' → status chip + next action (› scrolls to
-// '지금' when the rule has one) → gauge + most deviated instrument → instrument rows → basis
-// line. At 1440 the card carries its own drift chart (or, for an AI rule, '지수 대비').
+// '지금' when the rule has one) → (실전: '약 X원을 달러로 바꾸면 50:50', D47) → gauge + most deviated
+// instrument → instrument rows → basis line. At 1440 the card carries its own drift chart (or, for
+// an AI rule, '지수 대비').
 import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
 import { marginText, metricName, ruleStatusChip } from '../../api/adapters';
@@ -8,6 +9,7 @@ import type { PlanResponse, RuleCard as RuleCardData } from '../../api/types';
 import type { ChartEvent } from '../../charts/geometry/lineChart';
 import { InitialLogo, type LogoTone } from '../../components/Badges';
 import { RebalanceChip } from '../../components/Chips';
+import { FxSuggestionLines } from '../../components/LiveMoney';
 import { planCopy } from '../../copy/plan';
 import { formatMonthDay, formatNumber, formatPercent } from '../../lib/format';
 import { DriftPlot, VsIndexChart, driftHeading } from './Drift';
@@ -114,6 +116,8 @@ export function RuleCard({ card, plan, now, tones, wide, onShowNow, onGroup }: R
             <span className="t-label">{next}</span>
           )}
         </div>
+
+        {card.fxSuggestion ? <FxSuggestionLines suggestion={card.fxSuggestion} /> : null}
 
         <GaugeBlock gauge={card.gauge} emptyCaption={quoteWait ? emptyCaption : null} />
 

@@ -17,6 +17,7 @@ import { useHealth, useLastLoadedAt, useNow, useShell } from '../../api/queries'
 import type { ShellResponse } from '../../api/types';
 import { Button } from '../../components/Buttons';
 import { InfoChip, SignalChip } from '../../components/Chips';
+import { LiveMoneyCard, hasLiveMoney } from '../../components/LiveMoney';
 import { Skeleton, SkeletonBlock } from '../../components/State';
 import { formatDateTime, formatTime } from '../../lib/format';
 import { PageTitle } from '../../shell/PageTitle';
@@ -109,7 +110,8 @@ export function HealthScreen() {
   const now = useNow();
   const loadedAt = useLastLoadedAt();
 
-  const withTodos = !q.isError && (q.data?.todos.length ?? 0) > 0;
+  const liveCash = q.isError ? null : (q.data?.liveCash ?? null);
+  const withTodos = !q.isError && ((q.data?.todos.length ?? 0) > 0 || hasLiveMoney(liveCash));
   let body;
   if (q.isPending) {
     body = (
@@ -143,15 +145,21 @@ export function HealthScreen() {
     body = (
       <>
         <Summary view={summaryView(h, now ?? loadedAt)} />
-        {h.todos.length > 0 ? (
-          <section className={clsx(styles.todos, styles.areaTodos)} aria-labelledby="health-todos">
-            <h2 id="health-todos" className="sr-only">
-              {t.todo.title}
-            </h2>
-            {h.todos.map((todo) => (
-              <TodoCard key={todo.id} todo={todo} now={now} />
-            ))}
-          </section>
+        {withTodos ? (
+          <div className={clsx(styles.todos, styles.areaTodos)}>
+            {h.todos.length > 0 ? (
+              <section className={styles.todos} aria-labelledby="health-todos">
+                <h2 id="health-todos" className="sr-only">
+                  {t.todo.title}
+                </h2>
+                {h.todos.map((todo) => (
+                  <TodoCard key={todo.id} todo={todo} now={now} />
+                ))}
+              </section>
+            ) : null}
+            {/* 실전 (D47·D48): beside the to-dos, never one of them (not counted). */}
+            {hasLiveMoney(h.liveCash) ? <LiveMoneyCard cash={h.liveCash} /> : null}
+          </div>
         ) : null}
         <SourcesCard sources={h.sources} devices={h.devices} now={now} />
         <RecentCard days={h.recent14} lastRun={h.lastRun} />

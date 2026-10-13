@@ -26,6 +26,7 @@ import {
   nextCheck,
   stages1007,
 } from './common';
+import { LIVE_CASH } from '../ops';
 import { NEXT_HOLIDAY_KR } from './home';
 import {
   discoveryVsIndex,
@@ -336,6 +337,37 @@ export function planLive(): PlanResponse {
       ],
     },
     drift: liveDrift(liveDriftIndex, 'in-progress'),
+  };
+}
+
+/**
+ * 실전 · 넣은 돈 그대로 (D47·D48, 그림 없음), 10/7 16:10: no plan open, and the owner deposited
+ * 3,000,000원 at 14:20. The rule's weights (its holdings) are inside the band, but with that won
+ * 한국 is 61.4% of the rule's money: '환전 제안 · 약 1,500,000원을 달러로 바꾸면 50:50'. The deposit
+ * waits for 10/8 08:30 (예정 '새로 들어온 돈'). Nothing waits on the suggestion.
+ */
+export function planLiveMix(): PlanResponse {
+  const base = planLive();
+  return {
+    ...base,
+    rules: [
+      indexCard({
+        share: { pct: 80.6, target: 80 },
+        status: 'fx-suggest',
+        next: NEXT_CHECK_1008,
+        fxSuggestion: LIVE_CASH.fxSuggestion,
+      }),
+      momentumCard({ share: { pct: 18.5, target: 20 }, status: 'in-range', next: NEXT_CHECK_1008 }),
+    ],
+    schedule: {
+      now: null,
+      items: [
+        { kind: 'next-check', at: kst('2026-10-08', '08:30') },
+        HOLIDAY_1009,
+        { kind: 'new-money-wait', krw: 3_000_000, usd: 0, from: kst('2026-10-08', '08:30') },
+        { kind: 'sub-share-cash', krw: 85_964 },
+      ],
+    },
   };
 }
 

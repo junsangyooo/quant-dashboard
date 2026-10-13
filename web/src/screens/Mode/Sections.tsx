@@ -1,18 +1,13 @@
 // SCR-MODE sections: 모의투자 성적, 켜기 전 점검, 첫 주문 미리보기, 취소 안 된 주문, 취소 요청한 주문.
 import clsx from 'clsx';
 import { Fragment, useId } from 'react';
-import {
-  ArrowDown,
-  ArrowLeftRight,
-  ChevronDown,
-  CircleMinus,
-  CirclePlus,
-  type LucideIcon,
-} from 'lucide-react';
+import { ArrowDown, ChevronDown, CircleMinus, CirclePlus, type LucideIcon } from 'lucide-react';
 import { modeCopy as t } from '../../copy/mode';
+import { newMoneyText } from '../../api/adapters';
 import type { ModeResponse, Order } from '../../api/types';
 import { Button, LinkButton } from '../../components/Buttons';
 import { InfoChip, SignalChip } from '../../components/Chips';
+import { FxSuggestionLines } from '../../components/LiveMoney';
 import { CheckRow, OrderRow } from '../../components/Rows';
 import { CompositionBar, type SegmentTone } from '../../charts/CompositionBar';
 import {
@@ -201,9 +196,9 @@ export function PreflightSection({
 
 const CAT: readonly SegmentTone[] = ['cat-1', 'cat-2', 'cat-3', 'cat-4', 'cat-5'];
 
-const STAGE_ICON: Record<'sell' | 'fx' | 'buy', LucideIcon> = {
+// The live ledger never converts (D47): the preview has sell and buy legs only.
+const STAGE_ICON: Record<'sell' | 'buy', LucideIcon> = {
   sell: CircleMinus,
-  fx: ArrowLeftRight,
   buy: CirclePlus,
 };
 
@@ -278,9 +273,6 @@ function PreviewOk({ preview: p, now }: { preview: OkPreview; now: string | null
                   </p>
                   <p className={styles.legAmount}>
                     <span className="t-body-strong">{view.amount}</span>
-                    {view.note ? (
-                      <span className={clsx('t-caption', styles.muted)}>{view.note}</span>
-                    ) : null}
                   </p>
                 </li>
               </Fragment>
@@ -288,6 +280,10 @@ function PreviewOk({ preview: p, now }: { preview: OkPreview; now: string | null
           })}
         </ol>
       ) : null}
+      {p.newMoney ? (
+        <p className={clsx('t-caption', styles.muted)}>{newMoneyText(p.newMoney)}</p>
+      ) : null}
+      {p.fxSuggestion ? <FxSuggestionLines suggestion={p.fxSuggestion} /> : null}
       <div className={styles.chips}>
         {basisChips(p, now).map((chip) => (
           <InfoChip key={chip}>{chip}</InfoChip>

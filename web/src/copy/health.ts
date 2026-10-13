@@ -190,16 +190,6 @@ export const healthCopy = {
       '토스에 이 주문으로 보이는 것이 둘이에요',
       '토스 앱에서 확인 뒤 Claude에게 요청',
     ],
-    // 토스 앱에서 환전: facts { direction, krw, usd, rate, orderId, by? }.
-    fxManualTitle: (direction: string) => `토스 앱에서 환전 · ${direction}`,
-    fxDirection: { 'krw-usd': '원→달러', 'usd-krw': '달러→원' },
-    /** '약 4,967,000원 → $3,568.24 · 환율 1,392.0원'. */
-    fxManualAmount: (from: string, to: string, rate: string) => `${from} → ${to} · 환율 ${rate}`,
-    fxManualBy: (at: string) => `${at} 미국 매수 전까지 바꿔 주세요`,
-    fxManualNoBy: '토스 API는 환전을 못 해서 직접 바꿔 주세요',
-    fxManualResult: '바뀐 돈이 보이면 다음 확인이 이어서 주문해요',
-    /** The won side is an estimate until Toss fills it: '약 4,967,000원'. */
-    fxApprox: (amount: string) => `약 ${amount}`,
     /** Small result line, by effect. */
     effect: {
       'orders-zero-live-blocked': '그동안 주문 0건 · 실전 켜기 막힘',

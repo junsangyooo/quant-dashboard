@@ -76,34 +76,37 @@ describe('모의투자·실전 (SCR-MODE)', () => {
     ]);
   });
 
-  it('shows the first order stage by stage with markets, quantities, 약 amounts, times and the basis chips', async () => {
+  it('shows the first order stage by stage with quantities, 약 amounts, times and the basis chips', async () => {
     await openMode(modePaper);
     const preview = region(modeCopy.preview.title);
     expect(within(preview).getByText('실계좌')).toBeInTheDocument();
     expect(within(preview).getByText('지금 · 원화 현금 10,000,000원')).toBeInTheDocument();
     expect(within(preview).getByText('목표 · 규칙대로')).toBeInTheDocument();
-    for (const name of ['KOSPI200', 'S&P 500', '삼성전자', 'NVDA', 'BTC']) {
+    for (const name of ['KOSPI200', 'S&P 500']) {
       expect(within(preview).getByText(name)).toBeInTheDocument();
     }
     const legs = within(preview)
       .getAllByRole('listitem')
       .filter((li) => li.classList.contains('leg'));
-    expect(legs).toHaveLength(2); // 매도 0건 → hidden
-    const [fx, buy] = legs;
-    expect(fx).toHaveTextContent('환전 · 원→달러');
-    expect(fx).toHaveTextContent('10/8 09:10 예상');
-    expect(fx).toHaveTextContent('약 4,705,000원');
-    expect(fx).toHaveTextContent('→ 약 $3,403');
-    expect(fx).toHaveTextContent('환율 1,382.4원');
-    expect(buy).toHaveTextContent('매수 · 4건');
-    expect(buy).toHaveTextContent('한국 09:05 · 미국 22:30');
-    expect(buy).toHaveTextContent('한국 · KOSPI200 ETF 110주 · 삼성전자 14주');
-    expect(buy).toHaveTextContent('미국 · S&P 500 ETF 46주 · NVDA 3주');
-    expect(buy).toHaveTextContent('약 4,775,700원 · 약 $3,400');
+    // Won only: one 매수 leg, no 환전 (the live ledger never converts, D47).
+    expect(legs).toHaveLength(1);
+    const [buy] = legs;
+    expect(buy).toHaveTextContent('매수 · 1건');
+    expect(buy).toHaveTextContent('10/8 09:05 예상');
+    expect(buy).toHaveTextContent('KOSPI200 ETF 275주');
+    expect(buy).toHaveTextContent('약 9,968,750원');
+    expect(within(preview).queryByText(/환전 ·/)).toBeNull();
     expect(within(preview).queryByText(/매도 ·/)).toBeNull();
+    // What the owner could convert for 50:50, as information.
+    expect(within(preview).getByText('약 5,000,000원을 달러로 바꾸면 50:50')).toBeInTheDocument();
+    expect(
+      within(preview).getByText('지금 한국 100 : 미국 0 · 토스 앱에서 바꾸면 다음 거래일부터 사요'),
+    ).toBeInTheDocument();
     for (const chip of ['잔고 08:30', '현재가 16:00', '환율 1,382.4원 16:00']) {
       expect(within(preview).getByText(chip)).toBeInTheDocument();
     }
+    // The suggestion never closes the 켜기 card.
+    expect(within(region(TURN_ON.title)).queryByText(/켤 수 있어요/)).toBeNull();
   });
 
   it('leaves the outside-Toss coin out of the preview with its own line', async () => {
@@ -413,9 +416,9 @@ describe('모의투자·실전 (SCR-MODE)', () => {
     await user.click(within(card).getByRole('button', { name: TURN_ON.button }));
     const preview = region(modeCopy.preview.title);
     expect(await within(preview).findByText('16:10 다시 계산 · 금액 바뀜')).toBeInTheDocument();
-    expect(within(preview).getByText('→ 약 $3,341')).toBeInTheDocument();
-    expect(within(preview).getByText('환율 1,401.2원 16:10')).toBeInTheDocument();
-    expect(preview).toHaveTextContent('미국 · S&P 500 ETF 45주 · NVDA 3주');
+    expect(preview).toHaveTextContent('KOSPI200 ETF 269주');
+    expect(within(preview).getByText('약 9,979,900원')).toBeInTheDocument();
+    expect(within(preview).getByText('현재가 16:10')).toBeInTheDocument();
     expect(within(card).getByRole('checkbox')).not.toBeChecked();
     expect(within(card).getByLabelText(TURN_ON.pin)).toHaveValue('');
   });

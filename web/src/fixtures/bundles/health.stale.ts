@@ -71,6 +71,7 @@ const health: HealthResponse = {
   }),
   lastRun: { at: LAST_CHECK, result: 'quote-wait', seconds: 6 },
   devices: PUSH_DEVICES,
+  liveCash: null,
 };
 
 const bundle = {

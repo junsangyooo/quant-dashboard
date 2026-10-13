@@ -99,11 +99,9 @@ export const modeCopy = {
     /** NEW — accessible names of the two bars. */
     nowBar: (items: string) => `지금 구성 · ${items}`,
     targetBar: (items: string) => `목표 구성 · ${items}`,
+    // The live ledger never converts (D47): no 환전 leg; FxSuggestionLines says what to convert.
     stage: {
       sell: (n: number) => `매도 · ${String(n)}건`,
-      fx: '환전 · 원→달러',
-      /** NEW — dollars back to won (a sell-only first order). */
-      fxBack: '환전 · 달러→원',
       buy: (n: number) => `매수 · ${String(n)}건`,
     },
     expected: (at: string) => `${at} 예상`,
@@ -113,8 +111,6 @@ export const modeCopy = {
     marketLine: (market: string, orders: string) => `${market} · ${orders}`,
     shares: (name: string, qty: string) => `${name} ${qty}주`,
     approx: (amount: string) => `약 ${amount}`,
-    arrow: (amount: string) => `→ ${amount}`,
-    rate: (rate: string) => `환율 ${rate}`,
     basisBalance: (time: string) => `잔고 ${time}`,
     basisPrice: (time: string) => `현재가 ${time}`,
     basisFx: (rate: string, time: string) => `환율 ${rate} ${time}`,

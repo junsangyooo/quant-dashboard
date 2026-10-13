@@ -30,6 +30,7 @@ export interface RuleRef {
 }
 
 // 상태 칩 일곱 가지(SCR-PLAN 완료 조건). AI 규칙은 같은 칩에 다른 낱말을 쓴다(화면-맞춤.md ②, 'hold' = '유지').
+// 'fx-suggest'('환전 제안')는 실전 장부의 지수 반반만(D47): 원화·달러가 목표에서 띠보다 멀다. 정보일 뿐 막는 것 없음
 export type RuleStatus =
   | 'in-range'
   | 'scheduled'
@@ -38,6 +39,7 @@ export type RuleStatus =
   | 'holiday'
   | 'quote-wait'
   | 'withdraw-wait'
+  | 'fx-suggest' // 실전 장부 전용(D47)
   | 'hold'
   | 'sell-scheduled'
   | 'buy-scheduled'; // AI 규칙 전용
@@ -381,6 +383,30 @@ export interface RuleCard {
   };
   vsIndex?: { since: string; points: Array<{ date: string; value: number | null }> } | null;
   // AI 규칙: '지수 대비 · [since]부터'(pp1). 종목마다 고른 날부터 같은 시장 지수 대비 초과 수익의 평균(채점과 같은 계산, 판 종목은 판 날에 고정)
+  fxSuggestion?: FxSuggestion | null;
+  // 실전 장부의 지수 반반 카드에만 키가 있다(D47). null = 띠 안(또는 시세·환율이 낡아 계산 안 함)
+}
+
+// 실전 장부는 넣은 돈 그대로 굴린다(D47): 원화는 한국 종목, 달러는 미국 종목, 환전하지 않음.
+// 원화·달러가 목표에서 띠보다 멀면 '약 X원을 달러로 바꾸면 50:50'. 할 일이 아니고 아무것도 막지 않는다.
+export interface FxSuggestion {
+  direction: 'krw-usd' | 'usd-krw'; // krw-usd = 한국이 많음: 원을 달러로
+  krw: number; // krw. 바꿀 원(krw-usd) 또는 받을 원(usd-krw), 1,000원 단위
+  usd: number; // usd. 받을 달러 또는 바꿀 달러
+  rate: number; // rate. 계산에 쓴 환율
+  now: { kr: number; us: number }; // pct1, 합 100.0: 규칙 돈의 지금 비율(현금 포함, 출금 대기 제외)
+  target: { kr: number; us: number }; // pct1: 규칙 목표(50 · 50)
+}
+// 새로 들어온 돈은 다음 거래일부터(D48): 주인이 오늘(KST) 넣은 돈·주인이 한 환전으로 들어온 돈
+export interface NewMoneyWait {
+  krw: number; // krw. 0 = 없음
+  usd: number; // usd. 0 = 없음
+  from: string; // 쓰기 시작하는 확인(다음 평일 08:30)
+}
+export interface LiveCash {
+  // 실전이 켜져 있을 때 모드·작동 화면에(할 일이 아님)
+  newMoney: NewMoneyWait | null;
+  fxSuggestion: FxSuggestion | null;
 }
 export type ScheduleItem =
   // ruleId는 한 규칙의 항목에만 있다. 확인·휴장·현금 항목은 장부 전체의 것이다
@@ -389,7 +415,8 @@ export type ScheduleItem =
   | { kind: 'retry'; at: string; market: Market; side: Side; ruleId: string } // 다시 낼 주문의 규칙
   | { kind: 'sub-share-cash'; krw: number }
   | { kind: 'withdraw-wait'; krw: number; until: string }
-  | { kind: 'new-cash'; krw: number }
+  | { kind: 'new-cash'; krw: number } // 다음 확인이 쓸 새 현금('새로 들어온 돈'은 빼고)
+  | ({ kind: 'new-money-wait' } & NewMoneyWait) // 실전(D48): '새로 들어온 돈 · 다음 거래일 08:30부터 써요'
   | { kind: 'first-check'; at: string }
   | { kind: 'monthly-review'; at: string; ruleId: string } // AI 규칙: 매달 1일 08:30(점검은 전날 22:00부터 돌아 그 확인 전에 끝난다)
   | { kind: 'discovery'; at: string; ruleId: string } // AI 규칙: 4·6·9·12월 1일 08:30
@@ -713,10 +740,9 @@ export interface HealthResponse {
       | 'filings'
       | 'pin-failures'
       | 'toss-link'
-      | 'broker-mismatch'
-      | 'fx-manual';
+      | 'broker-mismatch';
     // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
-    // toss-link·broker-mismatch·fx-manual: 실전 연결(3단계, autotrade/PHASE3.md 2.7)
+    // toss-link·broker-mismatch: 실전 연결(3단계, autotrade/PHASE3.md 2.7)
     facts: Record<string, string | number>; // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' };
     effect: 'orders-zero-live-blocked' | 'orders-and-reconcile-stop' | 'no-order-sent' | 'other';
@@ -755,6 +781,7 @@ export interface HealthResponse {
   }>; // 최근 14일 중 평일만(10칸). reason은 result 'failed'·'todo'일 때
   lastRun: { at: string; result: string; seconds: number; reason?: 'no-quote' | 'other' } | null; // reason은 코드다(문장 아님)
   devices: Array<{ name: string; lastDelivery: string | null; ok: boolean }>; // '알림 기기'를 펼친 목록(AccountResponse와 같은 모양). 3단계 전에는 빈 배열
+  liveCash: LiveCash | null; // 실전이 켜져 있을 때만(D47·D48). 할 일이 아니고 수에 들어가지 않는다
 }
 // todos[].facts 키(값은 날짜·시각·수·코드):
 //   stale: market('KR' | 'US' | 'FX'), basisDate, tradingDays, missingDates?(못 받은 거래일 'YYYY-MM-DD,YYYY-MM-DD', 환율은 없음)
@@ -775,8 +802,6 @@ export interface HealthResponse {
 //   broker-mismatch(3단계, 빨강·직접): { reason, instrument?, ledgerQty?, brokerQty?, count?, currency? }
 //           reason 'positions'(보유 수량이 다름, 첫 종목과 다른 종목 수) | 'cash'(설명 안 되는 현금 변화, currency)
 //           | 'external-fill' | 'fractional' | 'sleeves' | 'other' · 'order-unknown'(보낸 주문의 결과를 가를 수 없음: { reason, market, side })
-//   fx-manual(3단계, 노랑·직접): { direction: 'krw-usd' | 'usd-krw', krw, usd, rate, orderId, by? }
-//           토스 API는 환전을 못 해요: 주인이 토스 앱에서 바꾸면 다음 대조가 알아보고 이어서 사요. by = 기다리는 매수 시각
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 // 3단계 실제 연결: toss-link는 cadence 'per-check', age = 마지막 확인 뒤 ÷ 15분, basis = 주인이 알려 준 키 만료일(없으면 null),
 //   receivedAt = 마지막 성공, extra { cause?(TossLinkCause), account?(끝 4자리), daysLeft? }. 만료 14일 안이면 'late'.
@@ -833,8 +858,10 @@ export interface ModeResponse {
           krw: number;
         }>;
         target: Array<{ ruleId: string; instrument: Instrument; pct: number }>;
-        stages: Stage[];
+        stages: Stage[]; // 매도·매수뿐(실전은 환전하지 않음, D47)
         outside: Array<{ instrument: Instrument; qty: number; approxKrw: number }>;
+        newMoney: NewMoneyWait | null; // 다시 켤 때: 다음 확인 날 들어온 돈(그 확인이 쓰지 않음)
+        fxSuggestion: FxSuggestion | null;
       }
     | { kind: 'not-computable'; at: string; cause: 'stale' | 'other' };
   cancelFailed: Order[] | null;
@@ -847,6 +874,7 @@ export interface ModeResponse {
     cancel: Order[]; // 실전 장부의 열린 계획에서 아직 대기 중인 주문
     cash: Array<{ currency: 'KRW'; krw: number } | { currency: 'USD'; usd: number; krw: number }>; // 0보다 큰 현금만. 달러의 krw는 지금 환율로
   };
+  liveCash: LiveCash | null; // 실전이 켜져 있을 때만(D47·D48): 새로 들어온 돈과 환전 제안
 }
 // twoLedgers·preflight·preview는 실전이 생기는 3단계부터 채운다. 1·2단계는 null이다
 

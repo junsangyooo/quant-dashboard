@@ -49,6 +49,7 @@ export type StateId =
   | 'home.us-empty'
   | 'plan.paper'
   | 'plan.live'
+  | 'plan.live-mix'
   | 'plan.stale'
   | 'plan.partial'
   | 'plan.live-todo'
@@ -120,6 +121,7 @@ export type StateId =
   | 'mode.permission'
   // 3단계 실전 연결(그림 없음): 취소 요청 중, 토스 연결 꺼짐
   | 'mode.cancel-pending'
+  | 'mode.live-cash'
   | 'mode.link-off'
   | 'account.default'
   | 'account.no-push'

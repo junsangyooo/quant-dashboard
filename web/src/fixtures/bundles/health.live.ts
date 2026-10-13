@@ -1,12 +1,14 @@
 // SCR-HEALTH · 실전 할 일 (3단계, 그림 없음): 실전 9/1부터. 다른 프로그램(옛 quant)이 같은 토스 키로
-// 토큰을 받아 연결이 막혔고(빨강, 직접), 15:50 대조가 KOSPI200 ETF 수량이 다르다고 봤으며(빨강, 직접,
-// 주문 0건), 09:10 환전은 주인이 토스 앱에서 할 일로 남아 있어요(노랑). 토스 연결·잔고 대조 줄은 낡음.
+// 토큰을 받아 연결이 막혔고(빨강, 직접), 15:50 대조가 KOSPI200 ETF 수량이 다르다고 봤어요(빨강, 직접,
+// 주문 0건). 토스 연결·잔고 대조 줄은 낡음. 할 일 옆에 원화 · 달러 카드(D47·D48): 14:20에 넣은
+// 3,000,000원은 10/8 08:30부터 쓰고, 약 1,500,000원을 달러로 바꾸면 50:50 — 할 일이 아니라 수에 없어요.
 import type { HealthResponse } from '../../api/types';
 import type { FixtureBundle } from '../types';
 import { kst } from '../world';
 import {
   LAST_CHECK,
   LAST_RUN,
+  LIVE_CASH,
   NEXT_CHECK,
   NOW,
   PUSH_DEVICES,
@@ -22,7 +24,7 @@ const health: HealthResponse = {
     kind: 'check',
     sourcesTotal: 6,
     staleCount: 2,
-    todoCount: 3,
+    todoCount: 2,
     failCount: 0,
     lastCheckAt: LAST_CHECK,
     nextCheckAt: NEXT_CHECK,
@@ -51,21 +53,6 @@ const health: HealthResponse = {
       action: { kind: 'manual' },
       effect: 'orders-zero-live-blocked',
     },
-    {
-      id: 'fx-manual:41',
-      severity: 'yellow',
-      kind: 'fx-manual',
-      facts: {
-        direction: 'krw-usd',
-        krw: 4967000,
-        usd: 3568.24,
-        rate: 1392,
-        orderId: 41,
-        by: kst('2026-10-07', '22:30'),
-      },
-      action: { kind: 'manual' },
-      effect: 'other',
-    },
   ],
   sources: [
     sources.kr,
@@ -86,13 +73,14 @@ const health: HealthResponse = {
   recent14: recent14(),
   lastRun: LAST_RUN,
   devices: PUSH_DEVICES,
+  liveCash: LIVE_CASH,
 };
 
 const bundle = {
   id: 'health.live',
   now: NOW,
   responses: {
-    '/api/shell': liveShell({ status: { kind: 'todo', count: 3 } }),
+    '/api/shell': liveShell({ status: { kind: 'todo', count: 2 } }),
     '/api/health': health,
   },
 } satisfies FixtureBundle;

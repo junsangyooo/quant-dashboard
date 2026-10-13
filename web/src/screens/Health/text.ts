@@ -9,12 +9,10 @@ import { calendarCell, marketName, sideName } from '../../api/adapters';
 import {
   formatDateTime,
   formatFxRate,
-  formatKrw,
   formatMonthDay,
   formatMonthDayWeekday,
   formatNumber,
   formatTime,
-  formatUsd,
   kstDateKey,
 } from '../../lib/format';
 
@@ -209,17 +207,7 @@ export function unknownView(attemptAt: string, lastKnown: string | null): Summar
 
 export interface TodoView {
   tone: 'error' | 'warn';
-  icon:
-    | 'stale'
-    | 'failed'
-    | 'expiring'
-    | 'push'
-    | 'ai'
-    | 'filings'
-    | 'pin'
-    | 'link'
-    | 'mismatch'
-    | 'fx';
+  icon: 'stale' | 'failed' | 'expiring' | 'push' | 'ai' | 'filings' | 'pin' | 'link' | 'mismatch';
   title: string;
   chip: string;
   lines: readonly string[];
@@ -496,36 +484,7 @@ export function todoView(todo: Todo, now: string | null): TodoView {
         result: effectLine(todo.effect),
       };
     }
-    case 'fx-manual': {
-      const toUsd = str(f.direction) !== 'usd-krw';
-      const krw = num(f.krw);
-      const usd = num(f.usd);
-      const krwText = krw === undefined ? t.sources.noValue : formatKrw(krw);
-      const usdText = usd === undefined ? t.sources.noValue : formatUsd(usd);
-      const rate = num(f.rate);
-      const by = str(f.by);
-      return {
-        tone,
-        icon: 'fx',
-        title: t.todo.fxManualTitle(t.todo.fxDirection[toUsd ? 'krw-usd' : 'usd-krw']),
-        chip,
-        lines: [
-          t.todo.fxManualAmount(
-            toUsd ? approx(krwText) : usdText,
-            toUsd ? usdText : approx(krwText),
-            rate === undefined ? t.sources.noValue : formatFxRate(rate),
-          ),
-          by ? t.todo.fxManualBy(atTime(by, now)) : t.todo.fxManualNoBy,
-        ],
-        result: t.todo.fxManualResult,
-      };
-    }
   }
-}
-
-/** '약 4,967,000원' — the won side of a conversion is an estimate until Toss fills it. */
-function approx(amount: string): string {
-  return t.todo.fxApprox(amount);
 }
 
 type TossCause = keyof typeof t.toss.cause;

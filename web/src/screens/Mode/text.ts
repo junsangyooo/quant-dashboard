@@ -6,6 +6,7 @@ import { marketName, sideName } from '../../api/adapters';
 import { tossCause } from '../Health/text';
 import type { Instrument, Market, ModeResponse, Order, Stage } from '../../api/types';
 import {
+  endsWithConsonant,
   formatDateTime,
   formatFxRate,
   formatKrw,
@@ -41,14 +42,7 @@ export function usdWhole(value: number): string {
   return `$${formatNumber(Math.round(value))}`;
 }
 
-/** Whether the last sound of a figure or word closes on a consonant (받침): '7' 칠, '원', '율'. */
-function hasFinalConsonant(text: string): boolean {
-  const last = text.trim().at(-1) ?? '';
-  if (/[0-9]/.test(last)) return '0136781'.includes(last);
-  const code = last.charCodeAt(0);
-  if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 !== 0;
-  return true;
-}
+const hasFinalConsonant = endsWithConsonant;
 
 /** Topic particle after a figure or word: '$125.67은', '85,964원은', '시세는'. */
 export function topicParticle(text: string): string {
@@ -272,13 +266,11 @@ function byMarket(orders: readonly Order[]): { market: Market; orders: Order[] }
 }
 
 export interface StageView {
-  kind: Stage['kind'];
+  kind: 'sell' | 'buy';
   label: string;
   time: string;
   body: string[];
   amount: string;
-  /** fx: the rate beside the amount. */
-  note: string | null;
 }
 
 function qty(value: number | undefined): string {
@@ -294,21 +286,8 @@ function sumUsd(orders: readonly Order[]): number {
   return orders.reduce((s, o) => s + (o.amountUsd ?? 0), 0);
 }
 
-export function stageView(stage: Stage, now: string | null): StageView {
-  if (stage.kind === 'fx') {
-    const krw = stage.orders.reduce((s, o) => s + (o.fx?.krw ?? 0), 0);
-    const usd = stage.orders.reduce((s, o) => s + (o.fx?.usd ?? 0), 0);
-    const rate = stage.orders.find((o) => o.fx)?.fx?.rate;
-    const toUsd = krw > 0;
-    return {
-      kind: 'fx',
-      label: toUsd ? t.preview.stage.fx : t.preview.stage.fxBack,
-      time: t.preview.expected(atTime(stage.at, now)),
-      body: [t.preview.approx(toUsd ? formatKrw(krw) : usdWhole(usd))],
-      amount: t.preview.arrow(t.preview.approx(toUsd ? usdWhole(usd) : formatKrw(krw))),
-      note: rate === undefined ? null : t.preview.rate(formatFxRate(rate)),
-    };
-  }
+/** A preview leg (매도 · n건 / 매수 · n건). */
+export function stageView(stage: PreviewStage, now: string | null): StageView {
   const groups = byMarket(stage.orders);
   const count = stage.orders.length;
   const time =
@@ -342,14 +321,18 @@ export function stageView(stage: Stage, now: string | null): StageView {
     time,
     body,
     amount: amounts.join(' · '),
-    note: null,
   };
 }
 
-/** Stages in 매도 → 환전 → 매수 order; a stage with no orders is hidden. */
-export function visibleStages(stages: readonly Stage[]): Stage[] {
-  const rank = { sell: 0, fx: 1, buy: 2 } as const;
-  return stages.filter((s) => s.orders.length > 0).sort((a, b) => rank[a.kind] - rank[b.kind]);
+/** A stage of the turn-on preview: the live ledger never converts (D47), so sell or buy. */
+export type PreviewStage = Stage & { kind: 'sell' | 'buy' };
+
+/** Stages in 매도 → 매수 order; a stage with no orders (or a conversion) is not drawn. */
+export function visibleStages(stages: readonly Stage[]): PreviewStage[] {
+  const rank = { sell: 0, buy: 1 } as const;
+  return stages
+    .filter((s): s is PreviewStage => s.kind !== 'fx' && s.orders.length > 0)
+    .sort((a, b) => rank[a.kind] - rank[b.kind]);
 }
 
 export function currentItems(p: OkPreview): string[] {

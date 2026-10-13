@@ -61,6 +61,30 @@ export const copy = {
     holiday: '휴장',
     awaitingQuote: '시세 대기',
     withdrawPending: '출금 대기',
+    /** NEW (D47) — live only: the won and the dollars are off the targets; information only. */
+    fxSuggest: '환전 제안',
+  },
+
+  /**
+   * NEW (D47·D48, 2026-10-13) — the live ledger runs on the money as deposited: won buys the
+   * Korean ETF, dollars the US one, and only the owner converts (in the Toss app). Shared by the
+   * plan, mode and health screens; never a to-do.
+   */
+  liveMoney: {
+    title: '원화 · 달러',
+    /** '약 5,000,000원을 달러로 바꾸면 50:50' (the particle comes with the amount). */
+    suggestion: (amountWithParticle: string, to: string, kr: string, us: string) =>
+      `약 ${amountWithParticle} ${to} 바꾸면 ${kr}:${us}`,
+    toUsd: '달러로',
+    toKrw: '원화로',
+    objectAfterConsonant: '을',
+    objectAfterVowel: '를',
+    /** '지금 한국 100 : 미국 0'. */
+    mix: (kr: string, us: string) => `지금 한국 ${kr} : 미국 ${us}`,
+    suggestionNote: '토스 앱에서 바꾸면 다음 거래일부터 사요',
+    /** '새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'. */
+    newMoney: (amounts: string, time: string) =>
+      `새로 들어온 돈 ${amounts} · 다음 거래일 ${time}부터 써요`,
   },
 
   /** AI rules reuse the seven chips with other words (화면-맞춤.md ②, CONTRACT RuleStatus). */

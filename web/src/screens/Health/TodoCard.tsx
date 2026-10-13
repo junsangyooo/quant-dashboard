@@ -3,7 +3,6 @@
 import clsx from 'clsx';
 import { Fragment } from 'react';
 import {
-  ArrowLeftRight,
   BellOff,
   Bot,
   CircleX,
@@ -29,7 +28,6 @@ const ICON: Record<TodoView['icon'], LucideIcon> = {
   pin: UserX, // the 'PIN 실패 급증' icon of the notification settings
   link: Unplug, // 토스 연결 (3단계)
   mismatch: Scale, // 토스 잔고 불일치
-  fx: ArrowLeftRight, // 토스 앱에서 환전 (the preview's 환전 icon)
 };
 
 export function TodoCard({ todo, now }: { todo: Todo; now: string | null }) {

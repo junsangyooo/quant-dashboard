@@ -28,12 +28,13 @@ test.describe('SCR-MODE', () => {
     await open(page, 'mode.paper');
     const preview = card(page, '첫 주문 미리보기');
     await expect(preview.getByText('지금 · 원화 현금 10,000,000원')).toBeVisible();
-    await expect(preview.getByText('환전 · 원→달러')).toBeVisible();
-    await expect(preview.getByText('10/8 09:10 예상')).toBeVisible();
-    await expect(preview.getByText('→ 약 $3,403')).toBeVisible();
-    await expect(preview.getByText('매수 · 4건')).toBeVisible();
-    await expect(preview.getByText('약 4,775,700원 · 약 $3,400')).toBeVisible();
+    // Won only: all of it buys Korea; the live ledger never converts (D47).
+    await expect(preview.getByText('매수 · 1건')).toBeVisible();
+    await expect(preview.getByText('10/8 09:05 예상')).toBeVisible();
+    await expect(preview.getByText('약 9,968,750원')).toBeVisible();
+    await expect(preview.getByText(/^환전 ·/)).toHaveCount(0);
     await expect(preview.getByText(/^매도 ·/)).toHaveCount(0);
+    await expect(preview.getByText('약 5,000,000원을 달러로 바꾸면 50:50')).toBeVisible();
     for (const chip of ['잔고 08:30', '현재가 16:00', '환율 1,382.4원 16:00']) {
       await expect(preview.getByText(chip, { exact: true })).toBeVisible();
     }
@@ -119,6 +120,22 @@ test.describe('SCR-MODE', () => {
     await expect(card(page, '실전으로 켜기')).toHaveCount(0);
     await shoot(page, info, 'mode.live');
     expect(await axe(page)).toEqual([]);
+  });
+
+  test('mode.live-cash: the 원화 · 달러 card while live is on (D47·D48), information only', async ({
+    page,
+  }, info) => {
+    const problems = await watch(page);
+    await open(page, 'mode.live-cash');
+    const money = card(page, '원화 · 달러');
+    await expect(money.getByText('약 1,500,000원을 달러로 바꾸면 50:50')).toBeVisible();
+    await expect(
+      money.getByText('새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'),
+    ).toBeVisible();
+    await expect(page.getByRole('banner')).not.toContainText('직접 할 일');
+    await shoot(page, info, 'mode.live-cash');
+    expect(await axe(page)).toEqual([]);
+    expect(problems).toEqual([]);
   });
 
   test('mode.off-confirm: centred modal, focus trapped, no PIN; 끄기 returns to paper', async ({
@@ -228,7 +245,7 @@ test.describe('SCR-MODE', () => {
     const turnOn = await fillTurnOn(page);
     await turnOn.getByRole('button', { name: '실전 켜기' }).click();
     await expect(page.getByText('16:10 다시 계산 · 금액 바뀜')).toBeVisible();
-    await expect(page.getByText('→ 약 $3,341')).toBeVisible();
+    await expect(page.getByText('약 9,979,900원')).toBeVisible();
     await expect(turnOn.getByRole('checkbox')).not.toBeChecked();
     await shoot(page, info, 'mode.preview-changed');
     expect(await axe(page)).toEqual([]);

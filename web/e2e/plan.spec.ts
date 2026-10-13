@@ -6,6 +6,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 const STATES = [
   'plan.paper',
   'plan.live',
+  'plan.live-mix',
   'plan.stale',
   'plan.partial',
   'plan.live-todo',
@@ -161,4 +162,15 @@ test('AI 규칙 card (17:7108): 0–100 gauge and 지수 대비 line', async ({ 
 test('no session: the PIN page, with the way back', async ({ page }) => {
   await page.goto('/plan?fixture=plan.permission');
   await expect(page).toHaveURL(/\/pin\?next=/);
+});
+
+test('실전 · 넣은 돈 그대로: 환전 제안 and the money of today (D47·D48)', async ({ page }) => {
+  await page.goto('/plan?fixture=plan.live-mix');
+  const card = page.getByRole('article', { name: '지수 반반' });
+  await expect(card.getByText('환전 제안')).toBeVisible();
+  await expect(card.getByText('약 1,500,000원을 달러로 바꾸면 50:50')).toBeVisible();
+  await expect(
+    page.getByText('새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'),
+  ).toBeVisible();
+  await expect(page.getByRole('banner')).not.toContainText('직접 할 일');
 });

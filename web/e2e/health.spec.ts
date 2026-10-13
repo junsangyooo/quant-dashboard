@@ -124,9 +124,11 @@ test.describe('SCR-HEALTH', () => {
     await expect(mismatch).toContainText('그동안 주문 0건 · 실전 켜기 막힘');
     const link = page.getByRole('article', { name: '토스 연결 · 다른 프로그램과 키 겹침' });
     await expect(link).toContainText('Claude에게 옛 quant cron 줄 삭제 요청');
-    const fx = page.getByRole('article', { name: '토스 앱에서 환전 · 원→달러' });
-    await expect(fx).toContainText('약 4,967,000원 → $3,568.24 · 환율 1,392.0원');
-    await expect(fx).toContainText('22:30 미국 매수 전까지 바꿔 주세요');
+    // No conversion to-do (D47): the 원화 · 달러 card sits beside the to-dos, not among them.
+    await expect(page.getByRole('article')).toHaveCount(2);
+    const money = page.getByRole('region', { name: '원화 · 달러' });
+    await expect(money).toContainText('약 1,500,000원을 달러로 바꾸면 50:50');
+    await expect(money).toContainText('새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요');
     await expect(
       page.getByText('다른 프로그램과 키 겹침 · 마지막 성공 15:50 · 확인마다'),
     ).toBeVisible();

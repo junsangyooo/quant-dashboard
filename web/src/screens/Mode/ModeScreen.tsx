@@ -2,7 +2,7 @@
 // 1:65110 · 1:65140). Section order by state (기획 §5 레이아웃 의도):
 //   모의투자          세그먼트 → (두 장부) → 성적 → 켜기 전 점검 → 첫 주문 미리보기 → 실전으로 켜기
 //   모의투자 · 점검 ✕ 세그먼트 → 점검 → 미리보기 → 켜기(비활성) → (두 장부) → 성적
-//   실전              세그먼트 + 기간 칩 → 두 장부 → 성적 → 실전 끄기
+//   실전              세그먼트 + 기간 칩 → (원화 · 달러, D47·D48) → 두 장부 → 성적 → 실전 끄기
 //   끄기 실패         빨간 카드 → 세그먼트 → 두 장부(실전 기간) → 성적
 // From 900px: left 7 of 12 (세그먼트 · 두 장부 · 성적 · 점검), right 5 (미리보기 · 켜기 · 끄기).
 import clsx from 'clsx';
@@ -13,6 +13,7 @@ import { modeCopy as t } from '../../copy/mode';
 import { queryKeys, useCancelRetry, useMode, useNow, useShell } from '../../api/queries';
 import type { ModeResponse } from '../../api/types';
 import { InfoChip } from '../../components/Chips';
+import { LiveMoneyCard, hasLiveMoney } from '../../components/LiveMoney';
 import { ModeSwitch } from '../../components/Controls';
 import { ErrorBlock, Skeleton, SkeletonBlock } from '../../components/State';
 import { PageTitle } from '../../shell/PageTitle';
@@ -145,6 +146,11 @@ export function ModeScreen() {
     const pendingCard = cancelPending ? (
       <CancelPendingCard key="cancel-pending" orders={cancelPending} />
     ) : null;
+    // 실전 (D47·D48): the money of today and the conversion that would bring the mix to the
+    // targets; information, never a to-do.
+    const liveMoney = hasLiveMoney(m.liveCash) ? (
+      <LiveMoneyCard key="live-money" cash={m.liveCash} />
+    ) : null;
     const twoLedgers = m.twoLedgers ? <TwoLedgersCard key="two" data={m.twoLedgers} /> : null;
     const performance = (
       <PerformanceCard
@@ -190,7 +196,7 @@ export function ModeScreen() {
       left = [cancelCard, modeSection, pendingCard, twoLedgers, performance];
       right = [];
     } else if (m.mode === 'live') {
-      left = [modeSection, pendingCard, twoLedgers, performance];
+      left = [modeSection, pendingCard, liveMoney, twoLedgers, performance];
       right = [turnOff];
     } else if (checksBlocked) {
       left = [modeSection, pendingCard, preflight, twoLedgers, performance];

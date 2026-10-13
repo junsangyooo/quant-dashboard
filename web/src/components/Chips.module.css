@@ -88,6 +88,11 @@ button.chip {
   --chip-dot: var(--status-warning);
 }
 
+/* 환전 제안 (실전, D47): the owner's to do if he wants; a hollow accent dot like 리밸런싱 예정. */
+.rb-fxSuggest {
+  --chip-dot: var(--accent-default);
+}
+
 /* 칩/기간 — selected is filled without a border (Figma: 26px vs 28px tall). */
 .period {
   padding: var(--space-tight) var(--chip-padding-x);

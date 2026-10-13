@@ -5,6 +5,7 @@ import type { RebalanceState } from '../components/Chips';
 import type { CalendarState as CellState, EventKind as MarkerKind } from '../components/Markers';
 import {
   MINUS,
+  endsWithConsonant,
   formatDateTime,
   formatKrw,
   formatMonthDay,
@@ -18,9 +19,11 @@ import type {
   Banner,
   CalendarState,
   EventKind,
+  FxSuggestion,
   Margin,
   Market,
   MetricRef,
+  NewMoneyWait,
   RuleStatus,
   Side,
 } from './types';
@@ -48,6 +51,8 @@ export function ruleStatusChip(
       return { state: 'awaitingQuote', label: copy.rebalance.awaitingQuote };
     case 'withdraw-wait':
       return { state: 'withdrawPending', label: copy.rebalance.withdrawPending };
+    case 'fx-suggest':
+      return { state: 'fxSuggest', label: copy.rebalance.fxSuggest };
     case 'hold':
       return { state: 'inRange', label: copy.ruleStatusAi.hold };
     case 'sell-scheduled':
@@ -281,4 +286,36 @@ export function bannerLink(
     target = 'health';
   }
   return { to: LINK_PATH[target], label: copy.banner.link[target] };
+}
+
+// ── the live ledger's money as deposited (D47·D48) ───────────────────────────────────
+
+const pct = (value: number): string => formatNumber(value, Number.isInteger(value) ? 0 : 1);
+
+/** '약 5,000,000원을 달러로 바꾸면 50:50' · '약 $1,437을 원화로 바꾸면 50:50'. */
+export function fxSuggestionText(s: FxSuggestion): string {
+  const m = copy.liveMoney;
+  const toUsd = s.direction === 'krw-usd';
+  const amount = toUsd ? formatKrw(s.krw) : `$${formatNumber(Math.round(s.usd))}`;
+  const particle = endsWithConsonant(amount) ? m.objectAfterConsonant : m.objectAfterVowel;
+  return m.suggestion(
+    `${amount}${particle}`,
+    toUsd ? m.toUsd : m.toKrw,
+    pct(s.target.kr),
+    pct(s.target.us),
+  );
+}
+
+/** '지금 한국 100 : 미국 0'. */
+export function fxMixText(s: FxSuggestion): string {
+  return copy.liveMoney.mix(pct(s.now.kr), pct(s.now.us));
+}
+
+/** '새로 들어온 돈 3,000,000원 · $718.39 · 다음 거래일 08:30부터 써요'. */
+export function newMoneyText(n: NewMoneyWait): string {
+  const amounts = [
+    ...(n.krw > 0 ? [formatKrw(n.krw)] : []),
+    ...(n.usd > 0 ? [formatUsd(n.usd)] : []),
+  ];
+  return copy.liveMoney.newMoney(amounts.join(' · '), formatTime(n.from));
 }

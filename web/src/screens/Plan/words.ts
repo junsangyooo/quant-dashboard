@@ -1,6 +1,6 @@
 // Contract values → the words of the 계획 screens (and the 계획 card on 자산). Pure functions:
 // the screens only place their results. Numbers use lib/format; dates have no zero padding.
-import { marketName, ruleStatusChip, sideName } from '../../api/adapters';
+import { marketName, newMoneyText, ruleStatusChip, sideName } from '../../api/adapters';
 import type {
   Instrument,
   Market,
@@ -268,6 +268,8 @@ export function scheduleItemText(item: ScheduleItem): ScheduleText {
       };
     case 'new-cash':
       return { caption: null, title: s.newCash(formatKrw(item.krw)), chip: null, note: null };
+    case 'new-money-wait':
+      return { caption: null, title: newMoneyText(item), chip: null, note: null };
     case 'first-check':
       return {
         caption: null,
