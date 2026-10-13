@@ -256,3 +256,47 @@ def test_money_booked_late_with_an_earlier_time_enters_the_next_value_once(
     # 7/3: that money is the 7/2 value's already.
     assert s3.contributions == s2.contributions
     assert s3.baseline_units == s2.baseline_units
+
+
+def test_the_breakdowns_take_money_booked_late_where_the_values_do(
+    lw: Live, web: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same late booking as above, seen a month later: the period opens with the 7/1 value,
+    which did not hold the money, so the money is the period's own (in and out), never 'market'
+    (the parts then explain the same P&L as the trend)."""
+    monkeypatch.setattr(series, "MIN_RECORD_DAYS", 2)
+    world.rate(kst("2026-06-30 08:25"), "1392.0")
+    prefetch_fx(lw.conn, lw.ctx.sources, kst("2026-06-30 09:10"))
+    lw.turn_on("2026-06-30 21:00")
+    lw.tick("2026-06-30 21:05")
+    first_buy(lw)
+    lw.at("2026-07-01 15:00")
+    lw.fake.deposit("KRW", D("5000000"))
+    lw.fake.app_trade("005930", "BUY", D("70"), D("70000"), commission=D("735"))
+    assert lw.snapshot("2026-07-01 16:05")["result"] == "ok"
+    flat_thursday(world)
+    lw.sync("2026-07-02 09:00")
+    assert lw.reconcile("2026-07-02 09:01")["result"] == "match"
+    assert lw.snapshot("2026-07-02 16:05")["result"] == "ok"
+    lw.at("2026-08-01 10:00")  # a Saturday: the 1m period opens with the 7/1 value
+    assert web.post("/api/auth/pin", json={"pin": PIN}).status_code == 204  # a month later
+
+    home = web.get("/api/home?ledger=live&period=1m").json()
+    whole = web.get("/api/home/breakdown?ledger=live&period=1m").json()
+    assert (whole["from"], whole["deposit"], whole["withdrawal"]) == (
+        "2026-07-01",
+        5000000,
+        -4900735,
+    )
+    gain = whole["market"] + whole["dividend"] + whole["fees"]
+    assert gain == home["trend"]["periodPnl"]["amount"]
+    kr = web.get("/api/home/breakdown?ledger=live&period=1m&account=kr").json()
+    assert (kr["deposit"], kr["withdrawal"]) == (5000000, -4900735)
+    # The 한국 계좌 line nets the money from the 7/2 value on, the first that holds it: no dip on
+    # 7/1 of the 99,265원 that value did not hold.
+    line = home["accounts"]["list"][0]["trend"]["series"]
+    assert [(p["date"], p["netIn"], p["ret"]) for p in line] == [
+        ("2026-06-30", 10000000, 0.0),
+        ("2026-07-01", 10000000, 0.14),
+        ("2026-07-02", 10099265, 0.14),
+    ]

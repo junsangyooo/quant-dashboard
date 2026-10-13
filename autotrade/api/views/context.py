@@ -205,10 +205,14 @@ class LedgerContext:
 
     @cached_property
     def events(self) -> list[EventRow]:
+        """The ledger's events by now, less the internal ones and a live plan that bought nothing
+        (engine/runner.py _summarize_plan 'untraded': its cash waits for the next check)."""
         return [
             e
             for e in repo.events_of_ledger(self.conn, self.ledger_id)
-            if e.occurred_at <= self.now and e.kind not in INTERNAL_EVENT_KINDS
+            if e.occurred_at <= self.now
+            and e.kind not in INTERNAL_EVENT_KINDS
+            and not (e.kind == "rebalance" and e.payload.get("untraded"))
         ]
 
     @cached_property

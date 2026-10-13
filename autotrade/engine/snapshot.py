@@ -174,10 +174,9 @@ def _baseline(
         # Money the last value had not counted, as its money in had not (the ledger's state when
         # it was written; api/views/series.py reads values the same way): what came after it (a
         # deposit on the evening of a day is the next day's; by date it fell between two values
-        # and was never added), and what was booked after it with an earlier time (a late
-        # reconciliation books money at the time it moved, engine/live.py).
-        booked = ev.occurred_at if ev.created_at is None else ev.created_at
-        if ev.occurred_at <= after and booked <= after:
+        # and was never added), and what was booked after it with an earlier time (EventRow
+        # counted_at: a late reconciliation books money at the time it moved).
+        if ev.counted_at <= after:
             continue
         if ev.payload.get("reason") == "conversion":
             continue  # the owner's own conversion (engine/live.py): no money came or went

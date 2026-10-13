@@ -328,6 +328,16 @@ class EventRow:
     ref: str | None = None  # natural key, unique per ledger ('dividend:KR:069500:2026-09-23')
     created_at: datetime | None = None  # when it was booked (repo.insert_event booked_at)
 
+    @property
+    def counted_at(self) -> datetime:
+        """When the ledger's figures first hold its money: when it happened, or when it was
+        booked if that was later (a late live reconciliation books money at the time it moved,
+        engine/live.py). A snapshot holds the money booked by then, so views that net money
+        against snapshot values place it here."""
+        if self.created_at is None:
+            return self.occurred_at
+        return max(self.occurred_at, self.created_at)
+
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> EventRow:
         payload = loads(str(row["payload"])) or {}

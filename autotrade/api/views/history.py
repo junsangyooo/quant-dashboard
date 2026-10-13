@@ -88,9 +88,15 @@ class DayData:
                 self.runs.setdefault(run.run_date, []).append(run)
         self.plans: dict[date, PlanRow] = {}
         self.plans_by_id: dict[int, PlanRow] = {}
+        # A live plan that bought nothing is no rebalance day (LedgerContext.events).
+        untraded = {
+            e.plan_id
+            for e in repo.events_of_ledger(ctx.conn, ctx.ledger_id, ["rebalance"])
+            if e.payload.get("untraded")
+        }
         for plan in repo.plans_of_ledger(ctx.conn, ctx.ledger_id):
             self.plans_by_id[plan.plan_id] = plan
-            if plan.created_at <= ctx.now:
+            if plan.created_at <= ctx.now and plan.plan_id not in untraded:
                 self.plans[plan.plan_date] = plan
         self.snaps: dict[date, SnapshotRow] = {s.date: s for s in ctx.snapshots}
         self.retried = {

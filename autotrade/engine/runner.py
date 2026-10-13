@@ -312,6 +312,16 @@ def _summarize_plan(conn: sqlite3.Connection, plan_id: int, at: datetime) -> Non
         if o.plan_id == plan_id and o.attempt > 1
     ]
     payload["retried"] = bool(retried)
+    latest: dict[tuple[str, str, str], OrderRow] = {}
+    for o in repo.orders_of_plan(conn, plan_id):
+        key = (o.stage, o.market, o.instrument_id or o.fx_direction or "fx")
+        if key not in latest or o.attempt > latest[key].attempt:
+            latest[key] = o
+    if latest and not fills and all(untraded(o) for o in latest.values()):
+        # A live plan whose buys all found nothing to buy when due (the price outran the cash,
+        # which waits for the next check): nothing happened, so no screen lists it as a
+        # rebalance (api/views/context.py LedgerContext.events; history.py DayData).
+        payload["untraded"] = True
     repo.update_event(conn, event.event_id, at, payload=payload)
 
 

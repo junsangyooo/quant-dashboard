@@ -28,6 +28,7 @@ from autotrade.domain.instruments import Currency
 from autotrade.engine import live
 from autotrade.engine.common import new_money_waiting
 from autotrade.engine.rebuild import verify_ledger
+from autotrade.jobs.tasks import adopt_job
 from autotrade.market.service import prefetch_dividends
 
 from .fakes import KR, US, World
@@ -473,6 +474,44 @@ def test_an_app_sale_during_a_long_busy_spell_is_still_an_app_sale(
     assert lw.status().matched_at == kst("2026-07-03 10:10")
 
 
+@pytest.mark.parametrize(
+    ("symbol", "price"),
+    [("069500", D("32000")), ("005930", D("70000"))],  # a rule instrument, one outside the rules
+)
+def test_the_fills_an_adoption_took_in_are_not_booked_again(
+    lw: Live, symbol: str, price: Decimal
+) -> None:
+    """adopt-broker takes the account as it was read, the owner's app fills included, while the
+    closed orders are still read from the last match: those fills must not come back as new ones
+    (the ledger would never match again, and a second adoption finds nothing to adopt)."""
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-06-30 21:30")
+    assert lw.reconcile()["result"] == "match"
+    lw.at("2026-07-01 10:00")
+    lw.fake.hold("069500", D("5"), D("32000"), name="KODEX 200")  # moved in from another broker
+    lw.sync("2026-07-01 10:05")
+    assert lw.reconcile()["result"] == "mismatch"
+    lw.at("2026-07-01 11:00")
+    lw.fake.app_trade(symbol, "BUY", D("3"), price, commission=D("5"))
+    lw.sync("2026-07-01 11:05")
+    assert lw.reconcile()["result"] == "mismatch"
+    lw.sync("2026-07-03 09:00")
+    assert adopt_job(lw.ctx, lw.now(), note="checked in the app")["result"] == "adopted"
+    held = lw.state().qty_of("KR:069500")
+    cash = lw.state().cash_of(KRW)
+    assert cash == lw.fake.cash["KRW"]
+    for t in ("2026-07-03 09:05", "2026-07-06 09:00"):
+        lw.sync(t)
+        lw.reconcile(t)
+        assert lw.status().reconcile_state == "match"
+    assert (lw.state().qty_of("KR:069500"), lw.state().cash_of(KRW)) == (held, cash)
+    # Only the adoption's own money (outside the rules the buy came back as money out plus as
+    # much 'unexplained' money in).
+    booked = repo.events_of_ledger(lw.conn, "live", ["deposit", "withdrawal"])
+    assert [e.payload.get("source") for e in booked] == ["adopt-broker"]
+    assert held == (8 if symbol == "069500" else 5)
+
+
 # ── 6. a one-share top-up ────────────────────────────────────────────────────────────────
 
 
@@ -546,6 +585,18 @@ def test_the_plan_screens_leave_out_an_order_that_bought_nothing(lw: Live) -> No
     lw.stages()
     instruments = live.rule_instruments(lw.conn)
     assert plan_stages(lw.conn, plan_id, instruments, "live") == []  # no '직접 할 일' on screen
+    # Nor a rebalance that bought nothing: no history row, no marker, no rebalance day (it could
+    # come back each morning the price opens above the plan's).
+    from autotrade.api.views import history
+    from autotrade.api.views.context import LedgerContext
+    from autotrade.api.views.series import event_markers
+
+    event = repo.event_of_plan(lw.conn, plan_id)
+    assert event is not None and event.payload.get("untraded") is True  # noqa: PT018
+    ctx = LedgerContext(lw.conn, lw.cfg, "live", lw.at("2026-07-02 16:10"))
+    assert [e.kind for e in ctx.events if e.event_date == date(2026, 7, 2)] == []
+    assert all(m["date"] != "2026-07-02" for m in event_markers(ctx))
+    assert history.DayData(ctx).calendar_state(date(2026, 7, 2)) == "normal"
 
 
 # ── 7. withdraw waits: a conversion caps them, a live wait holds its own money ───────────

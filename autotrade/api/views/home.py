@@ -254,12 +254,14 @@ def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None
         after, after_day = (None if start is None else start.at), since
     deposit = withdrawal = dividend = ZERO
     # The money that came in or went out after the opening value and by the moment `end` is of
-    # (ctx.as_of; series.py). The owner's conversions are not money in or out of the ledger
-    # (their won rounding and the rate after them fall in 'market').
+    # (ctx.as_of; series.py), placed when the ledger's figures first held it (EventRow
+    # counted_at: money a late live reconciliation booked with an earlier time is in the first
+    # value after its booking, as that value's money in is). The owner's conversions are not
+    # money in or out of the ledger (their won rounding and the rate after them fall in 'market').
     for ev in ctx.listed_events:
-        if ev.amount is None or ev.occurred_at > ctx.as_of:
+        if ev.amount is None or ev.counted_at > ctx.as_of:
             continue
-        if after is not None and ev.occurred_at <= after:
+        if after is not None and ev.counted_at <= after:
             continue
         if ev.kind == "deposit":
             deposit += event_krw(ev)

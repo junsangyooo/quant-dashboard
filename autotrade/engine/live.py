@@ -379,7 +379,7 @@ def _reconcile_body(
     result.booked.extend(late)
     ours = [repo.fill_of_order(conn, int(b["late_fill"])) for b in late]
     own = ledger_instrument_ids(conn)
-    trades = _new_external_trades(conn, snap, started_at)
+    trades = _new_external_trades(conn, snap, _fills_floor(conn, started_at))
     state = repo.load_state(conn, LIVE)
     residual = {
         c: snap.cash_of(c)
@@ -421,11 +421,25 @@ def _reconcile_body(
     return result
 
 
+def _fills_floor(conn: sqlite3.Connection, started_at: datetime) -> datetime:
+    """The time before which the owner's fills are in the ledger already: the live start, or the
+    account the owner last adopted (adopt_broker books its holdings and cash as read then, app
+    fills included). The closed orders are read from the last match (jobs/live_tasks.py
+    Sync._closed_since), which an adoption does not move: without this, the fills it took in
+    were booked again and the ledger never matched."""
+    adopted = [
+        ev.occurred_at
+        for ev in repo.events_of_ledger(conn, LIVE, ["deposit", "withdrawal"])
+        if ev.payload.get("source") == "adopt-broker"
+    ]
+    return max([started_at, *adopted])
+
+
 def _new_external_trades(
-    conn: sqlite3.Connection, snap: AccountSnapshot, started_at: datetime
+    conn: sqlite3.Connection, snap: AccountSnapshot, since: datetime
 ) -> list[BrokerOrder]:
     """The account's fills the engine did not send and the ledger has not booked, in time
-    order: the owner's, in the app or WTS, since the live ledger started."""
+    order: the owner's, in the app or WTS, after `since` (_fills_floor)."""
     ours = live_repo.our_broker_ids(conn)
     seen = live_repo.external_broker_ids(conn, LIVE)
     out = [
@@ -435,9 +449,9 @@ def _new_external_trades(
         and o.order_id not in ours
         and o.order_id not in seen
         and o.filled_at is not None
-        and o.filled_at > started_at  # earlier: part of the account the ledger started from
+        and o.filled_at > since  # earlier: part of the account the ledger started or adopted
     ]
-    return sorted(out, key=lambda o: (o.filled_at or started_at, o.order_id))
+    return sorted(out, key=lambda o: (o.filled_at or since, o.order_id))
 
 
 def _trade_amounts(order: BrokerOrder) -> tuple[Decimal, Decimal] | None:
@@ -1088,6 +1102,7 @@ def _book_dividend(
         currency=currency,
         ref=dividend_ref(due.inst.instrument_id, due.div.ex_date),
         payload=payload,
+        booked_at=at,
     )
     sleeves.split_dividend(
         conn,

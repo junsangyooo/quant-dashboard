@@ -197,13 +197,14 @@ class Accounts:
                 # currency's own amount, signed (engine/live.py).
                 for currency, amount in split.items():
                     kind = ev.kind if ev.kind == "start" else _in_or_out(amount)
-                    out.append(Flow(ev.occurred_at, currency, amount, kind))
+                    out.append(Flow(ev.counted_at, currency, amount, kind))
                 continue
             sign = -1 if ev.kind == "withdrawal" else 1
             # A conversion no plan asked for (the owner's, in the Toss app) is two events, one
             # per currency: a transfer between the accounts like an fx fill, not money in or out.
             kind = "transfer" if ev.payload.get("reason") == CONVERSION else ev.kind
-            out.append(Flow(ev.occurred_at, ev.currency or Currency.KRW, sign * ev.amount, kind))
+            # At counted_at: snapshot values hold money booked late only from its booking on.
+            out.append(Flow(ev.counted_at, ev.currency or Currency.KRW, sign * ev.amount, kind))
         for applied, f in self.fills:
             if f.kind != "fx" or f.fx_direction is None or f.received is None:
                 continue
@@ -566,7 +567,7 @@ class Accounts:
                 if ev.kind == "dividend"
                 and ev.amount is not None
                 and (ev.currency or Currency.KRW) is currency
-                and in_period(ev.occurred_at)
+                and in_period(ev.counted_at)
             ),
             ZERO,
         )
