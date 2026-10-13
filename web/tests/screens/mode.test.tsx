@@ -617,7 +617,7 @@ describe('모의투자·실전 · 실전 연결 (3단계)', () => {
       modeCopy.turnOff.title,
     ]);
     expect(
-      within(region(copy.liveMoney.title)).getByText('약 1,500,000원을 달러로 바꾸면 50:50'),
+      within(region(copy.liveMoney.title)).getByText('약 1,552,000원을 달러로 바꾸면 50:50'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: TURN_ON.title })).toBeNull();
     // The 모의투자 cell goes to 실전 끄기 (it does not switch by itself).

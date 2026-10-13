@@ -61,13 +61,18 @@ export function driftEnd(drift: Drift): string {
   return dates.at(-1) ?? drift.since;
 }
 
-/** '벗어남 흐름 · 3개월' / '벗어남 흐름 · 9/1부터'. */
+/** '벗어남 흐름 · 3개월' / '벗어남 흐름 · 9/1부터'; 실전 '원화 · 달러 비율 흐름 · 9/1부터' (D47). */
 export function driftHeading(drift: Drift): string {
-  return planCopy.drift.withPeriod(
+  const period =
     drift.periods === null
       ? planCopy.drift.since(formatMonthDay(drift.since))
-      : planCopy.drift.periods[drift.period],
-  );
+      : planCopy.drift.periods[drift.period];
+  return drift.mix ? planCopy.drift.mixWithPeriod(period) : planCopy.drift.withPeriod(period);
+}
+
+/** The section's name: '벗어남 흐름', or on the live ledger its mix of won and dollars (D47). */
+export function driftTitle(drift: Drift): string {
+  return drift.mix ? planCopy.drift.mixTitle : planCopy.drift.title;
 }
 
 /** The same values as a table, for assistive tech (the drawing has no visible table). */

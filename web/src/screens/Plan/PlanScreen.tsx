@@ -14,7 +14,7 @@ import { formatMonthDay, formatPercent } from '../../lib/format';
 import { pageTitle, useDocumentTitle } from '../../shell/page';
 import { EventListSheet } from '../Home/EventListSheet';
 import { WIDE, useMediaQuery } from '../Home/useMedia';
-import { DriftPlot, driftSeries } from './Drift';
+import { DriftPlot, driftSeries, driftTitle } from './Drift';
 import { RuleCard } from './RuleCard';
 import { NOW_ID, Schedule } from './Schedule';
 import { ruleName, toneMap } from './words';
@@ -85,7 +85,7 @@ function DriftSection({
     <section className={styles.drift} aria-labelledby="plan-drift">
       <div className={styles.driftHead}>
         <h2 id="plan-drift" className="t-heading-1">
-          {planCopy.drift.title}
+          {driftTitle(drift)}
         </h2>
         {drift.empty === null && drift.periods !== null ? (
           <div className={styles.chips} role="group" aria-label={planCopy.drift.periodGroup}>

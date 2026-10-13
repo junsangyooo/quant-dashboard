@@ -44,6 +44,26 @@ test('rules.index-half (1:60971 · 1:61916): six tiles; axe; screenshot', async 
   expect(problems).toEqual([]);
 });
 
+test('rules.live (D47): the band suggests a conversion, the orders buy each currency; axe; screenshot', async ({
+  page,
+}, info) => {
+  const problems = await watch(page);
+  await page.goto('/rules?fixture=rules.live');
+  await expect(page.getByRole('heading', { level: 1, name: '지수 반반' })).toBeVisible();
+  for (const v of [
+    '±2%p 넘으면 환전 제안',
+    '한국 비중 · 목표 50% 기준',
+    '매수 주문',
+    '원화로 한국 · 달러로 미국 종목',
+  ]) {
+    await expect(page.getByText(v, { exact: true }).first()).toBeVisible();
+  }
+  await expect(page.getByText(/리밸런싱 주문|목표 비중까지/)).toHaveCount(0);
+  await axe(page);
+  await shoot(page, info, 'rules.live');
+  expect(problems).toEqual([]);
+});
+
 test('rules.momentum (1:61226 · 1:62197): nine cards, lines in three styles, labels; axe; screenshot', async ({
   page,
 }, info) => {

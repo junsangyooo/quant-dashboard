@@ -33,6 +33,15 @@ export const rulesCopy = {
     stages: { sell: '매도', fx: '환전', buy: '매수' },
     rebalanceOrder: '리밸런싱 주문',
     toTarget: '목표 비중까지',
+    /**
+     * NEW (D47) — the live ledger runs on the money as deposited: the band is where a
+     * conversion is suggested (its won and dollars), and the orders buy with the money of each
+     * currency its instruments.
+     */
+    overSuggest: (pp: string) => `±${pp} 넘으면 환전 제안`,
+    mixBasis: (pct: string) => `한국 비중 · 목표 ${pct} 기준`,
+    buyOrder: '매수 주문',
+    asDeposited: '원화로 한국 · 달러로 미국 종목',
     measuredSub: (period: string, afterTax: boolean) =>
       afterTax ? `중간값 · 세후 · ${period}` : `중간값 · ${period}`,
     measuredRows: {

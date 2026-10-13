@@ -341,14 +341,18 @@ const LIVE_CALENDAR = weekdayCalendar('2026-09-01', '2026-10-09', '2026-10-07', 
 });
 
 /**
- * 실전 9/1–10/7 (27 checks; the 9/9 check failed for both ledgers). First buys 9/1 (값표 §2.1):
- * fees ≈ 728원 (한국 4,854,000원 × 0.015%) + 4,683원 ($3.39 at 1,381.5) + 179원 (BTC) = 5,590원,
- * then 10/7 27원. Month changes from the 실전 line: 9/30 10,060,000 → 9월 +60,000, 10월 +52,670.
+ * 실전 9/1–10/7 (27 checks; the 9/9 check failed for both ledgers), 지수 반반 alone (D47). The
+ * owner converted about half before turning on, so the first plan bought both ETFs in one buy stage
+ * (한국 09:05, 미국 22:30): fees ≈ 5,590원. 10/7 buys S&P 500 ETF at 22:30 with dollars he
+ * converted on 10/6 (no fee yet). Month changes from the 실전 line: 9/30 10,060,000 → 9월 +60,000,
+ * 10월 +52,670.
  */
 export function historyLive(): HistoryResponse {
   const live1007: HistoryEvent = {
     ...EVENT_1007,
+    stagesMini: ['pending'],
     fill: 'live',
+    fees: 0,
     dayChange: 14_670,
     dayTotal: 10_112_670,
   };
@@ -373,16 +377,13 @@ export function historyLive(): HistoryResponse {
     },
     tiles: {
       rebalances: { count: 1, partialFailed: 0, inProgress: 1 },
-      fees: { krw: 5_617 },
+      fees: { krw: 5_590 },
       checks: { count: 27, failed: 1 },
     },
     calendar: LIVE_CALENDAR,
     filters: {
       total: 3,
-      rules: [
-        { rule: INDEX_HALF, count: 1 },
-        { rule: MOMENTUM, count: 0 },
-      ],
+      rules: [{ rule: INDEX_HALF, count: 1 }],
       kinds: [
         { kind: 'rebalance', count: 1 },
         { kind: 'deposit', count: 0 },
@@ -410,7 +411,7 @@ export function historyLive(): HistoryResponse {
             kind: 'start',
             amount: START_CAPITAL,
             treatment: 'pnl-excluded',
-            stagesMini: ['done', 'done'],
+            stagesMini: ['done'],
             fill: 'live',
             fees: 5_590,
             dayChange: null,

@@ -13,8 +13,6 @@ import { BTC, INDEX_HALF, KOSPI200, MOMENTUM, NVDA, SAMSUNG, SP500, kst } from '
 import {
   LIVE_BUY_1007,
   LIVE_BUY_1007_REJECTED,
-  LIVE_FX_1007,
-  LIVE_SELL_1007,
   NEXT_QUOTE_WAIT_US,
   NEXT_RETRY_1008,
   NEXT_TODO_US_BUY,
@@ -23,6 +21,7 @@ import {
   PAPER_BUY_1007_FAILED,
   PAPER_FX_1007,
   PAPER_SELL_1007,
+  liveStages1007,
   nextCheck,
   stages1007,
 } from './common';
@@ -31,7 +30,6 @@ import { NEXT_HOLIDAY_KR } from './home';
 import {
   discoveryVsIndex,
   liveDriftIndex,
-  liveDriftMomentum,
   staleDriftIndex,
   staleDriftMomentum,
   withdrawDriftIndex,
@@ -100,6 +98,27 @@ function momentumCard(
   };
 }
 
+/**
+ * 실전 (D47): the rule's weights stay, but nothing rebalances between won and dollars, so the rows
+ * carry no '리밸런싱까지' and the gauge is the mix of the two against the targets.
+ */
+const LIVE_ROWS: Rows = [
+  { instrument: KOSPI200, weight: 50.4, target: 50, toThreshold: null },
+  { instrument: SP500, weight: 49.6, target: 50, toThreshold: null },
+];
+
+function liveCard(over: Partial<RuleCard> & Pick<RuleCard, 'share' | 'status' | 'next'>): RuleCard {
+  return indexCard({
+    gauge: {
+      kind: 'mix',
+      threshold: 2,
+      needle: { now: { kr: 50.5, us: 49.5 }, deviation: 0.5, toThreshold: 1.5 },
+    },
+    rows: LIVE_ROWS,
+    ...over,
+  });
+}
+
 const NEXT_CHECK_1008 = nextCheck('2026-10-08');
 
 // ── 벗어남 흐름 ──────────────────────────────────────────────────────────────
@@ -145,7 +164,10 @@ export function paperDrift(period: DriftPeriod = '3m'): Drift {
   };
 }
 
-/** 실전: 27거래일 since 9/1, no period chips; ⏻ 실전 켬 is the ledger's event (ruleId null). */
+/**
+ * 실전: 27거래일 since 9/1, no period chips; ⏻ 실전 켬 is the ledger's event (ruleId null). One line,
+ * 지수 반반's mix of won and dollars (D47: `mix`); 실전 has no AI rule.
+ */
 function liveDrift(
   index: readonly LinePoint[],
   last: Drift['events'][number]['kind'] | null,
@@ -154,13 +176,14 @@ function liveDrift(
     periods: null,
     period: 'all',
     since: '2026-09-01',
-    lines: lines(index, liveDriftMomentum),
+    lines: [{ ruleId: INDEX_HALF.id, points: [...index] }],
     staleFrom: null,
     events: [
       { date: '2026-09-01', kind: 'live-on', ruleId: null },
       ...(last ? [{ date: '2026-10-07', kind: last, ruleId: INDEX_HALF.id }] : []),
     ],
     empty: null,
+    mix: true,
   };
 }
 
@@ -307,33 +330,32 @@ export function planStale(): PlanResponse {
   };
 }
 
-/** SCR-PLAN · 실전 평상 (10/7 16:10): 실제 체결, 1주 미만 대기 85,964원. */
+/**
+ * SCR-PLAN · 실전 평상 (10/7 16:10, D47): 지수 반반 alone; the 08:30 check buys S&P 500 ETF at
+ * 22:30 with the dollars the owner converted. 1주 미만 대기 33,285원.
+ */
 export function planLive(): PlanResponse {
   return {
     ledger: 'live',
     example: true,
-    ruleShares: [
-      { rule: INDEX_HALF, pct: 80.6 },
-      { rule: MOMENTUM, pct: 18.5 },
-    ],
+    ruleShares: null,
     rules: [
-      indexCard({
-        share: { pct: 80.6, target: 80 },
+      liveCard({
+        share: { pct: 99.7, target: 100 },
         status: 'in-progress',
         next: NEXT_US_BUY_1007,
       }),
-      momentumCard({ share: { pct: 18.5, target: 20 }, status: 'in-range', next: NEXT_CHECK_1008 }),
     ],
     schedule: {
       now: {
         ruleId: INDEX_HALF.id,
         status: 'in-progress',
-        stages: stages1007(LIVE_SELL_1007, LIVE_FX_1007, LIVE_BUY_1007),
+        stages: liveStages1007(LIVE_BUY_1007),
       },
       items: [
         { kind: 'next-check', at: kst('2026-10-08', '08:30') },
         HOLIDAY_1009,
-        { kind: 'sub-share-cash', krw: 85_964 },
+        { kind: 'sub-share-cash', krw: 33_285 },
       ],
     },
     drift: liveDrift(liveDriftIndex, 'in-progress'),
@@ -343,21 +365,27 @@ export function planLive(): PlanResponse {
 /**
  * 실전 · 넣은 돈 그대로 (D47·D48, 그림 없음), 10/7 16:10: no plan open, and the owner deposited
  * 3,000,000원 at 14:20. The rule's weights (its holdings) are inside the band, but with that won
- * 한국 is 61.4% of the rule's money: '환전 제안 · 약 1,500,000원을 달러로 바꾸면 50:50'. The deposit
- * waits for 10/8 08:30 (예정 '새로 들어온 돈'). Nothing waits on the suggestion.
+ * 한국 is 61.8% of the rule's money: '환전 제안 · 약 1,552,000원을 달러로 바꾸면 50:50', and the gauge
+ * stands 11.8%p over (its 10/7 16:00 point too). The deposit waits for 10/8 08:30 (예정 '새로 들어온
+ * 돈'), as new cash outside the rule's share (10,079,385원 of 13,112,670원). No plan is open, and
+ * nothing waits on the suggestion.
  */
 export function planLiveMix(): PlanResponse {
   const base = planLive();
   return {
     ...base,
     rules: [
-      indexCard({
-        share: { pct: 80.6, target: 80 },
+      liveCard({
+        share: { pct: 76.8, target: 100 },
         status: 'fx-suggest',
         next: NEXT_CHECK_1008,
+        gauge: {
+          kind: 'mix',
+          threshold: 2,
+          needle: { now: { kr: 61.8, us: 38.2 }, deviation: 11.8, toThreshold: 0 },
+        },
         fxSuggestion: LIVE_CASH.fxSuggestion,
       }),
-      momentumCard({ share: { pct: 18.5, target: 20 }, status: 'in-range', next: NEXT_CHECK_1008 }),
     ],
     schedule: {
       now: null,
@@ -365,9 +393,13 @@ export function planLiveMix(): PlanResponse {
         { kind: 'next-check', at: kst('2026-10-08', '08:30') },
         HOLIDAY_1009,
         { kind: 'new-money-wait', krw: 3_000_000, usd: 0, from: kst('2026-10-08', '08:30') },
-        { kind: 'sub-share-cash', krw: 85_964 },
+        { kind: 'sub-share-cash', krw: 33_285 },
       ],
     },
+    drift: liveDrift(
+      liveDriftIndex.map((p) => (p.date === '2026-10-07' ? { ...p, value: 11.8 } : p)),
+      null,
+    ),
   };
 }
 
@@ -377,65 +409,54 @@ export function planLiveTodo(): PlanResponse {
   return {
     ...base,
     rules: [
-      indexCard({
-        share: { pct: 80.6, target: 80 },
+      liveCard({
+        share: { pct: 99.7, target: 100 },
         status: 'partial-failed',
         next: NEXT_TODO_US_BUY,
-      }),
-      momentumCard({
-        share: { pct: 18.5, target: 20 },
-        status: 'in-range',
-        next: nextCheck('2026-10-09'),
       }),
     ],
     schedule: {
       now: {
         ruleId: INDEX_HALF.id,
         status: 'partial-failed',
-        stages: stages1007(LIVE_SELL_1007, LIVE_FX_1007, LIVE_BUY_1007_REJECTED),
+        stages: liveStages1007(LIVE_BUY_1007_REJECTED),
       },
       items: [
         { kind: 'next-check', at: kst('2026-10-09', '08:30') },
         HOLIDAY_1009,
-        { kind: 'sub-share-cash', krw: 85_964 },
+        { kind: 'sub-share-cash', krw: 33_285 },
       ],
     },
     drift: liveDrift(liveDriftIndex, 'partial-failed'),
   };
 }
 
-/** 값표 §2.3 출금 대기: weights without the waiting cash (49.3 · 50.7), orders 0. */
+/**
+ * 값표 §2.3 출금 대기 (실전, D47): weights without the waiting cash (48.6 · 51.4), orders 0; the
+ * gauge is 한국 49.7 : 미국 50.3 of the rule's money (the waiting cash leaves it).
+ */
 export function planWithdraw(): PlanResponse {
   const next: NextAction = { kind: 'withdraw-wait', until: '2026-10-12' };
   const basis: BasisLine = { ...BASIS_INDEX, pendingBuyIncluded: false, withdrawExcluded: true };
   return {
     ledger: 'live',
     example: true,
-    ruleShares: [
-      { rule: INDEX_HALF, pct: 75.7 },
-      { rule: MOMENTUM, pct: 18.5 },
-    ],
+    ruleShares: null,
     rules: [
-      indexCard({
-        share: { pct: 75.7, target: 80 },
+      liveCard({
+        share: { pct: 93.0, target: 100 },
         status: 'withdraw-wait',
         next,
         gauge: {
-          kind: 'drift',
+          kind: 'mix',
           threshold: 2,
-          needle: { instrument: KOSPI200, deviation: -0.7, toThreshold: 1.3 },
+          needle: { now: { kr: 49.7, us: 50.3 }, deviation: -0.3, toThreshold: 1.7 },
         },
         rows: [
-          { instrument: KOSPI200, weight: 49.3, target: 50, toThreshold: 1.3 },
-          { instrument: SP500, weight: 50.7, target: 50, toThreshold: 1.3 },
+          { instrument: KOSPI200, weight: 48.6, target: 50, toThreshold: null },
+          { instrument: SP500, weight: 51.4, target: 50, toThreshold: null },
         ],
         basisLine: basis,
-      }),
-      momentumCard({
-        share: { pct: 18.5, target: 20 },
-        status: 'withdraw-wait',
-        next,
-        basisLine: { ...basis, pendingBuyIncluded: false },
       }),
     ],
     schedule: {

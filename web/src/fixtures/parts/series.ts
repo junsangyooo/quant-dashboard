@@ -70,7 +70,11 @@ export const liveUntouchedDaily: readonly LinePoint[] = [
   { date: '2026-10-07', value: 10175000 },
 ];
 
-/** 실전 벗어남 흐름 · 지수 반반 (largest |deviation|, %p). */
+/**
+ * 실전 · 지수 반반 (D47): how far its won and dollars were from 50 : 50 (|한국 − 목표|, %p). 10/6 is
+ * past the band ('환전 제안'), the owner converts that day, and 10/7 is back at 50 : 50 (the 08:30
+ * check buys S&P 500 ETF with those dollars at 22:30).
+ */
 export const liveDriftIndex: readonly LinePoint[] = [
   { date: '2026-09-01', value: 0.3 },
   { date: '2026-09-04', value: 0.6 },
@@ -81,31 +85,18 @@ export const liveDriftIndex: readonly LinePoint[] = [
   { date: '2026-09-30', value: 1.9 },
   { date: '2026-10-02', value: 2.0 },
   { date: '2026-10-06', value: 2.5 },
-  { date: '2026-10-07', value: 0.2 },
-];
-
-/** 실전 벗어남 흐름 · [예시] 종목 모멘텀. */
-export const liveDriftMomentum: readonly LinePoint[] = [
-  { date: '2026-09-01', value: 0.4 },
-  { date: '2026-09-04', value: 0.7 },
-  { date: '2026-09-09', value: 1.2 },
-  { date: '2026-09-14', value: 1.5 },
-  { date: '2026-09-18', value: 1.1 },
-  { date: '2026-09-24', value: 0.8 },
-  { date: '2026-09-30', value: 1.2 },
-  { date: '2026-10-06', value: 1.0 },
-  { date: '2026-10-07', value: 1.0 },
+  { date: '2026-10-07', value: 0.0 },
 ];
 
 /**
- * 출금 대기 variant: the hand sale on 10/2 (KOSPI200 ETF 14주) brings 지수 반반 back to
- * −0.7%p (KOSPI200 ETF 49.3%, 값표 §2.3) and no 10/7 rebalance happens. Not drawn in Figma.
+ * 출금 대기 variant: the hand sale on 10/2 (KOSPI200 ETF 14주) leaves 한국 at 49.7% of the rule's
+ * money (the waiting cash leaves it, 값표 §2.3), and nothing is bought. Not drawn in Figma.
  */
 export const withdrawDriftIndex: readonly LinePoint[] = [
   ...liveDriftIndex.filter((p) => p.date <= '2026-10-02'),
-  { date: '2026-10-05', value: 0.7 },
-  { date: '2026-10-06', value: 0.7 },
-  { date: '2026-10-07', value: 0.7 },
+  { date: '2026-10-05', value: 0.3 },
+  { date: '2026-10-06', value: 0.3 },
+  { date: '2026-10-07', value: 0.3 },
 ];
 
 /**

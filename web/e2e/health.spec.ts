@@ -127,7 +127,7 @@ test.describe('SCR-HEALTH', () => {
     // No conversion to-do (D47): the 원화 · 달러 card sits beside the to-dos, not among them.
     await expect(page.getByRole('article')).toHaveCount(2);
     const money = page.getByRole('region', { name: '원화 · 달러' });
-    await expect(money).toContainText('약 1,500,000원을 달러로 바꾸면 50:50');
+    await expect(money).toContainText('약 1,552,000원을 달러로 바꾸면 50:50');
     await expect(money).toContainText('새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요');
     await expect(
       page.getByText('다른 프로그램과 키 겹침 · 마지막 성공 15:50 · 확인마다'),

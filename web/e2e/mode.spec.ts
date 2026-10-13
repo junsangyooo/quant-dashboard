@@ -128,7 +128,7 @@ test.describe('SCR-MODE', () => {
     const problems = await watch(page);
     await open(page, 'mode.live-cash');
     const money = card(page, '원화 · 달러');
-    await expect(money.getByText('약 1,500,000원을 달러로 바꾸면 50:50')).toBeVisible();
+    await expect(money.getByText('약 1,552,000원을 달러로 바꾸면 50:50')).toBeVisible();
     await expect(
       money.getByText('새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'),
     ).toBeVisible();
@@ -206,7 +206,7 @@ test.describe('SCR-MODE', () => {
     const red = card(page, '취소 안 된 주문 · 토스 앱에서 확인');
     await expect(red.getByText('매수·미국 S&P 500 ETF 2주 · 약 $124.80')).toBeVisible();
     await expect(
-      card(page, '원화 · 달러').getByText('약 1,500,000원을 달러로 바꾸면 50:50'),
+      card(page, '원화 · 달러').getByText('약 1,552,000원을 달러로 바꾸면 50:50'),
     ).toBeVisible();
     const off = page.getByRole('button', { name: '실전 끄기' });
     await expect(off).toBeVisible();

@@ -1,6 +1,8 @@
 // Semicircle gauge + its text column, shared by the rule cards (계획) and the 계획 card (자산):
 // the same needle, instrument and numbers on both (SCR-HOME 완료 조건).
 // - drift: −2 · 0 · +2, needle = the most deviated instrument (charts/Gauge).
+// - mix (실전, D47): the same dial for 한국's share against its target; the band is where a
+//   conversion is suggested ('환전 제안까지'), never a rebalance between the currencies.
 // - sell-condition (AI rule, Figma 탐색 17:7108): 0 고른 날 → 100 팔 조건, 80~100 확인 구간.
 import clsx from 'clsx';
 import { marginText, metricName } from '../../api/adapters';
@@ -10,7 +12,7 @@ import chartStyles from '../../charts/charts.module.css';
 import { InitialLogo, type LogoTone } from '../../components/Badges';
 import type { Gauge as GaugeData } from '../../api/types';
 import { planCopy } from '../../copy/plan';
-import { formatNumber, formatPp } from '../../lib/format';
+import { formatNumber, formatPp, formatPpMagnitude } from '../../lib/format';
 import { toRebalanceText } from './words';
 import styles from './Plan.module.css';
 
@@ -85,22 +87,37 @@ export interface GaugeBlockProps {
   className?: string | undefined;
 }
 
+/** '한국 76.9 : 미국 23.1' (whole shares without '.0'). */
+function mixText(now: { kr: number; us: number }): string {
+  const pct = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 1);
+  return planCopy.gauge.mix(pct(now.kr), pct(now.us));
+}
+
 export function GaugeBlock({ gauge, logoTone, emptyCaption, className }: GaugeBlockProps) {
   const g = planCopy.gauge;
-  const needle = gauge.needle;
-  const head = gauge.kind === 'drift' ? g.mostDeviated : g.closestToSell;
+  const head =
+    gauge.kind === 'drift' ? g.mostDeviated : gauge.kind === 'mix' ? g.mixHead : g.closestToSell;
 
   let figure: string | null = null;
   let caption: string | null = emptyCaption ?? null;
   let summary: string = planCopy.row.dash;
+  // The needle's name line: an instrument (with its logo on 자산), or the 실전 mix of won and dollars.
+  let name: { text: string; initials: string | null } | null = null;
   if (gauge.kind === 'drift' && gauge.needle) {
     figure = formatPp(gauge.needle.deviation);
     caption = toRebalanceText(gauge.needle.toThreshold);
-    summary = `${gauge.needle.instrument.name} ${figure} · ${caption}`;
+    name = { text: gauge.needle.instrument.name, initials: gauge.needle.instrument.initials };
+  } else if (gauge.kind === 'mix' && gauge.needle) {
+    figure = formatPp(gauge.needle.deviation);
+    caption = g.toSuggest(formatPpMagnitude(gauge.needle.toThreshold));
+    name = { text: mixText(gauge.needle.now), initials: null };
   } else if (gauge.kind === 'sell-condition' && gauge.needle) {
     figure = `${formatNumber(gauge.needle.progress)}%`;
     caption = g.toSell(metricName(gauge.needle.metric), marginText(gauge.needle.margin));
-    summary = `${gauge.needle.instrument.name} ${figure} · ${caption}`;
+    name = { text: gauge.needle.instrument.name, initials: gauge.needle.instrument.initials };
+  }
+  if (name !== null && figure !== null && caption !== null) {
+    summary = `${name.text} ${figure} · ${caption}`;
   } else if (caption !== null) {
     summary = `${planCopy.row.dash} · ${caption}`;
   }
@@ -108,20 +125,20 @@ export function GaugeBlock({ gauge, logoTone, emptyCaption, className }: GaugeBl
   return (
     <div className={clsx(styles.gaugeBlock, className)}>
       <div className={styles.gaugeArt}>
-        {gauge.kind === 'drift' ? (
-          <Gauge value={gauge.needle?.deviation ?? null} label={summary} />
-        ) : (
+        {gauge.kind === 'sell-condition' ? (
           <ConditionGauge progress={gauge.needle?.progress ?? null} label={summary} />
+        ) : (
+          <Gauge value={gauge.needle?.deviation ?? null} label={summary} />
         )}
       </div>
       <div className={styles.gaugeText}>
         <p className={clsx('t-caption', styles.muted)}>{head}</p>
-        {needle ? (
+        {name ? (
           <p className={styles.gaugeName}>
-            {logoTone !== undefined ? (
-              <InitialLogo initials={needle.instrument.initials} size={20} tone={logoTone} />
+            {logoTone !== undefined && name.initials !== null ? (
+              <InitialLogo initials={name.initials} size={20} tone={logoTone} />
             ) : null}
-            <span className="t-label">{needle.instrument.name}</span>
+            <span className="t-label">{name.text}</span>
           </p>
         ) : (
           <p className="t-label">{planCopy.row.dash}</p>

@@ -30,10 +30,7 @@ import {
   BASIS_STALE,
   LIVE_BUY_1007,
   LIVE_BUY_1007_REJECTED,
-  LIVE_FIRST_BUYS,
-  LIVE_FIRST_FX,
-  LIVE_FX_1007,
-  LIVE_SELL_1007,
+  LIVE_FIRST_BUY,
   NEXT_QUOTE_WAIT_US,
   NEXT_RETRY_1008,
   NEXT_TODO_US_BUY,
@@ -42,6 +39,7 @@ import {
   PAPER_BUY_1007_FAILED,
   PAPER_FX_1007,
   PAPER_SELL_1007,
+  liveStages1007,
   nextCheck,
   stages1007,
 } from './common';
@@ -482,35 +480,41 @@ export const STALE_BREAKDOWN: Breakdown = {
   end: 10_217_664,
 };
 
-// ── 실전 world (값표 §2) ────────────────────────────────────────────────────
+// ── 실전 world (값표 §2, D47: 넣은 돈 그대로) ─────────────────────────────────────
 
-/** §2.2 평상 (10/7 16:00). */
+/**
+ * §2.2 평상 (10/7 16:00), as the live ledger runs since D47: only 지수 반반 (실전 몫 100 · 3년
+ * 발굴 0), won in the Korean ETF and the dollars the owner converted in the US one, about half
+ * each. KOSPI200 ETF 140주 × 36,250원; S&P 500 ETF 56주 × $62.40 × 1,382.4원; $125.67 wait for
+ * the 22:30 buy of 2주; 33,285원 is less than one share. Total and P&L stay the table's
+ * (10,112,670원).
+ */
 export const LIVE_COMPOSITION: Composition = {
-  groupBy: ['instrument', 'kind', 'country', 'currency', 'rule'],
+  groupBy: ['instrument', 'country', 'currency'],
   groups: [
     {
       key: INDEX_HALF.id,
       rule: INDEX_HALF,
-      pct: 80.6,
-      target: 80,
+      pct: 99.7,
+      target: 100,
       rows: [
         {
           kind: 'holding',
           instrument: KOSPI200,
-          pct: 40.5,
-          krw: 4_096_250,
+          pct: 50.2,
+          krw: 5_075_000,
           pnlPct: 5.3,
-          qty: 113,
+          qty: 140,
           avgCost: { amount: 34_425, currency: 'KRW' },
         },
         {
           kind: 'holding',
           instrument: SP500,
-          pct: 38.4,
-          krw: 3_881_779,
-          usd: 2_808,
+          pct: 47.8,
+          krw: 4_830_659,
+          usd: 3_494.4,
           pnlPct: -2.1,
-          qty: 45,
+          qty: 56,
           avgCost: { amount: 63.4, currency: 'USD' },
         },
         {
@@ -524,52 +528,16 @@ export const LIVE_COMPOSITION: Composition = {
       ],
     },
     {
-      key: MOMENTUM.id,
-      rule: MOMENTUM,
-      pct: 18.5,
-      target: 20,
-      rows: [
-        {
-          kind: 'holding',
-          instrument: SAMSUNG,
-          pct: 7.8,
-          krw: 788_200,
-          pnlPct: -0.5,
-          qty: 14,
-          avgCost: { amount: 56_608, currency: 'KRW' },
-        },
-        {
-          kind: 'holding',
-          instrument: NVDA,
-          pct: 7.2,
-          krw: 731_566,
-          usd: 529.2,
-          pnlPct: -1.6,
-          qty: 3,
-          avgCost: { amount: 178.38, currency: 'USD' },
-        },
-        {
-          kind: 'holding',
-          instrument: BTC,
-          pct: 3.5,
-          krw: 355_185,
-          pnlPct: -0.8,
-          qty: 0.0027,
-          avgCost: { amount: 132_660_000, currency: 'KRW' },
-        },
-      ],
-    },
-    {
       key: 'cash',
       label: 'cash',
-      pct: 0.9,
+      pct: 0.3,
       target: null,
       rows: [
         {
           kind: 'cash',
           cash: { currency: 'KRW', country: 'KR' },
-          pct: 0.9,
-          krw: 85_964,
+          pct: 0.3,
+          krw: 33_285,
           chip: { kind: 'sub-share' },
         },
       ],
@@ -579,19 +547,26 @@ export const LIVE_COMPOSITION: Composition = {
   outsideRules: null,
 };
 
+/**
+ * The live gauge (D47, CONTRACT Gauge 'mix'): 한국 5,108,285원 : 미국 5,004,385원 of the rule's
+ * money, so 50.5 : 49.5, +0.5%p and 1.5%p to the conversion suggestion.
+ */
+const LIVE_MIX_GAUGE: PlanCard['gauge'] = {
+  kind: 'mix',
+  threshold: 2,
+  needle: { now: { kr: 50.5, us: 49.5 }, deviation: 0.5, toThreshold: 1.5 },
+};
+
 const LIVE_PLAN_CARD: PlanCard = {
   rule: INDEX_HALF,
-  share: { pct: 80.6, target: 80 },
+  share: { pct: 99.7, target: 100 },
   status: 'in-progress',
   next: NEXT_US_BUY_1007,
-  gauge: {
-    kind: 'drift',
-    threshold: 2,
-    needle: { instrument: KOSPI200, deviation: 0.2, toThreshold: 1.8 },
-  },
-  stages: stages1007(LIVE_SELL_1007, LIVE_FX_1007, LIVE_BUY_1007),
+  gauge: LIVE_MIX_GAUGE,
+  stages: liveStages1007(LIVE_BUY_1007),
   nextCheckAt: kst('2026-10-08', '08:30'),
-  others: { count: 1, status: 'in-range' },
+  // 실전 has no AI rule (3년 발굴 0).
+  others: null,
 };
 
 /** SCR-HOME · 실전 평상 (10/7 16:10, 9/1부터 27거래일: no period chips). */
@@ -641,51 +616,53 @@ export function homeLiveTodo(): HomeResponse {
       ...LIVE_PLAN_CARD,
       status: 'partial-failed',
       next: NEXT_TODO_US_BUY,
-      stages: stages1007(LIVE_SELL_1007, LIVE_FX_1007, LIVE_BUY_1007_REJECTED),
+      stages: liveStages1007(LIVE_BUY_1007_REJECTED),
       nextCheckAt: kst('2026-10-09', '08:30'),
     },
   };
 }
 
-/** §2.3 출금 대기 (10/7 16:00): 10/2 hand sale of KOSPI200 ETF 14주, waiting until 10/12. */
+/**
+ * §2.3 출금 대기 (10/7 16:00): 10/2 hand sale of KOSPI200 ETF 14주 in the Toss app (140 → 126),
+ * waiting until 10/12; the won left waits with it (orders 0). 실전 runs 지수 반반 alone (D47).
+ */
 export const WITHDRAW_COMPOSITION: Composition = {
-  groupBy: ['instrument', 'kind', 'country', 'currency', 'rule'],
+  groupBy: ['instrument', 'country', 'currency'],
   groups: [
     {
       key: INDEX_HALF.id,
       rule: INDEX_HALF,
-      pct: 75.7,
-      target: 80,
+      pct: 93.0,
+      target: 100,
       rows: [
         {
           kind: 'holding',
           instrument: KOSPI200,
-          pct: 37.3,
-          krw: 3_770_000,
+          pct: 45.2,
+          krw: 4_567_500,
           pnlPct: 5.3,
-          qty: 104,
+          qty: 126,
           avgCost: { amount: 34_425, currency: 'KRW' },
         },
         {
           kind: 'holding',
           instrument: SP500,
-          pct: 38.4,
-          krw: 3_881_779,
-          usd: 2_808,
+          pct: 47.8,
+          krw: 4_830_659,
+          usd: 3_494.4,
           pnlPct: -2.1,
-          qty: 45,
+          qty: 56,
           avgCost: { amount: 63.4, currency: 'USD' },
         },
       ],
     },
-    LIVE_COMPOSITION.groups[1] ?? { key: MOMENTUM.id, pct: 0, target: 20, rows: [] },
     {
       key: 'cash',
       label: 'cash',
-      pct: 5.8,
+      pct: 7.0,
       target: null,
       rows: [
-        { kind: 'cash', cash: { currency: 'KRW', country: 'KR' }, pct: 0.8, krw: 77_141 },
+        { kind: 'cash', cash: { currency: 'KRW', country: 'KR' }, pct: 2.0, krw: 205_712 },
         { kind: 'cash', cash: { currency: 'USD', country: 'US' }, pct: 0.0, krw: 622, usd: 0.45 },
         {
           kind: 'cash',
@@ -723,17 +700,18 @@ export function homeWithdraw(): HomeResponse {
     },
     planCard: {
       rule: INDEX_HALF,
-      share: { pct: 75.7, target: 80 },
+      share: { pct: 93.0, target: 100 },
       status: 'withdraw-wait',
       next,
+      // 한국 4,773,212원 (the waiting cash leaves) : 미국 4,831,281원.
       gauge: {
-        kind: 'drift',
+        kind: 'mix',
         threshold: 2,
-        needle: { instrument: KOSPI200, deviation: -0.7, toThreshold: 1.3 },
+        needle: { now: { kr: 49.7, us: 50.3 }, deviation: -0.3, toThreshold: 1.7 },
       },
       stages: null,
       nextCheckAt: kst('2026-10-08', '08:30'),
-      others: { count: 1, status: 'withdraw-wait' },
+      others: null,
     },
     composition: WITHDRAW_COMPOSITION,
     // 계좌별 보기 is drawn in home.paper · home.account-* · home.us-* (the states with the split).
@@ -741,7 +719,7 @@ export function homeWithdraw(): HomeResponse {
   };
 }
 
-/** §2.1 첫 체결 전 (9/1 08:40): all cash, first orders at 09:05. */
+/** §2.1 첫 체결 전 (9/1 08:40): all cash (won only), the first order at 09:05. */
 export function homeLiveFirst(): HomeResponse {
   return {
     ledger: 'live',
@@ -751,7 +729,7 @@ export function homeLiveFirst(): HomeResponse {
       valuedAt: kst('2026-09-01', '08:30'),
       krClose: '2026-08-31',
       usClose: '2026-08-31',
-      // Not in 값표: the rate implied by §2.1 '약 4,710,000원 → 약 $3,389'.
+      // Not in 값표: the rate §2.1's first plan implied (it then converted; D47 does not).
       fxRate: 1389.8,
       fxAt: kst('2026-09-01', '08:30'),
       coinAt: null,
@@ -768,7 +746,7 @@ export function homeLiveFirst(): HomeResponse {
         at: kst('2026-09-01', '09:05'),
         market: 'KR',
         side: 'buy',
-        count: 2,
+        count: 1,
       },
     },
     trend: {
@@ -783,36 +761,38 @@ export function homeLiveFirst(): HomeResponse {
     },
     planCard: {
       rule: INDEX_HALF,
-      share: { pct: 0, target: 80 },
+      share: { pct: 0, target: 100 },
       status: 'scheduled',
       next: {
         kind: 'first-order',
         at: kst('2026-09-01', '09:05'),
         market: 'KR',
         side: 'buy',
-        count: 2,
+        count: 1,
       },
-      gauge: { kind: 'drift', threshold: 2, needle: null },
-      // Sell has no orders, so it is not sent (명세 어긋남 2): 환전 09:10 · 매수 22:30.
+      // Won only (D47): all of it in Korea, so the live gauge stands at 100 : 0 from the first
+      // check, where the plan screen suggests converting half ('환전 제안').
+      gauge: {
+        kind: 'mix',
+        threshold: 2,
+        needle: { now: { kr: 100, us: 0 }, deviation: 50, toThreshold: 0 },
+      },
+      // One stage: the won buys the Korean ETF at 09:05; nothing is converted.
       stages: [
-        { kind: 'fx', status: 'pending', at: kst('2026-09-01', '09:10'), orders: [LIVE_FIRST_FX] },
         {
           kind: 'buy',
           status: 'pending',
-          at: kst('2026-09-01', '22:30'),
-          orders: LIVE_FIRST_BUYS.filter(
-            (o) => o.instrument?.id === KOSPI200.id || o.instrument?.id === SP500.id,
-          ),
+          at: kst('2026-09-01', '09:05'),
+          orders: [LIVE_FIRST_BUY],
         },
       ],
       nextCheckAt: kst('2026-09-02', '08:30'),
-      others: { count: 1, status: 'scheduled' },
+      others: null,
     },
     composition: {
       groupBy: [],
       groups: [
-        { key: INDEX_HALF.id, rule: INDEX_HALF, pct: 0, target: 80, rows: [] },
-        { key: MOMENTUM.id, rule: MOMENTUM, pct: 0, target: 20, rows: [] },
+        { key: INDEX_HALF.id, rule: INDEX_HALF, pct: 0, target: 100, rows: [] },
         {
           key: 'cash',
           label: 'cash',

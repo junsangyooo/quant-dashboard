@@ -7,6 +7,7 @@ import rulesDaily from '../../src/fixtures/bundles/rules.discovery-daily';
 import rulesError from '../../src/fixtures/bundles/rules.error';
 import rulesFirstDay from '../../src/fixtures/bundles/rules.first-day';
 import rulesIndexHalf from '../../src/fixtures/bundles/rules.index-half';
+import rulesLive from '../../src/fixtures/bundles/rules.live';
 import rulesLoading from '../../src/fixtures/bundles/rules.loading';
 import rulesMomentum from '../../src/fixtures/bundles/rules.momentum';
 import rulesStale from '../../src/fixtures/bundles/rules.stale';
@@ -111,6 +112,27 @@ describe('SCR-RULES · 지수 반반 (1:60971 · 1:61916)', () => {
       0,
     );
     expect(screen.queryByRole('button', { name: /저장|편집|수정/ })).toBeNull();
+  });
+});
+
+describe('SCR-RULES · 지수 반반 · 실전 (D47: 넣은 돈 그대로)', () => {
+  it('says what the band does on live: 환전 제안 on 한국 비중, buying with each currency', async () => {
+    renderState(rulesLive, '/rules');
+    await screen.findByRole('heading', { level: 1, name: '지수 반반' });
+    expect(textOf(tile('조건'))).toContain('±2%p 넘으면 환전 제안한국 비중 · 목표 50% 기준');
+    expect(textOf(tile('행동'))).toContain('매수 주문원화로 한국 · 달러로 미국 종목');
+    expect(textOf(tile('행동'))).not.toMatch(/환전|매도|리밸런싱/);
+    // Only the hollow 'now' point (+11.8%p, past the band); the check's drift is not this.
+    const condition = tile('조건');
+    expect(condition.querySelectorAll('circle')).toHaveLength(1);
+    expect(textOf(tile('지금 · 결과'))).toContain('환전 제안다음 확인 10/8 08:30');
+    expect(screen.queryByText(/목표 비중까지|리밸런싱 주문/)).toBeNull();
+  });
+
+  it('keeps the 모의투자 words where the band rebalances', async () => {
+    await indexHalf();
+    expect(textOf(tile('조건'))).not.toContain('환전 제안');
+    expect(textOf(tile('행동'))).toContain('리밸런싱 주문목표 비중까지');
   });
 });
 

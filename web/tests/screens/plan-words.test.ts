@@ -2,8 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NextAction, Order, RuleCard, ScheduleItem } from '../../src/api/types';
 import {
-  LIVE_FX_1007,
-  LIVE_SELL_1007,
   PAPER_BUY_1007,
   PAPER_BUY_1007_FAILED,
   PAPER_FX_1007,
@@ -137,8 +135,6 @@ describe('orders and stages (값표 §1.4 · §2.2 10/7)', () => {
     [PAPER_SELL_1007, 'KOSPI200 ETF 매도 5주 · 181,900원', '09:05'],
     [PAPER_FX_1007, '173,000원 → $125.30 · 1,380.6원', '09:10'],
     [PAPER_BUY_1007, 'S&P 500 ETF 매수 2주 · 약 $124.80', '22:30'],
-    [LIVE_SELL_1007, 'KOSPI200 ETF 매도 5주 · 181,850원', '09:05'],
-    [LIVE_FX_1007, '173,000원 → $125.22 · 1,381.5원', '09:10'],
     [PAPER_BUY_1007_FAILED, 'S&P 500 ETF 매수 2주 · 시세 응답 없음', '10/7 22:30'],
     [LIVE_BUY_1007_REJECTED, 'S&P 500 ETF 매수 2주 · 토스 주문 거부', '10/7 22:30'],
   ] as [Order, string, string][])('%#: %s', (order, text, time) => {

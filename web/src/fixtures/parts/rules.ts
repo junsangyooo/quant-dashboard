@@ -93,6 +93,36 @@ export function ruleIndexHalf(): RuleDetailResponse {
   };
 }
 
+/** 실전 (D47): 지수 반반 alone, the state of plan.live-mix (10/7 16:10, no plan open). */
+export function rulesListLive(): RulesListResponse {
+  return {
+    rules: [
+      { rule: INDEX_HALF, share: { pct: 76.8, target: 100 }, status: 'fx-suggest', example: true },
+    ],
+  };
+}
+
+/**
+ * 실전 · 넣은 돈 그대로 (D47, 그림 없음), plan.live-mix's 10/7 16:10: the 조건 tile is 한국's share of
+ * the rule's money against its target (61.8% → +11.8%p, past the band: '환전 제안') with no 08:30
+ * point (the check records the whole rule's drift, which across won and dollars triggers nothing),
+ * and the 행동 tile buys each currency's ETF with its own money.
+ */
+export function ruleIndexLive(): RuleDetailResponse {
+  const tiles = indexTiles(
+    { status: 'fx-suggest', stages: null, nextCheckAt: kst('2026-10-08', '08:30') },
+    { threshold: 2, targetEach: [50, 50], deviation: { now: 11.8, atCheck: null } },
+  );
+  return {
+    rule: INDEX_HALF,
+    share: { pct: 76.8, target: 100 },
+    status: 'fx-suggest',
+    example: true,
+    stale: [],
+    display: { ...tiles, action: { stages: ['buy'] }, mix: true },
+  };
+}
+
 /** 출시 첫날 (값표 §4, Figma 1:61661): 자산의 99.6% · 목표 100%, 환전 09:10 ✓ · 매수 22:30 ⏳. */
 export function ruleIndexFirstDay(): RuleDetailResponse {
   const condition: TilesDisplay['condition'] = {

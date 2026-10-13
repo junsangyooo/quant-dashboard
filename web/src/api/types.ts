@@ -247,6 +247,17 @@ export type Gauge =
       };
     } // pp1
   | {
+      // 실전 장부의 지수 반반(D47): 원화·달러 비율. 띠는 '환전 제안'의 문턱이고 리밸런싱하지 않는다
+      kind: 'mix';
+      threshold: number;
+      needle: null | {
+        // null = 바늘 숨김(시세 대기·첫 확인 전·자료가 낡음·규칙 돈 없음)
+        now: { kr: number; us: number }; // pct1, 합 100.0 (FxSuggestion.now와 같은 셈)
+        deviation: number; // pp1, 한국 − 한국 목표(+ = 원화가 많음)
+        toThreshold: number; // pp1, 환전 제안까지(띠 밖이면 0)
+      };
+    }
+  | {
       kind: 'sell-condition';
       needle: null | {
         // AI 규칙(D34)
@@ -354,6 +365,7 @@ export interface PlanResponse {
     events: Array<{ date: string; kind: EventKind; ruleId: string | null }>;
     // 규칙의 리밸런싱은 그 규칙 선 위에(ruleId), 시작·실전 켬·끔은 장부 전체의 사건이라 ruleId null. AI 규칙은 선이 없어 여기 없다
     empty: null | 'second-day';
+    mix?: true; // 실전 장부만(D47): 선이 원화·달러 비율의 벗어남 |한국 − 목표|이고 띠는 환전 제안의 문턱
   };
 }
 export interface RuleCard {
@@ -366,7 +378,7 @@ export interface RuleCard {
     instrument: Instrument;
     weight: number | null; // pct1, null = '—'(시세 대기)
     target: number; // pct1
-    toThreshold: number | null; // pp1
+    toThreshold: number | null; // pp1. 실전 장부는 null(D47: 통화 사이로 리밸런싱하지 않는다)
     // AI 규칙(sell-condition 게이지): 팔 조건까지
     progress?: number;
     metric?: MetricRef;
@@ -627,6 +639,9 @@ export interface TilesDisplay {
     source: string;
   } | null; // 측정되지 않으면 null(그리지 않음)
   now: { status: RuleStatus; stages: Stage[] | null; nextCheckAt: string };
+  mix?: true;
+  // 실전 장부만(D47 넣은 돈 그대로): condition.deviation은 원화·달러 비율(한국 − 목표, atCheck는 null)이고
+  // 띠를 넘으면 '환전 제안'(정보). action은 통화마다 그 통화 종목을 산다(실전 stages ['buy'])
 }
 export interface FlowDisplay {
   // AI 규칙: 흐름 카드(D34)

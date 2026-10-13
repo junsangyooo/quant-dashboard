@@ -40,13 +40,28 @@ async function shoot(page: Page, info: TestInfo, name: string) {
   await info.attach(name, { path, contentType: 'image/png' });
 }
 
+/**
+ * axe over the whole page at once (as home.spec.ts and e2e/full/checks.ts): at a scroll position
+ * the 390 tab bar lies over whatever is under it, and target-size reads that overlap as crowding
+ * (규칙 그림 보기 under the bar once the 실전 plan had one card). A viewport as tall as the page
+ * shows every target clear.
+ */
 async function axe(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
-    .analyze();
-  return results.violations.map(
-    (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`,
-  );
+  const size = page.viewportSize();
+  if (size) {
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    if (height > size.height) await page.setViewportSize({ width: size.width, height });
+  }
+  try {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    return results.violations.map(
+      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`,
+    );
+  } finally {
+    if (size) await page.setViewportSize(size);
+  }
 }
 
 const wide = (info: TestInfo) => info.project.name === 'desktop-1440';
@@ -167,8 +182,14 @@ test('no session: the PIN page, with the way back', async ({ page }) => {
 test('실전 · 넣은 돈 그대로: 환전 제안 and the money of today (D47·D48)', async ({ page }) => {
   await page.goto('/plan?fixture=plan.live-mix');
   const card = page.getByRole('article', { name: '지수 반반' });
-  await expect(card.getByText('환전 제안')).toBeVisible();
-  await expect(card.getByText('약 1,500,000원을 달러로 바꾸면 50:50')).toBeVisible();
+  await expect(card.getByText('환전 제안', { exact: true })).toBeVisible();
+  await expect(card.getByText('약 1,552,000원을 달러로 바꾸면 50:50')).toBeVisible();
+  // The gauge is the same mix; its band is the suggestion's. No rebalance between currencies.
+  await expect(card.getByText('원화 · 달러 비율', { exact: true })).toBeVisible();
+  await expect(card.getByText('한국 61.8 : 미국 38.2', { exact: true })).toBeVisible();
+  await expect(card.getByText('환전 제안까지 0.0%p', { exact: true })).toBeVisible();
+  await expect(page.getByText(/리밸런싱까지/)).toHaveCount(0);
+  await expect(page.getByRole('article')).toHaveCount(1);
   await expect(
     page.getByText('새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'),
   ).toBeVisible();

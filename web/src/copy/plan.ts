@@ -23,6 +23,15 @@ export const planCopy = {
     toSell: (metric: string, margin: string) => `팔 조건까지 ${metric} ${margin}`,
     /** Accessible summary of a hollow gauge. */
     empty: '바늘 없음',
+    /**
+     * NEW (D47) — the live ledger's gauge: its won and dollars against the targets. The same
+     * band is where a conversion is suggested; nothing rebalances between the currencies.
+     */
+    mixHead: '원화 · 달러 비율',
+    /** NEW (D47) — '한국 76.9 : 미국 23.1'. */
+    mix: (kr: string, us: string) => `한국 ${kr} : 미국 ${us}`,
+    /** NEW (D47) — '환전 제안까지 1.5%p'. */
+    toSuggest: (pp: string) => `환전 제안까지 ${pp}`,
   },
 
   row: {
@@ -116,6 +125,9 @@ export const planCopy = {
   drift: {
     title: '벗어남 흐름',
     withPeriod: (period: string) => `벗어남 흐름 · ${period}`,
+    /** NEW (D47) — the live ledger's line: how far its won and dollars were from the targets. */
+    mixTitle: '원화 · 달러 비율 흐름',
+    mixWithPeriod: (period: string) => `원화 · 달러 비율 흐름 · ${period}`,
     since: (date: string) => `${date}부터`,
     secondDay: '벗어남 흐름은 둘째 날부터',
     periods: { '3m': '3개월', '1y': '1년', all: '전체' },

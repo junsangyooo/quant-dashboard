@@ -14,8 +14,8 @@ import { renderApp, serve } from './ops';
 
 beforeAll(stubScroll);
 
-const SUGGESTION = '약 1,500,000원을 달러로 바꾸면 50:50';
-const MIX = '지금 한국 61.4 : 미국 38.6 · 토스 앱에서 바꾸면 다음 거래일부터 사요';
+const SUGGESTION = '약 1,552,000원을 달러로 바꾸면 50:50';
+const MIX = '지금 한국 61.8 : 미국 38.2 · 토스 앱에서 바꾸면 다음 거래일부터 사요';
 const NEW_MONEY = '새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요';
 
 describe('계획 · 실전 (plan.live-mix)', () => {
@@ -25,9 +25,15 @@ describe('계획 · 실전 (plan.live-mix)', () => {
     expect(within(card).getByText('환전 제안')).toBeVisible();
     expect(within(card).getByText(SUGGESTION)).toBeVisible();
     expect(within(card).getByText(MIX)).toBeVisible();
-    // The other rule has nothing to say about the currencies.
-    const other = screen.getByRole('article', { name: '[예시] 종목 모멘텀' });
-    expect(within(other).queryByText(/바꾸면/)).toBeNull();
+    // 실전 runs 지수 반반 alone (실전 몫 100 · 3년 발굴 0): no other rule card, no share bar.
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.queryByText('규칙별 자산 비중')).toBeNull();
+    // The gauge is the same mix, its band the suggestion's: no rebalance between the currencies.
+    expect(within(card).getByText('원화 · 달러 비율')).toBeVisible();
+    expect(within(card).getByText('한국 61.8 : 미국 38.2')).toBeVisible();
+    expect(within(card).getByText('+11.8%p')).toBeVisible();
+    expect(within(card).getByText('환전 제안까지 0.0%p')).toBeVisible();
+    expect(within(card).queryByText(/리밸런싱/)).toBeNull();
     expect(screen.getByText(NEW_MONEY)).toBeVisible();
     // Only the money that is not today's would be '새 현금 · 다음 확인에 목표대로'.
     expect(screen.queryByText(/^새 현금/)).toBeNull();

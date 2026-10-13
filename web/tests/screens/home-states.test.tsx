@@ -55,8 +55,11 @@ describe('출금 대기 (값표 §2.3)', () => {
     const card = region('계획');
     expect(within(card).queryByRole('list')).not.toBeInTheDocument();
     expect(within(card).getByText('500,425원 · 10/12까지 · 주문 0건')).toBeVisible();
-    expect(within(card).getByText('−0.7%p')).toBeVisible();
-    expect(within(card).getByText('리밸런싱까지 1.3%p')).toBeVisible();
+    // 실전 (D47): the gauge is the mix of won and dollars (the waiting cash leaves it).
+    expect(within(card).getByText('한국 49.7 : 미국 50.3')).toBeVisible();
+    expect(within(card).getByText('−0.3%p')).toBeVisible();
+    expect(within(card).getByText('환전 제안까지 1.7%p')).toBeVisible();
+    expect(within(card).queryByText(/리밸런싱까지/)).toBeNull();
     expect(within(region('구성')).getByText('원화 현금 · 출금 대기')).toBeVisible();
     expect(within(region('구성')).getByText('출금 대기 · 10/12까지')).toBeVisible();
   });
@@ -159,9 +162,16 @@ describe('실전 평상 (값표 §2.2)', () => {
       'href',
       '/day/2026-09-01',
     );
-    expect(within(region('구성')).getByText('자산의 80.6% · 목표 80%')).toBeVisible();
-    expect(within(region('구성')).getByText('자산의 18.5% · 목표 20%')).toBeVisible();
+    // 실전 runs 지수 반반 alone (실전 몫 100 · 3년 발굴 0, D47).
+    expect(within(region('구성')).getByText('자산의 99.7% · 목표 100%')).toBeVisible();
+    expect(within(region('구성')).queryByText(/목표 20%/)).toBeNull();
     expect(rowValuesSum()).toBe(10_112_670);
+    // The 계획 card's gauge: won and dollars against 50 : 50, the band the suggestion's.
+    const plan = region('계획');
+    expect(within(plan).getByText('원화 · 달러 비율')).toBeVisible();
+    expect(within(plan).getByText('한국 50.5 : 미국 49.5')).toBeVisible();
+    expect(within(plan).getByText('환전 제안까지 1.5%p')).toBeVisible();
+    expect(within(plan).queryByText(/리밸런싱까지|외 1개 규칙/)).toBeNull();
   });
 });
 
@@ -174,14 +184,19 @@ describe('실전 첫 체결 전 (값표 §2.1)', () => {
     expect(screen.queryByText(/손대지 않았을 때 \+/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '08:30 기준' })).toBeVisible();
     const line = screen.getByRole('link', { name: /첫 주문/ });
-    expect(textOf(line)).toBe('리밸런싱 예정오늘 09:05 첫 주문 · 한국 매수 2건');
+    expect(textOf(line)).toBe('리밸런싱 예정오늘 09:05 첫 주문 · 한국 매수 1건');
     expect(screen.getByText('첫 체결 뒤 그래프가 그려져요')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '9/1(화) 실전 켬' })).toBeVisible();
     expect(screen.queryByText('손대지 않았을 때')).not.toBeInTheDocument();
+    // Won only (D47): one buy stage, no conversion leg; 지수 반반 is all of 실전 (목표 100%). The
+    // live gauge reads the mix from the first check: all won, at the suggestion already.
     const card = region('계획');
-    expect(within(card).getByText('목표 80%')).toBeVisible();
-    expect(within(card).queryByRole('img', { name: /%p/ })).not.toBeInTheDocument();
-    expect(textOf(within(card).getByRole('list'))).toBe('대기환전09:10대기매수22:30');
+    expect(within(card).getByText('목표 100%')).toBeVisible();
+    expect(textOf(within(card).getByRole('list'))).toBe('대기매수09:05');
+    expect(within(card).getByText('원화 · 달러 비율')).toBeVisible();
+    expect(within(card).getByText('한국 100 : 미국 0')).toBeVisible();
+    expect(within(card).getByText('+50.0%p')).toBeVisible();
+    expect(within(card).getByText('환전 제안까지 0.0%p')).toBeVisible();
     expect(within(region('구성')).getByText('09:05부터 매수')).toBeVisible();
     expect(within(region('구성')).getByText('자산의 100.0%')).toBeVisible();
     const text = container.textContent;
@@ -361,11 +376,12 @@ describe('group-by of the 실전 world', () => {
     const card = region('구성');
     expect(within(card).getByRole('heading', { level: 3, name: '한국' })).toBeVisible();
     expect(within(card).getByRole('heading', { level: 3, name: '미국' })).toBeVisible();
-    expect(within(card).getByRole('heading', { level: 3, name: '코인' })).toBeVisible();
+    // 실전 holds the two ETFs only (D47: no AI rule, no coin).
+    expect(within(card).queryByRole('heading', { level: 3, name: '코인' })).toBeNull();
     // Cash now joins its country (CONTRACT CompRow.cash.country: 원화 현금 한국, 달러 현금 미국),
     // so 나라 has no separate '현금' group.
     expect(within(card).queryByRole('heading', { level: 3, name: '현금' })).toBeNull();
-    expect(within(card).getByText('원화 현금')).toBeVisible();
-    expect(within(card).getByText('달러 현금')).toBeVisible();
+    expect(within(card).getAllByText('원화 현금').length).toBeGreaterThan(0);
+    expect(within(card).getAllByText('달러 현금').length).toBeGreaterThan(0);
   });
 });

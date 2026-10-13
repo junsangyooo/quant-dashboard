@@ -9,7 +9,7 @@ import type {
   ShellResponse,
   Stage,
 } from '../../api/types';
-import { KOSPI200, SAMSUNG, SP500, NVDA, kst } from '../world';
+import { KOSPI200, SP500, kst } from '../world';
 
 // ── clocks ───────────────────────────────────────────────────────────────────
 
@@ -137,21 +137,10 @@ export const PAPER_BUY_1007: Order = {
   status: 'pending',
 };
 
-export const LIVE_SELL_1007: Order = {
-  ...PAPER_SELL_1007,
-  id: 'live-20261007-sell-1',
-  price: 36_370,
-  amountKrw: 181_850,
-  fill: 'live',
-};
-
-export const LIVE_FX_1007: Order = {
-  ...PAPER_FX_1007,
-  id: 'live-20261007-fx-1',
-  fx: { krw: 173_000, usd: 125.22, rate: 1381.5 },
-  fill: 'live',
-};
-
+/**
+ * 실전 10/7 (D47: no conversion, no sale of one market to buy the other): the 08:30 check buys
+ * S&P 500 ETF with the dollars the owner converted in the Toss app; it goes at 22:30.
+ */
 export const LIVE_BUY_1007: Order = { ...PAPER_BUY_1007, id: 'live-20261007-buy-1' };
 
 /** 일부 실패: the 22:30 buy got no quote; it goes again 10/8 22:30. */
@@ -176,6 +165,13 @@ export function stages1007(sell: Order, fx: Order, buy: Order): Stage[] {
     { kind: 'fx', status: 'done', at: kst('2026-10-07', '09:10'), orders: [fx] },
     { kind: 'buy', status: buyStatus, at: kst('2026-10-07', '22:30'), orders: [buy] },
   ];
+}
+
+/** 실전 10/7: one buy stage (the live ledger never converts, D47). */
+export function liveStages1007(buy: Order): Stage[] {
+  const status: Stage['status'] =
+    buy.status === 'failed' ? 'failed' : buy.status === 'filled' ? 'done' : 'pending';
+  return [{ kind: 'buy', status, at: kst('2026-10-07', '22:30'), orders: [buy] }];
 }
 
 export const NEXT_US_BUY_1007: NextAction = {
@@ -206,66 +202,21 @@ export function nextCheck(date: string, time = '08:30'): NextAction {
   return { kind: 'next-check', at: kst(date, time) };
 }
 
-// ── 실전 첫 체결 전 (값표 §2.1, 9/1 08:40): the first orders of 지수 반반 ─────────
+// ── 실전 첫 체결 전 (값표 §2.1, 9/1 08:40): the first order of 지수 반반 ──────────
 
-export const LIVE_FIRST_FX: Order = {
-  id: 'live-20260901-fx-1',
+/**
+ * Won only (D47): the live ledger buys the Korean ETF with the won and converts nothing; the
+ * owner's dollars, when he converts some in the Toss app, buy the US one the next trading day.
+ */
+export const LIVE_FIRST_BUY: Order = {
+  id: 'live-20260901-buy-kr-1',
   market: 'KR',
-  side: 'fx',
-  direction: 'krw-usd',
+  side: 'buy',
+  instrument: KOSPI200,
+  qty: 290,
+  price: 34_400,
   approx: true,
-  fx: { krw: 4_710_000, usd: 3_389, rate: 1389.8 },
-  at: kst('2026-09-01', '09:10'),
+  amountKrw: 9_976_000,
+  at: kst('2026-09-01', '09:05'),
   status: 'pending',
 };
-
-export const LIVE_FIRST_BUYS: Order[] = [
-  {
-    id: 'live-20260901-buy-kr-1',
-    market: 'KR',
-    side: 'buy',
-    instrument: KOSPI200,
-    qty: 118,
-    price: 34_400,
-    approx: true,
-    amountKrw: 4_059_200,
-    at: kst('2026-09-01', '09:05'),
-    status: 'pending',
-  },
-  {
-    id: 'live-20260901-buy-kr-2',
-    market: 'KR',
-    side: 'buy',
-    instrument: SAMSUNG,
-    qty: 14,
-    price: 56_800,
-    approx: true,
-    amountKrw: 795_200,
-    at: kst('2026-09-01', '09:05'),
-    status: 'pending',
-  },
-  {
-    id: 'live-20260901-buy-us-1',
-    market: 'US',
-    side: 'buy',
-    instrument: SP500,
-    qty: 45,
-    price: 63.4,
-    approx: true,
-    amountUsd: 2_853,
-    at: kst('2026-09-01', '22:30'),
-    status: 'pending',
-  },
-  {
-    id: 'live-20260901-buy-us-2',
-    market: 'US',
-    side: 'buy',
-    instrument: NVDA,
-    qty: 3,
-    price: 177.3,
-    approx: true,
-    amountUsd: 531.9,
-    at: kst('2026-09-01', '22:30'),
-    status: 'pending',
-  },
-];

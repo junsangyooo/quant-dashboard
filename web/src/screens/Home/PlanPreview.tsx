@@ -45,7 +45,8 @@ export function PlanPreview({
   const showGauge = card.gauge.needle !== null || card.status === 'quote-wait';
   const withdrawKrw = home.composition.pendingBar?.withdraw?.krw;
   const next = nextActionText(card.next, { now, variant: 'card', withdrawKrw });
-  const needleId = card.gauge.needle?.instrument.id;
+  // The live mix gauge (D47) names no instrument: no logo before its line.
+  const needleId = card.gauge.kind === 'mix' ? undefined : card.gauge.needle?.instrument.id;
 
   const rule = (
     <div className={styles.planRule}>

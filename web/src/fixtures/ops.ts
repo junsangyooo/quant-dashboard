@@ -460,18 +460,18 @@ export function modeLive(overrides: Partial<ModeResponse> = {}): ModeResponse {
 
 /**
  * 원화 · 달러 (D47·D48, 그림 없음) while live is on, 10/7 16:10: the live ledger (10,112,670원,
- * about half in each market) and 3,000,000원 the owner deposited at 14:20, which the checks use
- * from 10/8 08:30. With it 한국 is 61.4% of 13,112,670원: about 1,500,000원 to dollars
- * ($1,085.07 at 1,382.4원) would make it 50:50.
+ * 한국 5,108,285원 · 미국 5,004,385원) and 3,000,000원 the owner deposited at 14:20, which the
+ * checks use from 10/8 08:30. With it 한국 is 61.8% of 13,112,670원: about 1,552,000원 to dollars
+ * ($1,122.69 at 1,382.4원) would make it 50:50.
  */
 export const LIVE_CASH: NonNullable<ModeResponse['liveCash']> = {
   newMoney: { krw: 3_000_000, usd: 0, from: kst('2026-10-08', '08:30') },
   fxSuggestion: {
     direction: 'krw-usd',
-    krw: 1_500_000,
-    usd: 1085.07,
+    krw: 1_552_000,
+    usd: 1122.69,
     rate: 1382.4,
-    now: { kr: 61.4, us: 38.6 },
+    now: { kr: 61.8, us: 38.2 },
     target: { kr: 50, us: 50 },
   },
 };

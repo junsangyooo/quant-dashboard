@@ -75,23 +75,26 @@ describe('상태 칩 일곱 가지', () => {
   });
 });
 
-describe('실전 평상 (값표 §2.2)', () => {
-  it("80.6% · 18.5%, '실제 체결' on filled cards, 1주 미만 대기 85,964원, drift 9/1부터 with ⏻", async () => {
+describe('실전 평상 (값표 §2.2, D47)', () => {
+  it('지수 반반 alone, the mix gauge, no 리밸런싱까지, one buy at 22:30, drift 9/1부터 with ⏻', async () => {
     await openPlan(planLive);
-    expect(textOf(screen.getByRole('article', { name: '지수 반반' }).querySelector('p'))).toBe(
-      '자산의80.6%· 목표 80%',
-    );
-    expect(
-      textOf(screen.getByRole('article', { name: '[예시] 종목 모멘텀' }).querySelector('p')),
-    ).toBe('자산의18.5%· 목표 20%');
+    const index = screen.getByRole('article', { name: '지수 반반' });
+    expect(textOf(index.querySelector('p'))).toBe('자산의99.7%· 목표 100%');
+    // 실전 몫 100 · 3년 발굴 0: no second card, no share bar.
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.queryByText('규칙별 자산 비중')).toBeNull();
+    // Won and dollars against the targets; the band is where a conversion is suggested.
+    expect(within(index).getByText('원화 · 달러 비율')).toBeVisible();
+    expect(within(index).getByText('한국 50.5 : 미국 49.5')).toBeVisible();
+    expect(within(index).getByText('환전 제안까지 1.5%p')).toBeVisible();
+    expect(within(index).getByText('50.4% · 목표 50%')).toBeVisible();
+    expect(within(index).getByText('49.6% · 목표 50%')).toBeVisible();
+    expect(within(index).queryByText(/리밸런싱까지/)).toBeNull();
     const now = nowItem();
-    expect(within(now).getAllByText('실제 체결')).toHaveLength(2);
-    expect(within(now).queryByText('모의 체결')).not.toBeInTheDocument();
-    expect(within(now).getByText('KOSPI200 ETF 매도 5주 · 181,850원')).toBeVisible();
-    expect(within(now).getByText('173,000원 → $125.22 · 1,381.5원')).toBeVisible();
     expect(within(now).getByText('S&P 500 ETF 매수 2주 · 약 $124.80')).toBeVisible();
-    expect(screen.getByText('85,964원')).toBeVisible();
-    const drift = screen.getByRole('region', { name: '벗어남 흐름' });
+    expect(within(now).queryByText(/환전|매도/)).toBeNull();
+    expect(screen.getByText('33,285원')).toBeVisible();
+    const drift = screen.getByRole('region', { name: '원화 · 달러 비율 흐름' });
     expect(within(drift).getByText('9/1부터')).toBeVisible();
     expect(within(drift).queryByRole('group', { name: '흐름 기간' })).not.toBeInTheDocument();
     expect(within(drift).getAllByRole('link', { name: '9/1(화) 실전 켬' })).toHaveLength(1);
@@ -181,13 +184,14 @@ describe('출시 첫날 (값표 §4)', () => {
 });
 
 describe('출금 대기 (값표 §2.3)', () => {
-  it('chip 출금 대기, weights without the waiting cash (49.3 · 50.7), orders 0, no banner', async () => {
+  it('chip 출금 대기, weights without the waiting cash (48.6 · 51.4), orders 0, no banner', async () => {
     await openPlan(planWithdraw);
     const index = screen.getByRole('article', { name: '지수 반반' });
     expect(within(index).getByText('출금 대기')).toBeVisible();
     expect(within(index).getByRole('button', { name: '10/12까지 · 리밸런싱 쉼' })).toBeVisible();
-    expect(within(index).getByText('49.3% · 목표 50%')).toBeVisible();
-    expect(within(index).getByText('50.7% · 목표 50%')).toBeVisible();
+    expect(within(index).getByText('48.6% · 목표 50%')).toBeVisible();
+    expect(within(index).getByText('51.4% · 목표 50%')).toBeVisible();
+    expect(within(index).getByText('환전 제안까지 1.7%p')).toBeVisible();
     expect(within(index).getByText(/출금 대기 현금 제외/)).toBeVisible();
     expect(screen.getByText('출금 대기 500,425원 · 10/12까지 · 주문 0건')).toBeVisible();
     expect(screen.getByText('출금 없으면 다음 확인에 목표대로')).toBeVisible();

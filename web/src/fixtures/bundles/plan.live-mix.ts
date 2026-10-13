@@ -1,5 +1,5 @@
 // SCR-PLAN · 실전 · 넣은 돈 그대로 (D47·D48, 그림 없음), 10/7 16:10: '환전 제안' 칩과 바꿀 금액
-// (약 1,500,000원 → 50:50), 예정의 '새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'.
+// (약 1,552,000원 → 50:50), 예정의 '새로 들어온 돈 3,000,000원 · 다음 거래일 08:30부터 써요'.
 import type { FixtureBundle } from '../types';
 import { NOW_1007, OK_0830_1007, shellOf } from '../parts/common';
 import { planLiveMix } from '../parts/plan';

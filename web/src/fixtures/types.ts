@@ -83,6 +83,7 @@ export type StateId =
   | 'day.error'
   | 'day.permission'
   | 'rules.index-half'
+  | 'rules.live'
   | 'rules.momentum'
   | 'rules.first-day'
   // SCR-RULES states drawn only in the spec, plus the 3년 발굴 lanes (Figma 탐색 17:5855 …)

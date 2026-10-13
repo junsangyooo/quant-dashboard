@@ -2,6 +2,8 @@
 // (weekdays + 0–24h axis) ③ 조건 (deviation band) ④ 행동 (매도 → 환전 → 매수) ⑤ 과거 1년 수익·측정
 // (measured points; ⌄ opens the source, period and definitions) ⑥ 지금·결과 (stages, status chip,
 // next check). Each tile: kind stripe + head icon/label, picture, big value, small line.
+// 실전 (display.mix, D47): ③ is 한국's share against its target, '±2%p 넘으면 환전 제안'; ④ buys
+// with each currency's money ('매수 주문 · 원화로 한국 · 달러로 미국 종목'). No rebalance across.
 import clsx from 'clsx';
 import {
   ArrowLeftRight,
@@ -336,6 +338,13 @@ export function RuleTiles({
   const sameTarget = targets.every((t) => t === targets[0]);
   const deviation = condition.deviation;
   const chip = ruleStatusChip(now.status);
+  // 실전 (D47): the band is where a conversion is suggested, its dots 한국's share against its
+  // target; the orders buy with each currency's own money.
+  const mix = display.mix === true;
+  const krTarget = what.instruments.reduce(
+    (sum, inst, i) => (inst.currency === 'KRW' ? sum + (what.weights[i] ?? 0) : sum),
+    0,
+  );
 
   return (
     <div className={styles.tiles}>
@@ -385,21 +394,29 @@ export function RuleTiles({
           />
         }
         value={
-          <p className="t-heading-1">{rc.tiles.over(formatPpMagnitude(condition.threshold, 0))}</p>
+          <p className="t-heading-1">
+            {(mix ? rc.tiles.overSuggest : rc.tiles.over)(
+              formatPpMagnitude(condition.threshold, 0),
+            )}
+          </p>
         }
-        note={rc.tiles.targetBasis(
-          sameTarget && targets[0] !== undefined
-            ? formatPercent(targets[0], 0)
-            : targets.map((t) => String(t)).join(' · '),
-        )}
+        note={
+          mix
+            ? rc.tiles.mixBasis(formatPercent(krTarget, 0))
+            : rc.tiles.targetBasis(
+                sameTarget && targets[0] !== undefined
+                  ? formatPercent(targets[0], 0)
+                  : targets.map((t) => String(t)).join(' · '),
+              )
+        }
       />
       <Tile
         kind="action"
         icon={Send}
         label={rc.tiles.action}
         picture={<ActionPicture stages={action.stages} />}
-        value={<p className="t-heading-1">{rc.tiles.rebalanceOrder}</p>}
-        note={rc.tiles.toTarget}
+        value={<p className="t-heading-1">{mix ? rc.tiles.buyOrder : rc.tiles.rebalanceOrder}</p>}
+        note={mix ? rc.tiles.asDeposited : rc.tiles.toTarget}
       />
       {measured ? (
         <Tile
