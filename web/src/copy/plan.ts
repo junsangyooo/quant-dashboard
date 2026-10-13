@@ -64,8 +64,6 @@ export const planCopy = {
       `${market} ${side} ${String(count)}건`,
     retry: (when: string, market: string, side: string) => `${when} ${market} ${side} 다시 시도`,
     todo: '직접 할 일 · 토스 앱에서 주문 확인',
-    withdrawWait: (until: string) => `${until}까지 · 리밸런싱 쉼`,
-    withdrawCard: (amount: string, until: string) => `${amount} · ${until}까지 · 주문 0건`,
     holiday: (markets: string) => `${markets} 휴장 · 거래 없음`,
     quoteWait: (market: string, date: string) => `${market} 시세 ${date} 기준`,
     fxQuoteWait: (date: string) => `환율 ${date} 기준`,
@@ -111,9 +109,6 @@ export const planCopy = {
     retry: (market: string, side: string) => `${market} ${side} 다시 시도`,
     krwCash: '원화 현금',
     subShare: '1주 미만 대기',
-    withdrawWait: (amount: string, until: string) =>
-      `출금 대기 ${amount} · ${until}까지 · 주문 0건`,
-    withdrawAfter: '출금 없으면 다음 확인에 목표대로',
     newCash: (amount: string) => `새 현금 ${amount} · 다음 확인에 목표대로`,
     firstCheck: (when: string) => `첫 확인 ${when} · 목표대로 매수`,
     monthlyReview: '다음 월 점검',

@@ -42,14 +42,14 @@ interface RuleRef {
   example?: boolean     // 이름 앞 '[예시]'
 }
 
-// 상태 칩 일곱 가지(SCR-PLAN 완료 조건). AI 규칙은 같은 칩에 다른 낱말을 쓴다(화면-맞춤.md ②, 'hold' = '유지').
+// 상태 칩 여섯 가지(SCR-PLAN 완료 조건의 일곱 가지에서 '출금 대기'를 뺐다, 2026-10-13). AI 규칙은 같은 칩에 다른 낱말을 쓴다(화면-맞춤.md ②, 'hold' = '유지').
 // 'fx-suggest'('환전 제안')는 실전 장부의 지수 반반만(D47): 원화·달러가 규칙 목표에서 띠(±2%p)보다 멀다.
 // 실전은 환전하지 않아서 주인이 토스 앱에서 바꾼다. 정보일 뿐이다(막는 것 없음). 우선순위는 '리밸런싱 예정' 다음, '목표 범위 안' 앞
-// 'withdraw-wait'('출금 대기 · 리밸런싱 쉼')는 모의투자 장부만: 실전 장부의 출금 대기는 그 돈만 묶고 주문을 멈추지 않는다
+// 출금 대기 칩은 없다: 출금 대기는 실전 장부만 만들고, 그 돈만 묶을 뿐 주문을 멈추지 않는다
 // (그 돈과 날짜는 구성의 출금 대기 행·pendingBar가 보인다)
 type RuleStatus =
   | 'in-range' | 'scheduled' | 'in-progress' | 'partial-failed'
-  | 'holiday' | 'quote-wait' | 'withdraw-wait'
+  | 'holiday' | 'quote-wait'
   | 'fx-suggest'                                  // 실전 장부 전용(D47)
   | 'hold' | 'sell-scheduled' | 'buy-scheduled'   // AI 규칙 전용
 
@@ -98,7 +98,6 @@ type NextAction =
   | { kind: 'first-order'; at: string; market: Market; side: Side; count: number }  // '오늘 09:05 첫 주문 · 한국 매수 2건'
   | { kind: 'retry'; at: string; market: Market; side: Side }
   | { kind: 'todo'; market: Market; side: Side }           // '직접 할 일 · 토스 앱에서 주문 확인'
-  | { kind: 'withdraw-wait'; until: string }               // '10/12까지 · 리밸런싱 쉼'(모의투자만)
   | { kind: 'holiday'; markets: Market[]; nextCheckAt: string }
   | { kind: 'quote-wait'; market: Market | 'FX'; basisDate: string }   // 'FX' = 환율이 낡음
   | { kind: 'next-check'; at: string; reviewAt?: string }   // AI 규칙: '다음 확인 10/8 08:30 · 점검 11/1'(다음 월 점검, 1일 08:30)
@@ -371,7 +370,6 @@ type ScheduleItem =                  // ruleId는 한 규칙의 항목에만 있
   | { kind: 'holiday'; date: string; markets: Market[] }
   | { kind: 'retry'; at: string; market: Market; side: Side; ruleId: string }   // 다시 낼 주문의 규칙
   | { kind: 'sub-share-cash'; krw: number }
-  | { kind: 'withdraw-wait'; krw: number; until: string }    // '… · 주문 0건': 모의투자만(실전의 출금 대기는 주문을 멈추지 않는다)
   | { kind: 'new-cash'; krw: number }                          // 다음 확인이 쓸 새 현금(아래 '새로 들어온 돈'은 빼고)
   | ({ kind: 'new-money-wait' } & NewMoneyWait)                // 실전(D48): '새로 들어온 돈 [금액] · 다음 거래일 08:30부터 써요'
   | { kind: 'first-check'; at: string }
@@ -440,7 +438,7 @@ interface DayResponse {
   check: {
     at: string | null                             // null = 주말·확인 없음
     result: 'rebalance' | 'in-range' | 'partial-failed' | 'failed' | 'holiday' | 'quote-wait' | 'weekend'
-          | 'in-progress' | 'withdraw-wait' | 'no-run'   // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎). withdraw-wait는 모의투자만
+          | 'in-progress' | 'no-run'   // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎)
     holidayMarkets?: Market[]
     band: { threshold: number; before: number | null; after: number | null } | null   // pp1. 실전 장부는 null이고 instrument·weight·toThreshold·over도 없다(D47: 확인이 적은 규칙 전체의 벗어남은 통화 사이라 아무것도 하지 않는다)
     ruleId?: string; rule?: RuleRef                 // 확인한 규칙(이름은 rule)
@@ -556,7 +554,7 @@ interface NowBlock {
     // status·at이 다시 낸 결과다('9/15 다시 · 체결'). 주문(Order) 자체는 실패한 날의 기록으로 남는다
     | { kind: 'status'; status: RuleStatus; at?: string }
     | { kind: 'kv'; key: string; value: string; note?: string }   // 셋째 칸 note도 데이터(코드·수)다. 문장은 보내지 않는다
-    | { kind: 'exceptions'; items: Array<'holiday' | 'quote-wait' | 'withdraw-wait'>; active: boolean }
+    | { kind: 'exceptions'; items: Array<'holiday' | 'quote-wait'>; active: boolean }
   >
 }
 // AI 규칙(3년 발굴)의 kv 키. value와 note는 날짜(YYYY-MM-DD)·수·이름·코드이고, 값이 없으면 '-'다:
@@ -822,3 +820,4 @@ type NotifyEvent =
 - 2026-10-13: 실전 돈 경로 감사(10건)를 고쳤다(autotrade/PHASE3.md 2.3·2.5·2.6·3). 계약에 닿는 것: `TossLinkCause`에 'conditional'(계좌에 열린 조건주문: 켜기 점검 ✕ → `canTurnOn.cause` 'checks', 할 일은 직접·꺼져 있으면 노랑, 실전 중이면 빨강이고 effect 'other'). 실전 장부의 출금 대기는 그 돈만 묶는다: 상태 `withdraw-wait`·다음 할 일 `withdraw-wait`·예정 항목 `withdraw-wait`·그날 확인 결과 `withdraw-wait`는 모의투자 장부에만 나오고, 실전은 구성의 출금 대기 행과 `pendingBar`가 그 돈과 날짜를 보인다. 실전 계획·켜기 미리보기는 매수를 보낼 때와 같은 상한(종가 0.5% 위 지정가를 호가 단위로 + 수수료)으로 센다(예: 10,000,000원 → 312주가 아니라 310주). 보낼 때 1주도 못 사는 매수는 아무것도 사지 않은 채 끝나고 그 주문은 단계·계획 목록(`Stage.orders`)에서 빠진다(실패·직접 할 일이 아님). 미리보기 hash가 첫 확인 시각을 묶어, 08:30 전에 본 미리보기를 08:30 뒤에 승인하면 409 `preview-changed`다(그 첫 확인은 다음 평일 08:30). 결과를 모르는 주문 할 일의 두 줄을 '서버에서 정리'로 바꿨다(웹 문구).
 - 2026-10-13: 두 수정을 합친 뒤의 가벼운 확인. 늦은 실전 대조가 앞 시각으로 적은 돈은 그것을 처음 담은 평가의 것이다(장부 전체 변동 분해의 입출금·배당, 계좌별 보기의 선 `netIn`·기간 분해, '손대지 않았을 때'). 보낼 때 1주도 못 산 매수만 있던 실전 계획은 기록 줄·사건 표식·달력의 리밸런싱 날·연간 리밸런싱 수에 들지 않는다(그날 확인 카드의 결과는 그대로).
 - 2026-10-13: 밤의 토스 동기화 주기(엔진 세션). 한국·미국 정규장이 모두 닫혀 있고 우리 주문·취소·모드 바꿈·켜기 미리보기가 없으면 tick은 30분마다 토스를 본다(그 밖에는 5분마다). 그동안 토스 연결 줄 'late'·`old`와 toss-link·toss-balance의 `age`는 45분 한도로 잰다(장이 열린 뒤 15분까지). `GET /api/mode`(모드 '모의투자')는 tick에게 30분 동안 5분마다 보라고 남긴다. 켜기 미리보기의 15분은 그대로다.
+- 2026-10-13: 쓰이지 않게 된 출금 대기 값을 뺐다(엔진 세션). 출금 대기는 실전 장부만 만들고 그 돈만 묶으므로(돈 경로 감사 뒤) 어느 장부도 다음을 만들 수 없다: 상태 `withdraw-wait`, 다음 할 일 `withdraw-wait`, 예정 항목 `withdraw-wait`, 그날 확인 결과 `withdraw-wait`. AI 규칙 흐름 카드의 예외 줄(`exceptions.items`)도 '휴장'·'시세 대기' 둘이다. 상태 칩은 여섯 가지(+ 실전의 '환전 제안')다. 남는 것: 구성의 출금 대기 행과 칩(`withdraw-wait` + `until`), `pendingBar.withdraw`, `basisLine.withdrawExcluded`, 현금 칸 `withdraw_wait`.

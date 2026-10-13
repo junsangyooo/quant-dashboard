@@ -56,11 +56,9 @@ export interface NextTextOptions {
   now: string | null;
   /**
    * line: the hero plan line (자산) and the plan card status line (계획);
-   * card: the 계획 card on 자산 — shorter first-order words, and the waiting amount for 출금 대기.
+   * card: the 계획 card on 자산 — shorter first-order words.
    */
   variant?: 'line' | 'card' | undefined;
-  /** 출금 대기 amount (자산 card: '500,425원 · 10/12까지 · 주문 0건'). */
-  withdrawKrw?: number | undefined;
   /** 휴장: append '· 다음 확인 …' (계획 status line). */
   withNextCheck?: boolean | undefined;
 }
@@ -93,10 +91,6 @@ export function nextActionText(next: NextAction, options: NextTextOptions): stri
       return n.retry(formatDateTime(next.at), marketName(next.market), sideName(next.side));
     case 'todo':
       return n.todo;
-    case 'withdraw-wait':
-      return variant === 'card' && options.withdrawKrw !== undefined
-        ? n.withdrawCard(formatKrw(options.withdrawKrw), formatMonthDay(next.until))
-        : n.withdrawWait(formatMonthDay(next.until));
     case 'holiday': {
       const text = n.holiday(marketsText(next.markets));
       return options.withNextCheck
@@ -259,13 +253,6 @@ export function scheduleItemText(item: ScheduleItem): ScheduleText {
       };
     case 'sub-share-cash':
       return { caption: s.krwCash, title: s.subShare, chip: formatKrw(item.krw), note: null };
-    case 'withdraw-wait':
-      return {
-        caption: null,
-        title: s.withdrawWait(formatKrw(item.krw), formatMonthDay(item.until)),
-        chip: null,
-        note: s.withdrawAfter,
-      };
     case 'new-cash':
       return { caption: null, title: s.newCash(formatKrw(item.krw)), chip: null, note: null };
     case 'new-money-wait':

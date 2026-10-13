@@ -38,7 +38,6 @@ export type RuleStatus =
   | 'partial-failed'
   | 'holiday'
   | 'quote-wait'
-  | 'withdraw-wait'
   | 'fx-suggest' // 실전 장부 전용(D47)
   | 'hold'
   | 'sell-scheduled'
@@ -93,7 +92,6 @@ export type NextAction =
   | { kind: 'first-order'; at: string; market: Market; side: Side; count: number } // '오늘 09:05 첫 주문 · 한국 매수 2건'
   | { kind: 'retry'; at: string; market: Market; side: Side }
   | { kind: 'todo'; market: Market; side: Side } // '직접 할 일 · 토스 앱에서 주문 확인'
-  | { kind: 'withdraw-wait'; until: string } // '10/12까지 · 리밸런싱 쉼'
   | { kind: 'holiday'; markets: Market[]; nextCheckAt: string }
   | { kind: 'quote-wait'; market: Market | 'FX'; basisDate: string } // 'FX' = 환율이 낡음
   | { kind: 'next-check'; at: string; reviewAt?: string }; // AI 규칙: '다음 확인 10/8 08:30 · 점검 11/1'(다음 월 점검, 1일 08:30)
@@ -426,7 +424,6 @@ export type ScheduleItem =
   | { kind: 'holiday'; date: string; markets: Market[] }
   | { kind: 'retry'; at: string; market: Market; side: Side; ruleId: string } // 다시 낼 주문의 규칙
   | { kind: 'sub-share-cash'; krw: number }
-  | { kind: 'withdraw-wait'; krw: number; until: string }
   | { kind: 'new-cash'; krw: number } // 다음 확인이 쓸 새 현금('새로 들어온 돈'은 빼고)
   | ({ kind: 'new-money-wait' } & NewMoneyWait) // 실전(D48): '새로 들어온 돈 · 다음 거래일 08:30부터 써요'
   | { kind: 'first-check'; at: string }
@@ -507,7 +504,6 @@ export interface DayResponse {
       | 'quote-wait'
       | 'weekend'
       | 'in-progress'
-      | 'withdraw-wait'
       | 'no-run'; // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎)
     holidayMarkets?: Market[];
     band: { threshold: number; before: number | null; after: number | null } | null; // pp1
@@ -713,7 +709,7 @@ export interface NowBlock {
     | { kind: 'kv'; key: string; value: string; note?: string } // 셋째 칸 note도 데이터(코드·수)다. 문장은 보내지 않는다
     | {
         kind: 'exceptions';
-        items: Array<'holiday' | 'quote-wait' | 'withdraw-wait'>;
+        items: Array<'holiday' | 'quote-wait'>;
         active: boolean;
       }
   >;

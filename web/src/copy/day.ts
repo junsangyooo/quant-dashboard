@@ -68,7 +68,6 @@ export const dayCopy = {
       bothMarkets: '두 시장',
       quoteWait: '시세 대기',
       inProgress: '리밸런싱 중',
-      withdrawWait: '출금 대기',
       noRun: '실행 없음',
     },
     deviation: (pp: string) => `${pp} 벗어남`,
@@ -77,7 +76,6 @@ export const dayCopy = {
     position: (rule: string, instrument: string, weight: string, toThreshold: string) =>
       `${rule} ${instrument} ${weight} · 리밸런싱까지 ${toThreshold}`,
     quoteWait: '시세 대기 · 주문 0건',
-    withdrawWait: '출금 대기 · 리밸런싱 쉼 · 주문 0건',
     failed: '주문 없음',
     band: (before: string, after: string, band: string) =>
       `전 ${before} → 후 ${after} · 목표 ±${band}`,

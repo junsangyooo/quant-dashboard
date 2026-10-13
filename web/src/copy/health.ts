@@ -299,7 +299,6 @@ export const healthCopy = {
       'in-range': '목표 범위 안',
       holiday: '휴장',
       'quote-wait': '시세 대기',
-      'withdraw-wait': '출금 대기',
       'in-progress': '리밸런싱 중',
       'partial-failed': '일부 실패',
       /** NEW */

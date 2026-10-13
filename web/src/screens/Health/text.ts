@@ -720,7 +720,7 @@ export function runIcon(result: string): RunIcon {
   if (result === 'rebalance' || result === 'already-planned' || result === 'in-progress')
     return 'rebalance';
   if (result === 'failed' || result === 'todo' || result === 'partial-failed') return 'failed';
-  if (result === 'quote-wait' || result === 'withdraw-wait' || result === 'running') return 'wait';
+  if (result === 'quote-wait' || result === 'running') return 'wait';
   return 'ok';
 }
 

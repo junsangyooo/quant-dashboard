@@ -98,9 +98,6 @@ export function CheckCard({
       {check.result === 'quote-wait' ? (
         <p className={clsx('t-caption', styles.muted)}>{dc.check.quoteWait}</p>
       ) : null}
-      {check.result === 'withdraw-wait' ? (
-        <p className={clsx('t-caption', styles.muted)}>{dc.check.withdrawWait}</p>
-      ) : null}
       {check.result === 'failed' ? (
         <div className={styles.chips}>
           {failure && failure.reason !== 'other' ? (

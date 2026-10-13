@@ -23,15 +23,9 @@ import { must, renderState, stubScroll, textOf } from './home-plan.routes';
 
 beforeAll(stubScroll);
 
-const SEVEN = [
-  '목표 범위 안',
-  '리밸런싱 예정',
-  '리밸런싱 중',
-  '일부 실패',
-  '휴장',
-  '시세 대기',
-  '출금 대기',
-];
+// Seven chips in the spec; '출금 대기' is gone (2026-10-13): only the live ledger has withdrawal
+// waits, and they hold their own money without stopping orders (PHASE3.md 2.5).
+const SIX = ['목표 범위 안', '리밸런싱 예정', '리밸런싱 중', '일부 실패', '휴장', '시세 대기'];
 
 async function openPlan(bundle: FixtureBundle) {
   renderState(bundle, '/plan');
@@ -42,8 +36,8 @@ function nowItem() {
   return screen.getByText(/^지금 · /).closest('li') as HTMLElement;
 }
 
-describe('상태 칩 일곱 가지', () => {
-  it('the rule status chips map to the seven words only', () => {
+describe('상태 칩 여섯 가지', () => {
+  it('the rule status chips map to the six words only', () => {
     const fixed = [
       'in-range',
       'scheduled',
@@ -51,9 +45,8 @@ describe('상태 칩 일곱 가지', () => {
       'partial-failed',
       'holiday',
       'quote-wait',
-      'withdraw-wait',
     ] as const;
-    expect(fixed.map((s) => ruleStatusChip(s).label)).toEqual(SEVEN);
+    expect(fixed.map((s) => ruleStatusChip(s).label)).toEqual(SIX);
   });
 
   it.each([
@@ -70,7 +63,7 @@ describe('상태 칩 일곱 가지', () => {
     const cards = await openPlan(bundle);
     for (const c of cards) {
       const chip = c.querySelector('[class*="rebalance"] .t-label');
-      expect(SEVEN).toContain(chip?.textContent);
+      expect(SIX).toContain(chip?.textContent);
     }
   });
 });

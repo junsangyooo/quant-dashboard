@@ -747,7 +747,7 @@ def test_a_live_wait_shows_on_the_money_not_as_stopped_orders(lw: Live) -> None:
     lw.sync("2026-07-01 08:29")
     assert lw.check("2026-07-01 08:30")["result"] == "rebalance"  # not 'withdraw-wait'
     ctx = LedgerContext(lw.conn, lw.cfg, "live", lw.at("2026-07-01 08:31"))
-    assert ctx.status is not RuleStatus.WITHDRAW_WAIT
+    assert "withdraw-wait" not in {s.value for s in RuleStatus}  # no such chip at all
     assert ctx.next_action["kind"] != "withdraw-wait"
     chips = [r.chip for r in ctx.composition.rows if r.chip]
     assert {"kind": "withdraw-wait", "until": "2026-07-06"} in chips  # the money and its date

@@ -62,12 +62,9 @@ export function Schedule({ plan, card }: { plan: PlanResponse; card: boolean }) 
 
   items.forEach((item, i) => {
     const t = scheduleItemText(item);
-    // 출금 대기 has no stages: its item is the '지금' of the page.
-    const isNow = now === null && i === 0 && item.kind === 'withdraw-wait';
     entries.push({
       key: `${item.kind}-${String(i)}`,
-      id: isNow ? NOW_ID : undefined,
-      accent: isNow,
+      accent: false,
       body: (
         <>
           {t.caption !== null ? (

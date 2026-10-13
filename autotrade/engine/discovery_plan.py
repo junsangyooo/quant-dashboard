@@ -16,7 +16,6 @@ are done (D35), and idle money into the index ETF of its currency.
   attempts left. A review that failed for good waits for a person (a red 'to do'); the equal
   weight then goes on without that pick (its shares stay as they are: it is not traded on a
   month nobody judged it), and the plan says which picks it left out.
-- A pending withdrawal plans nothing (0 orders), as for the long-term rule (ops notes 매일 확인 3).
 
 Before planning it closes picks whose sale has filled ('sold', the sale's day) and clears the
 'buy' decisions that have their shares.
@@ -168,10 +167,6 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
     """Reconcile, then plan in the caller's transaction (the job downloaded the closes)."""
     d = kst_date(at)
     details: dict[str, Any] = {"reconciled": reconcile(conn, ledger_id, at)}
-    waits = repo.withdraw_waits(conn, ledger_id)
-    if waits:  # a withdrawal is pending: 0 orders (the long-term rule does the same)
-        details["withdraw_wait_until"] = max(w.until for w in waits)
-        return PlanOutcome("waiting", None, details)
     state = sleeves.view(conn, ledger_id, RULE_ID)
     held = ai_repo.picks_of(conn, ledger_id, RULE_ID, ("held",))
     parking = parking_ids(conn)

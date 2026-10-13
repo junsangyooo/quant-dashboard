@@ -100,16 +100,6 @@ def schedule(ctx: LedgerContext) -> dict[str, Any]:
     else:
         items.append({"kind": "next-check", "at": fmt.iso(ctx.next_check)})
     items.extend(ctx.upcoming_holidays())
-    if ctx.withdraw_until is not None and not ctx.live:
-        # '출금 대기 … · 주문 0건': the paper ledger's. A live wait holds its own money only (the
-        # home composition shows it with its date); the live plan goes on (PHASE3.md 2.5).
-        items.append(
-            {
-                "kind": "withdraw-wait",
-                "krw": _cash_krw(ctx, Purpose.WITHDRAW_WAIT),
-                "until": fmt.day(ctx.withdraw_until),
-            }
-        )
     waiting = ctx.new_money
     if waiting:
         # D48: the owner's money of today is not used before the next weekday's check.

@@ -68,7 +68,6 @@ describe('next action', () => {
       '10/8 22:30 미국 매수 다시 시도',
     ],
     [{ kind: 'todo', market: 'US', side: 'buy' }, '직접 할 일 · 토스 앱에서 주문 확인'],
-    [{ kind: 'withdraw-wait', until: '2026-10-12' }, '10/12까지 · 리밸런싱 쉼'],
     [
       { kind: 'holiday', markets: ['KR'], nextCheckAt: kst('2026-10-12', '08:30') },
       '한국 휴장 · 거래 없음',
@@ -100,13 +99,7 @@ describe('next action', () => {
     expect(nextActionText(next, { now, variant: 'card' })).toBe('오늘 09:05 첫 주문');
   });
 
-  it('the 자산 card puts the waiting amount on 출금 대기; 계획 adds 다음 확인 to 휴장', () => {
-    expect(
-      nextActionText(
-        { kind: 'withdraw-wait', until: '2026-10-12' },
-        { now: NOW, variant: 'card', withdrawKrw: 500_425 },
-      ),
-    ).toBe('500,425원 · 10/12까지 · 주문 0건');
+  it('계획 adds 다음 확인 to 휴장', () => {
     expect(
       nextActionText(
         { kind: 'holiday', markets: ['KR'], nextCheckAt: kst('2026-10-12', '08:30') },
@@ -195,12 +188,6 @@ describe('schedule items', () => {
       null,
     ],
     [{ kind: 'sub-share-cash', krw: 56_548 }, '원화 현금', '1주 미만 대기', '56,548원'],
-    [
-      { kind: 'withdraw-wait', krw: 500_425, until: '2026-10-12' },
-      null,
-      '출금 대기 500,425원 · 10/12까지 · 주문 0건',
-      null,
-    ],
     [{ kind: 'new-cash', krw: 300_000 }, null, '새 현금 300,000원 · 다음 확인에 목표대로', null],
     [
       { kind: 'first-check', at: kst('2026-07-01', '08:30') },

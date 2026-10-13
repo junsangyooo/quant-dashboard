@@ -50,8 +50,6 @@ export function ruleStatusChip(
       return { state: 'holiday', label: copy.rebalance.holiday };
     case 'quote-wait':
       return { state: 'awaitingQuote', label: copy.rebalance.awaitingQuote };
-    case 'withdraw-wait':
-      return { state: 'withdrawPending', label: copy.rebalance.withdrawPending };
     case 'fx-suggest':
       return { state: 'fxSuggest', label: copy.rebalance.fxSuggest };
     case 'hold':

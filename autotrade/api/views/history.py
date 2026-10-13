@@ -30,7 +30,6 @@ OK_RESULTS = (
     "in-range",
     "holiday",
     "quote-wait",
-    "withdraw-wait",
     "in-progress",
     "partial-failed",
     "already-planned",
@@ -45,7 +44,6 @@ DAY_RESULT = {
     "todo": "failed",
     "holiday": "holiday",
     "quote-wait": "quote-wait",
-    "withdraw-wait": "withdraw-wait",
 }
 CALENDAR_PRIORITY = (
     "failed",

@@ -43,8 +43,7 @@ export function PlanPreview({
   const chip = ruleStatusChip(card.status, card.rule.ai);
   const share = shareParts(card.share);
   const showGauge = card.gauge.needle !== null || card.status === 'quote-wait';
-  const withdrawKrw = home.composition.pendingBar?.withdraw?.krw;
-  const next = nextActionText(card.next, { now, variant: 'card', withdrawKrw });
+  const next = nextActionText(card.next, { now, variant: 'card' });
   // The live mix gauge (D47) names no instrument: no logo before its line.
   const needleId = card.gauge.kind === 'mix' ? undefined : card.gauge.needle?.instrument.id;
 

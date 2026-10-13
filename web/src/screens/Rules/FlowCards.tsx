@@ -64,10 +64,9 @@ const SIDE_ICON: Record<Side, LucideIcon> = {
 };
 const SIDES: readonly Side[] = ['sell', 'fx', 'buy'];
 
-const EXCEPTION: Record<'holiday' | 'quote-wait' | 'withdraw-wait', ExceptionKind> = {
+const EXCEPTION: Record<'holiday' | 'quote-wait', ExceptionKind> = {
   holiday: 'holiday',
   'quote-wait': 'awaitingQuote',
-  'withdraw-wait': 'withdrawPending',
 };
 
 function country(inst: Instrument): Country {
@@ -625,7 +624,7 @@ function ExceptionContent({ node }: { node: FlowNode }) {
   const row = node.now.rows.find(
     (r): r is Extract<NowRow, { kind: 'exceptions' }> => r.kind === 'exceptions',
   );
-  const items = row?.items ?? (['holiday', 'quote-wait', 'withdraw-wait'] as const);
+  const items = row?.items ?? (['holiday', 'quote-wait'] as const);
   const [open, setOpen] = useState<ExceptionKind | null>(null);
   return (
     <div className={styles.exceptionChips}>

@@ -413,25 +413,6 @@ def test_own_costs_fall_back_where_the_fills_do_not_cover_the_shares() -> None:
     assert mixed.realized_krw == rest.realized_krw  # not every share is accounted for
 
 
-def test_a_pending_withdrawal_plans_nothing(
-    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
-) -> None:
-    """E13: like the long-term rule, the AI rule sends 0 orders while a withdrawal waits."""
-    world.rate(kst("2026-07-02 08:25"), "1400.0")
-    seed_prices(p2conn, world, ["2026-07-01", "2026-07-02"], "10000")
-    with transaction(p2conn):
-        repo.add_withdraw_wait(
-            p2conn, "paper", Currency.KRW, D(500000), date(2026, 7, 6), kst("2026-07-01 18:00")
-        )
-    report = plan_job(p2ctx, "paper", kst("2026-07-02 08:40"))
-    assert (report["result"], report["plan_id"]) == ("waiting", None)
-    assert repo.plan_on(p2conn, "paper", RULE_ID, date(2026, 7, 2)) is None
-    run = discovery_plan.last_run(p2conn, "paper", date(2026, 7, 2))
-    assert run is not None
-    assert run.details["withdraw_wait_until"] == "2026-07-06"
-    assert ai_plan_due(p2conn, p2ctx.cfg, "paper", kst("2026-07-02 08:50")) is None  # once a day
-
-
 def test_the_equal_weight_waits_for_reviews_with_attempts_left_only(
     p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
 ) -> None:

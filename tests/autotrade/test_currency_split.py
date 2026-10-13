@@ -161,7 +161,7 @@ def test_the_suggestion_never_blocks_a_status_above_it() -> None:
     for flags in (
         StatusFlags(fx_suggest=True, scheduled=True),
         StatusFlags(fx_suggest=True, in_progress=True),
-        StatusFlags(fx_suggest=True, withdraw_wait=True),
+        StatusFlags(fx_suggest=True, holiday=True),
         StatusFlags(fx_suggest=True, quote_wait=True),
     ):
         assert rule_status(flags) is not RuleStatus.FX_SUGGEST

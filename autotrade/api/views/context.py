@@ -659,10 +659,8 @@ class LedgerContext:
             partial_failed=self.open_plan is not None
             and self.open_plan.status in ("partial-failed", "todo"),
             in_progress=self.open_plan is not None and self.open_plan.status == "in-progress",
-            # The live ledger's wait holds its own money only and stops no order (PHASE3.md
-            # 2.5): the composition row shows the money and its date, the chip never says
-            # '출금 대기 · 리밸런싱 쉼'.
-            withdraw_wait=self.withdraw_until is not None and not self.live,
+            # A withdrawal wait (live only) holds its own money and stops no order (PHASE3.md
+            # 2.5): the composition row shows the money and its date; no chip says it.
             holiday=last is not None and last.run_date == self.today and last.result == "holiday",
             scheduled=last is None or (exceeded and self.open_plan is None),
             fx_suggest=self.fx_suggestion is not None,
@@ -715,8 +713,6 @@ class LedgerContext:
                     "instrumentName": name,
                     "qty": order.get("qty", 0),
                 }
-        if status is RuleStatus.WITHDRAW_WAIT and self.withdraw_until is not None:
-            return {"kind": "withdraw-wait", "until": fmt.day(self.withdraw_until)}
         if status is RuleStatus.HOLIDAY and self.last_check is not None:
             closed = self.last_check.details.get("closed_markets", [])
             return {

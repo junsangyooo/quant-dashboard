@@ -202,9 +202,7 @@ export function PlanScreen() {
   let body;
   if (data) {
     const tones = toneMap(data.rules.flatMap((r) => r.rows.map((row) => row.instrument)));
-    const nowRule =
-      data.schedule.now?.ruleId ??
-      (data.schedule.items[0]?.kind === 'withdraw-wait' ? 'withdraw-wait' : null);
+    const nowRule = data.schedule.now?.ruleId ?? null;
     const cards = data.rules.map((card) => (
       <RuleCard
         key={card.rule.id}
@@ -215,8 +213,7 @@ export function PlanScreen() {
         wide={wide}
         onGroup={setGroup}
         onShowNow={
-          nowRule === card.rule.id ||
-          (nowRule === 'withdraw-wait' && card.status === 'withdraw-wait')
+          nowRule === card.rule.id
             ? () => {
                 revealElement(NOW_ID);
               }

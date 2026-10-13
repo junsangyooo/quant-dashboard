@@ -122,8 +122,6 @@ export function checkChip(check: Check): { state: RebalanceState; label: string 
       return { state: 'awaitingQuote', label: dc.check.chip.quoteWait };
     case 'in-progress':
       return { state: 'inProgress', label: dc.check.chip.inProgress };
-    case 'withdraw-wait':
-      return { state: 'withdrawPending', label: dc.check.chip.withdrawWait };
     case 'no-run':
       return { state: 'holiday', label: dc.check.chip.noRun };
     case 'weekend':

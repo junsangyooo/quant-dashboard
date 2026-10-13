@@ -212,7 +212,7 @@ function edge(
 
 const EXCEPTIONS: NowRow = {
   kind: 'exceptions',
-  items: ['holiday', 'quote-wait', 'withdraw-wait'],
+  items: ['holiday', 'quote-wait'],
   active: false,
 };
 

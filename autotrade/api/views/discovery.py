@@ -512,10 +512,10 @@ class AiRule:
 
     def _exceptions(self) -> dict[str, Any]:
         status = self.ctx.status.value
-        active = status in ("holiday", "quote-wait", "withdraw-wait")
+        active = status in ("holiday", "quote-wait")
         return {
             "kind": "exceptions",
-            "items": ["holiday", "quote-wait", "withdraw-wait"],
+            "items": ["holiday", "quote-wait"],
             "active": active,
         }
 

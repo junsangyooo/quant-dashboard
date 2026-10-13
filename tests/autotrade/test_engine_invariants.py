@@ -177,9 +177,12 @@ def test_us_first_plan_on_a_us_holiday_waits(
 # ── withdraw wait ─────────────────────────────────────────────────────────────────────────
 
 
-def test_pending_withdrawal_means_zero_orders(
+def test_a_pending_withdrawal_holds_its_own_money_only(
     ctx: JobContext, conn: sqlite3.Connection, world: World
 ) -> None:
+    """Only the live ledger makes a withdrawal wait (PHASE3.md 2.5); one is put on this ledger
+    by hand. Its money is left out of the free cash and the rest is planned as usual: a wait
+    never stops the orders (ops notes 매일 확인 3)."""
     seed_drifted(conn)
     with transaction(conn):
         repo.add_withdraw_wait(
@@ -188,13 +191,15 @@ def test_pending_withdrawal_means_zero_orders(
     prices(world, "2026-10-06")
     world.rate(kst("2026-10-07 08:25"), "1380.6")
     report = check_job(ctx, "paper", kst("2026-10-07 08:30"))
-    assert report["result"] == "withdraw-wait"
-    assert str(report["details"]["withdraw_wait_until"]) == "2026-10-12"
-    assert no_orders(conn)
-    # The wait ends after 10/12: on 10/13 the check trades again.
+    assert report["result"] == "rebalance"
+    assert report["details"]["withdraw_held"] == {"KRW": D("40000")}
+    assert str(report["details"]["withdraw_held_until"]) == "2026-10-12"
+    assert not no_orders(conn)
+    # The wait ends after 10/12: the next check releases it.
     prices(world, "2026-10-12")
     world.rate(kst("2026-10-13 08:25"), "1380.6")
-    assert check_job(ctx, "paper", kst("2026-10-13 08:30"))["result"] == "rebalance"
+    later = check_job(ctx, "paper", kst("2026-10-13 08:30"))
+    assert later["details"]["withdraw_released"] == 1
     assert repo.withdraw_waits(conn, "paper") == []
 
 

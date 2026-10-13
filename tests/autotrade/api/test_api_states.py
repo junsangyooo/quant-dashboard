@@ -373,25 +373,28 @@ def test_a_month_of_history(
 def test_withdraw_wait(
     logged_in: TestClient, db: sqlite3.Connection, world: World, jobs: JobContext, clock: Clock
 ) -> None:
+    """A withdrawal wait holds its own money only (PHASE3.md 2.5). Only the live ledger makes
+    one; it is put on this seeded ledger by hand to read the screens: the money and its date
+    show on the composition, and no status, next action, schedule line or check result says
+    '출금 대기' (the four were removed: no ledger can produce them)."""
     seed_1007(db, world)
     with transaction(db):
         repo.add_withdraw_wait(
             db, "paper", Currency.KRW, D("40000"), date(2026, 10, 12), kst("2026-10-02 10:00")
         )
-    assert check_job(jobs, "paper", kst("2026-10-07 08:30"))["result"] == "withdraw-wait"
+    result = check_job(jobs, "paper", kst("2026-10-07 08:30"))["result"]
+    assert result == "rebalance"
     move_clock(logged_in, clock, "2026-10-07 08:40")
     home = logged_in.get("/api/home").json()
-    assert home["planChip"]["status"] == "withdraw-wait"
-    assert home["planChip"]["next"] == {"kind": "withdraw-wait", "until": "2026-10-12"}
+    assert home["planChip"]["status"] == "in-progress"
+    assert home["planChip"]["next"]["kind"] != "withdraw-wait"
     assert home["composition"]["pendingBar"] == {"withdraw": {"krw": 40000, "until": "2026-10-12"}}
     chips = [r.get("chip") for g in home["composition"]["groups"] for r in g["rows"]]
     assert {"kind": "withdraw-wait", "until": "2026-10-12"} in chips
     plan = logged_in.get("/api/plan").json()
-    assert {"kind": "withdraw-wait", "krw": 40000, "until": "2026-10-12"} in plan["schedule"][
-        "items"
-    ]
+    assert "withdraw-wait" not in [i["kind"] for i in plan["schedule"]["items"]]
     assert plan["rules"][0]["basisLine"]["withdrawExcluded"] is True
-    assert logged_in.get("/api/day/2026-10-07").json()["check"]["result"] == "withdraw-wait"
+    assert logged_in.get("/api/day/2026-10-07").json()["check"]["result"] == result
 
 
 def test_parameters(logged_in: TestClient) -> None:
@@ -411,8 +414,9 @@ def test_parameters(logged_in: TestClient) -> None:
 def test_cash_a_withdrawal_did_not_take_is_invested(
     logged_in: TestClient, db: sqlite3.Connection, world: World, jobs: JobContext, clock: Clock
 ) -> None:
-    """인계 14: 300,000 won held for a withdrawal until 10/12; nothing trades while it waits,
-    and on 10/13 the check invests it although no weight left the band ('withdraw-expired')."""
+    """인계 14: 300,000 won held for a withdrawal until 10/12 is not invested while it waits (the
+    rest of the money is: here there is none, so the check is 'in range'), and on 10/13 the check
+    invests it although no weight left the band ('withdraw-expired')."""
     seed_ledger(
         db,
         start=date(2026, 7, 1),
@@ -430,7 +434,7 @@ def test_cash_a_withdrawal_did_not_take_is_invested(
         world.bar(US, d, close="62.40", open_="62.40")
     for t in ("2026-10-07 08:25", "2026-10-13 08:25"):
         world.rate(kst(t), "1380.0")
-    assert check_job(jobs, "paper", kst("2026-10-07 08:30"))["result"] == "withdraw-wait"
+    assert check_job(jobs, "paper", kst("2026-10-07 08:30"))["result"] == "in-range"
     assert check_job(jobs, "paper", kst("2026-10-13 08:30"))["result"] == "rebalance"
     move_clock(logged_in, clock, "2026-10-13 09:00")
     check = logged_in.get("/api/day/2026-10-13").json()["check"]
