@@ -11,7 +11,7 @@
   - FAQ `https://openapi.tossinvest.com/openapi-docs/faq.md`
   - OpenAPI JSON `https://openapi.tossinvest.com/openapi-docs/latest/openapi.json` (정본)
   - 안내 `https://developers.tossinvest.com/llms.txt`
-- 옛 클라이언트 `src/quant/broker/toss.py`·`src/quant/broker/__init__.py`와 루트 운영 노트 §9.5·§11 '자동매매'(옛 시스템이 서버에서 겪은 것)
+- 옛 클라이언트 `src/quant/broker/toss.py`·`src/quant/broker/__init__.py`와 루트 운영 노트 §9.5·§11 '자동매매'(옛 시스템이 서버에서 겪은 것. 2026-10-13에 지워 git 이력 `935be03`에 있다)
 - Vault `001_projects/quant-dashboard/7-웹기획/인계.md` 규칙 5·6·7·13·14·15, `기획.md` SCR-MODE, `예시-값표.md` §1.6·§2
 
 ## 1. 토스 Open API에서 확인한 것
@@ -81,7 +81,7 @@
 - 주문은 **두 열쇠가 모두 있을 때만** 나간다(ops notes 안전).
   1. tick의 cron 줄에 `AUTOTRADE_LIVE_ORDERS=1`
   2. DB의 모드 '실전'(웹에서 PIN과 확인으로 켬)
-- `AUTOTRADE_LIVE_ORDERS=1`이 없으면 tick은 **토스를 아예 부르지 않는다**(읽기도 안 함). 옛 quant가 같은 client로 토큰을 쓰고 있어서, 새 엔진이 토큰을 받는 순간 서로를 무효화하기 때문이다(1.6). 열쇠 1을 넣는 것이 '토스에 연결해도 된다'는 뜻이고, 열쇠 2 없이는 주문이 0건이다.
+- `AUTOTRADE_LIVE_ORDERS=1`이 없으면 tick은 **토스를 아예 부르지 않는다**(읽기도 안 함). 같은 client로 토큰을 받는 다른 프로그램과는 서로를 무효화하기 때문이다(1.6, 옛 quant가 그랬다. 그 cron 줄은 2026-10-13에 뺐다). 열쇠 1을 넣는 것이 '토스에 연결해도 된다'는 뜻이고, 열쇠 2 없이는 주문이 0건이다.
 - 보낼 때마다 두 열쇠를 다시 본다: 주문 기록을 쓰는 같은 거래 안에서 모드를 읽고, 프로세스 환경을 읽는다(`broker/toss.py` `LivePermit`). 테스트와 노트북에는 열쇠 1이 없다(`tests/autotrade/conftest.py`).
 - 비밀: tick만 `AUTOTRADE_SECRETS_ENV` 파일에서 `TOSS_CLIENT_ID`·`TOSS_CLIENT_SECRET`·`TOSS_ACCOUNT_NO`를 한 줄씩 읽는다(`config.read_env_key`). 토큰은 `data/autotrade-toss/token.json`(폴더 0700, 파일 0600, 원자적 쓰기, git 제외, 웹 서비스에서는 InaccessiblePaths). 폴더는 배포의 `migrate`가 재시작 전에 0700으로 만든다: `-`가 붙은 InaccessiblePaths는 단위가 시작할 때 없는 경로를 건너뛰어서, tick이 첫 토큰을 받으며 만든 폴더는 웹이 다시 시작할 때까지 웹에 보였다.
 
@@ -198,8 +198,8 @@
 ## 3. 파생 문제와 처리
 | 고친 것 | 새로 생길 수 있는 문제 | 처리 |
 |---|---|---|
-| 새 엔진이 토스 토큰을 받는다 | 옛 quant(keeper·cycle, 아직 cron에 있음)와 서로 토큰을 무효화 | 열쇠 1 전에는 토스를 부르지 않음. 켜기 전 할 일: 옛 quant의 토스 cron 줄을 뺀다(4절). `token-revoked`를 세어 토스 연결 ✕ |
-| 같은 계좌를 옛 quant가 매매할 수 있다 | 대조가 앱 매매로 보고 출금 대기를 만든다 | 옛 quant 줄 제거가 켜기 전 조건. 우리 것 아닌 체결은 기록에 남는다 |
+| 새 엔진이 토스 토큰을 받는다 | 같은 키를 쓰는 다른 프로그램(옛 quant의 keeper·cycle)과 서로 토큰을 무효화 | 열쇠 1 전에는 토스를 부르지 않음. 옛 quant의 토스 cron 줄은 2026-10-13에 뺐다(4절). `token-revoked`를 세어 토스 연결 ✕ |
+| 같은 계좌를 옛 quant가 매매할 수 있었다 | 대조가 앱 매매로 보고 출금 대기를 만든다 | 옛 quant 줄은 2026-10-13에 뺐다. 우리 것 아닌 체결은 기록에 남는다 |
 | 보내다 프로세스가 죽음 | 다음 tick이 같은 주문을 또 냄 | 의도를 먼저 커밋, 9분 안 같은 clientOrderId, 9분 뒤엔 목록에서 찾기 |
 | 응답 없음·5xx | 실패로 치고 다음 날 다시 내면 두 번 | 끝을 모르는 주문은 실패로 치지 않음('unknown' → 다시 확인) |
 | 일부 체결 | 나머지를 다시 내면 가격이 바뀐 뒤 과매수·과매도 | 체결분만 적고 나머지는 다음 확인이 다시 계획 |
@@ -223,7 +223,7 @@
 | 배당이 있을 때 입금 | 입금이 배당(총액까지)이 되고 진짜 배당은 나중에 입금이 됨 | 예상 세후 금액에 세금 반올림 범위로 가까울 때만 배당 |
 | 끝난 수수료 행 | 마지막 행(끝난 0.10%)으로 수량을 세어 422 → 직접 할 일 | 그날 유효한 행, 없으면 가장 높은 율 |
 | 열린 조건주문(옛 quant) | 켠 뒤 스스로 주문하고, toss-check의 openOrders에도 안 보임 | tick·toss-check가 읽고, 열려 있으면 켜지 않음(할 일: 앱에서 취소) |
-| 옛 앱 단위(`dashboard.service`) | 공개 프로세스가 `TOSS_*`를 받아 옛 quant 경로로 주문·전량 취소·토큰 무효화 | `UnsetEnvironment=`에 `TOSS_*`, 비밀 폴더를 `InaccessiblePaths=`로 가림(옛 코드의 `core.secrets.get()`이 파일을 직접 읽어서) |
+| 옛 앱 단위(`dashboard.service`) | 공개 프로세스가 `TOSS_*`를 받는다(옛 quant 경로로 주문·전량 취소·토큰 무효화를 할 수 있었다. 그 코드는 2026-10-13에 지웠다) | `UnsetEnvironment=`에 `TOSS_*`, 비밀 폴더를 `InaccessiblePaths=`로 가림(옛 코드의 `core.secrets.get()`이 파일을 직접 읽어서) |
 | 1억 원 이상 | 토스가 거부 | 보내기 전에 직접 할 일 |
 | 켜는 순간과 계좌 사진 사이 입금 | 시작 금액이 다름 | 시작은 미리보기의 사진, 그 뒤 차이는 다음 대조가 입금으로 |
 | 실전 장부가 브로커와 다름 | 틀린 장부로 매매 | 맞지 않으면 주문 0건, 직접 할 일, `adopt-broker` |
@@ -245,9 +245,9 @@
 
 ## 4. 실전 전에 유준상이 할 일
 1. **넣을 돈을 정한다.** 켜는 순간 토스 종합매매 계좌의 원화·달러·규칙 종목이 모두 실전 장부가 된다. 넣고 싶은 만큼만 두고, 넣지 않을 돈은 먼저 출금한다. 규칙 밖 종목은 그대로 둔다(팔지 않음). 원화는 한국 종목, 달러는 미국 종목에만 쓴다(D47): 원화만 두면 한국 종목만 사고, 50:50으로 시작하려면 켜기 전에 반쯤 달러로 바꿔 둔다(미리보기가 얼마인지 보여 준다).
-2. **옛 quant의 토스 사용을 멈춘다**(서버 crontab에서 `quant.keeper`·`quant.cycle_job` 줄 삭제, 백업 후). 같은 client의 토큰을 서로 무효화하고, 같은 계좌에 주문을 낼 수 있다.
+2. **옛 quant의 토스 사용을 멈춘다** — 서버 crontab의 `quant.keeper`·`quant.cycle_job` 줄은 2026-10-13에 뺐고, 코드도 저장소에서 지웠다. 남은 일:
    - **옛 quant가 건 조건주문을 토스 앱에서 모두 취소한다.** 토스에 남아 감시하다가 조건이 되면 스스로 주문한다(새 엔진은 걸지 않는다). 5절 `toss-check`의 `"conditionalOrders": 0`으로 확인한다. 하나라도 열려 있으면 켜기 점검이 ✕다.
-   - **옛 앱 단위를 갱신한다**(서버 변경, 유준상의 허락 뒤): 갱신한 `deploy/dashboard.service`(토스 키 `TOSS_*`를 `UnsetEnvironment=`에, 비밀 폴더를 `InaccessiblePaths=`로)를 설치하고 다시 시작한다. 공개된 옛 앱(portfolio.jsyoo.dev)이 옛 quant의 PIN 뒤에서 조건주문을 걸거나(`/api/quant/plans`) 계좌의 모든 주문을 취소하거나(`/orders/cancel_all`) 토큰을 받아 tick의 토큰을 끊을 수 없게 한다. `sudo cp deploy/dashboard.service /etc/systemd/system/` → `sudo systemd-analyze verify …` → `sudo systemctl daemon-reload && sudo systemctl restart dashboard` → `/proc/<PID>/environ`에 `TOSS_` 줄이 없는지, portfolio.jsyoo.dev가 그대로 뜨는지 본다.
+   - **옛 앱 단위를 갱신한다**(서버 변경, 유준상의 허락 뒤): 갱신한 `deploy/dashboard.service`(토스 키 `TOSS_*`를 `UnsetEnvironment=`에, 비밀 폴더를 `InaccessiblePaths=`로)를 설치하고 다시 시작한다. 공개된 옛 앱(portfolio.jsyoo.dev) 프로세스가 실계좌 토스 키를 들지 않게 한다. `sudo cp deploy/dashboard.service /etc/systemd/system/` → `sudo systemd-analyze verify …` → `sudo systemctl daemon-reload && sudo systemctl restart dashboard` → `/proc/<PID>/environ`에 `TOSS_` 줄이 없는지, portfolio.jsyoo.dev가 그대로 뜨는지 본다.
 3. WTS 설정 > Open API: 서버 IP(146.56.118.65)가 허용 목록에 있는지, 키 만료일이 보이는지(있으면 알려 주면 `AUTOTRADE_TOSS_KEY_EXPIRES`로 넣는다). 계좌의 거래소 설정이 통합(SOR)인지.
 4. 서버 확인 단계(5절)를 허락한다(읽기만).
 5. tick 줄에 열쇠 1을 넣는다(crontab, AI 줄의 `AUTOTRADE_AI_CALLS=1`과 같은 방식):
@@ -265,7 +265,7 @@
 cd ~/portfolio-dashboard
 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env .venv/bin/python -m autotrade.jobs toss-check
 ```
-- 주문·취소를 부르지 않는다(코드에 그 경로가 없다). 토큰을 하나 받으므로 옛 quant의 토큰이 무효가 된다(옛 quant가 다음 호출에서 다시 받는다). 옛 quant를 멈춘 뒤에 하면 깔끔하다.
+- 주문·취소를 부르지 않는다(코드에 그 경로가 없다). 토큰을 하나 받는다(같은 키로 받은 다른 토큰은 무효가 된다).
 - 앞선 조건: 이 커밋이 배포되어 DB가 스키마 6이다(`migrate`). 규칙 종목을 DB에서 읽는다. 열쇠 1(`AUTOTRADE_LIVE_ORDERS`)은 필요 없다.
 - JSON 한 줄. 기대하는 출력(키 순서 그대로):
   - `"job": "toss-check"`, `"result": "ok"`, `"token": "ok"`
@@ -276,7 +276,7 @@ AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env .venv/bin/python -m au
   - `"commissions": {"KR": "0.00015", "US": "…"}`(1.10-4)
   - `"instruments": {"KR:069500": {"name": "KODEX 200", "market": "…", "status": "ACTIVE", "securityType": "ETF", "currency": "KRW", "tradable": true, "price": "…"}, "US:SPYM": {… "currency": "USD", "tradable": true …}}` — `tradable`이 false거나 `{"found": false}`면 그 종목으로는 켤 수 없다(1.10-1)
   - `"calendar": {"KR": {…}, "US": {…}}`(오늘 세션), `"fx": {"rate": "…", "midRate": "…"}`
-  - `"tokenRevoked": n`이 있으면 그 사이 다른 프로그램(옛 quant)이 같은 키로 토큰을 받았다.
+  - `"tokenRevoked": n`이 있으면 그 사이 다른 프로그램이 같은 키로 토큰을 받았다.
 - 실패하면 `"result": "failed"`, `"cause"`와 `"error"`: `ip`(403 `ip-not-allowed`·`access_denied`: WTS 허용 IP), `auth`(401 `invalid_client`: 키), `account`(404 `account-not-found` 또는 번호가 맞는 BROKERAGE 계좌 없음), `no-key`(파일에 키 없음), `unreachable`·`maintenance`·`error`. 비밀값·토큰은 출력하지 않는다.
 - 1.10-1의 사전 요건과 1.10-3은 첫 실주문에서만 안다: 첫날 작동 화면을 같이 본다.
 
