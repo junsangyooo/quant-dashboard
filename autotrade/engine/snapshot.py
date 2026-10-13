@@ -143,14 +143,15 @@ def _baseline(
     conn: sqlite3.Connection,
     cfg: Config,
     ledger_id: str,
-    d: date,
+    at: datetime,
     total: Decimal,
     unit_prices: dict[str, Decimal],
     rule: RuleDef,
     instruments: dict[str, Instrument],
     fx_rate: Decimal,
 ) -> tuple[Decimal | None, dict[str, str] | None, Decimal | None]:
-    """(value, units, dividend cash) of the untouched baseline on day d."""
+    """(value, units, dividend cash) of the untouched baseline valued at `at`."""
+    d = kst_date(at)
     start = repo.start_event(conn, ledger_id)
     if start is None or start.amount is None:
         return None, None, None
@@ -160,15 +161,18 @@ def _baseline(
     if previous is not None and previous.baseline_units:
         units = {k: Decimal(v) for k, v in previous.baseline_units.items()}
         cash = previous.baseline_cash_krw or ZERO
-        since = previous.date
+        since, after = previous.date, previous.valued_at
     else:
         start_units = _start_units(conn, cfg, rule, instruments, start.event_date, start.amount)
         if start_units is None:
             return None, None, None
-        units, cash, since = start_units, ZERO, start.event_date
+        units, cash, since, after = start_units, ZERO, start.event_date, start.occurred_at
     targets = {t.instrument_id: t.weight for t in rule.targets}
     for ev in repo.events_of_ledger(conn, ledger_id, ["deposit", "withdrawal"]):
-        if since < ev.event_date <= d and ev.amount is not None:
+        # Money that came after the last value and by this one, as the screens count it
+        # (api/views/series.py): a deposit on the evening of a day is in the next day's value,
+        # so it is the next day's (by date it fell between two values and was never added).
+        if after < ev.occurred_at <= at and ev.amount is not None:
             if ev.payload.get("reason") == "conversion":
                 continue  # the owner's own conversion (engine/live.py): no money came or went
             change = baseline.units_for_amount(_won(ev), targets, unit_prices)
@@ -225,7 +229,7 @@ def take_snapshot(
     ]
     parts = refresh_cash_parts(conn, ledger_id, at)
     base_value, base_units, base_cash = _baseline(
-        conn, cfg, ledger_id, d, val.total_krw, val.unit_prices, rule, instruments, val.fx.rate
+        conn, cfg, ledger_id, at, val.total_krw, val.unit_prices, rule, instruments, val.fx.rate
     )
     row = SnapshotRow(
         ledger_id=ledger_id,

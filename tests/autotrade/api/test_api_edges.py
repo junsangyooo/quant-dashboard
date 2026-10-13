@@ -119,7 +119,8 @@ def test_days_without_a_check(
     check_job(jobs, "paper", kst("2026-10-07 08:30"))
     day = logged_in.get("/api/day/2026-07-02").json()
     assert day["check"] == {"at": None, "result": "no-run", "band": None}
-    assert day["total"] == 0  # no value recorded yet
+    # No value recorded yet: the start's (what came in), as the 기록 row of that day says.
+    assert day["total"] == 10000000
     assert day["change"] is None
 
 

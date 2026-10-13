@@ -12,9 +12,10 @@ from autotrade.api.views.discovery import AI_EVENT_KINDS, judgment
 from autotrade.api.views.orders import plan_stages, stages_mini
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import (
-    contributions_by_date,
     month_changes,
     month_key,
+    pnl_now,
+    snapshot_pnl,
     weekdays,
 )
 from autotrade.db import repo
@@ -134,22 +135,28 @@ class DayData:
     def day_change(self, d: date) -> tuple[Decimal | None, Decimal | None]:
         """(change, total) of a day from the snapshots; change is net of money in and out.
 
-        A day without a snapshot (a weekend, a missed run) has no change, and its total is the
-        last value before it: nothing was revalued that day. None before any value exists.
+        change = the day's P&L (its 16:00 value less the money in by then) - the previous value's
+        (series.py): money counts in the first day whose value holds it, so a deposit after a
+        day's 16:00 value is the next value's, weekends included. Today before 16:00 the value is
+        the one now. A day without a snapshot (a weekend, a missed run) has no change, and its
+        total is the last value before it: nothing was revalued that day. Before the first value
+        that is the start (a live ledger turned on after its first day's snapshot ran: worth what
+        came in). None before the start.
         """
+        ctx = self.ctx
         snap = self.snaps.get(d)
-        before = [s for s in self.ctx.snapshots if s.date < d]
-        if snap is None and d != self.ctx.today:
-            return None, (before[-1].total_krw if before else None)
-        total = snap.total_krw if snap is not None else self.ctx.total
+        before = [s for s in ctx.snapshots if s.date < d]
+        if snap is None and d != ctx.today:
+            if before:
+                return None, before[-1].total_krw
+            started = ctx.start is not None and ctx.start_date <= d
+            return None, (ctx.start_amount if started else None)
+        total, pnl = (
+            (snap.total_krw, snapshot_pnl(snap)) if snap is not None else (ctx.total, pnl_now(ctx))
+        )
         if not before:
             return None, total
-        previous = before[-1]
-        flows = sum(
-            (v for day, v in contributions_by_date(self.ctx).items() if previous.date < day <= d),
-            ZERO,
-        )  # money that came in since the previous value, weekends included
-        return total - previous.total_krw - flows, total
+        return pnl - snapshot_pnl(before[-1]), total
 
     def recovered_on(self, d: date) -> str | None:
         for later in sorted(x for x in self.runs if x >= d):
@@ -317,7 +324,7 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
     }
     if ctx.ai_rule.shown:
         kinds_count["ai"] = sum(1 for e in year_events if e.kind in AI_EVENT_KINDS)
-    changes = month_changes(ctx, ctx.total)
+    changes = month_changes(ctx)
     months: list[dict[str, Any]] = []
     for month in sorted(changes, reverse=True):
         if not month.startswith(f"{chosen:04d}-"):

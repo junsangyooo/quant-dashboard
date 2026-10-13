@@ -1,14 +1,24 @@
-"""Time series shared by home, history and plan: snapshots, periods, event markers, drift."""
+"""Time series shared by home, history and plan: snapshots, periods, event markers, drift.
+
+Money in or out against values (one rule everywhere): a period's change is the P&L at its closing
+valuation less the P&L at its opening one, P&L being the value less the money in by that moment.
+So money counts in a period when it arrived after the opening valuation and by the closing one:
+a deposit at 20:00 belongs to the next day's 16:00 value, not to the day it came (its 16:00 value
+was taken before it). A snapshot stores its value and the money in from the same ledger state at
+the same moment (engine/snapshot.py take_snapshot), so its P&L is exact even when a deposit was
+booked late; now, the closing pair is the ledger's (ctx.total, ctx.contributions, ctx.as_of).
+"""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from autotrade.api.views import fmt
-from autotrade.api.views.context import LedgerContext, event_kind, event_krw
+from autotrade.api.views.context import LedgerContext, event_kind
 from autotrade.db.models import SnapshotRow
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, usd_in_krw
@@ -60,20 +70,40 @@ def ret(value: Decimal, base: Decimal) -> float:
     return fmt.ret2((value - base) / base) if base > 0 else 0.0
 
 
-def contributions_by_date(ctx: LedgerContext) -> dict[date, Decimal]:
-    """Net money in per day, in won: start and deposits in, withdrawals out (dividends are
-    income). A live dollar deposit counts its won value as booked (the ledger's money in moved
-    by that much); the owner's conversion is a withdrawal and a deposit of the same won, so it
-    nets to nothing. Only up to `ctx.as_of`, the moment the ledger's figures are of."""
-    out: dict[date, Decimal] = {}
-    for ev in ctx.events:
-        if ev.amount is None or ev.occurred_at > ctx.as_of:
-            continue
-        if ev.kind in ("start", "deposit"):
-            out[ev.event_date] = out.get(ev.event_date, ZERO) + event_krw(ev)
-        elif ev.kind == "withdrawal":
-            out[ev.event_date] = out.get(ev.event_date, ZERO) - event_krw(ev)
-    return out
+def snapshot_pnl(snap: SnapshotRow) -> Decimal:
+    """A snapshot's P&L: its value less the money that had come in when it was taken."""
+    return snap.total_krw - snap.contributions
+
+
+@dataclass(frozen=True)
+class Opening:
+    """The valuation a period opens with: its value, its P&L, and when it was taken (money that
+    came in after `at` belongs to the period)."""
+
+    value: Decimal
+    pnl: Decimal
+    at: datetime
+
+
+def opening(ctx: LedgerContext, d: date) -> Opening | None:
+    """The valuation of a period that starts on d: the snapshot on d or the last one before it,
+    else the start when the ledger had started by d (worth what came in, so no P&L: a live
+    ledger turned on after that day's snapshot ran has no snapshot on its first day). None
+    before the start."""
+    best: SnapshotRow | None = None
+    for s in ctx.snapshots:
+        if s.date <= d:
+            best = s
+    if best is not None:
+        return Opening(best.total_krw, snapshot_pnl(best), best.valued_at)
+    if ctx.start is not None and ctx.start_date <= d:
+        return Opening(ctx.start_amount, ZERO, ctx.start.occurred_at)
+    return None
+
+
+def pnl_now(ctx: LedgerContext) -> Decimal:
+    """The ledger's P&L at `ctx.as_of`: the total less the money in by then."""
+    return ctx.total - ctx.contributions
 
 
 def series_points(ctx: LedgerContext, since: date) -> list[dict[str, Any]]:
@@ -96,7 +126,9 @@ def series_points(ctx: LedgerContext, since: date) -> list[dict[str, Any]]:
 
 def event_markers(ctx: LedgerContext, since: date | None = None) -> list[dict[str, Any]]:
     """One marker per day (CONTRACT.md Trend.events): the day's first event kind, every kind of
-    the day in `kinds`, and `count` when there are two or more (a bundle marker)."""
+    the day in `kinds`, and `count` when there are two or more (a bundle marker). A marker stays
+    on its event's own day even when the money came after that day's value (it opens that day's
+    panel, which lists the event); it nets nothing, so it needs no valuation time."""
     by_date: dict[str, list[str]] = {}
     for ev in ctx.listed_events:
         if since is not None and ev.event_date < since:
@@ -112,15 +144,6 @@ def event_markers(ctx: LedgerContext, since: date | None = None) -> list[dict[st
             marker["count"] = len(kinds)
         out.append(marker)
     return out
-
-
-def value_on(ctx: LedgerContext, d: date) -> Decimal | None:
-    """The snapshot value on d, or on the last snapshot before it."""
-    best: SnapshotRow | None = None
-    for s in ctx.snapshots:
-        if s.date <= d:
-            best = s
-    return None if best is None else best.total_krw
 
 
 def snapshot_drift(ctx: LedgerContext, snap: SnapshotRow) -> Decimal | None:
@@ -156,37 +179,30 @@ def month_key(d: date) -> str:
     return f"{d.year:04d}-{d.month:02d}"
 
 
-def month_changes(ctx: LedgerContext, total: Decimal) -> dict[str, int]:
+def month_changes(ctx: LedgerContext) -> dict[str, int]:
     """Change per month in whole won, net of money in and out; the changes add up to the P&L.
 
-    month change = (value at month end - value at the previous month end) - net money in during
-    the month, with the value before the start = 0 and the current month ending at `total`.
-    Each month is the change of the rounded running sum, so rounding never piles up: the months
-    add up to the rounded P&L exactly ('월 변동의 합 = 손익').
+    month change = P&L at the month's last valuation - P&L at the previous month's (the module
+    docstring), with the P&L before the start 0 and the current month ending at the ledger's P&L
+    now. Money that came after a month's last 16:00 value is the next month's: a deposit on the
+    evening of 6/30 is in neither June's value nor June's money in. Each month is the change of
+    the rounded running sum, so rounding never piles up: the months add up to the rounded P&L
+    exactly ('월 변동의 합 = 손익').
     """
-    flows = contributions_by_date(ctx)
-    month_end: dict[str, Decimal] = {}
+    month_pnl: dict[str, Decimal] = {}
     for snap in ctx.snapshots:
-        month_end[month_key(snap.date)] = snap.total_krw
-    current = month_key(ctx.today)
-    month_end[current] = total
-    # Every month with a value, money in or out, or an event gets a row (a month with events but
-    # no snapshot keeps the previous value: its change is 0 and the sum still equals the P&L).
-    months = sorted(
-        set(month_end)
-        | {month_key(d) for d in flows}
-        | {month_key(e.event_date) for e in ctx.events}
-    )
+        month_pnl[month_key(snap.date)] = snapshot_pnl(snap)
+    month_pnl[month_key(ctx.today)] = pnl_now(ctx)
+    # Every month with a value or an event gets a row (a month with events but no value keeps
+    # the previous P&L: its change is 0 and the sum still equals the P&L).
+    months = sorted(set(month_pnl) | {month_key(e.event_date) for e in ctx.events})
     out: dict[str, int] = {}
-    previous = running = ZERO
+    running = ZERO
     shown = 0
     for m in months:
-        end = month_end.get(m, previous)
-        net_in = sum((v for d, v in flows.items() if month_key(d) == m), ZERO)
-        running += end - previous - net_in
+        running = month_pnl.get(m, running)
         out[m] = fmt.krw(running) - shown
         shown += out[m]
-        previous = end
     return out
 
 

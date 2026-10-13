@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any
 
 from autotrade.api.views import fmt
@@ -9,12 +10,12 @@ from autotrade.api.views.accounts import Accounts, home_accounts
 from autotrade.api.views.context import CompRow, LedgerContext, event_krw
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import (
-    contributions_by_date,
     event_markers,
     long_record,
+    opening,
     period_start,
+    pnl_now,
     series_points,
-    value_on,
 )
 from autotrade.db import repo
 from autotrade.domain.instruments import Currency
@@ -183,12 +184,12 @@ def trend(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
         empty = None
     period_pnl = None
     if long and chosen != "all":
-        start_value = value_on(ctx, since)
-        if start_value is not None and start_value > 0:
-            flows = contributions_by_date(ctx)
-            net_in = sum((v for d, v in flows.items() if d > since), ZERO)
-            amount = ctx.total - start_value - net_in
-            period_pnl = {"amount": fmt.krw(amount), "pct": fmt.ret2(amount / start_value)}
+        # The P&L now less the P&L of the period's opening value (series.py): money that came
+        # after that value is the period's, even on its first day.
+        start = opening(ctx, since)
+        if start is not None and start.value > 0:
+            amount = pnl_now(ctx) - start.pnl
+            period_pnl = {"amount": fmt.krw(amount), "pct": fmt.ret2(amount / start.value)}
     return {
         "periods": list(HOME_PERIODS) if long else None,
         "period": chosen,
@@ -240,19 +241,25 @@ def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None
     chosen = period if (long and period in HOME_PERIODS) else "all"
     since = period_start(chosen, ctx.today, ctx.start_date)
     end = ctx.total
+    after: datetime | None = None  # money that came after this belongs to the period
+    # Fees still go by day: a fill on the evening of the opening day (a US order at 22:30) stays
+    # in 'market', as it always has on both ledgers (moving it would change paper's breakdowns).
+    after_day: date | None = None
     if chosen == "all":
         # From the start amount: the start is not a deposit ('입금 개수에 넣지 않음').
-        start_value, after = ctx.start_amount if ctx.started else ZERO, None
+        start_value = ctx.start_amount if ctx.started else ZERO
     else:
-        start_value = value_on(ctx, since) or ZERO
-        after = since
+        start = opening(ctx, since)
+        start_value = ZERO if start is None else start.value
+        after, after_day = (None if start is None else start.at), since
     deposit = withdrawal = dividend = ZERO
-    # Up to the moment `end` is of (ctx.as_of). The owner's conversions are not money in or out
-    # of the ledger (their won rounding and the rate after them fall in 'market').
+    # The money that came in or went out after the opening value and by the moment `end` is of
+    # (ctx.as_of; series.py). The owner's conversions are not money in or out of the ledger
+    # (their won rounding and the rate after them fall in 'market').
     for ev in ctx.listed_events:
         if ev.amount is None or ev.occurred_at > ctx.as_of:
             continue
-        if after is not None and ev.event_date <= after:
+        if after is not None and ev.occurred_at <= after:
             continue
         if ev.kind == "deposit":
             deposit += event_krw(ev)
@@ -264,7 +271,7 @@ def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None
         (
             f.fee_krw
             for f in repo.fills_of_ledger(ctx.conn, ctx.ledger_id)
-            if f.filled_at <= ctx.as_of and (after is None or kst_date(f.filled_at) > after)
+            if f.filled_at <= ctx.as_of and (after_day is None or kst_date(f.filled_at) > after_day)
         ),
         ZERO,
     )
