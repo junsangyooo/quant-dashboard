@@ -717,7 +717,9 @@ CREATE TABLE ai_runner (
 
 # V6: phase 3, live orders through Toss (autotrade/PHASE3.md).
 # - broker_status: one row, what the tick last saw of the Toss link. The web service cannot reach
-#   Toss (sandbox), so the mode and health screens read this.
+#   Toss (sandbox), so the mode and health screens read this. reconciled_at is the last
+#   reconciliation (busy ones too), matched_at the last one that matched: the closed orders the
+#   next one reads start there. conditional_orders: the account's open 조건주문 (NULL: not read).
 # - broker_snapshots: what the account held when the tick looked (cash = buying power per
 #   currency, holdings, the closed orders read with it); the reconciliation and the live preview
 #   start from it. A tick that finds the same account only moves confirmed_at.
@@ -748,7 +750,9 @@ CREATE TABLE broker_status (
     detail            TEXT,
     reconcile_state   TEXT CHECK (reconcile_state IN ('match', 'mismatch', 'busy')),
     reconciled_at     TEXT,
+    matched_at        TEXT,
     reconcile_detail  TEXT NOT NULL DEFAULT '{}',
+    conditional_orders TEXT,
     updated_at        TEXT NOT NULL
 );
 

@@ -15,7 +15,9 @@ committed before the order leaves, so a crash in between is found and resolved t
   4. send the orders whose stage is due (only with both keys, and never on a mismatch)
   5. once a day: the rule's instruments tradable, the commission rates
   6. a snapshot of the account: cash (buying power), holdings, the closed orders since the last
-     reconciliation; 'quiet' when no order was open anywhere while it was read
+     reconciliation that matched; 'quiet' when no order was open anywhere while it was read;
+     then the account's open 조건주문 (armed, they place orders of their own: live is not
+     turned on while one is open)
   7. the link's status (the mode and health screens read it)
 
 Without AUTOTRADE_LIVE_ORDERS=1 nothing is called: the status says 'off' and that is all.
@@ -40,6 +42,7 @@ from autotrade.broker.toss_api import (
     OPEN_OR_CLOSED,
     REQUEST_RECORDS,
     BrokerOrder,
+    ConditionalOrder,
     LivePermit,
     OrderRequest,
     TossApiError,
@@ -63,7 +66,7 @@ from autotrade.domain.planner import Side
 from autotrade.engine import live, runner, sleeves
 from autotrade.engine.common import new_money_waiting, withdraw_wait_amounts
 from autotrade.market.calendar import CalendarRangeError, calendar_for
-from autotrade.timeutil import et_date, from_iso, kst_date, require_aware
+from autotrade.timeutil import KST, et_date, from_iso, kst_date, require_aware
 
 SNAPSHOT_KEEP = timedelta(days=7)
 SESSION_GRACE = timedelta(minutes=30)  # a day order still open this long after its session
@@ -98,6 +101,7 @@ class Sync:
         self.now = now
         self.changes: list[dict[str, Any]] = []
         self.errors: list[str] = []
+        self.conditional: list[ConditionalOrder] | None = None  # step 6, None until read
         self._closed: dict[tuple[str, date], set[str]] = {}  # CLOSED ids by (symbol, day)
 
     # 1. read our open orders
@@ -532,7 +536,7 @@ class Sync:
                 tradable[iid] = "suspended"
             else:
                 tradable[iid] = "ok"
-        return tradable, self.client.commissions(), self.now()
+        return tradable, self.client.commissions(kst_date(self.now())), self.now()
 
     # 6. the account
     def snapshot(self) -> tuple[int, bool]:
@@ -568,14 +572,24 @@ class Sync:
             live_repo.prune_snapshots(self.conn, read_at - SNAPSHOT_KEEP)
         return snapshot_id, quiet
 
+    def conditional_orders(self) -> None:
+        """Armed 조건주문 (the old quant's, the app's) place orders of their own: turning live on
+        waits until none is open (engine/live.py link_check). Read after the account's snapshot
+        is stored, so a failure here (the link's state, like any read) never costs the snapshot
+        the reconciliation needs."""
+        self.conditional = self.client.conditional_orders("OPEN")
+
     def _closed_since(self) -> date:
-        """The closed orders the reconciliation still needs: since the last one (a day earlier,
-        orders are dated in KST), or since the live ledger's start; today before a start."""
+        """The closed orders the reconciliation still needs: since the last one that matched
+        (a day earlier, orders are dated in KST), or since the live ledger's start; today before
+        a start. Not since the last attempt: one that found the account busy or not matching
+        booked nothing, and days of them (the first key out of cron, Toss unreachable, an order
+        open) must not let the owner's app fills drop out of the list."""
         today = kst_date(self.now())
         status = live_repo.get_status(self.conn)
         start = repo.start_event(self.conn, LIVE)
-        if status is not None and status.reconciled_at is not None and start is not None:
-            return max(kst_date(status.reconciled_at), start.event_date) - timedelta(days=1)
+        if status is not None and status.matched_at is not None and start is not None:
+            return max(kst_date(status.matched_at), start.event_date) - timedelta(days=1)
         if start is not None:
             return start.event_date - timedelta(days=1)
         return today
@@ -615,6 +629,8 @@ def _off_status(
         reconcile_state=None if before is None else before.reconcile_state,
         reconciled_at=None if before is None else before.reconciled_at,
         reconcile_detail={} if before is None else before.reconcile_detail,
+        matched_at=None if before is None else before.matched_at,
+        conditional=None if before is None else before.conditional,
     )
     with transaction(conn):
         live_repo.save_status(conn, status, at)
@@ -651,6 +667,12 @@ def broker_job(
         return {**base, "result": state if changed else "quiet", "error": str(exc)}
     sync = Sync(conn, cfg, client, at, wall)
     state, detail = "ok", None
+    # What a step that fails leaves: the last known daily facts, no snapshot.
+    tradable = {} if before is None else before.tradable
+    commissions = {} if before is None else before.commissions
+    tradable_at = None if before is None else before.tradable_at
+    snapshot_id: int | None = None
+    quiet = False
     try:
         sync.poll()
         sync.recover()
@@ -658,12 +680,9 @@ def broker_job(
         sync.send_due()
         tradable, commissions, tradable_at = sync.daily(before)
         snapshot_id, quiet = sync.snapshot()
+        sync.conditional_orders()
     except TossError as exc:
         state, detail = link_state(exc), str(exc)
-        tradable = {} if before is None else before.tradable
-        commissions = {} if before is None else before.commissions
-        tradable_at = None if before is None else before.tradable_at
-        snapshot_id, quiet = None, False
     ok = state == "ok"
     latest = live_repo.get_status(conn)  # the reconciliation may have written meanwhile
     status = BrokerStatus(
@@ -683,6 +702,10 @@ def broker_job(
         reconcile_state=None if latest is None else latest.reconcile_state,
         reconciled_at=None if latest is None else latest.reconciled_at,
         reconcile_detail={} if latest is None else latest.reconcile_detail,
+        matched_at=None if latest is None else latest.matched_at,
+        conditional=[c.to_json() for c in sync.conditional]
+        if sync.conditional is not None
+        else (None if before is None else before.conditional),
     )
     with transaction(conn):
         live_repo.save_status(conn, status, at)
@@ -693,6 +716,7 @@ def broker_job(
         or client.revoked
         or before is None
         or before.state != state
+        or (status.conditional or []) != (before.conditional or [])
     )
     out: dict[str, Any] = {
         **base,
@@ -731,10 +755,14 @@ def reconcile_job(conn: Any, cfg: Config, at: datetime, *, dry_run: bool = False
 # ── the server's read-only check (PHASE3.md 5) ───────────────────────────────────────────
 
 
-def toss_check(cfg: Config, conn: Any, *, transport: Transport | None = None) -> dict[str, Any]:
+def toss_check(
+    cfg: Config, conn: Any, *, transport: Transport | None = None, today: date | None = None
+) -> dict[str, Any]:
     """Read the account once and print what the engine would rely on. Reads only: there is no
-    order or cancel call in it. Secrets and tokens are never printed."""
+    order or cancel call in it. Secrets and tokens are never printed. `today` (KST) picks the
+    commission rows in force (default: the wall clock's day)."""
     out: dict[str, Any] = {"job": "toss-check", "result": "ok"}
+    day = today or datetime.now(KST).date()
     try:
         client = make_client(cfg, transport)
         client.token()
@@ -746,7 +774,16 @@ def toss_check(cfg: Config, conn: Any, *, transport: Transport | None = None) ->
             {"id": h.instrument_id, "name": h.name, "qty": str(h.qty)} for h in client.holdings()
         ]
         out["openOrders"] = len(client.orders("OPEN"))
-        out["commissions"] = {k: str(v) for k, v in client.commissions().items()}
+        # Armed 조건주문 do not show as open orders until they fire (the old quant's, the app's):
+        # each must be cancelled in the Toss app before live is turned on (PHASE3.md 4).
+        conditional = client.conditional_orders("OPEN")
+        out["conditionalOrders"] = len(conditional)
+        if conditional:
+            out["conditional"] = [
+                {"symbol": c.symbol, "market": c.market, "type": c.type, "status": c.status}
+                for c in conditional
+            ]
+        out["commissions"] = {k: str(v) for k, v in client.commissions(day).items()}
         instruments = live.rule_instruments(conn)
         infos = client.stocks([i.ticker for i in instruments.values()])
         quotes = client.prices([i.ticker for i in instruments.values()])

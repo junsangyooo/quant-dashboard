@@ -2,11 +2,15 @@
 asserting the right behavior. Against the fake Toss (tests/autotrade/live_world.py).
 
 3. A partly filled order that ends in the CLOSED list with PARTIAL_FILLED.
+5. The closed orders the reconciliation reads start at its last match, not its last attempt.
+9. The commission rate a buy is sized with is the one in force.
+10. An armed 조건주문 on the account blocks turning live on.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,6 +19,7 @@ import pytest
 from autotrade.db import live_repo, repo
 from autotrade.domain.instruments import Currency
 from autotrade.engine import live
+from autotrade.engine.common import new_money_waiting
 from autotrade.engine.rebuild import verify_ledger
 
 from .fakes import KR, US, World
@@ -125,3 +130,127 @@ def test_a_cancel_of_a_partial_fill_that_closed_meanwhile_finishes(lw: Live) -> 
     assert {"late_fill": order_id, "qty": 100} in result["booked"]
     assert lw.state().qty_of(KR) == 100
     assert verify_ledger(lw.conn, "live") == []
+
+
+# ── 5. the closed orders start at the last match ─────────────────────────────────────────
+
+
+def test_an_app_sale_during_a_long_busy_spell_is_still_an_app_sale(
+    lw: Live, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Days without a usable look at the account (the first key out of cron) must not let the
+    owner's app fills drop out of the closed orders the next look reads: a sale's proceeds would
+    come back as new money, invested from the next weekday with no wait for the withdrawal."""
+    lw.fake.hold("005930", D("10"), D("70000"), name="Samsung")  # outside the rules
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-06-30 21:05")
+    assert lw.reconcile()["result"] in ("match", "quiet")
+    matched = lw.status().matched_at
+    assert matched == kst("2026-06-30 21:05")
+    monkeypatch.delenv("AUTOTRADE_LIVE_ORDERS")  # the owner takes key 1 out of cron
+    lw.at("2026-07-01 10:00")
+    lw.fake.app_trade(
+        "005930",
+        "SELL",
+        D("10"),
+        D("71000"),
+        commission=D("106"),
+        tax=D("1420"),
+        settlement=date(2026, 7, 3),
+    )  # ... and sells the outside stock in the app, to withdraw it
+    for t in ("2026-07-01 10:05", "2026-07-02 10:05", "2026-07-03 10:05"):
+        lw.sync(t)
+        assert lw.reconcile(t)["result"] == "quiet"
+        status = lw.status()
+        assert (status.reconcile_state, status.reconciled_at) == ("busy", kst(t))
+        assert status.matched_at == matched  # a busy pass booked nothing: the window stays
+    monkeypatch.setenv("AUTOTRADE_LIVE_ORDERS", "1")  # key 1 back
+    lw.sync("2026-07-03 10:10")
+    result = lw.reconcile()
+    assert result["result"] == "match", result
+    assert events(lw, "deposit") == [("deposit", D("708474"), KRW, "outside-sell")]
+    waits = repo.withdraw_waits(lw.conn, "live")
+    # Settlement 7/3 + 2 Korean trading days = 7/7: it waits for the withdrawal.
+    assert [(w.amount, w.until) for w in waits] == [(D("708474"), date(2026, 7, 7))]
+    assert new_money_waiting(lw.conn, "live", lw.now()) == {}  # sale proceeds are not new money
+    assert lw.status().matched_at == kst("2026-07-03 10:10")
+
+
+# ── 9. the commission in force ───────────────────────────────────────────────────────────
+
+
+def test_the_sync_keeps_the_commission_in_force(lw: Live) -> None:
+    lw.fake.commission_rows = [
+        {"marketCountry": "KR", "commissionRate": "0.00015", "startDate": None, "endDate": None},
+        {"marketCountry": "US", "commissionRate": "0.0025", "startDate": None, "endDate": None},
+        {
+            "marketCountry": "US",
+            "commissionRate": "0.001",
+            "startDate": None,
+            "endDate": "2026-06-29",
+        },  # an expired promotion, listed last
+    ]
+    lw.sync("2026-06-30 21:00")
+    assert lw.status().commissions == {"KR": D("0.00015"), "US": D("0.0025")}
+
+
+# ── 10. an armed 조건주문 ────────────────────────────────────────────────────────────────
+
+
+def test_an_armed_conditional_order_blocks_turning_live_on(lw: Live) -> None:
+    from autotrade.api.views import mode as mode_view
+    from autotrade.api.views.context import LedgerContext
+    from autotrade.api.views.live import todos
+
+    cid = lw.fake.arm_conditional("069500", "SELL", D("10"))  # the old quant's stop
+    lw.sync("2026-06-30 21:00")
+    lw.market_data()
+    assert [c["id"] for c in lw.status().conditional or []] == [cid]
+    assert live.link_check(lw.conn, lw.cfg, lw.now()).cause == "conditional"
+    found = mode_view.checks(LedgerContext(lw.conn, lw.cfg, "paper", lw.now()), lw.now())
+    link = next(r for r in found.preflight if r["id"] == "toss-link")
+    assert (link["ok"], link["facts"]) == (False, {"cause": "conditional"})
+    assert found.can_turn_on == {"ok": False, "cause": "checks"}
+    # The owner cancels it in the Toss app: the next look lets live on.
+    lw.fake.conditional.clear()
+    lw.sync("2026-06-30 21:05")
+    assert lw.status().conditional == []
+    assert live.link_check(lw.conn, lw.cfg, lw.now()).ok
+    # Armed again while live: a red manual to-do; live orders go on (its fills are the owner's).
+    lw.turn_on("2026-06-30 21:10")
+    lw.fake.arm_conditional("005930", "BUY", D("1"))
+    lw.sync("2026-06-30 21:15")
+    [card] = [t for t in todos(lw.conn, lw.cfg, lw.now()) if t["kind"] == "toss-link"]
+    assert (card["severity"], card["facts"], card["action"], card["effect"]) == (
+        "red",
+        {"cause": "conditional"},
+        {"kind": "manual"},
+        "other",
+    )
+
+
+def test_conditional_orders_that_cannot_be_read_keep_live_off_not_the_snapshot(lw: Live) -> None:
+    lw.fake.fail_paths["/api/v1/conditional-orders"] = (500, "internal-error")
+    report = lw.sync("2026-06-30 21:00")
+    assert report["result"] == "unreachable"
+    assert live_repo.latest_snapshot(lw.conn) is not None  # the account was still read
+    assert live.link_check(lw.conn, lw.cfg, lw.now()).cause == "unreachable"
+    del lw.fake.fail_paths["/api/v1/conditional-orders"]
+    lw.sync("2026-06-30 21:05")
+    assert live.link_check(lw.conn, lw.cfg, lw.now()).ok
+
+
+def test_the_read_only_check_lists_conditional_orders(lw: Live) -> None:
+    from autotrade.jobs.live_tasks import toss_check
+
+    out = toss_check(lw.cfg, lw.conn, transport=lw.fake, today=date(2026, 6, 30))
+    assert (out["openOrders"], out["conditionalOrders"]) == (0, 0)
+    assert "conditional" not in out
+    lw.fake.arm_conditional("SPYM", "SELL", D("3"), market="US", kind="OCO")
+    out = toss_check(lw.cfg, lw.conn, transport=lw.fake, today=date(2026, 6, 30))
+    assert out["conditionalOrders"] == 1
+    assert out["conditional"] == [
+        {"symbol": "SPYM", "market": "US", "type": "OCO", "status": "WATCHING"}
+    ]
+    writes = [c for c in lw.fake.calls if c[0] != "GET" and c[1] != "/oauth2/token"]
+    assert writes == []  # reads only

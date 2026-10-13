@@ -103,7 +103,7 @@ from autotrade.jobs.tasks import (
 )
 from autotrade.jobs.tick import run_all, run_tick
 from autotrade.market.service import MarketSources, default_sources
-from autotrade.timeutil import KST, UTC, parse_cli_time
+from autotrade.timeutil import KST, UTC, kst_date, parse_cli_time
 
 COMMANDS = (
     "tick",
@@ -309,7 +309,7 @@ def _dispatch(
     if args.command == "reconcile":
         return reconcile_job(ctx.conn, ctx.cfg, at, dry_run=dry)
     if args.command == "toss-check":
-        return toss_check(ctx.cfg, ctx.conn, transport=ctx.toss_transport)
+        return toss_check(ctx.cfg, ctx.conn, transport=ctx.toss_transport, today=kst_date(at))
     if args.command == "adopt-broker":
         return adopt_job(ctx, at, note=args.note, dry_run=dry)
     if args.command in TAKES_ID and not args.todo_id:

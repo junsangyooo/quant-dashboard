@@ -329,6 +329,7 @@ export const healthCopy = {
       error: '토스 오류',
       old: '확인 늦음',
       conflict: '다른 프로그램과 키 겹침',
+      conditional: '열린 조건주문',
       'not-tradable': '거래 안 되는 종목',
       mismatch: '잔고 불일치',
       expired: '키 만료',
@@ -351,6 +352,10 @@ export const healthCopy = {
       conflict: [
         '다른 프로그램이 같은 키로 토큰을 받아요',
         'Claude에게 옛 quant cron 줄 삭제 요청',
+      ],
+      conditional: [
+        '토스에 감시 중인 조건주문이 있어요 · 조건이 되면 스스로 주문해요',
+        '토스 앱에서 조건주문 취소',
       ],
       'not-tradable': ['규칙 종목이 지금 거래되지 않아요', '토스 앱에서 종목 상태 확인'],
       mismatch: ['토스 잔고가 장부와 달라요', '토스 잔고 대조 카드 확인'],

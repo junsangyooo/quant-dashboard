@@ -320,6 +320,9 @@ def _record(conn: sqlite3.Connection, at: datetime, result: ReconcileResult) -> 
             reconcile_state=result.state if result.state != "skipped" else None,
             reconciled_at=at,
             reconcile_detail={"reason": result.reason, **result.detail},
+            # The closed orders the next snapshot reads start at the last match
+            # (jobs/live_tasks.py Sync._closed_since): a busy or mismatched pass booked nothing.
+            matched_at=at if result.state == "match" else status.matched_at,
         )
         live_repo.save_status(conn, status, at)
     if result.state != "busy" or result.reason not in ("orders-open", "orders-in-flight"):
@@ -1413,7 +1416,7 @@ def live_periods(conn: sqlite3.Connection) -> list[tuple[datetime, datetime | No
 class LinkCheck:
     ok: bool
     cause: str | None  # why not: env-off | no-key | auth | ip | account | unreachable |
-    # maintenance | error | old | not-tradable | conflict | mismatch | never
+    # maintenance | error | old | not-tradable | conflict | conditional | mismatch | never
     checked_at: datetime | None
     account_tail: str | None
     key_expires: date | None
@@ -1441,6 +1444,11 @@ def link_check(conn: sqlite3.Connection, cfg: Config, at: datetime) -> LinkCheck
         return no("conflict")
     if any(v != "ok" for v in status.tradable.values()) or not status.tradable:
         return no("not-tradable")
+    if status.conditional:
+        # An armed 조건주문 on the account (the old quant's, the app's) places an order of its
+        # own when triggered: live is not turned on while one is open (cancel it in the Toss
+        # app). While live, the reconciliation books what it fills as the owner's trade.
+        return no("conditional")
     if repo.start_event(conn, LIVE) is not None and status.reconcile_state == "mismatch":
         return no("mismatch")
     if days_left is not None and days_left < 0:
