@@ -6,7 +6,8 @@ the web service (sandboxed: no network, no secrets). Each step is network first,
 transaction of its own, like the market downloads (autotrade/jobs/tasks.py); an order's intent is
 committed before the order leaves, so a crash in between is found and resolved the next time:
 
-  1. read our open orders at the broker (fills, ends)
+  1. read our open orders at the broker (fills, ends: a PARTIAL_FILLED order is over only once
+     the CLOSED list has it or it carries a cancel time, Sync.finished)
   2. resolve orders whose sending was cut off: within 9 minutes the same client order id is sent
      again (Toss returns the first order), later the account's orders are searched for it
   3. cancel what must not stay open: cancel requests ('live off', resolve), any open order of
@@ -36,6 +37,8 @@ from autotrade.broker.toss import (
     permit_for,
 )
 from autotrade.broker.toss_api import (
+    OPEN_OR_CLOSED,
+    REQUEST_RECORDS,
     BrokerOrder,
     LivePermit,
     OrderRequest,
@@ -95,6 +98,7 @@ class Sync:
         self.now = now
         self.changes: list[dict[str, Any]] = []
         self.errors: list[str] = []
+        self._closed: dict[tuple[str, date], set[str]] = {}  # CLOSED ids by (symbol, day)
 
     # 1. read our open orders
     def poll(self) -> None:
@@ -103,24 +107,44 @@ class Sync:
                 continue
             try:
                 view = self.client.order(row.broker_order_id)
+                self._record_view(row, view)
             except TossApiError as exc:
                 self.errors.append(f"poll {row.order_id}: {exc}")
-                continue
-            self._record_view(row, view)
 
-    def _record_view(self, row: BrokerOrderRow, view: BrokerOrder) -> None:
+    def finished(self, view: BrokerOrder) -> bool:
+        """Whether the broker is done with an order: its own record says so (a terminal status,
+        a cancel time), or it is PARTIAL_FILLED and the CLOSED list has it (the status is in both
+        lists, openapi.json 1.2.24: a partly filled order whose rest lapsed may keep it). An
+        order the OPEN list holds as PARTIAL_FILLED still trades."""
+        if view.terminal:
+            return True
+        if view.status != OPEN_OR_CLOSED or view.ordered_at is None:
+            return False
+        day = kst_date(view.ordered_at)
+        key = (view.symbol, day)
+        if key not in self._closed:
+            closed = self.client.orders(
+                "CLOSED", symbol=view.symbol, start=day, end=day + timedelta(days=1)
+            )
+            self._closed[key] = {o.order_id for o in closed}
+        return view.order_id in self._closed[key]
+
+    def _record_view(self, row: BrokerOrderRow, view: BrokerOrder) -> bool:
+        """Record what the broker says of `row` now; returns whether the order is over."""
+        over = self.finished(view)
         if (
-            row.state == ("done" if view.terminal else "sent")
+            row.state == ("done" if over else "sent")
             and row.status == view.status
             and row.filled_qty == view.filled_qty
             and row.broker_order_id == view.order_id
         ):
-            return
+            return over
         with transaction(self.conn):
-            live_repo.record_broker_view(self.conn, row.order_id, view, self.now())
+            live_repo.record_broker_view(self.conn, row.order_id, view, self.now(), finished=over)
         self.changes.append(
             {"order_id": row.order_id, "status": view.status, "filled": str(view.filled_qty)}
         )
+        return over
 
     # 2. orders whose sending was cut off
     def recover(self) -> None:
@@ -155,7 +179,7 @@ class Sync:
         sent = row.sent_at
         try:
             found = self.client.orders("OPEN", symbol=request.symbol)
-            found += self.client.orders(
+            closed = self.client.orders(
                 "CLOSED",
                 symbol=request.symbol,
                 start=kst_date(sent),
@@ -164,6 +188,8 @@ class Sync:
         except TossError as exc:
             self.errors.append(f"search {row.order_id}: {exc}")
             return
+        closed_ids = {o.order_id for o in closed}
+        found += closed
         ours = live_repo.our_broker_ids(self.conn)
         matches = [
             o
@@ -179,8 +205,11 @@ class Sync:
         with transaction(self.conn):
             if len(unique) == 1:
                 view = next(iter(unique.values()))
+                over = view.terminal or view.order_id in closed_ids
                 live_repo.mark_sent(self.conn, row.order_id, view.order_id, self.now())
-                live_repo.record_broker_view(self.conn, row.order_id, view, self.now())
+                live_repo.record_broker_view(
+                    self.conn, row.order_id, view, self.now(), finished=over
+                )
                 self.changes.append({"order_id": row.order_id, "found": view.order_id})
             elif len(unique) > 1:
                 live_repo.mark_unknown(
@@ -252,13 +281,12 @@ class Sync:
                 self.changes.append({"order_id": row.order_id, "cancel": "failed"})
                 continue
             try:
-                view = self.client.order(row.broker_order_id)
+                over = self._record_view(row, self.client.order(row.broker_order_id))
             except TossError as exc:
                 self.errors.append(f"after cancel {row.order_id}: {exc}")
                 outcome = "requested"
             else:
-                self._record_view(row, view)
-                if not view.terminal:
+                if not over:
                     outcome = "requested"  # PENDING_CANCEL: read again next time
             with transaction(self.conn):
                 live_repo.record_cancel(self.conn, row.order_id, outcome, None, self.now())
@@ -431,11 +459,11 @@ class Sync:
         )
         try:  # a marketable limit usually fills at once: read it now rather than next tick
             view = self.client.order(broker_id)
+            row = live_repo.get_broker_order(self.conn, order_id)
+            if row is not None:
+                self._record_view(row, view)
         except TossError:
             return
-        row = live_repo.get_broker_order(self.conn, order_id)
-        if row is not None:
-            self._record_view(row, view)
 
     def _refused(self, order_id: int, request: OrderRequest, exc: TossApiError) -> None:
         code = exc.code
@@ -520,7 +548,9 @@ class Sync:
         cash = {c: self.client.buying_power(c) for c in Currency}
         closed = self.client.orders("CLOSED", start=self._closed_since())
         open_after = self.client.orders("OPEN")
-        filled = [o for o in closed if o.filled_qty > 0]
+        # A refused cancel or change is a record of its own; the order it was about keeps its
+        # fills (openapi.json OrderStatus): never a trade of the account.
+        filled = [o for o in closed if o.filled_qty > 0 and o.status not in REQUEST_RECORDS]
         # A fill the balances may not include yet (it ended as they were read): look again.
         late = any(
             o.order_id not in known

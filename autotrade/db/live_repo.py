@@ -429,11 +429,18 @@ def mark_rejected(
 
 
 def record_broker_view(
-    conn: sqlite3.Connection, order_id: int, view: BrokerOrder, at: datetime
+    conn: sqlite3.Connection,
+    order_id: int,
+    view: BrokerOrder,
+    at: datetime,
+    *,
+    finished: bool | None = None,
 ) -> None:
-    """What the broker says of our order now: its status and the fill so far. A terminal status
-    makes the row 'done' (the fill is final)."""
-    state = "done" if view.terminal else "sent"
+    """What the broker says of our order now: its status and the fill so far. An order that is
+    over makes the row 'done' (the fill is final): `finished`, or by default its own record
+    (BrokerOrder.terminal; a PARTIAL_FILLED order needs the CLOSED list, jobs/live_tasks.py)."""
+    over = view.terminal if finished is None else finished
+    state = "done" if over else "sent"
     conn.execute(
         "UPDATE broker_orders SET state = ?, broker_order_id = ?, status = ?, filled_qty = ?,"
         " filled_amount = ?, avg_price = ?, commission = ?, tax = ?, filled_at = ?,"

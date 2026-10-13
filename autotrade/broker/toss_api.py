@@ -68,6 +68,16 @@ DEFAULT_RATE = 2.0  # an unknown group goes slowly
 # Order statuses that are over (openapi.json OrderStatus). CANCEL_REJECTED and REPLACE_REJECTED
 # are records of their own; the original order goes back to its earlier state.
 TERMINAL_STATUSES = frozenset({"FILLED", "CANCELED", "REJECTED", "REPLACED"})
+# The one status in both lists of GET /api/v1/orders (its `status` parameter, 1.2.24): OPEN holds
+# PENDING, PARTIAL_FILLED, PENDING_CANCEL and PENDING_REPLACE; CLOSED holds the terminal ones,
+# CANCEL_REJECTED, REPLACE_REJECTED and PARTIAL_FILLED. A partly filled order keeps the status
+# while the rest still trades and may keep it after the rest lapsed: it is over only when the
+# CLOSED list has it or it carries canceledAt (jobs/live_tasks.py Sync.finished).
+OPEN_OR_CLOSED = "PARTIAL_FILLED"
+# Statuses only the OPEN list holds: never over, whatever else the record says.
+PENDING_STATUSES = frozenset({"PENDING", "PENDING_CANCEL", "PENDING_REPLACE"})
+# Records of a refused cancel or change: the original order keeps its own record and fills.
+REQUEST_RECORDS = frozenset({"CANCEL_REJECTED", "REPLACE_REJECTED"})
 
 
 # ── transport ────────────────────────────────────────────────────────────────────────────
@@ -370,7 +380,12 @@ class BrokerOrder:
 
     @property
     def terminal(self) -> bool:
-        return self.status in TERMINAL_STATUSES
+        """Over by its own record: a terminal status, or a cancel time on an order that is not
+        pending. A PARTIAL_FILLED order without one may still trade or may be over
+        (OPEN_OR_CLOSED: the CLOSED list tells)."""
+        if self.status in TERMINAL_STATUSES:
+            return True
+        return self.canceled_at is not None and self.status not in PENDING_STATUSES
 
     @property
     def market(self) -> str:
