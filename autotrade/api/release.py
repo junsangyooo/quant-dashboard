@@ -17,6 +17,9 @@ Layout on the server (paths relative to the repository root, the working directo
   data/deploy/history.jsonl  one line per deploy and rollback
   data/backup/autotrade/autotrade-predeploy-<UTC yyyymmdd-HHMMSS>.db
                              written by `python -m autotrade.jobs migrate --predeploy` (deploy.sh)
+  data/backup/autotrade/autotrade-<KST yyyy-mm-dd>.db
+                             the daily copies (after the snapshot); a rollback never picks one by
+                             itself, but names them when no predeploy copy fits (see no_backup)
 
 Releases: a build is made from `git archive <commit> web` in a temporary folder (npm ci
 --ignore-scripts, npm run build), never in the live tree, so a failed build changes nothing. The
@@ -31,6 +34,15 @@ it), restores the newest predeploy backup at that commit's schema when the datab
 that code — the replaced database is moved aside, not deleted, and every session in the restored
 copy is closed (sessions the owner ended after the backup must not come back) — and switches
 web/dist back. deploy.sh then starts the services and checks them.
+
+The live ledger (autotrade/PHASE3.md): a restore puts back a copy made before part or all of its
+record (its start, orders, fills, conversions), and code before schema 6 has no Toss link at all,
+so nothing would cancel or book an order still open at Toss. A rollback that restores therefore
+refuses while the live database has the live ledger (a live start, the mode 'live', or an order
+still open at Toss or waiting for its cancel) unless --drop-live says to set it aside with the
+replaced database; the message asks to turn live off and wait for the cancels first. --yes (no
+typing 'restore') does not cover it. rollback-apply checks again once the service is stopped and
+the jobs are held, so live turned on between the plan and the apply refuses there too.
 """
 
 from __future__ import annotations
@@ -60,6 +72,9 @@ from typing import Any
 KEEP = 4  # releases kept besides the live one and the one before it
 RELEASE_ID = re.compile(r"^\d{8}T\d{6}Z-(?:[0-9a-f]{12}|legacy)$")
 PREDEPLOY = re.compile(r"^autotrade-predeploy-(\d{8}-\d{6})\.db$")
+DAILY = re.compile(r"^autotrade-(\d{4}-\d{2}-\d{2})\.db$")  # autotrade/jobs/backup.py NAME
+LIVE_SCHEMA = 6  # the schema that brought the live ledger's Toss link (autotrade/PHASE3.md 2.9)
+OPEN_ORDER_STATES = ("sending", "sent", "unknown")  # autotrade/db/live_repo.py OPEN_STATES
 JOBS_LOCK_WAIT_S = 120.0  # a tick finishes within this
 AI_LOCK_WAIT_S = 900.0  # an AI call has no time limit; wait this long, then give up unchanged
 SERVICE = "autotrade"
@@ -234,15 +249,146 @@ def predeploy_backups(paths: Paths) -> list[Path]:
     return sorted(found, key=lambda p: p.name, reverse=True)
 
 
+def _at_schema(backups: Sequence[Path], version: int) -> list[Path]:
+    """The backups (in the order given) whose schema is `version`; a broken one is skipped."""
+    out: list[Path] = []
+    for backup in backups:
+        try:
+            if backup_schema(backup) == version:
+                out.append(backup)
+        except (sqlite3.Error, ReleaseError):
+            continue
+    return out
+
+
 def backup_for(paths: Paths, version: int) -> Path | None:
     """The newest predeploy backup at schema `version`: the last state that code can read."""
     for backup in predeploy_backups(paths):
-        try:
-            if backup_schema(backup) == version:
-                return backup
-        except (sqlite3.Error, ReleaseError):
-            continue
+        if _at_schema([backup], version):
+            return backup
     return None
+
+
+def daily_backups(paths: Paths) -> list[Path]:
+    """The daily copies, newest first."""
+    if not paths.backups.is_dir():
+        return []
+    found = [p for p in paths.backups.iterdir() if DAILY.match(p.name)]
+    return sorted(found, key=lambda p: p.name, reverse=True)
+
+
+def no_backup(paths: Paths, version: int) -> str:
+    """Why a rollback to code of schema `version` has nothing to restore, and what to do. Only the
+    newest predeploy copies are kept (autotrade/jobs/backup.py), so a rollback several deploys
+    back finds none; a daily copy at that schema can stand in, under a predeploy name."""
+    daily = _at_schema(daily_backups(paths), version)
+    if not daily:
+        return f"no predeploy backup at schema {version}: restore by hand"
+    newest = daily[0]
+    day = newest.name.removeprefix("autotrade-").removesuffix(".db").replace("-", "")
+    folder = paths.backups.relative_to(paths.root)
+    as_predeploy = folder / f"autotrade-predeploy-{day}-000000.db"
+    return (
+        f"no predeploy backup at schema {version} (older ones are pruned); daily copies at"
+        f" that schema: {', '.join(p.name for p in daily)}. To roll back to the newest, copy it"
+        f" on the server under a predeploy name (cp -p {folder / newest.name} {as_predeploy})"
+        " and roll back again: everything written since that copy leaves the live DB"
+    )
+
+
+# ── the live ledger ────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class LiveLedger:
+    """What the live database holds of the live ledger (autotrade/PHASE3.md)."""
+
+    started: bool  # its 'start' event: the ledger has a record (orders, fills, conversions)
+    on: bool  # the mode 'live': the tick sends orders
+    open_orders: int  # orders still open at Toss or waiting for their cancel
+
+    @property
+    def found(self) -> bool:
+        return self.started or self.on or self.open_orders > 0
+
+    def facts(self) -> list[str]:
+        out: list[str] = []
+        if self.on:
+            out.append("live is on (mode 'live')")
+        if self.open_orders:
+            out.append(f"{self.open_orders} order(s) open at Toss or waiting for a cancel")
+        if self.started:
+            out.append("the live ledger has started")
+        return out
+
+    def json(self) -> dict[str, Any]:
+        return {"started": self.started, "on": self.on, "openOrders": self.open_orders}
+
+
+def live_ledger(db: Path) -> LiveLedger:
+    """The live ledger in the live database (read-only). A table its schema does not have yet
+    (broker_orders came with schema 6) counts as empty; so does a missing database."""
+    if not db.exists():
+        return LiveLedger(False, False, 0)
+    conn = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        started = "events" in tables and (
+            conn.execute(
+                "SELECT 1 FROM events WHERE ledger_id = 'live' AND kind = 'start' LIMIT 1"
+            ).fetchone()
+            is not None
+        )
+        mode = (
+            conn.execute("SELECT value FROM settings WHERE key = 'mode'").fetchone()
+            if "settings" in tables
+            else None
+        )
+        orders = 0
+        if "broker_orders" in tables:
+            # Open (the tick has not seen its end), or its cancel asked or failed: the tick marks
+            # the cancel done once the order has ended, so either way Toss may still hold it.
+            marks = ",".join("?" * len(OPEN_ORDER_STATES))
+            orders = int(
+                conn.execute(
+                    f"SELECT COUNT(*) FROM broker_orders WHERE state IN ({marks})"
+                    " OR cancel_state IN ('requested', 'failed')",
+                    OPEN_ORDER_STATES,
+                ).fetchone()[0]
+            )
+    finally:
+        conn.close()
+    return LiveLedger(started, mode is not None and mode[0] == "live", orders)
+
+
+def live_refusal(live: LiveLedger, target: str, code: int) -> str:
+    """The rollback's refusal while the live database has the live ledger."""
+    no_toss = (
+        f"; the code of {target[:12]} has no Toss link to cancel or book what is open there"
+        if code < LIVE_SCHEMA
+        else ""
+    )
+    return (
+        f"the live DB has the live ledger ({'; '.join(live.facts())}): the restore puts back a"
+        f" copy made before (part of) its record{no_toss}. Turn live off on the mode screen"
+        " (실전 끄기) and wait until its cancels are done (the next tick, within 5 minutes: no"
+        " order left under 취소 요청한 주문 or 취소 안 된 주문), then roll back with --drop-live:"
+        " the live ledger leaves the live DB with the replaced database (kept aside, not deleted)"
+    )
+
+
+def live_say(live: LiveLedger, code: int) -> list[str]:
+    """The plan's lines when --drop-live lets the live ledger go."""
+    lines = [
+        f"live ledger: {'; '.join(live.facts())}. --drop-live: its record (start, orders, fills,"
+        " conversions) leaves the live DB with the replaced database (kept aside, not deleted)"
+    ]
+    if code < LIVE_SCHEMA and (live.on or live.open_orders):
+        lines.append(
+            "that code has no Toss link: nothing cancels or books the orders still open at Toss"
+            " (cancel them in the Toss app)"
+        )
+    return lines
 
 
 # ── web releases ───────────────────────────────────────────────────────────────────────────
@@ -599,7 +745,7 @@ def default_target(paths: Paths, head: str) -> str:
 
 
 def rollback_plan(
-    paths: Paths, commit: str | None, sysctl: Systemctl = systemctl
+    paths: Paths, commit: str | None, sysctl: Systemctl = systemctl, *, drop_live: bool = False
 ) -> dict[str, Any]:
     head = commit_of(paths.root, "HEAD")
     target = commit_of(paths.root, commit) if commit else default_target(paths, head)
@@ -611,6 +757,7 @@ def rollback_plan(
     stored = stored_schema(paths.db)
     say = [f"server at {head[:12]}, back to {target[:12]}"]
     restore: Path | None = None
+    live: LiveLedger | None = None
     if stored is not None:
         if code is None:
             raise ReleaseError(f"{target[:12]} has no autotrade/ but the server has its database")
@@ -619,15 +766,23 @@ def rollback_plan(
                 f"the database (schema {stored}) is older than that code ({code}): deploy instead"
             )
         if stored > code:
+            # The live ledger first: what the owner must do in the app (turn live off, wait for
+            # the cancels) comes before any choice of a copy.
+            found = live_ledger(paths.db)
+            if found.found and not drop_live:
+                raise ReleaseError(live_refusal(found, target, code))
             restore = backup_for(paths, code)
             if restore is None:
-                raise ReleaseError(f"no predeploy backup at schema {code}: restore by hand")
+                raise ReleaseError(no_backup(paths, code))
             say.append(
                 f"autotrade DB: schema {stored} -> {code}: restore {restore.name}; everything"
                 " written since it (runs, orders, fills, snapshots, events, AI calls, logins,"
                 " PIN and lockout changes) leaves the live DB, which is kept aside, and every"
                 " session is closed (log in again, with the PIN of that time)"
             )
+            if found.found:
+                live = found
+                say.extend(live_say(found, code))
         else:
             say.append(f"autotrade DB: schema {stored} fits that code, it stays as it is")
     release = find_release(paths, target) if code is not None else None
@@ -652,6 +807,7 @@ def rollback_plan(
         "target": target,
         "schema": {"stored": stored, "code": code},
         "restore": None if restore is None else str(restore),
+        "live": None if live is None else live.json(),  # set only when --drop-live lets it go
         "release": release,
         "autotrade": code is not None,
         "dashboardChanged": bool(old_app),
@@ -669,6 +825,8 @@ def rollback_apply(
     sysctl: Systemctl = systemctl,
     jobs_wait_s: float = JOBS_LOCK_WAIT_S,
     ai_wait_s: float = AI_LOCK_WAIT_S,
+    *,
+    drop_live: bool = False,
 ) -> dict[str, Any]:
     target = commit_of(paths.root, commit)
     if git(paths.root, "status", "--porcelain", "--untracked-files=no"):
@@ -678,10 +836,24 @@ def rollback_apply(
     backup = None if restore is None else Path(restore)
     if backup is not None and not backup.is_file():
         raise ReleaseError(f"no backup {restore}")
+    version = None if backup is None else backup_schema(backup)  # the target code's schema
+    dropped: LiveLedger | None = None
     with held(paths.lock("jobs"), jobs_wait_s), held(paths.lock("ai"), ai_wait_s):
         was_active = sysctl(["is-active", SERVICE]) == "active"
         if was_active:
             sysctl(["stop", SERVICE])  # fails before anything changed
+        if version is not None:
+            # Again, now that nothing writes (service stopped, jobs held): live may have been
+            # turned on, or an order sent, since the plan was read.
+            found = live_ledger(paths.db)
+            if found.found and not drop_live:
+                if was_active:
+                    sysctl(["start", SERVICE])
+                again = "; autotrade.service started again" if was_active else ""
+                raise ReleaseError(
+                    f"{live_refusal(found, target, version)} (nothing changed{again})"
+                )
+            dropped = found if found.found else None
         try:
             git(paths.root, "checkout", "-q", "--detach", target)
         except ReleaseError as exc:
@@ -708,6 +880,8 @@ def rollback_apply(
         "wasActive": was_active,
         "restored": restored,
         "switched": switched,
+        # What --drop-live let go: it stays in the replaced database (restored.setAside).
+        "liveDropped": None if dropped is None else dropped.json(),
     }
 
 
@@ -767,11 +941,14 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
     for name in ("code-schema", "web-build", "web-find"):
         sub.add_parser(name).add_argument("commit")
     sub.add_parser("web-switch").add_argument("release")
-    sub.add_parser("rollback-plan").add_argument("commit", nargs="?")
+    plan = sub.add_parser("rollback-plan")
+    plan.add_argument("commit", nargs="?")
     apply = sub.add_parser("rollback-apply")
     apply.add_argument("commit")
     apply.add_argument("--restore")
     apply.add_argument("--release")
+    for command in (plan, apply):  # a restore may set the live ledger aside (see live_refusal)
+        command.add_argument("--drop-live", action="store_true")
     sub.add_parser("record").add_argument("entry", help="a JSON object")
     sub.add_parser("health").add_argument("--origin-optional", action="store_true")
     args = parser.parse_args(argv)
@@ -790,9 +967,11 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
         elif args.command == "web-switch":
             out = web_switch(paths, args.release, now)
         elif args.command == "rollback-plan":
-            out = rollback_plan(paths, args.commit)
+            out = rollback_plan(paths, args.commit, drop_live=args.drop_live)
         elif args.command == "rollback-apply":
-            out = rollback_apply(paths, args.commit, args.restore, args.release, now)
+            out = rollback_apply(
+                paths, args.commit, args.restore, args.release, now, drop_live=args.drop_live
+            )
         elif args.command == "record":
             out = record(paths, dict(json.loads(args.entry)), now)
         else:

@@ -8,6 +8,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import urllib.error
@@ -111,6 +112,30 @@ def notes(path: Path) -> list[str]:
     conn = sqlite3.connect(path)
     try:
         return [r[0] for r in conn.execute("SELECT text FROM notes ORDER BY rowid")]
+    finally:
+        conn.close()
+
+
+def add_live(
+    path: Path,
+    *,
+    start: bool = False,
+    mode: str | None = None,
+    orders: Sequence[tuple[str, str | None]] = (),
+) -> None:
+    """The live ledger's traces in a database (the columns release.py reads): its start event,
+    the stored mode, and broker orders as (state, cancel_state)."""
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS events (ledger_id TEXT, kind TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS broker_orders (state TEXT, cancel_state TEXT)")
+        conn.execute("INSERT INTO events VALUES ('paper', 'start')")  # paper's is not the live one
+        if start:
+            conn.execute("INSERT INTO events VALUES ('live', 'start')")
+        conn.execute("INSERT OR REPLACE INTO settings VALUES ('mode', ?)", (mode or "paper",))
+        conn.executemany("INSERT INTO broker_orders VALUES (?, ?)", orders)
+        conn.commit()
     finally:
         conn.close()
 
@@ -547,6 +572,178 @@ def test_rollback_apply_reports_where_it_stopped(
         rel.rollback_apply(deployed, a, None, plan["release"], T0, FakeSystemd(), 0.1, 0.1)
 
 
+# ── the live ledger and a rollback's restore (autotrade/PHASE3.md) ───────────────────────
+
+
+@pytest.mark.parametrize(
+    ("live", "fact"),
+    [
+        ({"start": True}, "the live ledger has started"),
+        ({"mode": "live"}, "live is on (mode 'live')"),
+        ({"orders": [("sent", None)]}, "1 order(s) open at Toss or waiting for a cancel"),
+        # The tick has not marked the cancel done yet: Toss may still hold the order.
+        ({"orders": [("done", "requested")]}, "1 order(s) open at Toss"),
+        ({"orders": [("unknown", "failed"), ("sending", None)]}, "2 order(s) open at Toss"),
+    ],
+)
+def test_a_restore_refuses_while_the_live_db_has_the_live_ledger(
+    deployed: rel.Paths, two_commits: tuple[str, str], live: dict[str, Any], fact: str
+) -> None:
+    """Rolling back past schema 6 used to drop the live ledger silently: the copy restored predates
+    it, and the code rolled back to has no Toss link to cancel or book an order open there."""
+    _, b = two_commits
+    add_live(deployed.db, **live)
+    with pytest.raises(rel.ReleaseError) as refused:
+        rel.rollback_plan(deployed, None, FakeSystemd())
+    message = str(refused.value)
+    assert fact in message
+    assert "has no Toss link" in message  # the target's schema 2 is before the live link (6)
+    assert "Turn live off on the mode screen (실전 끄기)" in message
+    assert "then roll back with --drop-live" in message
+    assert sh(deployed.root, "rev-parse", "HEAD") == b  # nothing changed
+    assert notes(deployed.db) == ["at a", "written by b"]
+
+
+def test_drop_live_lets_the_restore_go_and_says_what_leaves(
+    deployed: rel.Paths, two_commits: tuple[str, str]
+) -> None:
+    a, _ = two_commits
+    add_live(deployed.db, start=True, mode="live", orders=[("sent", "requested"), ("done", None)])
+    plan = rel.rollback_plan(deployed, None, FakeSystemd(), drop_live=True)
+    assert plan["live"] == {"started": True, "on": True, "openOrders": 1}
+    assert "leaves the live DB" in plan["say"][1]  # the restore line comes first, as before
+    assert plan["say"][2].startswith(
+        "live ledger: live is on (mode 'live'); 1 order(s) open at Toss or waiting for a cancel;"
+        " the live ledger has started. --drop-live: its record (start, orders, fills,"
+        " conversions) leaves the live DB"
+    )
+    assert plan["say"][3].startswith("that code has no Toss link")
+    report = rel.rollback_apply(
+        deployed, a, plan["restore"], plan["release"], T0, FakeSystemd(), 0.1, 0.1, drop_live=True
+    )
+    assert report["liveDropped"] == {"started": True, "on": True, "openOrders": 1}
+    assert notes(deployed.db) == ["at a"]
+    aside = Path(report["restored"]["setAside"])
+    assert rel.live_ledger(aside) == rel.LiveLedger(True, True, 1)  # kept aside, not deleted
+    assert rel.live_ledger(deployed.db) == rel.LiveLedger(False, False, 0)
+
+
+def test_the_apply_looks_again_once_nothing_writes(
+    deployed: rel.Paths, two_commits: tuple[str, str]
+) -> None:
+    """Live turned on (or an order sent) between the plan and the apply: the apply refuses too,
+    after the service has stopped and the jobs are held, and starts the service again."""
+    a, b = two_commits
+    plan = rel.rollback_plan(deployed, None, FakeSystemd())
+    assert plan["live"] is None
+    add_live(deployed.db, start=True, mode="live")
+    systemd = FakeSystemd()
+    with pytest.raises(
+        rel.ReleaseError,
+        match=r"--drop-live.*\(nothing changed; autotrade\.service started again\)",
+    ):
+        rel.rollback_apply(deployed, a, plan["restore"], plan["release"], T0, systemd, 0.1, 0.1)
+    assert systemd.calls == [
+        ["is-active", "autotrade"],
+        ["stop", "autotrade"],
+        ["start", "autotrade"],
+    ]
+    assert sh(deployed.root, "rev-parse", "HEAD") == b
+    assert notes(deployed.db) == ["at a", "written by b"]
+    stopped = FakeSystemd("inactive")
+    with pytest.raises(rel.ReleaseError, match=r"\(nothing changed\)$"):
+        rel.rollback_apply(deployed, a, plan["restore"], plan["release"], T0, stopped, 0.1, 0.1)
+    assert stopped.calls == [["is-active", "autotrade"]]
+    report = rel.rollback_apply(
+        deployed, a, plan["restore"], plan["release"], T0, FakeSystemd(), 0.1, 0.1, drop_live=True
+    )
+    assert report["liveDropped"] == {"started": True, "on": True, "openOrders": 0}
+    assert sh(deployed.root, "rev-parse", "HEAD") == a
+
+
+def test_without_a_restore_the_live_ledger_stays_where_it_is(
+    repo: Path, two_commits: tuple[str, str]
+) -> None:
+    """A rollback that keeps the database (same schema) keeps the live ledger and its Toss code."""
+    _, b = two_commits
+    commit(repo, {"src/app.py": "print('old app, changed')\n"}, "c: old app only")
+    paths = rel.Paths(repo)
+    make_db(paths.db, 3)
+    add_live(paths.db, start=True, mode="live", orders=[("sent", None)])
+    plan = rel.rollback_plan(paths, b, FakeSystemd())
+    assert (plan["restore"], plan["live"]) == (None, None)
+
+
+def test_the_live_ledger_is_read_from_the_app_schema(tmp_path: Path) -> None:
+    """release.py reads the app's tables without importing it: the names it uses are the real
+    ones (a schema-6 database made by the app's migrations), and older or empty ones are empty."""
+    from autotrade.db.connection import connect
+    from autotrade.db.migrations import migrate
+
+    db = tmp_path / "autotrade.db"
+    conn = connect(db)
+    try:
+        migrate(conn, T0)
+    finally:
+        conn.close()
+    assert rel.live_ledger(db) == rel.LiveLedger(False, False, 0)
+    raw = sqlite3.connect(db)  # no foreign keys: only the columns release.py reads matter
+    try:
+        at = "2026-10-13T00:00:00+00:00"
+        raw.execute(
+            "INSERT INTO events (ledger_id, kind, event_date, occurred_at, created_at,"
+            " updated_at) VALUES ('live', 'start', '2026-10-13', ?, ?, ?)",
+            (at, at, at),
+        )
+        raw.execute(
+            "INSERT INTO settings (key, value, updated_at) VALUES ('mode', 'live', ?)", (at,)
+        )
+        raw.execute(
+            "INSERT INTO broker_orders (order_id, ledger_id, client_order_id, state, updated_at)"
+            " VALUES (1, 'live', 'at-1', 'sent', ?)",
+            (at,),
+        )
+        raw.commit()
+    finally:
+        raw.close()
+    assert rel.live_ledger(db) == rel.LiveLedger(True, True, 1)
+    make_db(tmp_path / "old.db", 5)  # no events, settings or broker_orders tables
+    assert rel.live_ledger(tmp_path / "old.db") == rel.LiveLedger(False, False, 0)
+    assert rel.live_ledger(tmp_path / "none.db") == rel.LiveLedger(False, False, 0)
+
+
+def test_no_predeploy_copy_names_the_daily_copies(repo: Path, two_commits: tuple[str, str]) -> None:
+    """Five predeploy copies are kept; a rollback several deploys back finds none at its schema.
+    The refusal names the daily copies at that schema, and its advice works."""
+    a, b = two_commits
+    paths = rel.Paths(repo)
+    make_db(paths.db, 3, rows=["now"])
+    make_db(paths.backups / "autotrade-predeploy-20261012-090000.db", 3)
+    make_db(paths.backups / "autotrade-2026-10-08.db", 2, rows=["daily 10/8"])
+    make_db(paths.backups / "autotrade-2026-10-09.db", 2, rows=["daily 10/9"])
+    make_db(paths.backups / "autotrade-2026-10-12.db", 3)
+    (paths.backups / "autotrade-2026-10-10.db").write_bytes(b"not a database" * 100)
+    with pytest.raises(rel.ReleaseError) as refused:
+        rel.rollback_plan(paths, a, FakeSystemd())
+    message = str(refused.value)
+    assert message.startswith("no predeploy backup at schema 2 (older ones are pruned)")
+    assert (
+        "daily copies at that schema: autotrade-2026-10-09.db, autotrade-2026-10-08.db." in message
+    )
+    advice = (
+        "cp -p data/backup/autotrade/autotrade-2026-10-09.db"
+        " data/backup/autotrade/autotrade-predeploy-20261009-000000.db"
+    )
+    assert advice in message
+    shutil.copy2(
+        paths.backups / "autotrade-2026-10-09.db",
+        paths.backups / "autotrade-predeploy-20261009-000000.db",
+    )
+    plan = rel.rollback_plan(paths, a, FakeSystemd())
+    assert plan["restore"] == str(paths.backups / "autotrade-predeploy-20261009-000000.db")
+    assert b != a
+
+
 # ── record, status, health, the command line ─────────────────────────────────────────────
 
 
@@ -643,3 +840,31 @@ def test_the_command_line(
     assert (code, out["result"]) == (1, "failed")
     assert "no complete release" in out["error"]
     assert run("code-schema", "nope")[0] == 1
+
+
+def test_the_command_line_passes_drop_live(
+    deployed: rel.Paths,
+    two_commits: tuple[str, str],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    a, _ = two_commits
+    add_live(deployed.db, start=True)
+    assert rel.main(["rollback-plan", a], root=deployed.root) == 1
+    assert "then roll back with --drop-live" in json.loads(capsys.readouterr().out)["error"]
+    seen: list[tuple[str, bool]] = []
+
+    def plan(paths: rel.Paths, commit: str | None, *, drop_live: bool = False) -> dict[str, Any]:
+        seen.append(("plan", drop_live))
+        return {"result": "ok"}
+
+    def apply(*args: Any, drop_live: bool = False, **kwargs: Any) -> dict[str, Any]:
+        seen.append(("apply", drop_live))
+        return {"result": "ok"}
+
+    monkeypatch.setattr(rel, "rollback_plan", plan)
+    monkeypatch.setattr(rel, "rollback_apply", apply)
+    for argv in (["rollback-plan", "--drop-live"], ["rollback-apply", a, "--drop-live"]):
+        assert rel.main(argv, root=deployed.root) == 0
+    assert rel.main(["rollback-apply", a], root=deployed.root) == 0
+    assert seen == [("plan", True), ("apply", True), ("apply", False)]

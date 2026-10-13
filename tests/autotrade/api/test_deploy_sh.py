@@ -392,3 +392,54 @@ def test_the_old_app_deploys_and_rolls_back_as_before(sim: Sim) -> None:
     assert sim.head() == before
     assert sim.calls().count("systemctl restart dashboard.service") == restarts + 1
     assert sim.schema() == 2  # nothing restored
+
+
+def test_a_rollback_keeps_the_live_ledger_unless_told(sim: Sim) -> None:
+    """Rolling back past the schema that brought the live ledger restores a copy without it, on
+    code with no Toss link: the rollback refuses while the database has it (--yes does not
+    cover that), and --drop-live sets it aside with the replaced database and says so."""
+    first = git(sim.laptop, "rev-parse", "HEAD")
+    assert sim.deploy("autotrade").returncode == 0
+    second = sim.commit({"autotrade/db/migrations.py": migrations(3)}, "a migration")
+    assert sim.deploy("autotrade").returncode == 0
+    db = sim.server / "data" / "autotrade.db"
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("CREATE TABLE events (ledger_id TEXT, kind TEXT)")
+        conn.execute("INSERT INTO events VALUES ('live', 'start')")
+        conn.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute("INSERT INTO settings VALUES ('mode', 'live')")
+        conn.execute("CREATE TABLE broker_orders (state TEXT, cancel_state TEXT)")
+        conn.execute("INSERT INTO broker_orders VALUES ('sent', NULL)")
+        conn.commit()
+    finally:
+        conn.close()
+
+    refused = sim.deploy("rollback", "--yes")
+    assert refused.returncode != 0
+    assert "cannot roll back: the live DB has the live ledger" in refused.stderr
+    assert "Turn live off on the mode screen" in refused.stderr
+    assert "then roll back with --drop-live" in refused.stderr
+    assert "(nothing changed)" in refused.stderr
+    assert (sim.head(), sim.schema()) == (second, 3)
+    cancelled = sim.deploy("rollback", "--drop-live", stdin="no\n")
+    assert cancelled.returncode != 0
+    assert "rollback cancelled (nothing changed)" in cancelled.stderr
+    assert (sim.head(), sim.schema()) == (second, 3)
+
+    done = sim.deploy("rollback", "--yes", "--drop-live")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (
+        "[rollback] live ledger: live is on (mode 'live'); 1 order(s) open at Toss or waiting for"
+        " a cancel; the live ledger has started. --drop-live:" in done.stdout
+    )
+    assert "[rollback] that code has no Toss link" in done.stdout
+    assert "[rollback] the live ledger (실전) left the live DB: it is in" in done.stdout
+    assert "orders may still be open at Toss: cancel them in the Toss app" in done.stdout
+    assert (sim.head(), sim.schema()) == (first, 2)
+    (replaced,) = (sim.server / "data" / "backup" / "autotrade").glob("autotrade-replaced-*.db")
+    conn = sqlite3.connect(replaced)
+    try:
+        assert conn.execute("SELECT value FROM settings WHERE key = 'mode'").fetchone() == ("live",)
+    finally:
+        conn.close()
