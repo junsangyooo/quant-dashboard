@@ -251,7 +251,8 @@ def run_cli(args: list[str], db_path: Path, stdin: str = "") -> tuple[int, dict[
 
 def test_cli_migrate_and_set_pin(tmp_path: Path) -> None:
     db_path = tmp_path / "data" / "autotrade.db"
-    expected = {"job": "migrate", "result": "ok", "schema": len(MIGRATIONS)}
+    # The Toss token folder is made too (data/autotrade-toss, 0700: deploy/autotrade.service).
+    expected = {"job": "migrate", "result": "ok", "schema": len(MIGRATIONS), "token_dir": "created"}
     assert run_cli(["migrate"], db_path) == (0, expected)
     code, out = run_cli(["set-pin"], db_path, "123456\n654321\n")
     assert (code, out["error"]) == (1, "pin-mismatch")

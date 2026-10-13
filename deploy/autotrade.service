@@ -36,7 +36,9 @@
 # the stored mode 'live' (set here, with the PIN) is the second key. The web process never calls
 # Toss: it reads what the tick recorded (broker_status, broker_orders), and 'live off' writes
 # cancel requests that the next tick carries out. So the Toss keys (TOSS_*) are unset below, and
-# the tick's token cache (data/autotrade-toss/, 0700) is hidden from it.
+# the tick's token cache (data/autotrade-toss/, 0700) is hidden from it. InaccessiblePaths= skips a
+# '-' path that does not exist when the unit starts, so `python -m autotrade.jobs migrate` makes
+# that folder (deploy.sh runs it before the restart) instead of the tick's first token.
 #
 # Sandbox — what the process touches: it reads the repository (code, the venv, web/dist and the
 # web/releases it links to) and /usr (python3.10, its libraries); it reads and writes only data/

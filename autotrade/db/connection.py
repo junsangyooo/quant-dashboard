@@ -8,6 +8,7 @@ The database holds the PIN hash and the sessions, so a new file is created 0600 
 umask (the server's is 0002). SQLite gives the -wal and -shm files the main file's mode when it
 creates them (measured with SQLite 3.53: a 0600 database gets 0600 -wal/-shm under umask 0002);
 `secure_files` tightens a database made before this rule (python -m autotrade.jobs migrate).
+`private_dir` does the same for a folder next to it (the Toss token's, migrate too).
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from typing import Any
 from autotrade.timeutil import to_iso
 
 DB_MODE = 0o600
+DIR_MODE = 0o700
 SIDE_FILES = ("-wal", "-shm", "-journal")
 
 
@@ -49,6 +51,21 @@ def secure_files(path: Path) -> list[str]:
             file.chmod(DB_MODE)
             changed.append(file.name)
     return changed
+
+
+def private_dir(path: Path) -> str | None:
+    """Make `path` a folder only its owner can enter (0700, whatever the umask): 'created' when it
+    was missing, 'secured' when it was looser, None when it already was."""
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        path.mkdir(mode=DIR_MODE, parents=True)
+        path.chmod(DIR_MODE)  # mkdir's mode goes through the umask
+        return "created"
+    if mode == DIR_MODE:
+        return None
+    path.chmod(DIR_MODE)
+    return "secured"
 
 
 def connect(path: Path | str, *, check_same_thread: bool = True) -> sqlite3.Connection:

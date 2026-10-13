@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -125,3 +127,29 @@ def test_ops_commands(tmp_path: Path, world: World) -> None:
 def test_only_resolve_takes_an_argument(tmp_path: Path, world: World) -> None:
     with pytest.raises(SystemExit):
         run(["check", "extra", "--at", "2026-07-01T08:30"], world, tmp_path / "x.db")
+
+
+def test_migrate_makes_the_toss_token_folder_private(tmp_path: Path) -> None:
+    """deploy/autotrade.service hides data/autotrade-toss from the web, but systemd skips a '-'
+    path that does not exist when the unit starts: migrate (before deploy.sh restarts it) makes
+    the folder 0700, and tightens one a looser umask made, leaving the tick's token alone."""
+    previous = os.umask(0o002)  # the server's
+    try:
+        db = tmp_path / "data" / "autotrade.db"
+        folder = tmp_path / "data" / "autotrade-toss"
+
+        def migrate() -> dict[str, Any]:
+            lines: list[str] = []
+            assert main(["migrate", "--db", str(db)], env={}, out=lines.append) == 0
+            return dict(json.loads(lines[-1]))
+
+        assert migrate()["token_dir"] == "created"
+        assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+        assert "token_dir" not in migrate()  # nothing to change
+        folder.chmod(0o775)
+        (folder / "token.json").write_text("{}")
+        assert migrate()["token_dir"] == "secured"
+        assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+        assert (folder / "token.json").read_text() == "{}"
+    finally:
+        os.umask(previous)

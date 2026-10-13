@@ -41,7 +41,9 @@ Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, -
              and cash the account's (the difference is booked as money in or out)
   status     read-only summary
   migrate    create or upgrade data/autotrade.db and write its fixed rows (deploy.sh runs it);
-             the only command that changes the schema. The file is made 0600 (and -wal/-shm).
+             the only command that changes the schema. The file is made 0600 (and -wal/-shm),
+             the Toss token folder data/autotrade-toss 0700 (it must exist before the web unit
+             starts: its InaccessiblePaths skips a missing path).
              It holds the jobs lock and the AI lock throughout (waits up to 2 and 15 minutes;
              still busy: changes nothing, exit 3). --predeploy (deploy.sh) first makes the
              predeploy copy under the same locks (see backup); if that fails, nothing migrates.
@@ -80,7 +82,7 @@ from typing import Any, TextIO
 
 from autotrade.broker.base import LiveOrdersBlockedError
 from autotrade.config import Config, load_config
-from autotrade.db.connection import connect, json_default, secure_files
+from autotrade.db.connection import connect, json_default, private_dir, secure_files
 from autotrade.db.migrations import LATEST_VERSION, current_version, stored_version
 from autotrade.engine.bootstrap import bootstrap
 from autotrade.jobs.ai_tasks import ai_job, plan_job, watch_job
@@ -279,6 +281,9 @@ def _dispatch(
         secured = secure_files(ctx.cfg.db_path)  # a database made before files were 0600
         if secured:
             report["secured"] = secured
+        token_dir = private_dir(ctx.cfg.toss_dir)  # before deploy.sh restarts the web unit
+        if token_dir:
+            report["token_dir"] = token_dir
         return report
     if args.command == "set-pin":
         return _set_pin(ctx.conn, ctx.cfg, at, stdin)
