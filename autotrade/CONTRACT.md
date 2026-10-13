@@ -44,6 +44,8 @@ interface RuleRef {
 // 상태 칩 일곱 가지(SCR-PLAN 완료 조건). AI 규칙은 같은 칩에 다른 낱말을 쓴다(화면-맞춤.md ②, 'hold' = '유지').
 // 'fx-suggest'('환전 제안')는 실전 장부의 지수 반반만(D47): 원화·달러가 규칙 목표에서 띠(±2%p)보다 멀다.
 // 실전은 환전하지 않아서 주인이 토스 앱에서 바꾼다. 정보일 뿐이다(막는 것 없음). 우선순위는 '리밸런싱 예정' 다음, '목표 범위 안' 앞
+// 'withdraw-wait'('출금 대기 · 리밸런싱 쉼')는 모의투자 장부만: 실전 장부의 출금 대기는 그 돈만 묶고 주문을 멈추지 않는다
+// (그 돈과 날짜는 구성의 출금 대기 행·pendingBar가 보인다)
 type RuleStatus =
   | 'in-range' | 'scheduled' | 'in-progress' | 'partial-failed'
   | 'holiday' | 'quote-wait' | 'withdraw-wait'
@@ -83,6 +85,7 @@ interface Order {
 
 interface Stage {
   kind: 'sell' | 'fx' | 'buy'     // 매도 → 환전 → 매수. 주문 0건 단계는 보내지 않는다(화면이 숨김). 실전 계획에는 'fx'가 없다(D47)
+  // 실전 매수가 보낼 때 1주도 살 수 없었던 주문(값이 올라 현금이 모자람: 아무것도 사지 않고 끝남, 실패·직접 할 일 아님)은 orders에 없다
   status: 'done' | 'pending' | 'failed'
   at: string                      // 대표 시각(09:05 / 09:10 / 22:30)
   orders: Order[]
@@ -94,7 +97,7 @@ type NextAction =
   | { kind: 'first-order'; at: string; market: Market; side: Side; count: number }  // '오늘 09:05 첫 주문 · 한국 매수 2건'
   | { kind: 'retry'; at: string; market: Market; side: Side }
   | { kind: 'todo'; market: Market; side: Side }           // '직접 할 일 · 토스 앱에서 주문 확인'
-  | { kind: 'withdraw-wait'; until: string }               // '10/12까지 · 리밸런싱 쉼'
+  | { kind: 'withdraw-wait'; until: string }               // '10/12까지 · 리밸런싱 쉼'(모의투자만)
   | { kind: 'holiday'; markets: Market[]; nextCheckAt: string }
   | { kind: 'quote-wait'; market: Market | 'FX'; basisDate: string }   // 'FX' = 환율이 낡음
   | { kind: 'next-check'; at: string; reviewAt?: string }   // AI 규칙: '다음 확인 10/8 08:30 · 점검 11/1'(다음 월 점검, 1일 08:30)
@@ -359,7 +362,7 @@ type ScheduleItem =                  // ruleId는 한 규칙의 항목에만 있
   | { kind: 'holiday'; date: string; markets: Market[] }
   | { kind: 'retry'; at: string; market: Market; side: Side; ruleId: string }   // 다시 낼 주문의 규칙
   | { kind: 'sub-share-cash'; krw: number }
-  | { kind: 'withdraw-wait'; krw: number; until: string }
+  | { kind: 'withdraw-wait'; krw: number; until: string }    // '… · 주문 0건': 모의투자만(실전의 출금 대기는 주문을 멈추지 않는다)
   | { kind: 'new-cash'; krw: number }                          // 다음 확인이 쓸 새 현금(아래 '새로 들어온 돈'은 빼고)
   | ({ kind: 'new-money-wait' } & NewMoneyWait)                // 실전(D48): '새로 들어온 돈 [금액] · 다음 거래일 08:30부터 써요'
   | { kind: 'first-check'; at: string }
@@ -426,7 +429,7 @@ interface DayResponse {
   check: {
     at: string | null                             // null = 주말·확인 없음
     result: 'rebalance' | 'in-range' | 'partial-failed' | 'failed' | 'holiday' | 'quote-wait' | 'weekend'
-          | 'in-progress' | 'withdraw-wait' | 'no-run'   // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎)
+          | 'in-progress' | 'withdraw-wait' | 'no-run'   // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎). withdraw-wait는 모의투자만
     holidayMarkets?: Market[]
     band: { threshold: number; before: number | null; after: number | null } | null   // pp1
     ruleId?: string; rule?: RuleRef                 // 확인한 규칙(이름은 rule)
@@ -610,12 +613,15 @@ interface HealthResponse {
 //           10회부터 서버의 unlock·set-pin까지. since = 생긴 시각, count = 그때부터 센 틀린 PIN 수, lastAt = 기록에 남은
 //           마지막 틀린 PIN, closed 1 = 새 로그인이 닫힘(30회)). 헤더 status는 이것도 'todo' 수로 세고, '첫 확인 전'보다 앞선다
 //   toss-link(3단계): { cause: TossLinkCause }. 실전이면 빨강, 아니면 노랑. 사람이 고칠 원인(env-off·no-key·auth·ip·account·
-//           not-tradable·conflict·never·expired)은 직접 할 일, 나머지(unreachable·maintenance·error·old)는 다음 확인(5분 뒤) 자동.
-//           effect 'orders-zero-live-blocked'. 실전이 아니고 켜려는 기미도 없으면(env-off·never) 카드를 만들지 않는다.
+//           not-tradable·conflict·conditional·never·expired)은 직접 할 일, 나머지(unreachable·maintenance·error·old)는 다음 확인(5분 뒤) 자동.
+//           effect 'orders-zero-live-blocked'(실전 중의 conditional만 'other': 주문은 계속되고 그 조건주문의 체결은 주인의 매매로 적힌다).
+//           실전이 아니고 켜려는 기미도 없으면(env-off·never) 카드를 만들지 않는다.
 //           mismatch는 이 카드 대신 broker-mismatch가 말한다
 //   broker-mismatch(3단계, 빨강·직접): { reason, instrument?(이름), ledgerQty?, brokerQty?, count?(다른 종목 수), currency? }
 //           reason 'positions' | 'cash'(설명 안 되는 현금 변화, currency) | 'external-fill' | 'fractional' | 'sleeves' | 'other'.
-//           id 'broker-mismatch:order:<id>'는 결과를 가를 수 없는 우리 주문 { reason: 'order-unknown', market, side }.
+//           id 'broker-mismatch:order:<id>'는 결과를 가를 수 없는 우리 주문 { reason: 'order-unknown', market, side }:
+//           토스에 그 주문으로 보이는 주문이 둘 이상. 주인이 앱에서 확인하고 서버에서만 정리한다
+//           (`resolve broker-mismatch:order:<id> --ledger live --pick <토스 주문 id>|none`, PHASE3.md 2.3).
 //           effect 'orders-zero-live-blocked'(대조가 맞을 때까지 실전 주문 0건)
 //   cancel-failed(3단계 facts): { at(대기 시각), market, side }
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
@@ -627,6 +633,7 @@ interface HealthResponse {
 // type TossLinkCause = 'never' | 'env-off'(주문 실행기에 AUTOTRADE_LIVE_ORDERS 없음) | 'no-key' | 'auth' | 'ip' | 'account'
 //   | 'unreachable' | 'maintenance' | 'error' | 'old'(마지막 확인 15분 넘음) | 'conflict'(다른 프로그램이 같은 키로 토큰을 받음)
 //   | 'not-tradable'(규칙 종목이 거래 안 됨) | 'mismatch'(잔고가 장부와 다름) | 'expired'(알려 준 키 만료일 지남)
+//   | 'conditional'(계좌에 감시 중인 조건주문이 있음: 옛 quant·앱이 건 것. 조건이 되면 스스로 주문한다. 실전 켜기를 막는다)
 ```
 
 ### `GET /api/mode` — SCR-MODE
@@ -792,3 +799,4 @@ type NotifyEvent =
 - 2026-10-13: 계좌 pct·ret·periodPnl.pct를 수정 디츠(평균으로 머문 돈 대비)로 바꿨다(가벼운 확인: 손익 ÷ 들어온 돈은 환전마다 휘었다). 평가가 실패해 값이 마지막 스냅숏일 때는 그 뒤 옮긴 돈을 세지 않고 stale을 켠다. accounts가 null인 경우에 '평가도 스냅숏도 없을 때'를 적었다. 화면: 점선 이름 '원금' → '들어온 돈'과 한 줄 설명, 설정 알림 줄 문구, 미국 계좌 변동 분해의 입금·출금 줄은 값이 있을 때만, 전체에서 연 계좌 보기는 뒤로 가기가 전체로(스위치도). 값이 마지막 스냅숏일 때(지금 평가를 못 함) 숫자는 모두 그 스냅숏 시각 기준이다: 전체 손익은 그 스냅숏까지 들어온 돈을 빼고, 변동 분해·월 변동·기간 손익·그날 변동도 돈의 출입을 그 시각까지만 센다(그 뒤 입금이 손실로 보이지 않게, 월 변동의 합 = 손익 유지). basis는 그 스냅숏의 것(시각·종가일·환율)이고 stale에 셋 다를 넣는다.
 - 2026-10-13: 3단계 실전 연결(토스 세션, autotrade/PHASE3.md). 작동 화면 할 일에 `toss-link`(원인 `TossLinkCause`, 실전이면 빨강, 사람이 고칠 원인만 직접 할 일)·`broker-mismatch`(대조가 맞지 않음: 보유 수량·현금·결과를 모르는 주문, 그동안 실전 주문 0건)·`fx-manual`(토스 앱에서 할 환전: 방향·원화·달러·환율·기다리는 매수 시각)을 더하고 `cancel-failed`의 facts를 정했다. 토스 연결 줄은 'per-check'다(토스 API에 키 만료가 없다): tick이 마지막으로 본 결과, `extra.cause`·`account`, 주인이 알려 준 키 만료일이 있을 때만 basis·`daysLeft`(14일 안이면 'late'). '90d'는 1·2단계 그림의 값으로 남는다. `/api/mode`에 `cancelPending`(토스에 요청한 취소, 다음 확인이 처리)과 `canTurnOn.cause` 'cancel-pending'을, 켜기 전 점검 toss-link의 facts(`checkedAt`·`account` 또는 `cause`)를 더했다. `POST /api/mode/paper`·`/cancel-retry`가 `cancelPending`을 준다. 켜기 전 점검의 자료 최신이 토스 계좌 사진 탓에 ✕이고 토스 연결도 ✕이면 `sameCauseAs: 'toss-link'`(원인 하나). 고정 자료 mode.cancel-pending·mode.link-off·health.live를 더했다. 실전 장부는 계좌별 보기가 읽는 대로 적는다: 계획의 환전은 그 환전 주문의 fx 체결(주문의 `executed_at`은 계좌가 보여 준 시각), 실전 체결 주문의 `executed_at`은 브로커 시각, 대조가 찾은 입·출금·배당은 그 통화의 사건(`occurred_at` = 계좌에서 처음 보인 시각). 달러가 있는 시작과 adopt-broker는 payload `by_currency`(통화마다 들어온 돈, 부호 있음)를, 계획에 없던 환전(주인이 앱에서)은 'conversion' 표시가 붙은 출금·입금 사건 둘을 남기고 계좌별 보기는 이를 계좌 사이의 이동으로 읽는다.
 - 2026-10-13: 넣은 돈 그대로(D47)·새 돈은 다음 거래일부터(D48)(토스 세션, 주인의 결정). 실전 장부는 환전하지 않는다: 원화는 한국 종목, 달러는 미국 종목에 넣고, 한쪽을 팔아 다른 쪽을 사지 않는다. 할 일 `fx-manual`을 뺐다(모의투자는 만든 적이 없고, 실전 장부는 서버에서 시작된 적이 없다). 실전 계획과 켜기 미리보기의 단계에 'fx'가 없다. 원화·달러 비율이 띠 밖이면 상태 `fx-suggest`('환전 제안', 실전 지수 반반만)와 `FxSuggestion`(계획 카드 `fxSuggestion`, 미리보기 `fxSuggestion`, 모드·작동 화면 `liveCash`)을 준다: 정보일 뿐 할 일이 아니고 수에 들어가지 않는다. 대조가 주인의 돈으로 적은 돈(입금, 주인이 한 환전으로 들어온 돈)은 들어온 날(KST)의 확인이 쓰지 않는다: 예정 항목 `new-money-wait`(`NewMoneyWait`: 원·달러·쓰기 시작하는 확인), 미리보기 `newMoney`, `liveCash.newMoney`. `new-cash`는 그 돈을 뺀 값이다. 주인의 환전('conversion' 사건 둘)은 장부 전체의 기록·그날·자산 표식·변동 분해의 입금·출금에 넣지 않는다(돈이 들어오거나 나간 것이 아니다. 계좌별 보기는 이동으로 읽는다). 장부 전체의 변동 분해·월 변동·그날 변동은 달러 입금을 그 사건의 원화 값으로 센다(전에는 달러 금액을 원으로 읽었다). 고정 자료 plan.live-mix·mode.live-cash를 더하고 mode.paper 등 켜기 미리보기를 원화만 있는 계좌(한국 매수 + 환전 제안)로 바꿨다.
+- 2026-10-13: 실전 돈 경로 감사(10건)를 고쳤다(autotrade/PHASE3.md 2.3·2.5·2.6·3). 계약에 닿는 것: `TossLinkCause`에 'conditional'(계좌에 열린 조건주문: 켜기 점검 ✕ → `canTurnOn.cause` 'checks', 할 일은 직접·꺼져 있으면 노랑, 실전 중이면 빨강이고 effect 'other'). 실전 장부의 출금 대기는 그 돈만 묶는다: 상태 `withdraw-wait`·다음 할 일 `withdraw-wait`·예정 항목 `withdraw-wait`·그날 확인 결과 `withdraw-wait`는 모의투자 장부에만 나오고, 실전은 구성의 출금 대기 행과 `pendingBar`가 그 돈과 날짜를 보인다. 실전 계획·켜기 미리보기는 매수를 보낼 때와 같은 상한(종가 0.5% 위 지정가를 호가 단위로 + 수수료)으로 센다(예: 10,000,000원 → 312주가 아니라 310주). 보낼 때 1주도 못 사는 매수는 아무것도 사지 않은 채 끝나고 그 주문은 단계·계획 목록(`Stage.orders`)에서 빠진다(실패·직접 할 일이 아님). 미리보기 hash가 첫 확인 시각을 묶어, 08:30 전에 본 미리보기를 08:30 뒤에 승인하면 409 `preview-changed`다(그 첫 확인은 다음 평일 08:30). 결과를 모르는 주문 할 일의 두 줄을 '서버에서 정리'로 바꿨다(웹 문구).
