@@ -400,8 +400,11 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     assert tick.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && ")
     assert " flock -n data/autotrade.db-cron.lock timeout 10m " in tick
     assert "AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env" in tick  # DART key only
-    # Live orders wait for the owner's go: the first key is not on the line (PHASE3.md 4).
-    assert "AUTOTRADE_LIVE_ORDERS" not in tick
+    # Live orders: the first key is on the tick's line since the owner's go (2026-10-13), the tick
+    # alone; the second is the mode 'live' the owner sets with the PIN (PHASE3.md 4).
+    assert tick.startswith(
+        "*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_LIVE_ORDERS=1 "
+    )
     assert ".venv/bin/python -m autotrade.jobs tick" in tick
     assert tick.endswith(">> data/logs/autotrade-jobs.log 2>&1")
     # The AI line: its own lock, no time limit, and AUTOTRADE_AI_CALLS=1 since the owner's go
@@ -416,6 +419,7 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     assert "timeout" not in ai
     assert "AUTOTRADE_AI_CALLS=1 " in ai
     assert "AUTOTRADE_AI_CALLS" not in tick
+    assert "AUTOTRADE_LIVE_ORDERS" not in ai
     assert "ANTHROPIC_API_KEY" not in ai
     for line in (tick, ai):
         assert "%" not in line  # cron would cut the line at an unescaped %

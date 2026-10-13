@@ -19,23 +19,22 @@
 #   from the file AUTOTRADE_SECRETS_ENV names; nothing else of that file is read
 #   (autotrade/config.py read_env_key). Without it DART shows 'no-key' on the health screen and
 #   the Korean filing watch stops. Without KRX_ID/KRX_PW pykrx cannot log in.
-# - Live orders (phase 3, autotrade/PHASE3.md 2.1 and 4): AUTOTRADE_LIVE_ORDERS stays unset here,
-#   so the tick never calls Toss and no live order can be sent. It is the first of two keys; the
-#   second is the mode 'live' the owner sets on the mode screen with the PIN. With the owner's go
-#   (and the old quant's keeper and cycle_job lines removed first: they share the Toss client and
-#   each new token revokes the other's), the tick's line becomes:
-#     */5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_LIVE_ORDERS=1 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
-#   With it the tick reads TOSS_CLIENT_ID, TOSS_CLIENT_SECRET and TOSS_ACCOUNT_NO from the same
-#   file (one key at a time, nothing else of it), keeps the token in data/autotrade-toss/ (0700,
-#   git-ignored), looks at the account every 5 minutes and records it for the web. Taking the key
-#   off this line stops every Toss call at the next tick; the mode stays whatever it was.
+# - Live orders (phase 3, autotrade/PHASE3.md 2.1 and 4): AUTOTRADE_LIVE_ORDERS=1 on the tick's
+#   line is the first of two keys, on since the owner's go (2026-10-13, after the old quant's
+#   cron lines were removed: they shared the Toss client and each new token revoked the other's).
+#   The second is the mode 'live' the owner sets on the mode screen with the PIN; until then the
+#   tick only reads the account. With the key the tick reads TOSS_CLIENT_ID, TOSS_CLIENT_SECRET
+#   and TOSS_ACCOUNT_NO from the same file (one key at a time, nothing else of it), keeps the
+#   token in data/autotrade-toss/ (0700, git-ignored), looks at the account every 5 minutes and
+#   records it for the web. Taking the key off this line stops every Toss call at the next tick;
+#   the mode stays whatever it was.
 # - One JSON line per task that ran goes to data/logs/autotrade-jobs.log (rotated daily with the
 #   other data/logs/*.log by deploy/logrotate-dashboard). A tick with nothing due writes nothing.
 # - The line has no % (crontab would cut it there; ops notes §8).
 # - Only `python -m autotrade.jobs migrate` (deploy.sh) changes the schema. A job that finds the
 #   database at another schema (between a deploy's `git pull` and its `migrate`, or before the
 #   first `migrate`) writes one line {"result": "schema-mismatch", ...} and exits 3, doing nothing.
-*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
+*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_LIVE_ORDERS=1 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
 #
 # The AI rule's questions (PHASE2.md §6): `python -m autotrade.jobs ai` takes the due AI tasks
 # (filing extraction and screening, sell and buy confirmations, the monthly review, the quarterly
