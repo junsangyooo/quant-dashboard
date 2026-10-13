@@ -16,8 +16,10 @@ recorded (broker_status, broker_snapshots, broker_orders); it never calls Toss:
   `adopt-broker` accepts the broker's numbers.
 - preview: the first orders the rule would send for the account as it is, for the mode screen;
   the hash and total are kept so that turning live on can tell a changed preview (인계 13).
-  Like the check, it plans per currency (D47) and leaves out the owner's money of the day of the
-  next check (D48); it carries the conversion that would bring the mix to the targets.
+  Like the check, it plans per currency (D47), sizes buys as the send pays them (the limit
+  price and the fee) and leaves out the owner's money of the day of the next check (D48); it
+  carries the conversion that would bring the mix to the targets. Its first check is the first
+  one live runs once turned on (first_live_check).
 - turn_on / turn_off: the mode switch's database side (the web service runs it; the cancels at
   the broker are the tick's, as requests).
 - link_check and live_todos: what the mode and health screens show of the Toss link.
@@ -1283,6 +1285,9 @@ class PreviewData:
     new_money: dict[Currency, Decimal] = field(default_factory=dict)
     new_money_from: datetime | None = None  # the check that uses it
     suggestion: FxSuggestion | None = None
+    # The check that plans the first orders: the first weekday check after now. Turned on now,
+    # live runs no check before it (first_live_check); the hash binds it.
+    first_check: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -1409,6 +1414,7 @@ def preview_data(
         ],
         "orders": sorted(parts),
         "snapshot": snap.snapshot_id,
+        "first_check": to_iso(check_at),
     }
     digest = hashlib.sha256(dumps(material).encode()).hexdigest()[:16]
     outside_rows = [(h, _holding_krw(h, rate)) for h in outside]
@@ -1447,6 +1453,7 @@ def preview_data(
         new_money=new_money,
         new_money_from=first_check_after(cfg, kst_date(check_at)),
         suggestion=suggest(mix, rule.threshold, rate, cfg.fx_step_krw),
+        first_check=check_at,
     )
 
 
@@ -1485,7 +1492,11 @@ def store_preview(conn: sqlite3.Connection, data: PreviewData, payload: dict[str
             snapshot_id=data.snapshot.snapshot_id,
             total_krw=data.total_krw,
             signature=data.signature,
-            payload={**payload, "account_krw": str(data.account_krw)},
+            payload={
+                **payload,
+                "account_krw": str(data.account_krw),
+                "first_check": None if data.first_check is None else to_iso(data.first_check),
+            },
         ),
     )
     live_repo.prune_previews(conn, data.computed_at - timedelta(days=2))
@@ -1493,12 +1504,15 @@ def store_preview(conn: sqlite3.Connection, data: PreviewData, payload: dict[str
 
 def preview_changed(stored: live_repo.StoredPreview | None, fresh: PreviewData) -> bool:
     """인계 13: turning live on recomputes the preview and stops when its amounts moved by 1% or
-    more (or it orders something else). Without orders the account's value is compared."""
+    more, it orders something else, or its first check is another one (the owner saw the first
+    orders go out at that check's times: shown before 08:30, approved after it, they go the next
+    morning). Without orders the account's value is compared."""
     if stored is None:
         return True
     if stored.hash == fresh.hash:
         return False
-    if stored.signature != fresh.signature:
+    first = None if fresh.first_check is None else to_iso(fresh.first_check)
+    if stored.signature != fresh.signature or stored.payload.get("first_check") != first:
         return True
     old, new = stored.total_krw, fresh.total_krw
     if old <= 0:
@@ -1600,6 +1614,16 @@ def retry_cancels(conn: sqlite3.Connection, at: datetime) -> list[int]:
         live_repo.request_cancel(conn, row.order_id, at)
         out.append(row.order_id)
     return out
+
+
+def first_live_check(conn: sqlite3.Connection, cfg: Config) -> datetime | None:
+    """The first check of the live period: the first weekday check time strictly after the
+    latest 'live-on' (engine/status.py next_check_at), the one the approved preview showed
+    (PreviewData.first_check). No live check or retry runs before it: turned on, or on again,
+    after the day's check time, live waits for the next weekday's 08:30 instead of planning
+    within minutes as a missed check. None while live was never turned on."""
+    periods = live_periods(conn)
+    return None if not periods else next_check_at(cfg, periods[-1][0])
 
 
 def live_periods(conn: sqlite3.Connection) -> list[tuple[datetime, datetime | None]]:

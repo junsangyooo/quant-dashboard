@@ -2,6 +2,7 @@
 asserting the right behavior. Against the fake Toss (tests/autotrade/live_world.py).
 
 1. Money that came in and an app buy it paid for, in one look at the account.
+2. Live turned on in the day runs no check before the next weekday's 08:30.
 3. A partly filled order that ends in the CLOSED list with PARTIAL_FILLED.
 5. The closed orders the reconciliation reads start at its last match, not its last attempt.
 6. A one-share top-up the send's limit price cannot pay.
@@ -21,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from autotrade.db import live_repo, repo
+from autotrade.db.connection import transaction
 from autotrade.domain.instruments import Currency
 from autotrade.engine import live
 from autotrade.engine.common import new_money_waiting
@@ -148,6 +150,73 @@ def test_an_app_buy_nothing_paid_for_is_still_a_mismatch(lw: Live) -> None:
     result = lw.reconcile()
     assert (result["result"], result["reason"]) == ("mismatch", "cash")
     assert events(lw, "deposit", "withdrawal") == []  # nothing written
+
+
+# ── 2. live turned on in the day ─────────────────────────────────────────────────────────
+
+
+def test_live_turned_on_at_two_waits_for_the_next_morning(lw: Live, world: World) -> None:
+    """Tuesday 14:00 (10,000,000 won only): no 'missed-check' plan minutes later. The first
+    check is Wednesday 08:30, the one the preview showed."""
+    world.rate(kst("2026-06-30 13:55"), "1392.0")
+    data = lw.turn_on("2026-06-30 14:00")
+    assert data.first_check == kst("2026-07-01 08:30")
+    assert set(data.due.values()) == {kst("2026-07-01 09:05")}
+    assert live.first_live_check(lw.conn, lw.cfg) == kst("2026-07-01 08:30")
+    for t in ("2026-06-30 14:05", "2026-06-30 14:10", "2026-06-30 15:25"):
+        lines = lw.tick(t)
+        assert not [line for line in lines if line["task"] in ("check", "retry")], lines
+    assert lw.fake.ours() == []
+    assert repo.plans_of_ledger(lw.conn, "live") == []
+    assert lw.check("2026-06-30 15:00")["result"] == "not-yet"  # by hand, too
+    # Wednesday: the first check plans, and 09:05 sends.
+    lines = lw.tick("2026-07-01 08:30")
+    assert [(x["task"], x["result"]) for x in lines if x["task"] == "check"] == [
+        ("check", "rebalance")
+    ]
+    lw.tick("2026-07-01 09:05")
+    assert [o.symbol for o in lw.fake.ours()] == ["069500"]
+
+
+def test_live_turned_on_before_the_check_time_plans_that_morning(lw: Live) -> None:
+    lw.turn_on("2026-06-30 21:00")
+    assert live.first_live_check(lw.conn, lw.cfg) == kst("2026-07-01 08:30")
+    lw.at("2026-07-01 08:00")
+    lw.turn_off("2026-07-01 08:05")
+    data = lw.turn_on("2026-07-01 08:10")  # off and on again before 08:30: today's check
+    assert data.first_check == kst("2026-07-01 08:30")
+    assert live.first_live_check(lw.conn, lw.cfg) == kst("2026-07-01 08:30")
+    lines = lw.tick("2026-07-01 08:30")
+    assert ("check", "rebalance") in [(x["task"], x.get("result")) for x in lines]
+
+
+def test_off_and_on_again_after_the_check_waits_for_the_next_morning(lw: Live) -> None:
+    invested(lw)
+    lw.turn_off("2026-07-01 10:00")
+    lw.sync("2026-07-01 10:05")
+    lw.turn_on("2026-07-01 10:10")
+    assert live.first_live_check(lw.conn, lw.cfg) == kst("2026-07-02 08:30")
+    lines = lw.tick("2026-07-01 10:15")  # today's check ran before: no retry after it either
+    assert not [x for x in lines if x["task"] in ("check", "retry")], lines
+
+
+def test_a_preview_shown_before_the_check_time_is_changed_after_it(lw: Live) -> None:
+    """The preview binds its first check: shown at 08:25 (first orders today 09:05), turned on
+    at 08:35 (they would go tomorrow), it is another preview (인계 13: 409 preview-changed)."""
+    lw.sync("2026-07-01 08:20")
+    shown = lw.preview()
+    lw.at("2026-07-01 08:25")
+    again = lw.preview()
+    assert (shown.first_check, again.first_check) == (kst("2026-07-01 08:30"),) * 2
+    with transaction(lw.conn):
+        live.store_preview(lw.conn, shown, {})
+    stored = live_repo.get_preview(lw.conn, shown.hash)
+    assert not live.preview_changed(stored, again)
+    lw.sync("2026-07-01 08:35")
+    later = lw.preview()
+    assert later.first_check == kst("2026-07-02 08:30")
+    assert later.signature == shown.signature  # the same orders, a day later
+    assert live.preview_changed(stored, later)
 
 
 # ── 3. a partial fill that ends PARTIAL_FILLED in the CLOSED list ────────────────────────

@@ -85,6 +85,9 @@ FAILED = "failed"
 WEEKEND = "weekend"
 NOT_STARTED = "not-started"
 NOT_LIVE = "not-live"  # the live ledger's check while the mode is paper: nothing runs
+# The live ledger's check before the first weekday check after live was turned on (the one its
+# preview showed, engine/live.py first_live_check): nothing runs.
+NOT_YET = "not-yet"
 
 
 class CheckFailedError(RuntimeError):
@@ -555,6 +558,10 @@ def run_check(
         return CheckOutcome(WEEKEND, None, None, None)
     if ledger_id == live.LIVE and (repo.get_setting(conn, MODE) or "paper") != live.LIVE:
         return CheckOutcome(NOT_LIVE, None, None, None)
+    if ledger_id == live.LIVE:
+        first = live.first_live_check(conn, cfg)
+        if first is not None and at < first:
+            return CheckOutcome(NOT_YET, None, None, None, {"first_check": first})
     if not ensure_started(conn, ledger_id, d, at):
         return CheckOutcome(NOT_STARTED, None, None, None)
     started = clock()
