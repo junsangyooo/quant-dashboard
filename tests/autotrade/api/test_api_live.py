@@ -19,6 +19,7 @@ from autotrade.db import live_repo, repo
 from autotrade.engine import live
 
 from ..fakes import World
+from ..helpers import kst
 from ..live_world import Live, make_live
 from .support import PIN, owner_pin
 
@@ -156,7 +157,9 @@ def test_another_program_on_the_same_client_blocks_turning_on(lw: Live, web: Tes
 
 def test_an_old_toss_check_blocks_turning_on(lw: Live, web: TestClient) -> None:
     ready(lw)
-    lw.at("2026-06-30 21:30")
+    # Both markets are closed at 21:00-21:50 (KRX shut, NYSE opens 22:30): the tick looks every
+    # 30 minutes then, so a look counts as old only past 15 + 30 minutes (sync_max_age).
+    lw.at("2026-06-30 21:50")
     mode = web.get("/api/mode").json()
     rows = {r["id"]: r for r in mode["preflight"]}
     assert rows["toss-link"]["facts"] == {"cause": "old"}
@@ -164,6 +167,30 @@ def test_an_old_toss_check_blocks_turning_on(lw: Live, web: TestClient) -> None:
     # The old account picture is the link's doing: one cause, not two.
     assert rows["freshness"]["sameCauseAs"] == "toss-link"
     assert mode["preview"]["kind"] == "not-computable"
+
+
+def test_at_night_the_mode_screen_gets_a_fresh_look_within_a_tick(
+    lw: Live, web: TestClient
+) -> None:
+    """At night the tick looks every 30 minutes, but the preview needs an account picture
+    within 15: opening the mode screen makes the next tick look, so turning on waits one tick,
+    not up to 30 minutes."""
+    lw.tick("2026-06-30 21:00")
+    lw.market_data()
+    lw.tick("2026-06-30 21:15")
+    assert lw.status().checked_at == kst("2026-06-30 21:00")  # the night cadence
+    lw.at("2026-06-30 21:16")
+    mode = web.get("/api/mode").json()
+    rows = {r["id"]: r for r in mode["preflight"]}
+    assert rows["toss-link"]["ok"] is True  # 16 minutes is no old link at night ...
+    assert rows["freshness"]["facts"]["source"] == "toss-balance"  # ... but an old picture
+    assert "sameCauseAs" not in rows["freshness"]
+    assert mode["preview"]["kind"] == "not-computable"
+    lw.tick("2026-06-30 21:20")
+    assert lw.status().checked_at == kst("2026-06-30 21:20")
+    mode = web.get("/api/mode").json()
+    assert mode["canTurnOn"] == {"ok": True}
+    assert turn_on(web, mode["preview"]["hash"]).json() == {"mode": "live"}
 
 
 def test_turning_off_cancels_at_the_broker_through_the_tick(lw: Live, web: TestClient) -> None:

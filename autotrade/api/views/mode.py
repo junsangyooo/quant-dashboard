@@ -344,7 +344,10 @@ def mode(ctx: LedgerContext) -> dict[str, Any]:
         out["preflight"] = found.preflight
         out["preview"] = preview_json(found.preview)
         out["canTurnOn"] = found.can_turn_on
-        if isinstance(found.preview, PreviewData):
-            with transaction(conn):
+        with transaction(conn):
+            # The preview needs an account snapshot within broker_max_age: the tick looks at
+            # Toss every 5 minutes for a while after this, also at night (engine/live.py).
+            live.request_sync(conn, now)
+            if isinstance(found.preview, PreviewData):
                 store(conn, found.preview, out["preview"])
     return out

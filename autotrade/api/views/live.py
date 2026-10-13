@@ -48,9 +48,11 @@ MANUAL_CAUSES = frozenset(
 
 
 def _age(now: datetime, since: datetime | None, cfg: Config) -> float:
+    """The age as a share of how old the tick's look may be now (1 = the limit): the slower
+    night cadence counts against its own limit (engine/live.py sync_max_age)."""
     if since is None:
         return 0.0
-    span = cfg.broker_max_age.total_seconds()
+    span = live.sync_max_age(cfg, now).total_seconds()
     return round(max(0.0, (now - since).total_seconds()) / span, 2)
 
 
@@ -99,7 +101,7 @@ def balance_source(conn: sqlite3.Connection, cfg: Config, now: datetime) -> dict
     result = None if status is None else status.reconcile_state
     if result == "mismatch":
         state = "stale"
-    elif result == "match" and at is not None and now - at <= cfg.broker_max_age:
+    elif result == "match" and at is not None and now - at <= live.sync_max_age(cfg, now):
         state = "fresh"
     elif result in ("match", "busy"):
         state = "late"

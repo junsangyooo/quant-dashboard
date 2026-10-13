@@ -129,6 +129,10 @@ class Config:
     # How old the account snapshot and the Toss check may be for the check, the preview and
     # turning live on.
     broker_max_age: timedelta = timedelta(minutes=15)
+    # The tick's Toss sync while both markets are closed and nothing of ours is moving (nights,
+    # weekends, holidays; engine/live.py fast_sync_reason): every 30 minutes, not every tick.
+    # Meanwhile a look this much older than broker_max_age still counts (sync_max_age).
+    broker_sync_slow: timedelta = timedelta(minutes=30)
     # A won and a dollar change in opposite directions is a conversion when its rate is within
     # this of the market rate (the owner converts in the app, PHASE3.md 2.4).
     live_fx_tolerance: Decimal = Decimal("0.03")

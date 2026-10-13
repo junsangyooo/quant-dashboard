@@ -641,12 +641,13 @@ interface HealthResponse {
 //   cancel-failed(3단계 facts): { at(대기 시각), market, side }
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 //   3단계 실제 연결은 cadence 'per-check'다(토스 API에 키 만료가 없다, PHASE3.md 1.6):
-//   toss-link: state는 tick이 마지막으로 본 토스(fresh | 15분 넘게 못 봄 'late' | 원인이 있으면 'stale' | 아직 모르면 'unknown'),
+//   toss-link: state는 tick이 마지막으로 본 토스(fresh | 한도 넘게 못 봄 'late' | 원인이 있으면 'stale' | 아직 모르면 'unknown'),
 //              주인이 알려 준 키 만료일(`AUTOTRADE_TOSS_KEY_EXPIRES`)이 14일 안이면 'late'. basis = 그 만료일(없으면 null),
-//              receivedAt = 마지막 성공, age = 마지막 확인 뒤 ÷ 15분, extra { cause?: TossLinkCause, account?(끝 4자리), daysLeft? }
-//   toss-balance: basis 'match' | 'mismatch' | null(대조 결과), receivedAt = 마지막 대조, age = ÷ 15분
+//              receivedAt = 마지막 성공, age = 마지막 확인 뒤 ÷ 한도, extra { cause?: TossLinkCause, account?(끝 4자리), daysLeft? }
+//              한도는 15분, 한국·미국 정규장이 모두 닫힌 동안(밤·주말·휴장일)과 장이 열린 뒤 15분은 45분(tick이 30분마다 본다, PHASE3.md 2.8)
+//   toss-balance: basis 'match' | 'mismatch' | null(대조 결과), receivedAt = 마지막 대조, age = ÷ 같은 한도
 // type TossLinkCause = 'never' | 'env-off'(주문 실행기에 AUTOTRADE_LIVE_ORDERS 없음) | 'no-key' | 'auth' | 'ip' | 'account'
-//   | 'unreachable' | 'maintenance' | 'error' | 'old'(마지막 확인 15분 넘음) | 'conflict'(다른 프로그램이 같은 키로 토큰을 받음)
+//   | 'unreachable' | 'maintenance' | 'error' | 'old'(마지막 확인이 한도를 넘음: 15분, 두 장이 닫힌 동안 45분) | 'conflict'(다른 프로그램이 같은 키로 토큰을 받음)
 //   | 'not-tradable'(규칙 종목이 거래 안 됨) | 'mismatch'(잔고가 장부와 다름) | 'expired'(알려 준 키 만료일 지남)
 //   | 'conditional'(계좌에 감시 중인 조건주문이 있음: 옛 quant·앱이 건 것. 조건이 되면 스스로 주문한다. 실전 켜기를 막는다)
 ```
@@ -673,7 +674,8 @@ interface ModeResponse {
   // facts 키: health ok면 { lastCheckAt }, 아니면 { count, source }(원인 수와 첫 원인의 출처 id)
   //          toss-link ok면 { checkedAt, account }(tick이 마지막으로 본 시각, 계좌 끝 4자리), 아니면 { cause: TossLinkCause };
   //          주인이 키 만료일을 알려 줬으면 둘 다 { expiresAt, daysLeft }를 더한다. 웹은 서버 cron에 열쇠가 있고(env-off 아님)
-  //          15분 안에 본 결과로만 켤 수 있다: 웹 서비스는 토스를 부르지 않는다
+  //          15분 안에 본 결과로만 켤 수 있다: 웹 서비스는 토스를 부르지 않는다. 이 응답(모드 '모의투자')을 받으면
+//          tick이 30분 동안 5분마다 보므로 밤에도 계좌 사진(자료 최신)은 다음 tick에 새로워진다
   //          freshness ok면 { balanceAt, priceAt, fxAt }, 아니면 { source, basisDate } · push { devices, lastDelivery }
   preview: null
     | { kind: 'ok'; computedAt: string; hash: string; basis: { balanceAt: string; priceAt: string; fxRate: number; fxAt: string };
@@ -819,3 +821,4 @@ type NotifyEvent =
 - 2026-10-13: 실전 화면 감사 수정(화면 세션). 돈의 출입은 평가 시각으로 기간에 넣는다(원칙): 그날·월 변동, 기간 손익, 장부 전체 변동 분해의 입출금·배당, 기록 줄의 그날 변동은 여는 평가 뒤에 들어와 닫는 평가 때까지 들어온 돈만 센다(16:00 뒤 입금은 다음 평가의 것, 달 마지막 평일 저녁 입금은 다음 달의 것). 그날 스냅숏이 없는 실전 시작일의 total은 시작 금액이고, 그런 시작이 기간 시작이면 여는 평가가 된다. 수수료는 아직 날짜로 센다. 실전 장부는 리밸런싱을 말하지 않는다(D47): 게이지 `mix`(원화·달러 비율, '환전 제안까지'), 규칙 카드 줄 `toThreshold` null, 벗어남 흐름 `drift.mix`(선은 원화·달러 비율의 벗어남), 규칙 타일 `TilesDisplay.mix`(조건은 원화·달러 비율·atCheck null, 행동 stages ['buy']), 그날 확인 `band` null, 기록 줄 `deviation` 없음. cancel-failed 배너는 실전이 켜진 채로도 온다(화면이 모드로 문구를 가른다). 고정 자료 rules.live·mode.live-cancel-failed를 더하고 실전 고정 자료를 D47로 고쳤다(환전 단계·둘째 규칙 없음, 몫 100).
 - 2026-10-13: 실전 돈 경로 감사(10건)를 고쳤다(autotrade/PHASE3.md 2.3·2.5·2.6·3). 계약에 닿는 것: `TossLinkCause`에 'conditional'(계좌에 열린 조건주문: 켜기 점검 ✕ → `canTurnOn.cause` 'checks', 할 일은 직접·꺼져 있으면 노랑, 실전 중이면 빨강이고 effect 'other'). 실전 장부의 출금 대기는 그 돈만 묶는다: 상태 `withdraw-wait`·다음 할 일 `withdraw-wait`·예정 항목 `withdraw-wait`·그날 확인 결과 `withdraw-wait`는 모의투자 장부에만 나오고, 실전은 구성의 출금 대기 행과 `pendingBar`가 그 돈과 날짜를 보인다. 실전 계획·켜기 미리보기는 매수를 보낼 때와 같은 상한(종가 0.5% 위 지정가를 호가 단위로 + 수수료)으로 센다(예: 10,000,000원 → 312주가 아니라 310주). 보낼 때 1주도 못 사는 매수는 아무것도 사지 않은 채 끝나고 그 주문은 단계·계획 목록(`Stage.orders`)에서 빠진다(실패·직접 할 일이 아님). 미리보기 hash가 첫 확인 시각을 묶어, 08:30 전에 본 미리보기를 08:30 뒤에 승인하면 409 `preview-changed`다(그 첫 확인은 다음 평일 08:30). 결과를 모르는 주문 할 일의 두 줄을 '서버에서 정리'로 바꿨다(웹 문구).
 - 2026-10-13: 두 수정을 합친 뒤의 가벼운 확인. 늦은 실전 대조가 앞 시각으로 적은 돈은 그것을 처음 담은 평가의 것이다(장부 전체 변동 분해의 입출금·배당, 계좌별 보기의 선 `netIn`·기간 분해, '손대지 않았을 때'). 보낼 때 1주도 못 산 매수만 있던 실전 계획은 기록 줄·사건 표식·달력의 리밸런싱 날·연간 리밸런싱 수에 들지 않는다(그날 확인 카드의 결과는 그대로).
+- 2026-10-13: 밤의 토스 동기화 주기(엔진 세션). 한국·미국 정규장이 모두 닫혀 있고 우리 주문·취소·모드 바꿈·켜기 미리보기가 없으면 tick은 30분마다 토스를 본다(그 밖에는 5분마다). 그동안 토스 연결 줄 'late'·`old`와 toss-link·toss-balance의 `age`는 45분 한도로 잰다(장이 열린 뒤 15분까지). `GET /api/mode`(모드 '모의투자')는 tick에게 30분 동안 5분마다 보라고 남긴다. 켜기 미리보기의 15분은 그대로다.

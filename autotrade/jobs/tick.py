@@ -15,6 +15,10 @@ weekday check after it was turned on: never a 'missed-check' plan minutes after)
 (whenever the ledger has started: an account that is off still counts, 인계 15). Live dividends
 come from the account (the reconciliation), not from the paper ledger's dividend job. A task
 whose report says 'quiet' (nothing changed) prints nothing.
+
+The sync runs on every tick while a market is open, anything of ours is moving, or another live
+task runs on the same tick; otherwise (nights, weekends, holidays) every 30 minutes
+(engine/live.py fast_sync_reason, cfg.broker_sync_slow).
 """
 
 from __future__ import annotations
@@ -24,7 +28,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from autotrade.db import repo
+from autotrade.broker.toss import env_live
+from autotrade.db import live_repo, repo
 from autotrade.engine import live
 from autotrade.engine.check import FAILED
 from autotrade.jobs.ai_tasks import plan_job, queue_job, watch_job
@@ -64,6 +69,9 @@ TASKS = (
 # The live ledger's turn (PHASE3.md 2.8): the sync first, so the stages read fresh broker
 # records and the check reconciles a fresh snapshot.
 LIVE_TASKS = ("broker", "stages", "reconcile", "check", "retry", "snapshot")
+# The live tasks that read what the sync records: when one runs on a tick, the sync runs first
+# on the same tick whatever its cadence.
+SYNC_READERS = ("stages", "check", "retry", "snapshot")
 # What a log line keeps from a job's report (the full report stays in the database records).
 KEEP = (
     "result",
@@ -104,11 +112,27 @@ def tick_ledgers(ctx: JobContext) -> list[str]:
     return out
 
 
+def _broker_due(ctx: JobContext, at: datetime) -> Due | None:
+    """The Toss sync: on every tick while a market is open or something of ours moves, else
+    every cfg.broker_sync_slow from the last look (engine/live.py fast_sync_reason). Without the
+    first key it only records 'off' (no call), so it stays on every tick."""
+    if not (ctx.cfg.live_orders and env_live()):
+        return Due("broker", "every-tick")
+    if live.fast_sync_reason(ctx.conn, ctx.cfg, at) is not None or any(
+        _live_due(task, ctx, at) is not None for task in SYNC_READERS
+    ):
+        return Due("broker", "every-tick")
+    status = live_repo.get_status(ctx.conn)
+    if status is None or at - status.checked_at >= ctx.cfg.broker_sync_slow - live.SYNC_TOLERANCE:
+        return Due("broker", "slow")
+    return None
+
+
 def _live_due(task: str, ctx: JobContext, at: datetime) -> Due | None:
     started = repo.start_event(ctx.conn, live.LIVE) is not None
     on = live.mode_of(ctx.conn) == live.LIVE
     if task == "broker":
-        return Due("broker", "every-tick")
+        return _broker_due(ctx, at)
     if task == "reconcile":
         return Due("reconcile", "every-tick") if started else None
     if task in ("check", "retry"):

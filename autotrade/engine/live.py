@@ -34,7 +34,7 @@ import hashlib
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -78,11 +78,11 @@ from autotrade.engine.dividends import (
     tax_rate,
 )
 from autotrade.engine.status import first_check_after, next_check_at
-from autotrade.market.calendar import KRX
+from autotrade.market.calendar import KRX, NYSE, CalendarRangeError
 from autotrade.market.service import latest_close, market_freshness, rate_freshness
 from autotrade.market.types import FxQuote
 from autotrade.rules.index_half import RULE_ID
-from autotrade.timeutil import kst_date, require_aware, to_iso
+from autotrade.timeutil import KST, et_date, from_iso, kst_date, require_aware, to_iso
 
 LIVE = "live"
 MODE_CHANGED_AT = "mode.changed_at"
@@ -272,12 +272,18 @@ class ReconcileResult:
 
 
 def busy_reason(
-    conn: sqlite3.Connection, cfg: Config, snap: AccountSnapshot | None, at: datetime
+    conn: sqlite3.Connection,
+    cfg: Config,
+    snap: AccountSnapshot | None,
+    at: datetime,
+    max_age: timedelta | None = None,
 ) -> str | None:
-    """Why the account cannot be read as the truth right now (None = it can)."""
+    """Why the account cannot be read as the truth right now (None = it can). `max_age` is how
+    old the snapshot may be (default cfg.broker_max_age; the reconciliation passes sync_max_age,
+    which allows the slow night cadence)."""
     if snap is None:
         return "no-snapshot"
-    if at - snap.confirmed_at > cfg.broker_max_age:
+    if at - snap.confirmed_at > (cfg.broker_max_age if max_age is None else max_age):
         return "old-snapshot"
     if not snap.quiet:
         return "orders-open"
@@ -300,7 +306,7 @@ def reconcile(
     if start is None:
         return ReconcileResult("skipped", "not-started")
     snap = snapshot or live_repo.latest_snapshot(conn)
-    reason = busy_reason(conn, cfg, snap, at)
+    reason = busy_reason(conn, cfg, snap, at, sync_max_age(cfg, at))
     if reason is not None or snap is None:
         result = ReconcileResult("busy", reason or "no-snapshot")
         _record(conn, at, result)
@@ -1712,7 +1718,7 @@ def link_check(conn: sqlite3.Connection, cfg: Config, at: datetime) -> LinkCheck
         return no("env-off")
     if status.state != "ok":
         return no(status.state)
-    if status.ok_at is None or at - status.ok_at > cfg.broker_max_age:
+    if status.ok_at is None or at - status.ok_at > sync_max_age(cfg, at):
         return no("old")
     if status.revoked:
         return no("conflict")
@@ -1736,6 +1742,87 @@ def cancel_failed(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
 
 def cancel_pending(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
     return [r for r in live_repo.cancel_rows(conn, LIVE, ["requested"]) if r.open]
+
+
+# ── the sync's cadence ───────────────────────────────────────────────────────────────────
+#
+# The tick looks at Toss every 5 minutes while a market is open or anything of ours is moving,
+# and every cfg.broker_sync_slow (30 minutes) otherwise: nights, weekends and holidays with no
+# order of ours at Toss, no cancel to carry out, no mode change or turn-on preview just now.
+# The sync is the only code that calls Toss (jobs/live_tasks.py); this decides only how often.
+
+# The mode screen asked for a turn-on preview (GET /api/mode): the preview needs an account
+# snapshot within cfg.broker_max_age, so the tick looks every 5 minutes for a while after.
+SYNC_WANTED_AT = "broker.sync_wanted_at"
+# From here to midnight KST the tick looks every time: money the account shows on day D is
+# used from the next weekday (D48), so a deposit made late in the evening is still seen, and
+# dated, the day it arrived, as with the 5-minute look.
+DAY_END = time(23, 50)
+# Half a tick: a sync due every 30 minutes runs on the tick near the 30-minute mark, not the one
+# after it (the last look's time is when the previous sync finished).
+SYNC_TOLERANCE = timedelta(minutes=2, seconds=30)
+
+
+def markets_closed(at: datetime) -> bool:
+    """Both regular sessions (KRX in KST, NYSE in ET) are closed at `at`: their calendars'
+    weekends, holidays and hours. Outside the calendars' years it says False (look every tick)."""
+    try:
+        for cal, day in ((KRX, kst_date(at)), (NYSE, et_date(at))):
+            if cal.is_trading_day(day) and cal.session_open(day) <= at < cal.session_close(day):
+                return False
+    except CalendarRangeError:
+        return False
+    return True
+
+
+def sync_max_age(cfg: Config, at: datetime) -> timedelta:
+    """How old the tick's last look at Toss (its link check, its account snapshot and the
+    reconciliation of it) may be at `at` and still be current. cfg.broker_max_age while the
+    tick looks every 5 minutes; broker_max_age + broker_sync_slow while both markets are closed
+    and for broker_max_age after one opens (the first 5-minute looks then catch up), so the
+    slower night cadence never reads as late on the screens. The turn-on preview keeps the
+    strict broker_max_age (preview_data), with a fresh look asked for by the mode screen."""
+    if markets_closed(at) or markets_closed(at - cfg.broker_max_age):
+        return cfg.broker_max_age + cfg.broker_sync_slow
+    return cfg.broker_max_age
+
+
+def request_sync(conn: sqlite3.Connection, at: datetime) -> None:
+    """The mode screen showed (or tried to show) a turn-on preview: look at Toss every tick for
+    the next cfg.broker_sync_slow, so the preview and the turn-on find a fresh snapshot within a
+    tick even at night. The caller owns the transaction."""
+    repo.set_setting(conn, SYNC_WANTED_AT, to_iso(at), at)
+
+
+def _setting_time(conn: sqlite3.Connection, key: str) -> datetime | None:
+    value = repo.get_setting(conn, key)
+    if not value:
+        return None
+    try:
+        return from_iso(value)
+    except ValueError:
+        return None
+
+
+def fast_sync_reason(conn: sqlite3.Connection, cfg: Config, at: datetime) -> str | None:
+    """Why the tick looks at Toss on this tick, whatever the last look's time; None when the
+    slow cadence applies (every cfg.broker_sync_slow). The tick adds one more reason: a live
+    task (stages, check, retry, snapshot) due on the same tick (jobs/tick.py)."""
+    if not markets_closed(at):
+        return "market-open"
+    if at.astimezone(KST).time() >= DAY_END:
+        return "day-end"
+    if live_repo.broker_orders_of(conn, LIVE, live_repo.OPEN_STATES):
+        return "orders"  # at Toss, or its sending was cut off (resent within 9 minutes)
+    if live_repo.cancel_rows(conn, LIVE, ["requested", "failed"]):
+        return "cancel"  # live off, a resolve, or a cancel to try again
+    changed = _setting_time(conn, MODE_CHANGED_AT)
+    if changed is not None and at - changed < cfg.broker_sync_slow:
+        return "mode-changed"
+    wanted = _setting_time(conn, SYNC_WANTED_AT)
+    if wanted is not None and at - wanted < cfg.broker_sync_slow:
+        return "preview"
+    return None
 
 
 def settle_ambiguous(
