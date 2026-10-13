@@ -89,7 +89,21 @@ class Failed:
         return self.reason is not FailureReason.BROKER_REJECTED
 
 
-Outcome = TradeFilled | FxFilled | Waiting | Failed
+# NotTraded.reason of a live buy the cash could not pay one share of when it was due.
+NOTHING_TO_BUY = "nothing-to-buy"
+
+
+@dataclass(frozen=True)
+class NotTraded:
+    """The order ends with nothing traded and nothing failed: a live buy whose cash could not pay
+    one share when it was due (the price rose past the plan's, the account shows less). Its cash
+    simply waits for the next check, which plans with it again; no retry, no manual action."""
+
+    reason: str
+    detail: str
+
+
+Outcome = TradeFilled | FxFilled | Waiting | Failed | NotTraded
 
 
 class Executor(Protocol):

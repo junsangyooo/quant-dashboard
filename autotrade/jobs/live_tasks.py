@@ -6,7 +6,8 @@ the web service (sandboxed: no network, no secrets). Each step is network first,
 transaction of its own, like the market downloads (autotrade/jobs/tasks.py); an order's intent is
 committed before the order leaves, so a crash in between is found and resolved the next time:
 
-  1. read our open orders at the broker (fills, ends)
+  1. read our open orders at the broker (fills, ends: a PARTIAL_FILLED order is over only once
+     the CLOSED list has it or it carries a cancel time, Sync.finished)
   2. resolve orders whose sending was cut off: within 9 minutes the same client order id is sent
      again (Toss returns the first order), later the account's orders are searched for it
   3. cancel what must not stay open: cancel requests ('live off', resolve), any open order of
@@ -14,7 +15,9 @@ committed before the order leaves, so a crash in between is found and resolved t
   4. send the orders whose stage is due (only with both keys, and never on a mismatch)
   5. once a day: the rule's instruments tradable, the commission rates
   6. a snapshot of the account: cash (buying power), holdings, the closed orders since the last
-     reconciliation; 'quiet' when no order was open anywhere while it was read
+     reconciliation that matched; 'quiet' when no order was open anywhere while it was read;
+     then the account's open 조건주문 (armed, they place orders of their own: live is not
+     turned on while one is open)
   7. the link's status (the mode and health screens read it)
 
 Without AUTOTRADE_LIVE_ORDERS=1 nothing is called: the status says 'off' and that is all.
@@ -28,15 +31,20 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_FLOOR, Decimal
 from typing import Any
 
+from autotrade.broker.base import NOTHING_TO_BUY
 from autotrade.broker.toss import (
     LIVE,
     client_order_id,
     env_live,
+    fee_rate,
     limit_price,
     permit_for,
 )
 from autotrade.broker.toss_api import (
+    OPEN_OR_CLOSED,
+    REQUEST_RECORDS,
     BrokerOrder,
+    ConditionalOrder,
     LivePermit,
     OrderRequest,
     TossApiError,
@@ -60,7 +68,7 @@ from autotrade.domain.planner import Side
 from autotrade.engine import live, runner, sleeves
 from autotrade.engine.common import new_money_waiting, withdraw_wait_amounts
 from autotrade.market.calendar import CalendarRangeError, calendar_for
-from autotrade.timeutil import et_date, from_iso, kst_date, require_aware
+from autotrade.timeutil import KST, et_date, from_iso, kst_date, require_aware
 
 SNAPSHOT_KEEP = timedelta(days=7)
 SESSION_GRACE = timedelta(minutes=30)  # a day order still open this long after its session
@@ -95,6 +103,8 @@ class Sync:
         self.now = now
         self.changes: list[dict[str, Any]] = []
         self.errors: list[str] = []
+        self.conditional: list[ConditionalOrder] | None = None  # step 6, None until read
+        self._closed: dict[tuple[str, date], set[str]] = {}  # CLOSED ids by (symbol, day)
 
     # 1. read our open orders
     def poll(self) -> None:
@@ -103,24 +113,44 @@ class Sync:
                 continue
             try:
                 view = self.client.order(row.broker_order_id)
+                self._record_view(row, view)
             except TossApiError as exc:
                 self.errors.append(f"poll {row.order_id}: {exc}")
-                continue
-            self._record_view(row, view)
 
-    def _record_view(self, row: BrokerOrderRow, view: BrokerOrder) -> None:
+    def finished(self, view: BrokerOrder) -> bool:
+        """Whether the broker is done with an order: its own record says so (a terminal status,
+        a cancel time), or it is PARTIAL_FILLED and the CLOSED list has it (the status is in both
+        lists, openapi.json 1.2.24: a partly filled order whose rest lapsed may keep it). An
+        order the OPEN list holds as PARTIAL_FILLED still trades."""
+        if view.terminal:
+            return True
+        if view.status != OPEN_OR_CLOSED or view.ordered_at is None:
+            return False
+        day = kst_date(view.ordered_at)
+        key = (view.symbol, day)
+        if key not in self._closed:
+            closed = self.client.orders(
+                "CLOSED", symbol=view.symbol, start=day, end=day + timedelta(days=1)
+            )
+            self._closed[key] = {o.order_id for o in closed}
+        return view.order_id in self._closed[key]
+
+    def _record_view(self, row: BrokerOrderRow, view: BrokerOrder) -> bool:
+        """Record what the broker says of `row` now; returns whether the order is over."""
+        over = self.finished(view)
         if (
-            row.state == ("done" if view.terminal else "sent")
+            row.state == ("done" if over else "sent")
             and row.status == view.status
             and row.filled_qty == view.filled_qty
             and row.broker_order_id == view.order_id
         ):
-            return
+            return over
         with transaction(self.conn):
-            live_repo.record_broker_view(self.conn, row.order_id, view, self.now())
+            live_repo.record_broker_view(self.conn, row.order_id, view, self.now(), finished=over)
         self.changes.append(
             {"order_id": row.order_id, "status": view.status, "filled": str(view.filled_qty)}
         )
+        return over
 
     # 2. orders whose sending was cut off
     def recover(self) -> None:
@@ -155,7 +185,7 @@ class Sync:
         sent = row.sent_at
         try:
             found = self.client.orders("OPEN", symbol=request.symbol)
-            found += self.client.orders(
+            closed = self.client.orders(
                 "CLOSED",
                 symbol=request.symbol,
                 start=kst_date(sent),
@@ -164,6 +194,8 @@ class Sync:
         except TossError as exc:
             self.errors.append(f"search {row.order_id}: {exc}")
             return
+        closed_ids = {o.order_id for o in closed}
+        found += closed
         ours = live_repo.our_broker_ids(self.conn)
         matches = [
             o
@@ -179,16 +211,26 @@ class Sync:
         with transaction(self.conn):
             if len(unique) == 1:
                 view = next(iter(unique.values()))
+                over = view.terminal or view.order_id in closed_ids
                 live_repo.mark_sent(self.conn, row.order_id, view.order_id, self.now())
-                live_repo.record_broker_view(self.conn, row.order_id, view, self.now())
+                live_repo.record_broker_view(
+                    self.conn, row.order_id, view, self.now(), finished=over
+                )
                 self.changes.append({"order_id": row.order_id, "found": view.order_id})
             elif len(unique) > 1:
+                # A person tells which is ours (`resolve broker-mismatch:order:<id> --pick`):
+                # keep what each looked like, and from which list it came.
+                candidates = [
+                    {"order": o.to_json(), "closed": o.order_id in closed_ids}
+                    for o in sorted(unique.values(), key=lambda o: o.order_id)
+                ]
                 live_repo.mark_unknown(
                     self.conn,
                     row.order_id,
                     "ambiguous",
                     f"{len(unique)} orders match; check the Toss app",
                     self.now(),
+                    candidates,
                 )
                 self.changes.append({"order_id": row.order_id, "ambiguous": len(unique)})
             elif final:
@@ -252,13 +294,12 @@ class Sync:
                 self.changes.append({"order_id": row.order_id, "cancel": "failed"})
                 continue
             try:
-                view = self.client.order(row.broker_order_id)
+                over = self._record_view(row, self.client.order(row.broker_order_id))
             except TossError as exc:
                 self.errors.append(f"after cancel {row.order_id}: {exc}")
                 outcome = "requested"
             else:
-                self._record_view(row, view)
-                if not view.terminal:
+                if not over:
                     outcome = "requested"  # PENDING_CANCEL: read again next time
             with transaction(self.conn):
                 live_repo.record_cancel(self.conn, row.order_id, outcome, None, self.now())
@@ -362,8 +403,9 @@ class Sync:
     ) -> tuple[int, str | None]:
         """Whole shares that can go: a buy within the rule's cash (not the cash waiting for a
         withdrawal, nor the owner's money of today, D48) and the broker's buying power at the
-        limit price with the commission; a sell within the rule's shares and the broker's
-        sellable quantity."""
+        limit price with the commission (none: NOTHING_TO_BUY, the order ends and its cash waits
+        for the next check); a sell within the rule's shares and the broker's sellable
+        quantity."""
         view = sleeves.view(self.conn, LIVE, rule_id)
         if side is Side.BUY:
             held = (
@@ -379,23 +421,20 @@ class Sync:
             )
             power = self.client.buying_power(inst.currency)
             cash = min(power, ledger_cash)
-            rate = max(self._commission(inst.market), self.cfg.fees.rate_for(inst.currency))
-            unit = limit * (1 + rate)
+            unit = limit * (1 + fee_rate(self.cfg, self._commissions(), inst))
             affordable = (
                 0 if cash <= 0 else int((cash / unit).to_integral_value(rounding=ROUND_FLOOR))
             )
             qty = min(planned, affordable)
-            return qty, None if qty > 0 else "no-cash"
+            return qty, None if qty > 0 else NOTHING_TO_BUY
         sellable = self.client.sellable_quantity(inst.ticker)
         whole = int(sellable.to_integral_value(rounding=ROUND_FLOOR))
         qty = min(planned, view.qty_of(inst.instrument_id), whole)
         return qty, None if qty > 0 else "nothing-to-sell"
 
-    def _commission(self, market: Market) -> Decimal:
+    def _commissions(self) -> dict[str, Decimal]:
         status = live_repo.get_status(self.conn)
-        if status is None:
-            return ZERO
-        return status.commissions.get(market.value, ZERO)
+        return {} if status is None else status.commissions
 
     def _value_krw(self, inst: Instrument, qty: int, price: Decimal) -> Decimal:
         value = price * qty
@@ -431,11 +470,11 @@ class Sync:
         )
         try:  # a marketable limit usually fills at once: read it now rather than next tick
             view = self.client.order(broker_id)
+            row = live_repo.get_broker_order(self.conn, order_id)
+            if row is not None:
+                self._record_view(row, view)
         except TossError:
             return
-        row = live_repo.get_broker_order(self.conn, order_id)
-        if row is not None:
-            self._record_view(row, view)
 
     def _refused(self, order_id: int, request: OrderRequest, exc: TossApiError) -> None:
         code = exc.code
@@ -504,7 +543,7 @@ class Sync:
                 tradable[iid] = "suspended"
             else:
                 tradable[iid] = "ok"
-        return tradable, self.client.commissions(), self.now()
+        return tradable, self.client.commissions(kst_date(self.now())), self.now()
 
     # 6. the account
     def snapshot(self) -> tuple[int, bool]:
@@ -520,7 +559,9 @@ class Sync:
         cash = {c: self.client.buying_power(c) for c in Currency}
         closed = self.client.orders("CLOSED", start=self._closed_since())
         open_after = self.client.orders("OPEN")
-        filled = [o for o in closed if o.filled_qty > 0]
+        # A refused cancel or change is a record of its own; the order it was about keeps its
+        # fills (openapi.json OrderStatus): never a trade of the account.
+        filled = [o for o in closed if o.filled_qty > 0 and o.status not in REQUEST_RECORDS]
         # A fill the balances may not include yet (it ended as they were read): look again.
         late = any(
             o.order_id not in known
@@ -538,14 +579,24 @@ class Sync:
             live_repo.prune_snapshots(self.conn, read_at - SNAPSHOT_KEEP)
         return snapshot_id, quiet
 
+    def conditional_orders(self) -> None:
+        """Armed 조건주문 (the old quant's, the app's) place orders of their own: turning live on
+        waits until none is open (engine/live.py link_check). Read after the account's snapshot
+        is stored, so a failure here (the link's state, like any read) never costs the snapshot
+        the reconciliation needs."""
+        self.conditional = self.client.conditional_orders("OPEN")
+
     def _closed_since(self) -> date:
-        """The closed orders the reconciliation still needs: since the last one (a day earlier,
-        orders are dated in KST), or since the live ledger's start; today before a start."""
+        """The closed orders the reconciliation still needs: since the last one that matched
+        (a day earlier, orders are dated in KST), or since the live ledger's start; today before
+        a start. Not since the last attempt: one that found the account busy or not matching
+        booked nothing, and days of them (the first key out of cron, Toss unreachable, an order
+        open) must not let the owner's app fills drop out of the list."""
         today = kst_date(self.now())
         status = live_repo.get_status(self.conn)
         start = repo.start_event(self.conn, LIVE)
-        if status is not None and status.reconciled_at is not None and start is not None:
-            return max(kst_date(status.reconciled_at), start.event_date) - timedelta(days=1)
+        if status is not None and status.matched_at is not None and start is not None:
+            return max(kst_date(status.matched_at), start.event_date) - timedelta(days=1)
         if start is not None:
             return start.event_date - timedelta(days=1)
         return today
@@ -585,6 +636,8 @@ def _off_status(
         reconcile_state=None if before is None else before.reconcile_state,
         reconciled_at=None if before is None else before.reconciled_at,
         reconcile_detail={} if before is None else before.reconcile_detail,
+        matched_at=None if before is None else before.matched_at,
+        conditional=None if before is None else before.conditional,
     )
     with transaction(conn):
         live_repo.save_status(conn, status, at)
@@ -621,6 +674,12 @@ def broker_job(
         return {**base, "result": state if changed else "quiet", "error": str(exc)}
     sync = Sync(conn, cfg, client, at, wall)
     state, detail = "ok", None
+    # What a step that fails leaves: the last known daily facts, no snapshot.
+    tradable = {} if before is None else before.tradable
+    commissions = {} if before is None else before.commissions
+    tradable_at = None if before is None else before.tradable_at
+    snapshot_id: int | None = None
+    quiet = False
     try:
         sync.poll()
         sync.recover()
@@ -628,12 +687,9 @@ def broker_job(
         sync.send_due()
         tradable, commissions, tradable_at = sync.daily(before)
         snapshot_id, quiet = sync.snapshot()
+        sync.conditional_orders()
     except TossError as exc:
         state, detail = link_state(exc), str(exc)
-        tradable = {} if before is None else before.tradable
-        commissions = {} if before is None else before.commissions
-        tradable_at = None if before is None else before.tradable_at
-        snapshot_id, quiet = None, False
     ok = state == "ok"
     latest = live_repo.get_status(conn)  # the reconciliation may have written meanwhile
     status = BrokerStatus(
@@ -653,6 +709,10 @@ def broker_job(
         reconcile_state=None if latest is None else latest.reconcile_state,
         reconciled_at=None if latest is None else latest.reconciled_at,
         reconcile_detail={} if latest is None else latest.reconcile_detail,
+        matched_at=None if latest is None else latest.matched_at,
+        conditional=[c.to_json() for c in sync.conditional]
+        if sync.conditional is not None
+        else (None if before is None else before.conditional),
     )
     with transaction(conn):
         live_repo.save_status(conn, status, at)
@@ -663,6 +723,7 @@ def broker_job(
         or client.revoked
         or before is None
         or before.state != state
+        or (status.conditional or []) != (before.conditional or [])
     )
     out: dict[str, Any] = {
         **base,
@@ -701,10 +762,14 @@ def reconcile_job(conn: Any, cfg: Config, at: datetime, *, dry_run: bool = False
 # ── the server's read-only check (PHASE3.md 5) ───────────────────────────────────────────
 
 
-def toss_check(cfg: Config, conn: Any, *, transport: Transport | None = None) -> dict[str, Any]:
+def toss_check(
+    cfg: Config, conn: Any, *, transport: Transport | None = None, today: date | None = None
+) -> dict[str, Any]:
     """Read the account once and print what the engine would rely on. Reads only: there is no
-    order or cancel call in it. Secrets and tokens are never printed."""
+    order or cancel call in it. Secrets and tokens are never printed. `today` (KST) picks the
+    commission rows in force (default: the wall clock's day)."""
     out: dict[str, Any] = {"job": "toss-check", "result": "ok"}
+    day = today or datetime.now(KST).date()
     try:
         client = make_client(cfg, transport)
         client.token()
@@ -716,7 +781,16 @@ def toss_check(cfg: Config, conn: Any, *, transport: Transport | None = None) ->
             {"id": h.instrument_id, "name": h.name, "qty": str(h.qty)} for h in client.holdings()
         ]
         out["openOrders"] = len(client.orders("OPEN"))
-        out["commissions"] = {k: str(v) for k, v in client.commissions().items()}
+        # Armed 조건주문 do not show as open orders until they fire (the old quant's, the app's):
+        # each must be cancelled in the Toss app before live is turned on (PHASE3.md 4).
+        conditional = client.conditional_orders("OPEN")
+        out["conditionalOrders"] = len(conditional)
+        if conditional:
+            out["conditional"] = [
+                {"symbol": c.symbol, "market": c.market, "type": c.type, "status": c.status}
+                for c in conditional
+            ]
+        out["commissions"] = {k: str(v) for k, v in client.commissions(day).items()}
         instruments = live.rule_instruments(conn)
         infos = client.stocks([i.ticker for i in instruments.values()])
         quotes = client.prices([i.ticker for i in instruments.values()])

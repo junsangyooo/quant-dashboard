@@ -1026,6 +1026,7 @@ export type TossLinkCause =
   | 'error' // 토스 오류
   | 'old' // 마지막 확인이 15분보다 오래됨
   | 'conflict' // 다른 프로그램이 같은 키로 토큰을 받음(옛 quant)
+  | 'conditional' // 계좌에 열린 조건주문(옛 quant·앱): 실전 켜기 막힘, 켜진 동안은 할 일만
   | 'not-tradable' // 규칙 종목이 지금 거래 안 됨
   | 'mismatch' // 잔고가 장부와 다름
   | 'expired'; // 주인이 알려 준 키 만료일이 지남

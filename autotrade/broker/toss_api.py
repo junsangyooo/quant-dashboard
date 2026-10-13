@@ -62,12 +62,23 @@ GROUP_RATES: Mapping[str, float] = {
     "ORDER": 10.0,
     "ORDER_HISTORY": 5.0,
     "ORDER_INFO": 3.0,
+    "CONDITIONAL_ORDER_HISTORY": 10.0,
 }
 DEFAULT_RATE = 2.0  # an unknown group goes slowly
 
 # Order statuses that are over (openapi.json OrderStatus). CANCEL_REJECTED and REPLACE_REJECTED
 # are records of their own; the original order goes back to its earlier state.
 TERMINAL_STATUSES = frozenset({"FILLED", "CANCELED", "REJECTED", "REPLACED"})
+# The one status in both lists of GET /api/v1/orders (its `status` parameter, 1.2.24): OPEN holds
+# PENDING, PARTIAL_FILLED, PENDING_CANCEL and PENDING_REPLACE; CLOSED holds the terminal ones,
+# CANCEL_REJECTED, REPLACE_REJECTED and PARTIAL_FILLED. A partly filled order keeps the status
+# while the rest still trades and may keep it after the rest lapsed: it is over only when the
+# CLOSED list has it or it carries canceledAt (jobs/live_tasks.py Sync.finished).
+OPEN_OR_CLOSED = "PARTIAL_FILLED"
+# Statuses only the OPEN list holds: never over, whatever else the record says.
+PENDING_STATUSES = frozenset({"PENDING", "PENDING_CANCEL", "PENDING_REPLACE"})
+# Records of a refused cancel or change: the original order keeps its own record and fills.
+REQUEST_RECORDS = frozenset({"CANCEL_REJECTED", "REPLACE_REJECTED"})
 
 
 # ── transport ────────────────────────────────────────────────────────────────────────────
@@ -370,7 +381,12 @@ class BrokerOrder:
 
     @property
     def terminal(self) -> bool:
-        return self.status in TERMINAL_STATUSES
+        """Over by its own record: a terminal status, or a cancel time on an order that is not
+        pending. A PARTIAL_FILLED order without one may still trade or may be over
+        (OPEN_OR_CLOSED: the CLOSED list tells)."""
+        if self.status in TERMINAL_STATUSES:
+            return True
+        return self.canceled_at is not None and self.status not in PENDING_STATUSES
 
     @property
     def market(self) -> str:
@@ -458,6 +474,51 @@ def order_from_api(raw: Mapping[str, Any]) -> BrokerOrder:
         tax=dec(execution.get("tax")),
         filled_at=_time(execution.get("filledAt")),
         settlement_date=_day(execution.get("settlementDate")),
+    )
+
+
+@dataclass(frozen=True)
+class ConditionalOrder:
+    """One 조건주문 as GET /api/v1/conditional-orders lists it (every channel's: the app's, the
+    old quant's). Armed, it places an order of its own when its trigger is reached."""
+
+    conditional_order_id: str
+    type: str  # SINGLE | OCO | OTO
+    status: str  # OPEN: WATCHING | PAUSED | ORDERING | ORDERED; CLOSED: COMPLETED | EXPIRED
+    symbol: str
+    market: str  # 'KR' | 'US'
+    quantity: Decimal
+    sides: tuple[str, ...]  # its legs' orderSide (BUY | SELL), first then second
+    created_at: datetime | None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.conditional_order_id,
+            "type": self.type,
+            "status": self.status,
+            "symbol": self.symbol,
+            "market": self.market,
+            "quantity": str(self.quantity),
+            "sides": list(self.sides),
+            "created_at": None if self.created_at is None else self.created_at.isoformat(),
+        }
+
+
+def conditional_from_api(raw: Mapping[str, Any]) -> ConditionalOrder:
+    sides: list[str] = []
+    for key in ("first", "second"):
+        leg = raw.get(key)
+        if isinstance(leg, Mapping) and leg.get("orderSide"):
+            sides.append(str(leg["orderSide"]).upper())
+    return ConditionalOrder(
+        conditional_order_id=str(raw["conditionalOrderId"]),
+        type=str(raw.get("type") or "").upper(),
+        status=str(raw.get("status") or "").upper(),
+        symbol=str(raw.get("symbol") or ""),
+        market=str(raw.get("market") or ""),
+        quantity=dec(raw.get("quantity")) or Decimal(0),
+        sides=tuple(sides),
+        created_at=_time(raw.get("createdAt")),
     )
 
 
@@ -757,15 +818,26 @@ class TossClient:
             raise TossApiError(200, "bad-answer", "sellable quantity")
         return _req_dec(result.get("sellableQuantity"), "sellableQuantity")
 
-    def commissions(self) -> dict[str, Decimal]:
+    def commissions(self, today: date) -> dict[str, Decimal]:
+        """The commission rate of each market on `today` (KST): the row whose startDate..endDate
+        (either may be null: open-ended) holds it. A market with no such row (a promotion ended
+        and nothing else is listed) takes its highest rate: a fee counted too low sizes a buy
+        the broker refuses (422 insufficient-buying-power)."""
         result = self.call("GET", "/api/v1/commissions", group="ORDER_INFO", account=True)
-        out: dict[str, Decimal] = {}
+        valid: dict[str, Decimal] = {}
+        other: dict[str, Decimal] = {}
         for row in result or []:
-            if isinstance(row, Mapping):
-                rate = dec(row.get("commissionRate"))
-                if rate is not None:
-                    out[str(row.get("marketCountry") or "")] = rate
-        return out
+            if not isinstance(row, Mapping):
+                continue
+            rate = dec(row.get("commissionRate"))
+            if rate is None:
+                continue
+            market = str(row.get("marketCountry") or "")
+            start, end = _day(row.get("startDate")), _day(row.get("endDate"))
+            now = (start is None or start <= today) and (end is None or today <= end)
+            into = valid if now else other
+            into[market] = max(rate, into.get(market, rate))
+        return {**other, **valid}
 
     def prices(self, symbols: Sequence[str]) -> dict[str, Quote]:
         result = self.call(
@@ -871,6 +943,33 @@ class TossClient:
             )
             cursor = result.get("nextCursor")
             if status != "CLOSED" or not result.get("hasNext") or not cursor:
+                return out
+        raise TossApiError(200, "too-many-pages", f"more than {max_pages} pages of {status}")
+
+    def conditional_orders(
+        self, status: str = "OPEN", *, max_pages: int = 20
+    ) -> list[ConditionalOrder]:
+        """The account's 조건주문 (OPEN: watching, paused or ordering; CLOSED: completed or
+        expired), from every channel, 100 a page. Reads only: the engine never arms one."""
+        out: list[ConditionalOrder] = []
+        cursor: str | None = None
+        for _ in range(max_pages):
+            result = self.call(
+                "GET",
+                "/api/v1/conditional-orders",
+                group="CONDITIONAL_ORDER_HISTORY",
+                account=True,
+                params={"status": status, "limit": 100, "cursor": cursor},
+            )
+            if not isinstance(result, Mapping):
+                return out
+            out.extend(
+                conditional_from_api(o)
+                for o in result.get("conditionalOrders") or []
+                if isinstance(o, Mapping) and o.get("conditionalOrderId")
+            )
+            cursor = result.get("nextCursor")
+            if not result.get("hasNext") or not cursor:
                 return out
         raise TossApiError(200, "too-many-pages", f"more than {max_pages} pages of {status}")
 

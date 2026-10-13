@@ -10,7 +10,8 @@ nothing due prints nothing. A task that breaks is logged and the tick goes on wi
 One tick runs the paper ledger, then the live ledger (run_all, autotrade/PHASE3.md 2.8), then
 the backup once. The live ledger's turn: the Toss sync (broker: the only code that calls Toss,
 and only with AUTOTRADE_LIVE_ORDERS=1), the stages (the Toss executor reads what the sync
-recorded), the reconciliation, the check and its retry (while the mode is live), the snapshot
+recorded), the reconciliation, the check and its retry (while the mode is live, from the first
+weekday check after it was turned on: never a 'missed-check' plan minutes after), the snapshot
 (whenever the ledger has started: an account that is off still counts, 인계 15). Live dividends
 come from the account (the reconciliation), not from the paper ledger's dividend job. A task
 whose report says 'quiet' (nothing changed) prints nothing.
@@ -113,6 +114,9 @@ def _live_due(task: str, ctx: JobContext, at: datetime) -> Due | None:
     if task in ("check", "retry"):
         if not (started and on):
             return None
+        first = live.first_live_check(ctx.conn, ctx.cfg)
+        if first is not None and at < first:
+            return None  # turned on after a check time: the next weekday's check is the first
         if task == "check":
             return check_due(ctx.conn, ctx.cfg, live.LIVE, at)
         return retry_due(ctx.conn, ctx.cfg, live.LIVE, at)

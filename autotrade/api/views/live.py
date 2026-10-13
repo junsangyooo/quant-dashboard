@@ -32,7 +32,18 @@ if TYPE_CHECKING:
 TICK = timedelta(minutes=5)  # the next tick looks again (deploy/autotrade.cron)
 # Causes a person must fix on the server or in WTS; the others pass on their own (next tick).
 MANUAL_CAUSES = frozenset(
-    {"env-off", "no-key", "auth", "ip", "account", "not-tradable", "conflict", "never", "expired"}
+    {
+        "env-off",
+        "no-key",
+        "auth",
+        "ip",
+        "account",
+        "not-tradable",
+        "conflict",
+        "conditional",
+        "never",
+        "expired",
+    }
 )
 
 
@@ -158,6 +169,9 @@ def _link_todo(
     if check.cause == "mismatch":
         return None  # the broker-mismatch card says it, with what differs
     manual = check.cause in MANUAL_CAUSES
+    # No live order goes while the link is down. An open 조건주문 blocks turning live on only:
+    # while live, orders go on and the reconciliation books what it fills as the owner's trade.
+    effect = "other" if on and check.cause == "conditional" else "orders-zero-live-blocked"
     return {
         "id": "toss-link",
         "severity": "red" if on else "yellow",
@@ -166,7 +180,7 @@ def _link_todo(
         "action": {"kind": "manual"}
         if manual
         else {"kind": "auto-retry", "at": fmt.iso(now + TICK)},
-        "effect": "orders-zero-live-blocked",  # no live order goes while it lasts
+        "effect": effect,
     }
 
 

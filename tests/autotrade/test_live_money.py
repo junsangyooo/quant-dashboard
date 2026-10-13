@@ -72,7 +72,8 @@ def test_a_won_only_start_buys_only_korea(lw: Live) -> None:
     assert report["result"] == "rebalance"
     details = report["details"]
     assert (details["planned"]["sells"], details["planned"]["fx"]) == ([], None)
-    assert planned_buys(report) == [("KR:069500", 312)]
+    # Sized as the send pays: floor(10,000,000 / (32,160 x 1.00015)), the limit and the fee.
+    assert planned_buys(report) == [("KR:069500", 310)]
     assert [(o.side, o.market) for o in repo.orders_of_ledger(lw.conn, "live")] == [("buy", "KR")]
     lw.fake.slip = D("160")
     lw.sync("2026-07-01 09:05")
@@ -113,13 +114,14 @@ def test_the_owner_converts_on_tuesday_and_wednesday_buys_both(lw: Live, world: 
     # Tuesday's dollars are new money of Tuesday: no check that day may use them.
     assert new_money_waiting(lw.conn, "live", lw.now()) == {USD: D("1436.78")}
 
-    # Wednesday 08:30: Tuesday's money is this check's. 8,000,000원 -> 249 shares; $1,436.78 ->
-    # floor(1,436.78 / (66.00 x 1.001)) = 21 shares.
+    # Wednesday 08:30: Tuesday's money is this check's, sized as the send pays (the limit 0.5%
+    # over the close on its tick, plus the fee): 8,000,000원 -> floor(8,000,000 / (32,160 x
+    # 1.00015)) = 248 shares; $1,436.78 -> floor(1,436.78 / (66.33 x 1.001)) = 21 shares.
     lw.sync("2026-07-01 08:29")
     report = lw.check("2026-07-01 08:30")
     assert report["result"] == "rebalance"
     assert HELD_BACK not in report["details"]
-    assert planned_buys(report) == [("KR:069500", 249), ("US:SPYM", 21)]
+    assert planned_buys(report) == [("KR:069500", 248), ("US:SPYM", 21)]
     orders = {o.market: o for o in repo.orders_of_ledger(lw.conn, "live")}
     assert set(orders) == {"KR", "US"}  # no 'FX' order: nothing to convert
     stages = repo.stages_of(lw.conn, orders["KR"].plan_id)
@@ -128,8 +130,7 @@ def test_the_owner_converts_on_tuesday_and_wednesday_buys_both(lw: Live, world: 
         ("buy", "US", kst("2026-07-01 22:30")),
     ]
 
-    # 09:05: the Korean buy, cut to what the won pays at the limit price:
-    # floor(8,000,000 / (32,160 x 1.00015)) = 248.
+    # 09:05: the Korean buy at the limit price; the price has not moved, so all 248 go.
     lw.fake.slip = D("160")
     lw.sync("2026-07-01 09:05")
     assert [(o.symbol, o.quantity, o.price) for o in lw.fake.ours()] == [
@@ -180,7 +181,7 @@ def test_a_conversion_on_a_check_day_is_used_the_next_trading_day(lw: Live, worl
     report = lw.check("2026-07-01 08:30")
     # The won left buys Korea today; the dollars came today, so they wait.
     assert report["details"][HELD_BACK] == {"USD": D("1436.78")}
-    assert planned_buys(report) == [("KR:069500", 249)]
+    assert planned_buys(report) == [("KR:069500", 248)]
     lw.fake.slip = D("160")
     lw.sync("2026-07-01 09:05")
     lw.stages()
@@ -192,7 +193,8 @@ def test_a_conversion_on_a_check_day_is_used_the_next_trading_day(lw: Live, worl
     report = lw.check("2026-07-02 08:30")
     assert report["result"] == "rebalance"
     assert HELD_BACK not in report["details"]
-    # 62,810원 -> 1 share at 32,050; $1,436.78 -> floor(1,436.78 / (66.20 x 1.001)) = 21.
+    # 62,810원 -> 1 share at the limit over 32,050 (32,210 + fee); $1,436.78 ->
+    # floor(1,436.78 / (66.53 x 1.001)) = 21.
     assert planned_buys(report) == [("KR:069500", 1), ("US:SPYM", 21)]
 
 
@@ -206,7 +208,7 @@ def test_a_deposit_on_a_check_day_is_not_used_that_day_even_before_the_check(
     lw.sync("2026-07-01 08:29")
     report = lw.check("2026-07-01 08:30")
     assert report["details"][HELD_BACK] == {"KRW": D("3000000")}
-    assert planned_buys(report) == [("KR:069500", 312)]  # the start's won only
+    assert planned_buys(report) == [("KR:069500", 310)]  # the start's won only
     # 09:05: the limit's headroom is not paid from it either: 310 shares, as without it.
     lw.fake.slip = D("160")
     lw.sync("2026-07-01 09:05")
@@ -223,12 +225,13 @@ def test_a_deposit_on_a_check_day_is_not_used_that_day_even_before_the_check(
             (p.currency, p.purpose): p.amount for p in refresh_cash_parts(lw.conn, "live", lw.now())
         }
     assert parts == {(KRW, Purpose.NEW): D("3000000"), (KRW, Purpose.SUB_SHARE): D("78512")}
-    # Thursday 08:30: used. 3,078,512원 -> floor(3,078,512 / (32,050 x 1.00015)) = 96.
+    # Thursday 08:30: used. 3,078,512원 -> floor(3,078,512 / (32,210 x 1.00015)) = 95 (the limit
+    # over the 32,050 close, on its tick).
     thursday(world)
     lw.sync("2026-07-02 08:29")
     report = lw.check("2026-07-02 08:30")
     assert HELD_BACK not in report["details"]
-    assert planned_buys(report) == [("KR:069500", 96)]
+    assert planned_buys(report) == [("KR:069500", 95)]
 
 
 def test_dividends_and_sale_proceeds_are_not_new_money(lw: Live, world: World) -> None:

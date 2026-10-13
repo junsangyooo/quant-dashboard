@@ -7,17 +7,22 @@ recorded (broker_status, broker_snapshots, broker_orders); it never calls Toss:
   (its cash, and the rule's instruments it holds, at their price then: no gain at the start).
 - reconcile: before every plan (and whenever the account is quiet), the ledger is matched with
   the snapshot. What the broker did for our orders is booked first (late fills); then the
-  account's fills the engine did not send (the owner's trades in the app, PHASE3.md 2.5); then
-  the cash nothing explains: the owner's conversion (won and dollars in opposite directions at
-  about the market rate), a dividend the ledger is owed, a conversion that came with a deposit
-  or a withdrawal in the same five minutes, a deposit, a withdrawal. Last, the rule's holdings
-  must equal the broker's. Anything that does not fit is a mismatch: nothing is written
-  (savepoint), a red manual to-do shows it and no plan is made until it is fixed or
-  `adopt-broker` accepts the broker's numbers.
+  account's fills the engine did not send (the owner's trades in the app, PHASE3.md 2.5) and
+  the cash they do not explain: the owner's conversion (won and dollars in opposite directions
+  at about the market rate), a dividend the ledger is owed (its net, within the rounding of the
+  tax), a conversion that came with a deposit or a withdrawal in the same five minutes, a
+  deposit, a withdrawal. All of it is worked out first and booked in time order: money that
+  came in before an app buy it paid for, the fills, then the rest (_book_in_order). Last, the
+  rule's holdings must equal the broker's. Anything that does not fit is a mismatch: nothing
+  is written (savepoint), a red manual to-do shows it and no plan is made until it is fixed or
+  `adopt-broker` accepts the broker's numbers. An order more than one of the account's orders
+  could be waits for the owner's word (settle_ambiguous).
 - preview: the first orders the rule would send for the account as it is, for the mode screen;
   the hash and total are kept so that turning live on can tell a changed preview (인계 13).
-  Like the check, it plans per currency (D47) and leaves out the owner's money of the day of the
-  next check (D48); it carries the conversion that would bring the mix to the targets.
+  Like the check, it plans per currency (D47), sizes buys as the send pays them (the limit
+  price and the fee) and leaves out the owner's money of the day of the next check (D48); it
+  carries the conversion that would bring the mix to the targets. Its first check is the first
+  one live runs once turned on (first_live_check).
 - turn_on / turn_off: the mode switch's database side (the web service runs it; the cancels at
   the broker are the tick's, as requests).
 - link_check and live_todos: what the mode and health screens show of the Toss link.
@@ -27,20 +32,21 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from autotrade.broker.toss import TossExecutor, fill_of
+from autotrade.broker.toss import TossExecutor, buy_unit, fee_rate, fill_of
 from autotrade.broker.toss_api import BrokerHolding, BrokerOrder
 from autotrade.config import Config
 from autotrade.db import ai_repo, live_repo, repo
 from autotrade.db.connection import dumps
 from autotrade.db.live_repo import AccountSnapshot, NewExternalFill
-from autotrade.db.models import DividendRow
+from autotrade.db.models import DividendRow, FillRow
 from autotrade.domain.currency_mix import CurrencyMix, FxSuggestion, suggest
-from autotrade.domain.dividends import after_tax
+from autotrade.domain.dividends import HeldFill, after_tax, tax_slack
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.ledger import (
     CashFlowKind,
@@ -65,7 +71,12 @@ from autotrade.engine.common import (
     slotter_for,
     withdraw_wait_amounts,
 )
-from autotrade.engine.dividends import dividend_ref, shares_before_ex_date, tax_rate
+from autotrade.engine.dividends import (
+    dividend_ref,
+    session_of,
+    shares_before_ex_date,
+    tax_rate,
+)
 from autotrade.engine.status import first_check_after, next_check_at
 from autotrade.market.calendar import KRX
 from autotrade.market.service import latest_close, market_freshness, rate_freshness
@@ -78,7 +89,6 @@ MODE_CHANGED_AT = "mode.changed_at"
 RECONCILE_JOB = "reconcile"
 DIVIDEND_WINDOW_BEFORE = timedelta(days=21)  # a dividend paid this long ago may still arrive
 DIVIDEND_WINDOW_AFTER = timedelta(days=3)  # an estimated pay date can be early
-DIVIDEND_MIN_SHARE = Decimal("0.5")  # cash of at least half the expected net is that dividend
 WITHDRAW_TRADING_DAYS = 2  # 인계 5: settlement date + 2 business days
 KEY_EXPIRY_WARN_DAYS = 14
 
@@ -320,6 +330,9 @@ def _record(conn: sqlite3.Connection, at: datetime, result: ReconcileResult) -> 
             reconcile_state=result.state if result.state != "skipped" else None,
             reconciled_at=at,
             reconcile_detail={"reason": result.reason, **result.detail},
+            # The closed orders the next snapshot reads start at the last match
+            # (jobs/live_tasks.py Sync._closed_since): a busy or mismatched pass booked nothing.
+            matched_at=at if result.state == "match" else status.matched_at,
         )
         live_repo.save_status(conn, status, at)
     if result.state != "busy" or result.reason not in ("orders-open", "orders-in-flight"):
@@ -354,66 +367,221 @@ def _reconcile_body(
     snap: AccountSnapshot,
     started_at: datetime,
 ) -> ReconcileResult:
+    """Explain the account's cash, then book all of it in the order the account saw it.
+
+    The owner's fills in the app are known (the closed orders); what they do not explain of each
+    currency's change is worked out on the cash they leave: his conversion, a dividend, a deposit
+    or a withdrawal. So an app buy paid with money that came in the same window explains that
+    money, not a cash shortfall. Nothing is written until all of it is known (_book_in_order)."""
     result = ReconcileResult("match", snapshot_id=snap.snapshot_id)
-    result.booked.extend(book_late_fills(conn, cfg, at))
+    opening = repo.load_state(conn, LIVE).cash
+    late = book_late_fills(conn, cfg, at)
+    result.booked.extend(late)
+    ours = [repo.fill_of_order(conn, int(b["late_fill"])) for b in late]
     own = ledger_instrument_ids(conn)
-    ours = live_repo.our_broker_ids(conn)
-    seen = live_repo.external_broker_ids(conn, LIVE)
-    closed = sorted(
-        (o for o in snap.closed_orders if o.filled_at is not None and o.filled_qty > 0),
-        key=lambda o: (o.filled_at or at, o.order_id),
-    )
-    for order in closed:
-        if order.order_id in ours or order.order_id in seen:
-            continue
-        if order.filled_at is None or order.filled_at <= started_at:
-            continue  # part of the account the ledger started from
-        result.booked.append(_book_external_trade(conn, cfg, at, order, own))
+    trades = _new_external_trades(conn, snap, started_at)
     state = repo.load_state(conn, LIVE)
-    residual = {c: snap.cash_of(c) - state.cash_of(c) for c in Currency}
-    residual = _book_conversion(conn, cfg, at, snap, residual, result)
-    seen_at = snap.taken_at  # the best-known time the money arrived or left
+    residual = {
+        c: snap.cash_of(c)
+        - state.cash_of(c)
+        - sum((_cash_effect(o) for o in trades if o.currency is c), ZERO)
+        for c in Currency
+    }
+    moves: list[_Move] = []
+    residual = _explain_conversion(conn, cfg, at, residual, moves)
     for currency in Currency:
         if residual[currency] > 0:
-            residual[currency] = _book_dividends(
-                conn, cfg, at, currency, residual[currency], started_at, result, seen_at
+            residual[currency] = _explain_dividend(
+                conn, cfg, at, currency, residual[currency], started_at, trades, moves
             )
     # A dividend may have hidden a conversion; then a conversion that came with a deposit or a
     # withdrawal in the same five minutes.
-    residual = _book_conversion(conn, cfg, at, snap, residual, result)
-    residual = _book_mixed(conn, at, snap, residual, result)
+    residual = _explain_conversion(conn, cfg, at, residual, moves)
+    residual = _explain_mixed(conn, at, snap, residual, moves)
     for currency in Currency:
         amount = residual[currency]
         if amount > 0:
-            event_id = _flow(
-                conn,
-                at,
-                CashFlowKind.DEPOSIT,
-                amount,
-                currency,
-                {"reason": "unexplained-in"},
-                occurred_at=seen_at,
-            )
-            result.booked.append(
-                {"deposit": str(amount), "currency": currency.value, "event_id": event_id}
+            moves.append(
+                _Move(CashFlowKind.DEPOSIT, currency, amount, {"reason": "unexplained-in"})
             )
         elif amount < 0:
-            event_id = _flow(
-                conn,
-                at,
-                CashFlowKind.WITHDRAWAL,
-                -amount,
-                currency,
-                {"reason": "unexplained-out"},
-                occurred_at=seen_at,
+            moves.append(
+                _Move(
+                    CashFlowKind.WITHDRAWAL,
+                    currency,
+                    -amount,
+                    {"reason": "unexplained-out"},
+                    consume_waits=True,
+                )
             )
-            _consume_withdraw_waits(conn, currency, -amount, at)
-            result.booked.append(
-                {"withdrawal": str(-amount), "currency": currency.value, "event_id": event_id}
-            )
+    late_fills = [f for f in ours if f is not None and f.kind == "trade"]
+    _book_in_order(conn, cfg, at, snap, opening, late_fills, trades, moves, own, result)
     _check_positions(conn, snap, own)
     refresh_cash_parts(conn, LIVE, at)
     return result
+
+
+def _new_external_trades(
+    conn: sqlite3.Connection, snap: AccountSnapshot, started_at: datetime
+) -> list[BrokerOrder]:
+    """The account's fills the engine did not send and the ledger has not booked, in time
+    order: the owner's, in the app or WTS, since the live ledger started."""
+    ours = live_repo.our_broker_ids(conn)
+    seen = live_repo.external_broker_ids(conn, LIVE)
+    out = [
+        o
+        for o in snap.closed_orders
+        if o.filled_qty > 0
+        and o.order_id not in ours
+        and o.order_id not in seen
+        and o.filled_at is not None
+        and o.filled_at > started_at  # earlier: part of the account the ledger started from
+    ]
+    return sorted(out, key=lambda o: (o.filled_at or started_at, o.order_id))
+
+
+def _trade_amounts(order: BrokerOrder) -> tuple[Decimal, Decimal] | None:
+    """(gross, fee) of a fill as the broker reported it; None without an amount."""
+    gross = order.filled_amount
+    if gross is None and order.avg_price is not None:
+        gross = order.avg_price * order.filled_qty
+    if gross is None or gross <= 0:
+        return None
+    return gross, (order.commission or ZERO) + (order.tax or ZERO)
+
+
+def _cash_effect(order: BrokerOrder) -> Decimal:
+    """What a fill did to the cash of its currency: a buy paid gross + fee, a sale brought
+    gross - fee (0 without an amount: booking it is a mismatch anyway)."""
+    amounts = _trade_amounts(order)
+    if amounts is None:
+        return ZERO
+    gross, fee = amounts
+    return -(gross + fee) if order.side == "BUY" else gross - fee
+
+
+@dataclass
+class _Move:
+    """Money the reconciliation found: a deposit, a withdrawal, a dividend or one side of the
+    owner's conversion. Worked out before anything is written, then booked in time order with
+    the owner's fills (_book_in_order)."""
+
+    kind: CashFlowKind  # DEPOSIT | WITHDRAWAL | DIVIDEND
+    currency: Currency
+    amount: Decimal
+    extra: dict[str, Any] = field(default_factory=dict)  # the event's payload
+    rate: Decimal | None = None  # a dollar amount's won rate (None: the rate when it is booked)
+    consume_waits: bool = False  # a withdrawal takes the cash that waited for it first
+    due: DueDividend | None = None  # the dividend it is
+    conversion: dict[str, Any] | None = None  # the owner's conversion it is a side of (its log)
+
+    @property
+    def money_in(self) -> bool:
+        return self.kind is not CashFlowKind.WITHDRAWAL
+
+
+def _book_in_order(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    at: datetime,
+    snap: AccountSnapshot,
+    opening: Mapping[Currency, Decimal],
+    late_fills: list[FillRow],
+    trades: list[BrokerOrder],
+    moves: list[_Move],
+    own: set[str],
+    result: ReconcileResult,
+) -> None:
+    """Book the owner's fills and the money that explains the rest, as the account saw them:
+    each fill at its time; money that came in, just before the first fill the cash could not
+    pay without it (dated that fill's time: he deposited or converted to pay for an app buy);
+    the rest of the money in, and all money out, at the snapshot that showed it, after the
+    fills (money out may be the proceeds of an app sale). So the ledger's cash never goes below
+    zero on the way, and the rebuild, which folds the records in time order with money in before
+    fills at the same instant (engine/rebuild.py), takes the same steps: the cash is followed
+    in time order from before this pass, our late fills (booked already, `late_fills`) at their
+    own times. Money dated before the snapshot keeps the snapshot's day as its event date: D48
+    holds the owner's money from the day the account showed it (engine/common.py
+    new_money_waiting)."""
+    seen = snap.taken_at
+    day = kst_date(seen)
+    balance = {c: opening.get(c, ZERO) for c in Currency}
+    steps: list[tuple[datetime, int, Currency, Decimal, BrokerOrder | None]] = [
+        (
+            f.filled_at,
+            0,
+            f.currency,
+            -(f.gross + f.fee) if f.side == "buy" else f.gross - f.fee,
+            None,
+        )
+        for f in late_fills
+    ]
+    steps += [(t.filled_at or seen, 1, t.currency, _cash_effect(t), t) for t in trades]
+    steps.sort(key=lambda s: (s[0], s[1]))
+    waiting = [m for m in moves if m.money_in]
+    before: list[tuple[datetime, BrokerOrder | None, list[_Move]]] = []
+    for when, _, currency, effect, trade in steps:
+        funds: list[_Move] = []
+        while balance[currency] + effect < 0:
+            funding = next((m for m in waiting if m.currency is currency), None)
+            if funding is None:
+                break  # booking it finds the cash short: a mismatch (or a rebuild that fails)
+            waiting.remove(funding)
+            funds.append(funding)
+            balance[currency] += funding.amount
+        balance[currency] += effect
+        before.append((when, trade, funds))
+    early = {id(m) for _, _, ms in before for m in ms}
+    for when, trade, funds in before:  # our late fills are booked: their money first
+        if trade is None:
+            for move in funds:
+                _book_move(conn, cfg, at, move, when, day, result)
+    for when, trade, funds in before:
+        if trade is not None:
+            for move in funds:
+                _book_move(conn, cfg, at, move, when, day, result)
+            result.booked.append(_book_external_trade(conn, cfg, at, trade, own))
+    for move in moves:
+        if id(move) not in early:
+            _book_move(conn, cfg, at, move, seen, day, result)
+
+
+def _book_move(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    at: datetime,
+    move: _Move,
+    when: datetime,
+    day: date,
+    result: ReconcileResult,
+) -> None:
+    if move.due is not None:
+        _book_dividend(conn, cfg, at, move, move.due, when, day, result)
+        return
+    event_id = _flow(
+        conn,
+        at,
+        move.kind,
+        move.amount,
+        move.currency,
+        move.extra,
+        rate=move.rate,
+        occurred_at=when,
+        event_day=day,
+    )
+    if move.consume_waits:
+        _consume_withdraw_waits(conn, move.currency, move.amount, at)
+    if move.conversion is not None:
+        if not move.conversion["event_ids"]:
+            result.booked.append(move.conversion)
+        move.conversion["event_ids"].append(event_id)
+        if move.kind is CashFlowKind.WITHDRAWAL:
+            _cap_withdraw_waits(conn, move.currency, when, at)
+        return
+    key = "withdrawal" if move.kind is CashFlowKind.WITHDRAWAL else "deposit"
+    result.booked.append(
+        {key: str(move.amount), "currency": move.currency.value, "event_id": event_id}
+    )
 
 
 def book_late_fills(conn: sqlite3.Connection, cfg: Config, at: datetime) -> list[dict[str, Any]]:
@@ -466,12 +634,10 @@ def _book_external_trade(
     """A fill the engine did not send (the owner's, in the app or WTS)."""
     when = order.filled_at or at
     qty = order.filled_qty
-    gross = order.filled_amount
-    if gross is None and order.avg_price is not None:
-        gross = order.avg_price * qty
-    if gross is None or gross <= 0:
+    amounts = _trade_amounts(order)
+    if amounts is None:
         raise _MismatchError("external-fill", {"order": order.order_id, "why": "no amount"})
-    fee = (order.commission or ZERO) + (order.tax or ZERO)
+    gross, fee = amounts
     currency = order.currency
     rate = _rate(conn, when, at) if currency is Currency.USD else None
     fee_krw = fee if rate is None else usd_in_krw(fee, rate)
@@ -590,10 +756,12 @@ def _flow(
     *,
     rate: Decimal | None = None,
     occurred_at: datetime | None = None,
+    event_day: date | None = None,
 ) -> int:
     """A deposit or withdrawal the account shows (an event, as the screens list them), in its
     own currency, at the best-known time the money moved (`occurred_at`: the fill's time for a
-    trade in the app, else the account snapshot that first showed it); booked at `at`."""
+    trade in the app, else the account snapshot that first showed it), on `event_day` (by default
+    that time's KST date); booked at `at`."""
     when = occurred_at or at
     if currency is Currency.USD and rate is None:
         rate = _rate(conn, when, at)
@@ -612,7 +780,7 @@ def _flow(
         conn,
         ledger_id=LIVE,
         kind=kind.value,
-        event_date=kst_date(when),
+        event_date=event_day or kst_date(when),
         occurred_at=when,
         amount=amount,
         currency=currency,
@@ -647,30 +815,34 @@ def _consume_withdraw_waits(
             )
 
 
-def _owner_conversion(
-    conn: sqlite3.Connection,
-    at: datetime,
-    direction: FxDirection,
-    source: Decimal,
-    target: Decimal,
-    rate: Decimal,
-    when: datetime,
-    basis: str,
-    result: ReconcileResult,
+def _cap_withdraw_waits(
+    conn: sqlite3.Connection, currency: Currency, when: datetime, at: datetime
 ) -> None:
+    """After the owner converted money out of `currency`: the cash that waits there for a
+    withdrawal is at most the currency's cash left beyond the owner's new money of the day that
+    is still held back (D48). Proceeds of an app sale he converted instead of withdrawing stop
+    waiting (D47's way to move money from 한국 to 미국 without adding any); proceeds he did not
+    touch keep waiting when he converts other money. The earliest waits go first, as for a
+    withdrawal (_consume_withdraw_waits)."""
+    cash = repo.load_state(conn, LIVE).cash_of(currency)
+    fresh = new_money_waiting(conn, LIVE, when).get(currency, ZERO)
+    cap = max(ZERO, cash - fresh)
+    waiting = sum(
+        (w.amount for w in repo.withdraw_waits(conn, LIVE) if w.currency is currency), ZERO
+    )
+    if waiting > cap:
+        _consume_withdraw_waits(conn, currency, waiting - cap, at)
+
+
+def _conversion(
+    direction: FxDirection, source: Decimal, target: Decimal, rate: Decimal, basis: str
+) -> list[_Move]:
     """The owner's conversion in the Toss app: money moving between his two accounts. A
     withdrawal from the currency he paid and a deposit into the one he got, at `rate` (so the
     ledger's P&L moves as for a paper conversion), marked as a conversion: the accounts read it
     as a transfer (api/views/accounts.py), the whole ledger's views do not list it, and D48
-    counts the money it brought as new (engine/common.py).
-
-    What it took is first the owner's money of the day in that currency (he converts what he
-    has just deposited), then cash that waited for a withdrawal: proceeds of a sale in the app
-    that he converts instead of withdrawing (D47's way to move money from 한국 to 미국 without
-    adding any) no longer hold the orders back until their settlement."""
-    fresh = new_money_waiting(conn, LIVE, when).get(direction.source, ZERO)
-    if source > fresh:
-        _consume_withdraw_waits(conn, direction.source, source - fresh, at)
+    counts the money it brought as new (engine/common.py). Booking the withdrawal caps the cash
+    that waits for a withdrawal in that currency (_cap_withdraw_waits)."""
     extra: dict[str, Any] = {
         "reason": CONVERSION,
         "direction": direction.value,
@@ -679,48 +851,43 @@ def _owner_conversion(
         "rate": rate,
         "rate_basis": basis,  # 'balances': what the account showed; 'market': assumed
     }
-    out_id = _flow(
-        conn,
-        at,
-        CashFlowKind.WITHDRAWAL,
-        source,
-        direction.source,
-        extra,
-        rate=rate if direction.source is Currency.USD else None,
-        occurred_at=when,
-    )
-    in_id = _flow(
-        conn,
-        at,
-        CashFlowKind.DEPOSIT,
-        target,
-        direction.target,
-        extra,
-        rate=rate if direction.target is Currency.USD else None,
-        occurred_at=when,
-    )
-    result.booked.append(
-        {
-            "conversion": direction.value,
-            "from": str(source),
-            "to": str(target),
-            "event_ids": [out_id, in_id],
-        }
-    )
+    log: dict[str, Any] = {
+        "conversion": direction.value,
+        "from": str(source),
+        "to": str(target),
+        "event_ids": [],
+    }
+    return [
+        _Move(
+            CashFlowKind.WITHDRAWAL,
+            direction.source,
+            source,
+            extra,
+            rate=rate if direction.source is Currency.USD else None,
+            conversion=log,
+        ),
+        _Move(
+            CashFlowKind.DEPOSIT,
+            direction.target,
+            target,
+            extra,
+            rate=rate if direction.target is Currency.USD else None,
+            conversion=log,
+        ),
+    ]
 
 
-def _book_conversion(
+def _explain_conversion(
     conn: sqlite3.Connection,
     cfg: Config,
     at: datetime,
-    snap: AccountSnapshot,
     residual: dict[Currency, Decimal],
-    result: ReconcileResult,
+    moves: list[_Move],
 ) -> dict[Currency, Decimal]:
     """Won and dollars that moved in opposite directions at about the market rate (within
     `live_fx_tolerance`): the owner converted in the app. Booked at the rate the balances show
     (what he paid for what he got: the spread is a real cost, it stays in the P&L). Live plans
-    never convert (D47), so every conversion is the owner's (_owner_conversion).
+    never convert (D47), so every conversion is the owner's (_conversion).
 
     A deposit or a withdrawal small enough to hide inside the band in the same five minutes
     reads as part of the rate here; the balances cannot tell the two apart. This reading keeps
@@ -740,16 +907,16 @@ def _book_conversion(
         direction, source, target = FxDirection.KRW_TO_USD, -krw, usd
     else:
         direction, source, target = FxDirection.USD_TO_KRW, -usd, krw
-    _owner_conversion(conn, at, direction, source, target, rate, snap.taken_at, "balances", result)
+    moves.extend(_conversion(direction, source, target, rate, "balances"))
     return {Currency.KRW: ZERO, Currency.USD: ZERO}
 
 
-def _book_mixed(
+def _explain_mixed(
     conn: sqlite3.Connection,
     at: datetime,
     snap: AccountSnapshot,
     residual: dict[Currency, Decimal],
-    result: ReconcileResult,
+    moves: list[_Move],
 ) -> dict[Currency, Decimal]:
     """Won and dollars that both moved, but not as one conversion: in the same direction (he
     deposited 3,000,000원 and converted 1,000,000원 of it: won +2,000,000, dollars +$718), or at
@@ -761,13 +928,12 @@ def _book_mixed(
     rate. That reading keeps the ledger's P&L exact for what can be known: the conversion moves
     no P&L, and the money in (won deposited, dollars at the market rate) is the same as two
     deposits would have made it, to the won. Only the spread of that one conversion is out of
-    sight (it was paid inside the deposit). The deposit is booked before the conversion, the
+    sight (it was paid inside the deposit). The deposit comes before the conversion, the
     withdrawal after it, so the cash never goes below zero on the way."""
     krw, usd = residual[Currency.KRW], residual[Currency.USD]
     if krw == 0 or usd == 0:
         return residual
-    when = snap.taken_at
-    rate = _rate(conn, when, at)
+    rate = _rate(conn, snap.taken_at, at)
     won = usd_in_krw(abs(usd), rate)
     if usd > 0:
         direction, source, target = FxDirection.KRW_TO_USD, won, usd
@@ -776,29 +942,25 @@ def _book_mixed(
         direction, source, target = FxDirection.USD_TO_KRW, -usd, won
         rest = krw - won
     if rest > 0:
-        event_id = _flow(
-            conn,
-            at,
-            CashFlowKind.DEPOSIT,
-            rest,
-            Currency.KRW,
-            {"reason": "unexplained-in", "with": CONVERSION},
-            occurred_at=when,
+        moves.append(
+            _Move(
+                CashFlowKind.DEPOSIT,
+                Currency.KRW,
+                rest,
+                {"reason": "unexplained-in", "with": CONVERSION},
+            )
         )
-        result.booked.append({"deposit": str(rest), "currency": "KRW", "event_id": event_id})
-    _owner_conversion(conn, at, direction, source, target, rate, when, "market", result)
+    moves.extend(_conversion(direction, source, target, rate, "market"))
     if rest < 0:
-        event_id = _flow(
-            conn,
-            at,
-            CashFlowKind.WITHDRAWAL,
-            -rest,
-            Currency.KRW,
-            {"reason": "unexplained-out", "with": CONVERSION},
-            occurred_at=when,
+        moves.append(
+            _Move(
+                CashFlowKind.WITHDRAWAL,
+                Currency.KRW,
+                -rest,
+                {"reason": "unexplained-out", "with": CONVERSION},
+                consume_waits=True,
+            )
         )
-        _consume_withdraw_waits(conn, Currency.KRW, -rest, at)
-        result.booked.append({"withdrawal": str(-rest), "currency": "KRW", "event_id": event_id})
     return {Currency.KRW: ZERO, Currency.USD: ZERO}
 
 
@@ -812,10 +974,15 @@ class DueDividend:
 
 
 def due_dividends(
-    conn: sqlite3.Connection, cfg: Config, at: datetime, started: date
+    conn: sqlite3.Connection,
+    cfg: Config,
+    at: datetime,
+    started: date,
+    pending: Sequence[BrokerOrder] = (),
 ) -> list[DueDividend]:
     """Dividends the live ledger is owed around now and has not booked (from the dividend data
-    the paper ledger's job downloads; Toss reports none)."""
+    the paper ledger's job downloads; Toss reports none). `pending`: the owner's app fills of
+    this reconciliation, not booked yet: they count for the shares held before the ex-date."""
     today = kst_date(at)
     held = {**rule_instruments(conn)}
     for iid in repo.load_state(conn, LIVE).positions:
@@ -830,7 +997,17 @@ def due_dividends(
         if repo.event_by_ref(conn, LIVE, dividend_ref(div.instrument_id, div.ex_date)):
             continue
         inst = held[div.instrument_id]
-        qty = shares_before_ex_date(conn, LIVE, inst, div.ex_date)
+        unbooked = [
+            HeldFill(
+                session_of(inst, o.filled_at),
+                int(o.filled_qty) if o.side == "BUY" else -int(o.filled_qty),
+            )
+            for o in pending
+            if o.instrument_id == inst.instrument_id
+            and o.filled_at is not None
+            and o.filled_qty == o.filled_qty.to_integral_value()
+        ]
+        qty = shares_before_ex_date(conn, LIVE, inst, div.ex_date, unbooked)
         if qty <= 0:
             continue
         amounts = after_tax(div.per_share, qty, inst.currency, tax_rate(cfg, inst.market))
@@ -839,74 +1016,91 @@ def due_dividends(
     return out
 
 
-def _book_dividends(
+def _explain_dividend(
     conn: sqlite3.Connection,
     cfg: Config,
     at: datetime,
     currency: Currency,
     amount: Decimal,
     started_at: datetime,
-    result: ReconcileResult,
-    seen: datetime,
+    pending: Sequence[BrokerOrder],
+    moves: list[_Move],
 ) -> Decimal:
-    """Unexplained cash of `currency` that a dividend the ledger is owed explains. The broker's
-    amount is what counts (taxes withheld differ from the 15.4% estimate on Korean ETFs); the
-    estimate only tells a dividend from a deposit. Dated `seen`, the snapshot that showed it.
-    Returns what is left."""
-    left = amount
-    for due in due_dividends(conn, cfg, at, kst_date(started_at)):
-        if due.inst.currency is not currency or left <= 0:
+    """Unexplained cash of `currency` that is a dividend the ledger is owed: the amount the
+    broker paid (its tax is what counts), when it lies within the rounding of the tax of the
+    expected net (tax_slack: the broker cuts each part of the tax its own way). Never a sum far
+    from it: a deposit made while a dividend is due stays a deposit, and a dividend is never
+    taken for more than its net (the old reading took up to the gross of any amount above half
+    the net, and the real dividend became a deposit later). A dividend whose tax differs by more
+    (a Korean ETF's taxable base below its distribution) reads as a deposit: the cash is right,
+    only the income is counted as money in. Returns what is left."""
+    for due in due_dividends(conn, cfg, at, kst_date(started_at), pending):
+        if due.inst.currency is not currency:
             continue
-        if left < due.net * DIVIDEND_MIN_SHARE:
-            continue
-        booked = min(left, due.gross)
-        rate = _rate(conn, seen, at) if currency is Currency.USD else None
-        state = apply_cash_flow(
-            repo.load_state(conn, LIVE), CashFlowKind.DIVIDEND, booked, currency, rate
-        )
-        repo.save_state(conn, LIVE, state, at)
-        rule_ids = set(rule_instruments(conn))
-        payload: dict[str, Any] = {
-            "source": "broker",
-            "instrument_id": due.inst.instrument_id,
-            "ex_date": due.div.ex_date,
-            "pay_date": due.div.pay_date,
-            "per_share": due.div.per_share,
-            "qty": due.qty,
-            "expected_gross": due.gross,
-            "expected_net": due.net,
-            "net": booked,
-            "amount_krw": booked if rate is None else usd_in_krw(booked, rate),
-        }
-        if rate is not None:
-            payload["krw_rate"] = rate
-        event_id = repo.insert_event(
-            conn,
-            ledger_id=LIVE,
-            kind="dividend",
-            event_date=kst_date(seen),
-            occurred_at=seen,
-            rule_id=RULE_ID if due.inst.instrument_id in rule_ids else None,
-            amount=booked,
-            currency=currency,
-            ref=dividend_ref(due.inst.instrument_id, due.div.ex_date),
-            payload=payload,
-        )
-        sleeves.split_dividend(
-            conn,
-            LIVE,
-            due.inst.instrument_id,
-            due.div.ex_date,
-            due.qty,
-            booked,
-            currency,
-            rate,
-            event_id,
-            at,
-        )
-        result.booked.append({"dividend": str(booked), "instrument_id": due.inst.instrument_id})
-        left -= booked
-    return left
+        if abs(amount - due.net) <= tax_slack(currency):
+            moves.append(_Move(CashFlowKind.DIVIDEND, currency, amount, due=due))
+            return ZERO
+    return amount
+
+
+def _book_dividend(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    at: datetime,
+    move: _Move,
+    due: DueDividend,
+    when: datetime,
+    day: date,
+    result: ReconcileResult,
+) -> None:
+    """Book a dividend the account paid: its amount is the broker's, dated when the account
+    showed it."""
+    currency, booked = move.currency, move.amount
+    rate = _rate(conn, when, at) if currency is Currency.USD else None
+    state = apply_cash_flow(
+        repo.load_state(conn, LIVE), CashFlowKind.DIVIDEND, booked, currency, rate
+    )
+    repo.save_state(conn, LIVE, state, at)
+    rule_ids = set(rule_instruments(conn))
+    payload: dict[str, Any] = {
+        "source": "broker",
+        "instrument_id": due.inst.instrument_id,
+        "ex_date": due.div.ex_date,
+        "pay_date": due.div.pay_date,
+        "per_share": due.div.per_share,
+        "qty": due.qty,
+        "expected_gross": due.gross,
+        "expected_net": due.net,
+        "net": booked,
+        "amount_krw": booked if rate is None else usd_in_krw(booked, rate),
+    }
+    if rate is not None:
+        payload["krw_rate"] = rate
+    event_id = repo.insert_event(
+        conn,
+        ledger_id=LIVE,
+        kind="dividend",
+        event_date=day,
+        occurred_at=when,
+        rule_id=RULE_ID if due.inst.instrument_id in rule_ids else None,
+        amount=booked,
+        currency=currency,
+        ref=dividend_ref(due.inst.instrument_id, due.div.ex_date),
+        payload=payload,
+    )
+    sleeves.split_dividend(
+        conn,
+        LIVE,
+        due.inst.instrument_id,
+        due.div.ex_date,
+        due.qty,
+        booked,
+        currency,
+        rate,
+        event_id,
+        at,
+    )
+    result.booked.append({"dividend": str(booked), "instrument_id": due.inst.instrument_id})
 
 
 def _check_positions(conn: sqlite3.Connection, snap: AccountSnapshot, own: set[str]) -> None:
@@ -1094,6 +1288,9 @@ class PreviewData:
     new_money: dict[Currency, Decimal] = field(default_factory=dict)
     new_money_from: datetime | None = None  # the check that uses it
     suggestion: FxSuggestion | None = None
+    # The check that plans the first orders: the first weekday check after now. Turned on now,
+    # live runs no check before it (first_live_check); the hash binds it.
+    first_check: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -1101,6 +1298,23 @@ class NotComputable:
     at: datetime
     cause: str  # 'stale' | 'other'
     detail: str
+
+
+def buy_units(
+    conn: sqlite3.Connection, cfg: Config, prices: Mapping[str, Decimal]
+) -> dict[str, Decimal]:
+    """What one share of a live buy of each rule instrument takes at most at its plan price: the
+    limit the send caps it at (on the tick) plus Toss's fee (broker/toss.py buy_unit). The live
+    plan (the check, the preview) sizes its buys with it: PlanItem.buy_unit."""
+    status = live_repo.get_status(conn)
+    commissions = {} if status is None else status.commissions
+    out: dict[str, Decimal] = {}
+    for iid, inst in rule_instruments(conn).items():
+        price = prices.get(iid)
+        if price is not None and price > 0:
+            rate = fee_rate(cfg, commissions, inst)
+            out[iid] = buy_unit(inst, price, cfg.live_limit_slippage, rate)
+    return out
 
 
 def _order_krw(amount: Decimal, currency: Currency, rate: Decimal) -> Decimal:
@@ -1153,11 +1367,16 @@ def preview_data(
             for iid in instruments
         }
         outside = opening.outside
+    caps = buy_units(conn, cfg, {iid: c.price for iid, c in closes.items() if c is not None})
     items: list[PlanItem] = []
     for iid in rule.instrument_ids:
         close = closes[iid]
         assert close is not None  # checked above
-        items.append(PlanItem(instruments[iid], rule.target_of(iid), qty[iid], close.price))
+        items.append(
+            PlanItem(
+                instruments[iid], rule.target_of(iid), qty[iid], close.price, buy_unit=caps.get(iid)
+            )
+        )
     plan = plan_per_currency(
         PlanInput(
             items=tuple(items),
@@ -1198,6 +1417,7 @@ def preview_data(
         ],
         "orders": sorted(parts),
         "snapshot": snap.snapshot_id,
+        "first_check": to_iso(check_at),
     }
     digest = hashlib.sha256(dumps(material).encode()).hexdigest()[:16]
     outside_rows = [(h, _holding_krw(h, rate)) for h in outside]
@@ -1236,6 +1456,7 @@ def preview_data(
         new_money=new_money,
         new_money_from=first_check_after(cfg, kst_date(check_at)),
         suggestion=suggest(mix, rule.threshold, rate, cfg.fx_step_krw),
+        first_check=check_at,
     )
 
 
@@ -1274,7 +1495,11 @@ def store_preview(conn: sqlite3.Connection, data: PreviewData, payload: dict[str
             snapshot_id=data.snapshot.snapshot_id,
             total_krw=data.total_krw,
             signature=data.signature,
-            payload={**payload, "account_krw": str(data.account_krw)},
+            payload={
+                **payload,
+                "account_krw": str(data.account_krw),
+                "first_check": None if data.first_check is None else to_iso(data.first_check),
+            },
         ),
     )
     live_repo.prune_previews(conn, data.computed_at - timedelta(days=2))
@@ -1282,12 +1507,15 @@ def store_preview(conn: sqlite3.Connection, data: PreviewData, payload: dict[str
 
 def preview_changed(stored: live_repo.StoredPreview | None, fresh: PreviewData) -> bool:
     """인계 13: turning live on recomputes the preview and stops when its amounts moved by 1% or
-    more (or it orders something else). Without orders the account's value is compared."""
+    more, it orders something else, or its first check is another one (the owner saw the first
+    orders go out at that check's times: shown before 08:30, approved after it, they go the next
+    morning). Without orders the account's value is compared."""
     if stored is None:
         return True
     if stored.hash == fresh.hash:
         return False
-    if stored.signature != fresh.signature:
+    first = None if fresh.first_check is None else to_iso(fresh.first_check)
+    if stored.signature != fresh.signature or stored.payload.get("first_check") != first:
         return True
     old, new = stored.total_krw, fresh.total_krw
     if old <= 0:
@@ -1391,6 +1619,16 @@ def retry_cancels(conn: sqlite3.Connection, at: datetime) -> list[int]:
     return out
 
 
+def first_live_check(conn: sqlite3.Connection, cfg: Config) -> datetime | None:
+    """The first check of the live period: the first weekday check time strictly after the
+    latest 'live-on' (engine/status.py next_check_at), the one the approved preview showed
+    (PreviewData.first_check). No live check or retry runs before it: turned on, or on again,
+    after the day's check time, live waits for the next weekday's 08:30 instead of planning
+    within minutes as a missed check. None while live was never turned on."""
+    periods = live_periods(conn)
+    return None if not periods else next_check_at(cfg, periods[-1][0])
+
+
 def live_periods(conn: sqlite3.Connection) -> list[tuple[datetime, datetime | None]]:
     """(on, off) pairs of the live mode, oldest first; the last off is None while it is on."""
     periods: list[tuple[datetime, datetime | None]] = []
@@ -1413,7 +1651,7 @@ def live_periods(conn: sqlite3.Connection) -> list[tuple[datetime, datetime | No
 class LinkCheck:
     ok: bool
     cause: str | None  # why not: env-off | no-key | auth | ip | account | unreachable |
-    # maintenance | error | old | not-tradable | conflict | mismatch | never
+    # maintenance | error | old | not-tradable | conflict | conditional | mismatch | never
     checked_at: datetime | None
     account_tail: str | None
     key_expires: date | None
@@ -1441,6 +1679,11 @@ def link_check(conn: sqlite3.Connection, cfg: Config, at: datetime) -> LinkCheck
         return no("conflict")
     if any(v != "ok" for v in status.tradable.values()) or not status.tradable:
         return no("not-tradable")
+    if status.conditional:
+        # An armed 조건주문 on the account (the old quant's, the app's) places an order of its
+        # own when triggered: live is not turned on while one is open (cancel it in the Toss
+        # app). While live, the reconciliation books what it fills as the owner's trade.
+        return no("conditional")
     if repo.start_event(conn, LIVE) is not None and status.reconcile_state == "mismatch":
         return no("mismatch")
     if days_left is not None and days_left < 0:
@@ -1454,6 +1697,51 @@ def cancel_failed(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
 
 def cancel_pending(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:
     return [r for r in live_repo.cancel_rows(conn, LIVE, ["requested"]) if r.open]
+
+
+def settle_ambiguous(
+    conn: sqlite3.Connection, row: live_repo.BrokerOrderRow, pick: str | None, at: datetime
+) -> str:
+    """An order whose sending was cut off and that more than one of the account's orders could
+    be, settled with what the owner saw in the Toss app (engine/todos.py, `resolve
+    broker-mismatch:order:<id> --pick`): `pick`, the candidate that is ours, or None, none is.
+
+    - Ours is `pick`: the order is that one ('sent' with its id, or 'done' when the search saw
+      it over); the next sync reads it and its fill is booked as usual (by the stage, or as a
+      late fill when its plan was closed meanwhile).
+    - None is ours: our order never reached Toss ('not-sent', lost). Its stage fails and is sent
+      again the next trading day like any order that did not go; when its plan was closed
+      meanwhile (live off), the order is cancelled.
+    Either way the other candidates are the owner's: the reconciliation books what they filled.
+    The row stops keeping the account busy, and a cancel asked for it meanwhile (live off) is
+    carried out on the chosen order by the next tick, or has nothing left to cancel. The caller
+    owns the transaction. Returns what it became: the order id, or 'none'."""
+    if pick is None:
+        live_repo.record_not_sent(
+            conn,
+            order_id=row.order_id,
+            ledger_id=LIVE,
+            client_order_id=row.client_order_id,
+            code="lost",
+            detail="the owner checked the Toss app: none of the candidates is ours",
+            at=at,
+            request=row.request,
+        )
+        if row.cancel_state in ("requested", "failed"):
+            live_repo.record_cancel(conn, row.order_id, "done", None, at)
+        order = repo.get_order(conn, row.order_id)
+        plan = repo.get_plan(conn, order.plan_id)
+        if order.status == "pending" and plan.status not in repo.OPEN_PLAN_STATUSES:
+            repo.cancel_order(conn, order.order_id)
+        return "none"
+    found = [c for c in row.candidates if str(c.get("order", {}).get("order_id")) == pick]
+    if not found:
+        raise ValueError(f"{pick} is not a candidate of order {row.order_id}")
+    view = BrokerOrder.from_json(found[0]["order"])
+    live_repo.mark_sent(conn, row.order_id, view.order_id, at)
+    over = view.terminal or bool(found[0].get("closed"))
+    live_repo.record_broker_view(conn, row.order_id, view, at, finished=over)
+    return view.order_id
 
 
 def unknown_orders(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:

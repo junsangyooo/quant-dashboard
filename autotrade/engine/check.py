@@ -5,7 +5,8 @@
    09:30, then '직접 할 일'); data that is merely old means 'quote-wait' and 0 orders.
 2. Holidays per market: the check runs when one market is closed; that market's orders roll to its
    next session, and a plan whose first stage cannot run today is not made today ('holiday').
-3. A pending withdrawal means 0 orders.
+3. A pending withdrawal means 0 orders on the paper ledger. On the live ledger it holds its own
+   money only: that cash is never invested, the rest is planned as usual (PHASE3.md 2.5).
    The live ledger first matches the Toss account (engine/live.py reconcile, PHASE3.md 2.5):
    an account it cannot read as the truth, or that does not match, fails the check (0 orders).
 4-5. In-rule weights and drift; a plan to target when the band is exceeded or free cash can buy.
@@ -84,6 +85,9 @@ FAILED = "failed"
 WEEKEND = "weekend"
 NOT_STARTED = "not-started"
 NOT_LIVE = "not-live"  # the live ledger's check while the mode is paper: nothing runs
+# The live ledger's check before the first weekday check after live was turned on (the one its
+# preview showed, engine/live.py first_live_check): nothing runs.
+NOT_YET = "not-yet"
 
 
 class CheckFailedError(RuntimeError):
@@ -438,6 +442,13 @@ def _check_body(
     parts = refresh_cash_parts(conn, ledger_id, at)
     waiting = buy_wait_krw(parts, quote.rate)
     held = withdraw_wait_amounts(parts)
+    # The live ledger sizes a buy as its send will pay for it (limit price and fee): a share the
+    # send cannot pay for at the plan price is never planned (PlanItem.buy_unit).
+    caps = (
+        live.buy_units(conn, cfg, {iid: c.price for iid, c in closes.items() if c is not None})
+        if ledger_id == live.LIVE
+        else {}
+    )
     items: list[PlanItem] = []
     for inst in insts:
         close = closes[inst.instrument_id]
@@ -450,6 +461,7 @@ def _check_body(
                 qty=state.qty_of(inst.instrument_id),
                 price=close.price,
                 buy_wait_krw=waiting.get(inst.instrument_id, Decimal(0)),
+                buy_unit=caps.get(inst.instrument_id),
             )
         )
 
@@ -487,7 +499,14 @@ def _check_body(
         if latest.status in ("partial-failed", "todo"):
             return PARTIAL_FAILED, None
         return IN_PROGRESS, None
-    if waits:
+    if waits and ledger_id == live.LIVE:
+        # The live ledger's wait holds its own money only (the owner sold in the app to take the
+        # money out, or to convert it): it was left out of the free cash above, and the rest of
+        # the money is planned as usual. A wait that stopped every order would stop them for
+        # days whenever he follows a conversion suggestion by selling the Korean ETF (D47).
+        details["withdraw_held"] = {c.value: v for c, v in held.items()}
+        details["withdraw_held_until"] = max(w.until for w in waits)
+    elif waits:
         details["withdraw_wait_until"] = max(w.until for w in waits)
         return WITHDRAW_WAIT, None
     if repo.plan_on(conn, ledger_id, rule.rule_id, d) is not None:
@@ -539,6 +558,10 @@ def run_check(
         return CheckOutcome(WEEKEND, None, None, None)
     if ledger_id == live.LIVE and (repo.get_setting(conn, MODE) or "paper") != live.LIVE:
         return CheckOutcome(NOT_LIVE, None, None, None)
+    if ledger_id == live.LIVE:
+        first = live.first_live_check(conn, cfg)
+        if first is not None and at < first:
+            return CheckOutcome(NOT_YET, None, None, None, {"first_check": first})
     if not ensure_started(conn, ledger_id, d, at):
         return CheckOutcome(NOT_STARTED, None, None, None)
     started = clock()

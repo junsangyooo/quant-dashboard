@@ -106,6 +106,14 @@ class FakeToss:
         self.rate = D("1341.6")
         self.accounts = [{"accountNo": "12345678901", "accountSeq": 7, "accountType": "BROKERAGE"}]
         self.orders: dict[str, FakeOrder] = {}
+        # Partly filled orders whose rest lapsed but that kept PARTIAL_FILLED: in the CLOSED list
+        # (openapi.json 1.2.24 lists the status in both), out of the OPEN one.
+        self.closed: set[str] = set()
+        # GET /api/v1/commissions rows as Toss sends them; None: one open-ended row per market
+        # from `commission`.
+        self.commission_rows: list[dict[str, Any]] | None = None
+        # 조건주문 armed on the account (the old quant's, the app's), as the API lists them.
+        self.conditional: list[dict[str, Any]] = []
         self.client_ids: dict[str, tuple[datetime, FakeOrder]] = {}
         self.tokens: list[str] = []
         self.calls: list[tuple[str, str]] = []
@@ -121,6 +129,7 @@ class FakeToss:
         self.down = False
         self.lose_response = False  # create the order, then fail the transport
         self.fail_next: list[tuple[int, str]] = []  # (status, code) for the next calls
+        self.fail_paths: dict[str, tuple[int, str]] = {}  # path -> (status, code), every call
         self.slip = D(0)  # fill price = limit - slip (buys) / limit + slip (sells)
         self.tax_rate = D(0)
 
@@ -237,6 +246,38 @@ class FakeToss:
                 order.status = "CANCELED"
                 order.canceled_at = self.clock()
 
+    def close_partial(self, *, canceled_at: bool = False) -> None:
+        """The session ends the other way the API allows: a partly filled day order leaves the
+        OPEN list for the CLOSED one and keeps PARTIAL_FILLED (with a cancel time, or not)."""
+        for order in self.orders.values():
+            if order.status == "PARTIAL_FILLED" and order.order_id not in self.closed:
+                self.closed.add(order.order_id)
+                if canceled_at:
+                    order.canceled_at = self.clock()
+
+    def arm_conditional(
+        self, symbol: str, side: str, qty: Decimal, *, market: str = "KR", kind: str = "SINGLE"
+    ) -> str:
+        """A 조건주문 someone armed (the old quant, the app): watched, not yet an order."""
+        cid = f"cond-{len(self.conditional) + 1}"
+        leg = {"type": "STOP", "status": "WATCHING", "orderSide": side, "triggerPrice": "1"}
+        self.conditional.append(
+            {
+                "conditionalOrderId": cid,
+                "type": kind,
+                "status": "WATCHING",
+                "symbol": symbol,
+                "market": market,
+                "quantity": str(qty),
+                "orderType": "LIMIT",
+                "expireDate": "2026-12-31",
+                "first": leg,
+                "second": None,
+                "createdAt": self.clock().astimezone(KST).isoformat(),
+            }
+        )
+        return cid
+
     def ours(self) -> list[FakeOrder]:
         return [o for o in self.orders.values() if o.client_order_id is not None]
 
@@ -258,6 +299,9 @@ class FakeToss:
             status, code = self.fail_next.pop(0)
             headers = {"retry-after": "0"} if status == 429 else {}
             return self._err(status, code, "fake failure", headers=headers)
+        if path in self.fail_paths:
+            status, code = self.fail_paths[path]
+            return self._err(status, code, "fake failure")
         token = auth.removeprefix("Bearer ")
         if not self.tokens or token not in self.tokens:
             return self._err(401, "invalid-token", "유효하지 않은 토큰입니다.")
@@ -287,6 +331,8 @@ class FakeToss:
             h = self.holdings.get(query["symbol"])
             return self._ok({"sellableQuantity": str(h.qty if h else D(0))})
         if path == "/api/v1/commissions":
+            if self.commission_rows is not None:
+                return self._ok(self.commission_rows)
             return self._ok(
                 [
                     {
@@ -298,6 +344,14 @@ class FakeToss:
                     for k, v in self.commission.items()
                 ]
             )
+        if path == "/api/v1/conditional-orders" and method == "GET":
+            closed = ("COMPLETED", "EXPIRED")
+            wanted = [
+                c
+                for c in self.conditional
+                if (c["status"] in closed) == (query["status"] == "CLOSED")
+            ]
+            return self._ok({"conditionalOrders": wanted, "nextCursor": None, "hasNext": False})
         if path == "/api/v1/prices":
             out: list[dict[str, Any]] = []
             for sym in query["symbols"].split(","):
@@ -444,7 +498,10 @@ class FakeToss:
         end = date.fromisoformat(query["to"]) if query.get("to") else None
         out = []
         for o in self.orders.values():
-            is_open = o.status in ("PENDING", "PARTIAL_FILLED", "PENDING_CANCEL")
+            is_open = (
+                o.status in ("PENDING", "PARTIAL_FILLED", "PENDING_CANCEL")
+                and o.order_id not in self.closed
+            )
             if (status == "OPEN") != is_open:
                 continue
             if query.get("symbol") and o.symbol != query["symbol"]:
@@ -461,7 +518,7 @@ class FakeToss:
             return self._err(404, "order-not-found", "주문을 찾을 수 없습니다.")
         if order.status == "FILLED":
             return self._err(409, "already-filled", "이미 체결된 주문입니다.")
-        if order.status == "CANCELED":
+        if order.status == "CANCELED" or order_id in self.closed:
             return self._err(409, "already-canceled", "이미 취소된 주문입니다.")
         if "cancel" in self.refuse:
             status, code, data = self.refuse["cancel"]

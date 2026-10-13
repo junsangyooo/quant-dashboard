@@ -69,14 +69,21 @@ class BrokerStatus:
     key_expires: date | None = None
     detail: str | None = None
     reconcile_state: str | None = None  # 'match' | 'mismatch' | 'busy'
-    reconciled_at: datetime | None = None
+    reconciled_at: datetime | None = None  # the last reconciliation, whatever it found
     reconcile_detail: dict[str, Any] = field(default_factory=dict)
+    matched_at: datetime | None = None  # the last reconciliation that matched
+    # The account's open 조건주문 when the tick last looked (ConditionalOrder.to_json); None
+    # when they were never read.
+    conditional: list[dict[str, Any]] | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> BrokerStatus:
         tradable = loads(str(row["tradable"])) or {}
         commissions = loads(str(row["commissions"])) or {}
         detail = loads(str(row["reconcile_detail"])) or {}
+        conditional = (
+            None if row["conditional_orders"] is None else loads(str(row["conditional_orders"]))
+        )
         return cls(
             state=str(row["state"]),
             env_live=bool(row["env_live"]),
@@ -96,6 +103,10 @@ class BrokerStatus:
             reconcile_state=None if row["reconcile_state"] is None else str(row["reconcile_state"]),
             reconciled_at=_dt(row["reconciled_at"]),
             reconcile_detail=detail if isinstance(detail, dict) else {},
+            matched_at=_dt(row["matched_at"]),
+            conditional=[dict(c) for c in conditional if isinstance(c, dict)]
+            if isinstance(conditional, list)
+            else None,
         )
 
 
@@ -110,8 +121,9 @@ def save_status(conn: sqlite3.Connection, status: BrokerStatus, at: datetime) ->
     conn.execute(
         "INSERT INTO broker_status (id, state, env_live, checked_at, ok_at, account_seq,"
         " account_tail, tradable, tradable_at, commissions, revoked, revoked_at, key_expires,"
-        " detail, reconcile_state, reconciled_at, reconcile_detail, updated_at)"
-        " VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " detail, reconcile_state, reconciled_at, reconcile_detail, matched_at,"
+        " conditional_orders, updated_at)"
+        " VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(id) DO UPDATE SET state = excluded.state, env_live = excluded.env_live,"
         " checked_at = excluded.checked_at, ok_at = excluded.ok_at,"
         " account_seq = excluded.account_seq, account_tail = excluded.account_tail,"
@@ -120,6 +132,7 @@ def save_status(conn: sqlite3.Connection, status: BrokerStatus, at: datetime) ->
         " revoked_at = excluded.revoked_at, key_expires = excluded.key_expires,"
         " detail = excluded.detail, reconcile_state = excluded.reconcile_state,"
         " reconciled_at = excluded.reconciled_at, reconcile_detail = excluded.reconcile_detail,"
+        " matched_at = excluded.matched_at, conditional_orders = excluded.conditional_orders,"
         " updated_at = excluded.updated_at",
         (
             status.state,
@@ -138,6 +151,8 @@ def save_status(conn: sqlite3.Connection, status: BrokerStatus, at: datetime) ->
             status.reconcile_state,
             _iso(status.reconciled_at),
             dumps(status.reconcile_detail),
+            _iso(status.matched_at),
+            None if status.conditional is None else dumps(status.conditional),
             to_iso(at),
         ),
     )
@@ -276,6 +291,9 @@ class BrokerOrderRow:
     cancel_error: str | None
     cancel_attempts: int
     updated_at: datetime
+    # 'unknown'/'ambiguous': the account's orders that matched it, as the search saw them:
+    # {"order": BrokerOrder.to_json(), "closed": bool (from the CLOSED list)}.
+    candidates: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def open(self) -> bool:
@@ -289,6 +307,7 @@ class BrokerOrderRow:
     def from_row(cls, row: sqlite3.Row) -> BrokerOrderRow:
         request = loads(str(row["request"])) or {}
         settlement = row["settlement_date"]
+        candidates = loads(str(row["candidates"])) or []
         return cls(
             order_id=int(row["order_id"]),
             ledger_id=str(row["ledger_id"]),
@@ -313,6 +332,9 @@ class BrokerOrderRow:
             cancel_error=None if row["cancel_error"] is None else str(row["cancel_error"]),
             cancel_attempts=int(row["cancel_attempts"]),
             updated_at=from_iso(str(row["updated_at"])),
+            candidates=[dict(c) for c in candidates if isinstance(c, dict)]
+            if isinstance(candidates, list)
+            else [],
         )
 
 
@@ -354,7 +376,7 @@ def insert_intent(
         " sent_at, updated_at) VALUES (?, ?, ?, 'sending', ?, ?, ?)"
         " ON CONFLICT(order_id) DO UPDATE SET state = 'sending', request = excluded.request,"
         " sent_at = excluded.sent_at, error_code = NULL, error_detail = NULL,"
-        " retry_after = NULL, updated_at = excluded.updated_at",
+        " retry_after = NULL, candidates = '[]', updated_at = excluded.updated_at",
         (
             order_id,
             ledger_id,
@@ -409,12 +431,17 @@ def mark_sent(conn: sqlite3.Connection, order_id: int, broker_order_id: str, at:
 
 
 def mark_unknown(
-    conn: sqlite3.Connection, order_id: int, code: str, detail: str, at: datetime
+    conn: sqlite3.Connection,
+    order_id: int,
+    code: str,
+    detail: str,
+    at: datetime,
+    candidates: Sequence[Mapping[str, Any]] = (),
 ) -> None:
     conn.execute(
         "UPDATE broker_orders SET state = 'unknown', error_code = ?, error_detail = ?,"
-        " updated_at = ? WHERE order_id = ?",
-        (code, detail[:400], to_iso(at), order_id),
+        " candidates = ?, updated_at = ? WHERE order_id = ?",
+        (code, detail[:400], dumps([dict(c) for c in candidates]), to_iso(at), order_id),
     )
 
 
@@ -429,11 +456,18 @@ def mark_rejected(
 
 
 def record_broker_view(
-    conn: sqlite3.Connection, order_id: int, view: BrokerOrder, at: datetime
+    conn: sqlite3.Connection,
+    order_id: int,
+    view: BrokerOrder,
+    at: datetime,
+    *,
+    finished: bool | None = None,
 ) -> None:
-    """What the broker says of our order now: its status and the fill so far. A terminal status
-    makes the row 'done' (the fill is final)."""
-    state = "done" if view.terminal else "sent"
+    """What the broker says of our order now: its status and the fill so far. An order that is
+    over makes the row 'done' (the fill is final): `finished`, or by default its own record
+    (BrokerOrder.terminal; a PARTIAL_FILLED order needs the CLOSED list, jobs/live_tasks.py)."""
+    over = view.terminal if finished is None else finished
+    state = "done" if over else "sent"
     conn.execute(
         "UPDATE broker_orders SET state = ?, broker_order_id = ?, status = ?, filled_qty = ?,"
         " filled_amount = ?, avg_price = ?, commission = ?, tax = ?, filled_at = ?,"

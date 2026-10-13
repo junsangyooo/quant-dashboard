@@ -72,6 +72,31 @@ def test_the_unit_is_sandboxed() -> None:
     assert unit["StandardError"].startswith("append:/home/ubuntu/portfolio-dashboard/data/logs/")
 
 
+def test_the_old_apps_unit_keeps_the_toss_keys_out() -> None:
+    """Audit 2026-10-13 (10): the old app (portfolio.jsyoo.dev, internet-facing) loads the whole
+    secrets file; behind the old quant's PIN it can still arm and cancel orders on the live
+    account. Every Toss name src/ reads is unset, and the secrets folder is hidden too: the old
+    code's core.secrets.get() reads the file itself when the environment lacks a name."""
+    unit = directives((DEPLOY / "dashboard.service").read_text())
+    unset = " ".join(v for k, v in unit if k == "UnsetEnvironment").split()
+    read = set(re.findall(r"\b(TOSS_[A-Z_]+)\b", _src_text("secrets.get(")))
+    assert {"TOSS_CLIENT_ID", "TOSS_CLIENT_SECRET"} <= read  # what src/quant/broker reads
+    for name in read | {"TOSS_ACCOUNT_NO", "ANTHROPIC_API_KEY", "KRX_ID", "KRX_PW"}:
+        assert name in unset, name
+    hidden = " ".join(v for k, v in unit if k == "InaccessiblePaths").split()
+    assert "-/home/ubuntu/dotclaude/secrets" in hidden  # core.secrets._FILES on the server
+    assert "-/home/ubuntu/.claude/secrets" in hidden
+    assert ("EnvironmentFile", "/home/ubuntu/dotclaude/secrets/.env") in unit
+
+
+def _src_text(marker: str) -> str:
+    """The lines of the old app's code (src/) that contain `marker`."""
+    out = []
+    for path in sorted((REPO_ROOT / "src").rglob("*.py")):
+        out += [line for line in path.read_text().splitlines() if marker in line]
+    return "\n".join(out)
+
+
 def code_lines(text: str) -> str:
     """The text without its comment lines."""
     return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))

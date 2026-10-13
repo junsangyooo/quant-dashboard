@@ -241,13 +241,97 @@ def test_answers_are_exact_decimals(fake: FakeToss, tmp_path: Path) -> None:
     assert holdings["SPYM"].qty == D("2.5")
     assert holdings["SPYM"].instrument_id == "US:SPYM"
     assert c.sellable_quantity("069500") == D("10")
-    assert c.commissions() == {"KR": D("0.00015"), "US": D("0.001")}
+    assert c.commissions(date(2026, 7, 1)) == {"KR": D("0.00015"), "US": D("0.001")}
     assert c.prices(["069500", "SPYM", "NOPE"])["SPYM"].price == D("91.64")
     infos = c.stocks(["069500", "SPYM"])
     assert infos["069500"].tradable
     assert infos["SPYM"].currency is Currency.USD
     assert c.exchange_rate().rate == D("1341.6")
     assert c.market_calendar("KR", date(2026, 7, 1))["today"] == {"date": "2026-07-01"}
+
+
+def test_the_commission_rate_is_the_one_in_force(fake: FakeToss, tmp_path: Path) -> None:
+    """Audit 2026-10-13 (9): the row valid today, not the last one listed; with none in force
+    (a promotion ended, nothing else listed) the highest: a fee counted too low sizes a buy the
+    broker refuses."""
+    fake.commission_rows = [
+        {
+            "marketCountry": "KR",
+            "commissionRate": "0.00015",
+            "startDate": "2026-01-01",
+            "endDate": None,
+        },
+        {"marketCountry": "US", "commissionRate": "0.0025", "startDate": None, "endDate": None},
+        # an expired 0.10% promotion listed last: it used to win
+        {
+            "marketCountry": "US",
+            "commissionRate": "0.001",
+            "startDate": None,
+            "endDate": "2026-09-29",
+        },
+    ]
+    c = client(fake, tmp_path)
+    assert c.commissions(date(2026, 10, 13)) == {"KR": D("0.00015"), "US": D("0.0025")}
+    # On the promotion's last day both US rows are in force: the higher one counts.
+    assert c.commissions(date(2026, 9, 29))["US"] == D("0.0025")
+    # Before KR's start nothing is in force for it: its highest rate.
+    assert c.commissions(date(2025, 12, 31))["KR"] == D("0.00015")
+    fake.commission_rows = [
+        {
+            "marketCountry": "US",
+            "commissionRate": "0.001",
+            "startDate": None,
+            "endDate": "2026-09-29",
+        },
+        {
+            "marketCountry": "US",
+            "commissionRate": "0.0007",
+            "startDate": None,
+            "endDate": "2026-06-30",
+        },
+    ]
+    assert c.commissions(date(2026, 10, 13)) == {"US": D("0.001")}
+
+
+def test_conditional_orders_are_listed(fake: FakeToss, tmp_path: Path) -> None:
+    """Audit 2026-10-13 (10): every channel's 조건주문 (the old quant's, the app's) can be read:
+    they place orders of their own once triggered."""
+    c = client(fake, tmp_path)
+    assert c.conditional_orders("OPEN") == []
+    fake.arm_conditional("069500", "SELL", D("10"))
+    fake.arm_conditional("SPYM", "BUY", D("3"), market="US", kind="OCO")
+    found = c.conditional_orders("OPEN")
+    assert [(o.symbol, o.market, o.type, o.status, o.sides) for o in found] == [
+        ("069500", "KR", "SINGLE", "WATCHING", ("SELL",)),
+        ("SPYM", "US", "OCO", "WATCHING", ("BUY",)),
+    ]
+    assert found[0].to_json()["quantity"] == "10"
+    fake.conditional[0]["status"] = "EXPIRED"
+    assert [o.symbol for o in c.conditional_orders("OPEN")] == ["SPYM"]
+    assert [o.symbol for o in c.conditional_orders("CLOSED")] == ["069500"]
+    assert ("GET", "/api/v1/conditional-orders") in fake.calls
+
+
+def test_an_order_is_over_by_its_status_or_its_cancel_time() -> None:
+    """Audit 2026-10-13 (3): PARTIAL_FILLED is in both lists (openapi.json 1.2.24); with a cancel
+    time the order is over, without one only the CLOSED list can tell (jobs/live_tasks.py). A
+    pending status is never over."""
+    raw: dict[str, Any] = {
+        "orderId": "o1",
+        "symbol": "069500",
+        "side": "BUY",
+        "status": "PARTIAL_FILLED",
+        "quantity": "10",
+        "currency": "KRW",
+        "orderedAt": "2026-07-01T09:05:00+09:00",
+        "canceledAt": None,
+        "execution": {"filledQuantity": "3"},
+    }
+    assert order_from_api(raw).terminal is False
+    assert order_from_api({**raw, "canceledAt": "2026-07-01T15:30:00+09:00"}).terminal is True
+    pending = {**raw, "status": "PENDING_CANCEL", "canceledAt": "2026-07-01T15:30:00+09:00"}
+    assert order_from_api(pending).terminal is False
+    assert order_from_api({**raw, "status": "CANCELED"}).terminal is True
 
 
 def test_orders_need_a_granted_permit(fake: FakeToss, tmp_path: Path) -> None:

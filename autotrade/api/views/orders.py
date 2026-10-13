@@ -7,6 +7,8 @@
   holds the Korean buy at 09:05 and the US buy at 22:30). Stages without orders are left out.
 - A conversion order has market 'KR' (it is a won-side operation at the broker) and a
   `direction` ('krw-usd' | 'usd-krw').
+- A live buy that ended with nothing to buy (engine/runner.py untraded) is left out; a stage left
+  without orders is left out with it.
 - An order that failed and was sent again keeps its failure on the day it failed ('failed',
   `failure.reason`, `failure.retryAt`) and carries the outcome of the retry once it is known:
   `retried: {at, status: 'filled' | 'failed'}` ('9/15 다시 · 체결'). Such an order is settled
@@ -26,6 +28,7 @@ from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.db import repo
 from autotrade.db.models import FillRow, OrderRow, StageRow
 from autotrade.domain.instruments import Currency, Instrument
+from autotrade.engine.runner import untraded
 
 STAGE_ORDER = ("sell", "fx", "buy")
 
@@ -158,6 +161,9 @@ def plan_stages(
     for o in orders:
         key = (o.stage, o.market, o.instrument_id or o.fx_direction or "fx")
         groups.setdefault(key, []).append(o)
+    # A live buy that found nothing to buy when it was due (its cash waits for the next check)
+    # traded nothing and failed nothing: it is not an order of the plan any more.
+    groups = {k: v for k, v in groups.items() if not untraded(max(v, key=lambda a: a.attempt))}
     by_kind: dict[str, list[dict[str, Any]]] = {}
     times: dict[str, list[tuple[str, datetime]]] = {}
     for (kind, _, _), attempts in groups.items():

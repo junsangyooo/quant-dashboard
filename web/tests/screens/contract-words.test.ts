@@ -403,6 +403,13 @@ describe('작동 cards of the live link (3단계, autotrade/PHASE3.md 2.7)', () 
     expect(down.tone).toBe('warn');
     // A cause this screen does not know is not shown raw.
     expect(todoView(todo({ facts: { cause: 'new-cause' } }), NOW).title).toBe('토스 연결 · —');
+    // An armed 조건주문 (the old quant's): cancel it in the Toss app before live is turned on.
+    const armed = todoView(todo({ facts: { cause: 'conditional' } }), NOW);
+    expect(armed.title).toBe('토스 연결 · 열린 조건주문');
+    expect(armed.lines).toEqual([
+      '토스에 감시 중인 조건주문이 있어요 · 조건이 되면 스스로 주문해요',
+      '토스 앱에서 조건주문 취소',
+    ]);
   });
 
   it('토스 잔고 불일치 says what differs; an order whose result is unknown says where', () => {
@@ -450,8 +457,8 @@ describe('작동 cards of the live link (3단계, autotrade/PHASE3.md 2.7)', () 
     );
     expect(unknown.title).toBe('한국 매수 주문 결과 모름');
     expect(unknown.lines).toEqual([
-      '토스에 이 주문으로 보이는 것이 둘이에요',
-      '토스 앱에서 확인 뒤 Claude에게 요청',
+      '토스에 이 주문으로 보이는 주문이 여럿이라 어느 것인지 몰라요',
+      '토스 앱에서 어느 주문인지 확인 뒤 Claude에게 서버에서 정리 요청',
     ]);
   });
 
