@@ -183,18 +183,19 @@ describe('출시 첫날 (값표 §4)', () => {
   });
 });
 
-describe('출금 대기 (값표 §2.3)', () => {
-  it('chip 출금 대기, weights without the waiting cash (48.6 · 51.4), orders 0, no banner', async () => {
+describe('실전 출금 대기 (값표 §2.3, PHASE3.md 2.5)', () => {
+  it('the wait holds its own money only: chip 목표 범위 안, weights without it (49.6 · 50.4), no 주문 0건, no banner', async () => {
     await openPlan(planWithdraw);
     const index = screen.getByRole('article', { name: '지수 반반' });
-    expect(within(index).getByText('출금 대기')).toBeVisible();
-    expect(within(index).getByRole('button', { name: '10/12까지 · 리밸런싱 쉼' })).toBeVisible();
-    expect(within(index).getByText('48.6% · 목표 50%')).toBeVisible();
-    expect(within(index).getByText('51.4% · 목표 50%')).toBeVisible();
+    expect(within(index).getByText('목표 범위 안')).toBeVisible();
+    expect(within(index).queryByText('출금 대기')).toBeNull();
+    expect(within(index).getByText('49.6% · 목표 50%')).toBeVisible();
+    expect(within(index).getByText('50.4% · 목표 50%')).toBeVisible();
     expect(within(index).getByText('환전 제안까지 1.7%p')).toBeVisible();
     expect(within(index).getByText(/출금 대기 현금 제외/)).toBeVisible();
-    expect(screen.getByText('출금 대기 500,425원 · 10/12까지 · 주문 0건')).toBeVisible();
-    expect(screen.getByText('출금 없으면 다음 확인에 목표대로')).toBeVisible();
+    expect(screen.queryByText(/주문 0건/)).toBeNull();
+    expect(screen.queryByText(/리밸런싱 쉼/)).toBeNull();
+    expect(screen.queryByText('출금 없으면 다음 확인에 목표대로')).toBeNull();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

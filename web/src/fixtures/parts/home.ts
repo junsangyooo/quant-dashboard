@@ -624,7 +624,9 @@ export function homeLiveTodo(): HomeResponse {
 
 /**
  * §2.3 출금 대기 (10/7 16:00): 10/2 hand sale of KOSPI200 ETF 14주 in the Toss app (140 → 126),
- * waiting until 10/12; the won left waits with it (orders 0). 실전 runs 지수 반반 alone (D47).
+ * waiting until 10/12. The live wait holds the sale's money only (PHASE3.md 2.5): the won left
+ * over bought 5주 at the 10/5 check (126 → 131, 36,250원 + fee 27원). 실전 runs 지수 반반 alone
+ * (D47).
  */
 export const WITHDRAW_COMPOSITION: Composition = {
   groupBy: ['instrument', 'country', 'currency'],
@@ -632,17 +634,17 @@ export const WITHDRAW_COMPOSITION: Composition = {
     {
       key: INDEX_HALF.id,
       rule: INDEX_HALF,
-      pct: 93.0,
+      pct: 94.8,
       target: 100,
       rows: [
         {
           kind: 'holding',
           instrument: KOSPI200,
-          pct: 45.2,
-          krw: 4_567_500,
-          pnlPct: 5.3,
-          qty: 126,
-          avgCost: { amount: 34_425, currency: 'KRW' },
+          pct: 47.0,
+          krw: 4_748_750,
+          pnlPct: 5.1,
+          qty: 131,
+          avgCost: { amount: 34_495, currency: 'KRW' },
         },
         {
           kind: 'holding',
@@ -659,10 +661,10 @@ export const WITHDRAW_COMPOSITION: Composition = {
     {
       key: 'cash',
       label: 'cash',
-      pct: 7.0,
+      pct: 5.2,
       target: null,
       rows: [
-        { kind: 'cash', cash: { currency: 'KRW', country: 'KR' }, pct: 2.0, krw: 205_712 },
+        { kind: 'cash', cash: { currency: 'KRW', country: 'KR' }, pct: 0.2, krw: 24_435 },
         { kind: 'cash', cash: { currency: 'USD', country: 'US' }, pct: 0.0, krw: 622, usd: 0.45 },
         {
           kind: 'cash',
@@ -679,31 +681,32 @@ export const WITHDRAW_COMPOSITION: Composition = {
 };
 
 export function homeWithdraw(): HomeResponse {
-  const next = { kind: 'withdraw-wait', until: '2026-10-12' } as const;
+  // The wait stops no order on live: the chip is the plan's own and the next check goes on.
+  const next = { kind: 'next-check', at: kst('2026-10-08', '08:30') } as const;
   return {
     ledger: 'live',
     example: true,
     startDate: '2026-09-01',
     basis: BASIS_1007,
     stale: [],
-    total: 10_104_918,
-    pnl: { amount: 104_918, pct: 1.05 },
+    total: 10_104_891,
+    pnl: { amount: 104_891, pct: 1.05 },
     baseline: { pct: 1.75 },
-    planChip: { ruleId: INDEX_HALF.id, status: 'withdraw-wait', next },
+    planChip: { ruleId: INDEX_HALF.id, status: 'in-range', next },
     trend: {
       periods: null,
       period: 'all',
       periodPnl: null,
-      series: trendSeries(patch(liveDaily, { '2026-10-07': 10_104_918 }), liveUntouchedDaily),
+      series: trendSeries(patch(liveDaily, { '2026-10-07': 10_104_891 }), liveUntouchedDaily),
       events: [{ date: '2026-09-01', kind: 'live-on', kinds: ['live-on'] }],
       empty: null,
     },
     planCard: {
       rule: INDEX_HALF,
-      share: { pct: 93.0, target: 100 },
-      status: 'withdraw-wait',
+      share: { pct: 94.8, target: 100 },
+      status: 'in-range',
       next,
-      // 한국 4,773,212원 (the waiting cash leaves) : 미국 4,831,281원.
+      // 한국 4,773,185원 (the waiting cash leaves) : 미국 4,831,281원.
       gauge: {
         kind: 'mix',
         threshold: 2,

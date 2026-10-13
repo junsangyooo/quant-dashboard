@@ -432,11 +432,13 @@ export function planLiveTodo(): PlanResponse {
 }
 
 /**
- * 값표 §2.3 출금 대기 (실전, D47): weights without the waiting cash (48.6 · 51.4), orders 0; the
- * gauge is 한국 49.7 : 미국 50.3 of the rule's money (the waiting cash leaves it).
+ * 값표 §2.3 출금 대기 (실전, D47): the wait holds the sale's money only (PHASE3.md 2.5), so the
+ * chip is the plan's own and the next check goes on (the won left over bought 5주 on 10/5).
+ * Weights without the waiting cash (49.6 · 50.4); the gauge is 한국 49.7 : 미국 50.3 of the rule's
+ * money (the waiting cash leaves it).
  */
 export function planWithdraw(): PlanResponse {
-  const next: NextAction = { kind: 'withdraw-wait', until: '2026-10-12' };
+  const next: NextAction = { kind: 'next-check', at: kst('2026-10-08', '08:30') };
   const basis: BasisLine = { ...BASIS_INDEX, pendingBuyIncluded: false, withdrawExcluded: true };
   return {
     ledger: 'live',
@@ -444,8 +446,8 @@ export function planWithdraw(): PlanResponse {
     ruleShares: null,
     rules: [
       liveCard({
-        share: { pct: 93.0, target: 100 },
-        status: 'withdraw-wait',
+        share: { pct: 94.8, target: 100 },
+        status: 'in-range',
         next,
         gauge: {
           kind: 'mix',
@@ -453,19 +455,15 @@ export function planWithdraw(): PlanResponse {
           needle: { now: { kr: 49.7, us: 50.3 }, deviation: -0.3, toThreshold: 1.7 },
         },
         rows: [
-          { instrument: KOSPI200, weight: 48.6, target: 50, toThreshold: null },
-          { instrument: SP500, weight: 51.4, target: 50, toThreshold: null },
+          { instrument: KOSPI200, weight: 49.6, target: 50, toThreshold: null },
+          { instrument: SP500, weight: 50.4, target: 50, toThreshold: null },
         ],
         basisLine: basis,
       }),
     ],
     schedule: {
       now: null,
-      items: [
-        { kind: 'withdraw-wait', krw: 500_425, until: '2026-10-12' },
-        { kind: 'next-check', at: kst('2026-10-08', '08:30') },
-        HOLIDAY_1009,
-      ],
+      items: [{ kind: 'next-check', at: kst('2026-10-08', '08:30') }, HOLIDAY_1009],
     },
     drift: { ...liveDrift(withdrawDriftIndex, null) },
   };

@@ -90,7 +90,8 @@ export const liveDriftIndex: readonly LinePoint[] = [
 
 /**
  * 출금 대기 variant: the hand sale on 10/2 (KOSPI200 ETF 14주) leaves 한국 at 49.7% of the rule's
- * money (the waiting cash leaves it, 값표 §2.3), and nothing is bought. Not drawn in Figma.
+ * money (the waiting cash leaves it, 값표 §2.3); the won left over buys 5주 on 10/5, inside 한국,
+ * so the line stays. Not drawn in Figma.
  */
 export const withdrawDriftIndex: readonly LinePoint[] = [
   ...liveDriftIndex.filter((p) => p.date <= '2026-10-02'),

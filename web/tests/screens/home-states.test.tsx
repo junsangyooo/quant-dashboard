@@ -36,25 +36,29 @@ function rowValuesSum(): number {
 }
 
 describe('출금 대기 (값표 §2.3)', () => {
-  it('PnL counts no cash flow: +104,918원 · +1.05%; rows add up to 10,104,918원', async () => {
+  it('PnL counts no cash flow: +104,891원 · +1.05%; rows add up to 10,104,891원', async () => {
     renderState(homeWithdraw);
-    expect(await findTotal('10,104,918원')).toBeInTheDocument();
-    expect(screen.getByText('▲ +104,918원 · +1.05%')).toBeVisible();
-    expect(rowValuesSum()).toBe(10_104_918);
+    expect(await findTotal('10,104,891원')).toBeInTheDocument();
+    expect(screen.getByText('▲ +104,891원 · +1.05%')).toBeVisible();
+    expect(rowValuesSum()).toBe(10_104_891);
   });
 
-  it('hatched bar end + its line, plan line 출금 대기 · 10/12까지 · 리밸런싱 쉼; no 매수 대기, banner or stages', async () => {
+  it('hatched bar end + its line; the plan goes on (no 리밸런싱 쉼 or 주문 0건); no 매수 대기, banner or stages', async () => {
     const { container } = renderState(homeWithdraw);
-    await findTotal('10,104,918원');
+    await findTotal('10,104,891원');
     expect(screen.getByText('빗금 = 출금 대기 원화 500,425원 · 10/12까지')).toBeVisible();
     expect(container.querySelector('svg path.pending')).not.toBeNull();
-    const line = screen.getByRole('link', { name: /10\/12까지 · 리밸런싱 쉼/ });
-    expect(textOf(line)).toBe('출금 대기10/12까지 · 리밸런싱 쉼');
+    // 실전: the wait holds the sale's money only (PHASE3.md 2.5), the plan line is the plan's own.
+    const line = screen.getByRole('link', { name: /다음 확인 10\/8 08:30/ });
+    expect(textOf(line)).toBe('목표 범위 안다음 확인 10/8 08:30');
+    expect(screen.queryByText(/리밸런싱 쉼/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/주문 0건/)).not.toBeInTheDocument();
     expect(screen.queryByText(/매수 대기/)).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     const card = region('계획');
     expect(within(card).queryByRole('list')).not.toBeInTheDocument();
-    expect(within(card).getByText('500,425원 · 10/12까지 · 주문 0건')).toBeVisible();
+    expect(within(card).getByText('목표 범위 안')).toBeVisible();
+    expect(within(card).getAllByText('다음 확인 10/8 08:30')[0]).toBeVisible();
     // 실전 (D47): the gauge is the mix of won and dollars (the waiting cash leaves it).
     expect(within(card).getByText('한국 49.7 : 미국 50.3')).toBeVisible();
     expect(within(card).getByText('−0.3%p')).toBeVisible();
