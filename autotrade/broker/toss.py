@@ -26,9 +26,11 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from autotrade.broker.base import (
     LIVE_ENV,
+    NOTHING_TO_BUY,
     Failed,
     FailureReason,
     FxRequest,
+    NotTraded,
     Outcome,
     TradeFilled,
     TradeRequest,
@@ -45,11 +47,12 @@ LIVE = "live"
 PRICE_PLACES = Decimal("0.000001")
 
 # Broker answers that mean 'not now', not 'no': the attempt fails and is sent again the next
-# trading day like any failure (인계 11's '다음 날 같은 시각'), never a manual action at once.
+# trading day like any failure (인계 11's '다음 날 같은 시각'), never a manual action at once. A buy
+# the cash cannot pay one share of when it is due is neither ('not-sent' NOTHING_TO_BUY): it ends
+# with nothing traded (base.NotTraded) and its cash waits for the next check.
 RETRYABLE_CODES = frozenset(
     {
         "order-hours-closed",
-        "no-cash",
         "nothing-to-sell",
         "lost",
         "link",
@@ -147,6 +150,19 @@ def limit_price(inst: Instrument, side: Side, reference: Decimal, slippage: Deci
     return on_tick(inst, reference * (1 - slippage), up=True)
 
 
+def fee_rate(cfg: Config, commissions: Mapping[str, Decimal], inst: Instrument) -> Decimal:
+    """The commission a live order is sized with: Toss's rate for the market (read once a day,
+    broker_status) or the configured one, whichever is higher (a share too many is refused)."""
+    return max(commissions.get(inst.market.value, Decimal(0)), cfg.fees.rate_for(inst.currency))
+
+
+def buy_unit(inst: Instrument, reference: Decimal, slippage: Decimal, rate: Decimal) -> Decimal:
+    """The most one share of a live buy takes: its limit price over `reference` plus the fee at
+    that price. The send divides the cash by it (jobs/live_tasks.py), and the live plan sizes
+    its buys with it at the plan price (domain/planner.py PlanItem.buy_unit)."""
+    return limit_price(inst, Side.BUY, reference, slippage) * (1 + rate)
+
+
 # ── the executor ─────────────────────────────────────────────────────────────────────────
 
 
@@ -170,6 +186,8 @@ class TossExecutor:
             return Waiting(f"{row.state} at the broker")
         if row.state == "not-sent":
             code = row.error_code or "other"
+            if code == NOTHING_TO_BUY:
+                return NotTraded(NOTHING_TO_BUY, row.error_detail or "")
             if code == "order-hours-closed" and not req.deadline_passed:
                 return Waiting("order hours closed; sent again when they open")
             if code in ("no-quote",):

@@ -31,10 +31,12 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_FLOOR, Decimal
 from typing import Any
 
+from autotrade.broker.base import NOTHING_TO_BUY
 from autotrade.broker.toss import (
     LIVE,
     client_order_id,
     env_live,
+    fee_rate,
     limit_price,
     permit_for,
 )
@@ -394,8 +396,9 @@ class Sync:
     ) -> tuple[int, str | None]:
         """Whole shares that can go: a buy within the rule's cash (not the cash waiting for a
         withdrawal, nor the owner's money of today, D48) and the broker's buying power at the
-        limit price with the commission; a sell within the rule's shares and the broker's
-        sellable quantity."""
+        limit price with the commission (none: NOTHING_TO_BUY, the order ends and its cash waits
+        for the next check); a sell within the rule's shares and the broker's sellable
+        quantity."""
         view = sleeves.view(self.conn, LIVE, rule_id)
         if side is Side.BUY:
             held = (
@@ -411,23 +414,20 @@ class Sync:
             )
             power = self.client.buying_power(inst.currency)
             cash = min(power, ledger_cash)
-            rate = max(self._commission(inst.market), self.cfg.fees.rate_for(inst.currency))
-            unit = limit * (1 + rate)
+            unit = limit * (1 + fee_rate(self.cfg, self._commissions(), inst))
             affordable = (
                 0 if cash <= 0 else int((cash / unit).to_integral_value(rounding=ROUND_FLOOR))
             )
             qty = min(planned, affordable)
-            return qty, None if qty > 0 else "no-cash"
+            return qty, None if qty > 0 else NOTHING_TO_BUY
         sellable = self.client.sellable_quantity(inst.ticker)
         whole = int(sellable.to_integral_value(rounding=ROUND_FLOOR))
         qty = min(planned, view.qty_of(inst.instrument_id), whole)
         return qty, None if qty > 0 else "nothing-to-sell"
 
-    def _commission(self, market: Market) -> Decimal:
+    def _commissions(self) -> dict[str, Decimal]:
         status = live_repo.get_status(self.conn)
-        if status is None:
-            return ZERO
-        return status.commissions.get(market.value, ZERO)
+        return {} if status is None else status.commissions
 
     def _value_krw(self, inst: Instrument, qty: int, price: Decimal) -> Decimal:
         value = price * qty

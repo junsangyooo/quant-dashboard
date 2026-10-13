@@ -76,10 +76,12 @@ def test_the_mode_screen_before_turning_on(lw: Live, web: TestClient) -> None:
         ("KR:069500", 50.0),
         ("US:SPYM", 50.0),
     ]
-    # Won only: all of it buys the Korean ETF (D47). No conversion stage, no US order.
+    # Won only: all of it buys the Korean ETF (D47). No conversion stage, no US order. Sized as
+    # the send will pay: floor(10,000,000 / (32,160 x 1.00015)) = 310, the limit 0.5% over the
+    # 32,000 close on its tick, plus the fee.
     assert [s["kind"] for s in preview["stages"]] == ["buy"]
     buys = preview["stages"][0]["orders"]
-    assert [(o["instrument"]["id"], o["qty"]) for o in buys] == [("KR:069500", 312)]
+    assert [(o["instrument"]["id"], o["qty"]) for o in buys] == [("KR:069500", 310)]
     assert buys[0]["at"] == "2026-07-01T09:05:00+09:00"
     assert preview["outside"] == []
     # What the owner could convert for 50:50: half of the won, at the 21:00 rate.

@@ -193,9 +193,10 @@ def test_turning_on_again_leaves_the_money_of_the_check_day_for_the_next(
     assert mode["liveCash"] is None  # live is off
     preview = mode["preview"]
     assert preview["kind"] == "ok", preview
-    # The 08:30 check would leave Wednesday's deposit for Thursday: 312 shares, not 343.
+    # The 08:30 check would leave Wednesday's deposit for Thursday: 310 shares, not 341
+    # (floor(10,000,000 / (32,160 x 1.00015)), the send's limit and fee).
     assert [(o["instrument"]["id"], o["qty"]) for o in preview["stages"][0]["orders"]] == [
-        ("KR:069500", 312)
+        ("KR:069500", 310)
     ]
     assert preview["newMoney"] == {"krw": 1000000, "usd": 0.0, "from": "2026-07-02T08:30:00+09:00"}
     assert preview["fxSuggestion"]["krw"] == 5500000

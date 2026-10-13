@@ -321,14 +321,20 @@ def test_a_buy_uses_only_the_rules_cash_and_the_brokers(lw: Live) -> None:
     assert row is not None
 
 
-def test_no_cash_at_all_is_not_sent_and_tried_again_the_next_day(lw: Live) -> None:
-    planned(lw)
+def test_a_buy_the_cash_cannot_pay_ends_with_nothing_bought(lw: Live) -> None:
+    """Audit 2026-10-13 (6): a buy that cannot pay one share when it is due completes with
+    nothing bought; its cash waits for the next check. Never a failure, a retry or a to-do."""
+    ids = planned(lw)
     lw.fake.cash["KRW"] = D("100")
     lw.sync("2026-07-01 09:05")
     assert lw.fake.ours() == []
     row = kr_rows(lw)[0]
-    assert (row.state, row.error_code) == ("not-sent", "no-cash")
-    assert lw.stages()["result"] == "failed"
+    assert (row.state, row.error_code) == ("not-sent", "nothing-to-buy")
+    assert lw.stages()["result"] == "done"
+    order = repo.get_order(lw.conn, ids[("buy", "KR")])
+    assert (order.status, order.failure_reason, order.manual) == ("cancelled", None, False)
+    assert repo.get_plan(lw.conn, order.plan_id).status == "done"
+    assert not [o for o in repo.orders_of_ledger(lw.conn, "live") if o.retry_of]
 
 
 def test_an_order_over_the_limit_is_never_sent(lw: Live) -> None:

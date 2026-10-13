@@ -35,6 +35,7 @@ from autotrade.config import Config
 from autotrade.db import ai_repo, repo
 from autotrade.db.models import OrderRow, PlanRow
 from autotrade.engine.common import refresh_cash_parts
+from autotrade.engine.runner import untraded
 from autotrade.timeutil import kst_date, require_aware
 
 ORDER_TODO = "order-failed"
@@ -84,6 +85,8 @@ def _order_todos(conn: sqlite3.Connection, plan: PlanRow) -> list[Todo]:
         latest = attempts[-1]
         if not (latest.status == "cancelled" or (latest.status == "failed" and latest.manual)):
             continue
+        if untraded(latest):
+            continue  # nothing to buy when it was due: its cash waits, nothing to do by hand
         out.append(
             Todo(
                 todo_id=f"{ORDER_TODO}:{root_id}",

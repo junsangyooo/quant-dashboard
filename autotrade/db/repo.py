@@ -760,6 +760,26 @@ def mark_order_failed(
     )
 
 
+def end_order_untraded(
+    conn: sqlite3.Connection,
+    order_id: int,
+    *,
+    reason: str,
+    detail: str,
+    executor: str,
+    executed_at: datetime,
+) -> None:
+    """An order that ends with nothing traded and nothing failed (broker/base.py NotTraded):
+    'cancelled' with no failure reason (no retry follows, no manual action is asked); the
+    detail starts with `reason` (engine/runner.py untraded)."""
+    conn.execute(
+        "UPDATE orders SET status = 'cancelled', failure_reason = NULL, failure_detail = ?,"
+        " executor = ?, executed_at = ?, retry_at = NULL, manual = 0"
+        " WHERE order_id = ? AND status = 'pending'",
+        (f"{reason}: {detail}", executor, to_iso(executed_at), order_id),
+    )
+
+
 def cancel_order(conn: sqlite3.Connection, order_id: int) -> None:
     """Cancel one order that has not been sent (or that ended at the broker with nothing)."""
     conn.execute(

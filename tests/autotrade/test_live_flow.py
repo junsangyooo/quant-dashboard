@@ -61,8 +61,9 @@ def test_the_first_day(lw: Live) -> None:
     assert report["details"]["planned"]["fx"] is None
     orders = {(o.side, o.market): o for o in repo.orders_of_ledger(lw.conn, "live")}
     assert list(orders) == [("buy", "KR")]
-    # floor(10,000,000 / (32,000 x 1.00015)) = 312
-    assert orders[("buy", "KR")].qty == 312
+    # Sized as the send will pay at the 32,000 close: the limit 0.5% over it on the 5-won tick
+    # (32,160) plus the fee, floor(10,000,000 / (32,160 x 1.00015)) = 310.
+    assert orders[("buy", "KR")].qty == 310
     stages = repo.stages_of(lw.conn, orders[("buy", "KR")].plan_id)
     assert [(s.kind, s.market) for s in stages] == [("buy", "KR")]
 
@@ -70,8 +71,8 @@ def test_the_first_day(lw: Live) -> None:
     lw.sync("2026-07-01 09:00")
     assert lw.fake.ours() == []
 
-    # 09:05: the Korean buy goes out as a limit order 0.5% over the price, on the 5-won tick,
-    # cut to what the cash pays at that limit: floor(10,000,000 / (32,160 x 1.00015)) = 310.
+    # 09:05: the Korean buy goes out as a limit order 0.5% over the price, on the 5-won tick:
+    # the price has not moved, so the cash pays all 310 at that limit.
     lw.fake.slip = D("160")  # it fills at 32,000
     sync = lw.sync("2026-07-01 09:05")
     sent = [c for c in sync["changes"] if "sent" in c]

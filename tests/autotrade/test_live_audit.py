@@ -3,6 +3,7 @@ asserting the right behavior. Against the fake Toss (tests/autotrade/live_world.
 
 3. A partly filled order that ends in the CLOSED list with PARTIAL_FILLED.
 5. The closed orders the reconciliation reads start at its last match, not its last attempt.
+6. A one-share top-up the send's limit price cannot pay.
 9. The commission rate a buy is sized with is the one in force.
 10. An armed 조건주문 on the account blocks turning live on.
 """
@@ -174,6 +175,81 @@ def test_an_app_sale_during_a_long_busy_spell_is_still_an_app_sale(
     assert [(w.amount, w.until) for w in waits] == [(D("708474"), date(2026, 7, 7))]
     assert new_money_waiting(lw.conn, "live", lw.now()) == {}  # sale proceeds are not new money
     assert lw.status().matched_at == kst("2026-07-03 10:10")
+
+
+# ── 6. a one-share top-up ────────────────────────────────────────────────────────────────
+
+
+def top_up(lw: Live, cash: str) -> None:
+    """After the first buy (28,905 won left), the owner adds money so the cash is `cash`."""
+    invested(lw)
+    lw.at("2026-07-01 10:00")
+    lw.fake.deposit("KRW", D(cash) - lw.state().cash_of(KRW))
+    lw.sync("2026-07-01 10:05")
+    lw.reconcile()
+    assert lw.state().cash_of(KRW) == D(cash)
+
+
+def test_a_share_the_send_could_not_pay_is_never_planned(lw: Live) -> None:
+    """32,100 won buys one share at the 32,050 close but not at the send's limit (32,210 on the
+    tick, plus the fee: 32,214.8): the plan sizes buys as the send pays, so nothing is planned
+    and the cash waits below one share. It used to be planned, refused twice ('no-cash') and
+    become a to-do that blocked every later plan."""
+    top_up(lw, "32100")
+    lw.fake.prices["069500"] = D("32050")  # a flat market
+    lw.sync("2026-07-02 08:29")
+    report = lw.check("2026-07-02 08:30")
+    assert report["result"] == "in-range"
+    assert repo.open_plans(lw.conn, "live") == []
+    parts = {(p.currency, p.purpose.value): p.amount for p in repo.cash_parts(lw.conn, "live")}
+    assert parts == {(KRW, "sub_share"): D("32100")}
+    # More money: the next check plans with all of it.
+    lw.fake.deposit("KRW", D("5000000"))
+    lw.sync("2026-07-02 12:00")
+    lw.reconcile()
+    lw.sync("2026-07-03 08:29")
+    assert lw.check("2026-07-03 08:30")["result"] == "rebalance"
+
+
+def test_a_buy_the_price_outran_ends_with_nothing_bought(lw: Live) -> None:
+    """32,300 won pays one share at the 32,050 close's limit; at 09:05 the price is 32,400 and
+    the limit (32,560) leaves the cash short: the order ends with nothing bought, its stage
+    and plan complete, nothing waits for a person, and the next check plans again."""
+    from autotrade.engine.todos import open_todos
+
+    top_up(lw, "32300")
+    lw.sync("2026-07-02 08:29")
+    report = lw.check("2026-07-02 08:30")
+    assert report["details"]["planned"]["buys"] == [("KR:069500", 1)]
+    lw.fake.prices["069500"] = D("32400")
+    lw.sync("2026-07-02 09:05")
+    order = repo.orders_of_ledger(lw.conn, "live")[-1]
+    row = live_repo.get_broker_order(lw.conn, order.order_id)
+    assert row is not None and (row.state, row.error_code) == ("not-sent", "nothing-to-buy")  # noqa: PT018
+    assert lw.stages()["result"] == "done"
+    order = repo.get_order(lw.conn, order.order_id)
+    assert (order.status, order.manual, order.retry_at) == ("cancelled", False, None)
+    assert repo.get_plan(lw.conn, order.plan_id).status == "done"
+    assert open_todos(lw.conn, "live") == []
+    assert len(lw.fake.ours()) == 1  # only the first day's order ever reached Toss
+    assert lw.state().cash_of(KRW) == D("32300")  # it waits
+    # The next morning (a flat 32,050 again) plans it again.
+    lw.fake.prices["069500"] = D("32050")
+    lw.sync("2026-07-03 08:29")
+    assert lw.check("2026-07-03 08:30")["result"] == "rebalance"
+
+
+def test_the_plan_screens_leave_out_an_order_that_bought_nothing(lw: Live) -> None:
+    from autotrade.api.views.orders import plan_stages
+
+    top_up(lw, "32300")
+    lw.sync("2026-07-02 08:29")
+    plan_id = lw.check("2026-07-02 08:30")["plan_id"]
+    lw.fake.prices["069500"] = D("32400")
+    lw.sync("2026-07-02 09:05")
+    lw.stages()
+    instruments = live.rule_instruments(lw.conn)
+    assert plan_stages(lw.conn, plan_id, instruments, "live") == []  # no '직접 할 일' on screen
 
 
 # ── 9. the commission in force ───────────────────────────────────────────────────────────

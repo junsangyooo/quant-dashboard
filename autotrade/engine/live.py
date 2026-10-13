@@ -27,12 +27,13 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from autotrade.broker.toss import TossExecutor, fill_of
+from autotrade.broker.toss import TossExecutor, buy_unit, fee_rate, fill_of
 from autotrade.broker.toss_api import BrokerHolding, BrokerOrder
 from autotrade.config import Config
 from autotrade.db import ai_repo, live_repo, repo
@@ -1106,6 +1107,23 @@ class NotComputable:
     detail: str
 
 
+def buy_units(
+    conn: sqlite3.Connection, cfg: Config, prices: Mapping[str, Decimal]
+) -> dict[str, Decimal]:
+    """What one share of a live buy of each rule instrument takes at most at its plan price: the
+    limit the send caps it at (on the tick) plus Toss's fee (broker/toss.py buy_unit). The live
+    plan (the check, the preview) sizes its buys with it: PlanItem.buy_unit."""
+    status = live_repo.get_status(conn)
+    commissions = {} if status is None else status.commissions
+    out: dict[str, Decimal] = {}
+    for iid, inst in rule_instruments(conn).items():
+        price = prices.get(iid)
+        if price is not None and price > 0:
+            rate = fee_rate(cfg, commissions, inst)
+            out[iid] = buy_unit(inst, price, cfg.live_limit_slippage, rate)
+    return out
+
+
 def _order_krw(amount: Decimal, currency: Currency, rate: Decimal) -> Decimal:
     return amount if currency is Currency.KRW else usd_in_krw(amount, rate)
 
@@ -1156,11 +1174,16 @@ def preview_data(
             for iid in instruments
         }
         outside = opening.outside
+    caps = buy_units(conn, cfg, {iid: c.price for iid, c in closes.items() if c is not None})
     items: list[PlanItem] = []
     for iid in rule.instrument_ids:
         close = closes[iid]
         assert close is not None  # checked above
-        items.append(PlanItem(instruments[iid], rule.target_of(iid), qty[iid], close.price))
+        items.append(
+            PlanItem(
+                instruments[iid], rule.target_of(iid), qty[iid], close.price, buy_unit=caps.get(iid)
+            )
+        )
     plan = plan_per_currency(
         PlanInput(
             items=tuple(items),

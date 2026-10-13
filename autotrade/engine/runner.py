@@ -5,6 +5,8 @@
   does not depend on when the job happened to run.
 - A stage that fails is sent again the next trading day at the same time ('다음 날 같은 시각');
   if that fails too, or the broker rejected the order, it becomes a manual action ('직접 할 일').
+- An order with nothing to trade (a live buy the cash cannot pay one share of when it is due)
+  ends unfilled ('cancelled', reason nothing-to-buy) and does not hold the stage back.
 - When a stage completes, stages waiting on it move to their next slot after it.
 """
 
@@ -17,10 +19,12 @@ from decimal import Decimal
 from typing import Any
 
 from autotrade.broker.base import (
+    NOTHING_TO_BUY,
     Executor,
     Failed,
     FxFilled,
     FxRequest,
+    NotTraded,
     Outcome,
     TradeFilled,
     TradeRequest,
@@ -59,6 +63,15 @@ class StageResult:
     market: str
     status: str
     orders: list[dict[str, Any]] = field(default_factory=list)
+
+
+def untraded(order: OrderRow) -> bool:
+    """An order that ended with nothing to trade (a live buy the cash could not pay one share of,
+    repo.end_order_untraded): not a failure, not a manual action, and nothing the screens list
+    (api/views/orders.py)."""
+    return order.status == "cancelled" and (order.failure_detail or "").startswith(
+        f"{NOTHING_TO_BUY}:"
+    )
 
 
 def _session_date(stage: StageRow) -> date:
@@ -454,6 +467,20 @@ def execute_stage(
             waiting = True
             result.orders.append(
                 {"order_id": order.order_id, "outcome": "waiting", "detail": outcome.detail}
+            )
+        elif isinstance(outcome, NotTraded):
+            # Nothing to trade (a live buy the cash could not pay one share of): the order ends
+            # unfilled, the stage goes on, and its cash waits for the next check.
+            repo.end_order_untraded(
+                conn,
+                order.order_id,
+                reason=outcome.reason,
+                detail=outcome.detail,
+                executor=executor.name,
+                executed_at=at,
+            )
+            result.orders.append(
+                {"order_id": order.order_id, "outcome": outcome.reason, "detail": outcome.detail}
             )
         else:
             failed.append((order, outcome))

@@ -91,6 +91,17 @@ class PlanItem:
     qty: int  # shares held
     price: Decimal  # plan price in the instrument's currency (latest close)
     buy_wait_krw: Decimal = ZERO  # cash already waiting to buy this instrument
+    # The most one share of a buy may take, fee included, in the instrument's currency. The live
+    # ledger sets it to what its send divides the cash by (the limit price over the plan price,
+    # on the tick, plus the fee: autotrade/broker/toss.py buy_unit), so a planned share is one
+    # the send can pay for at that price. None (paper): the plan price plus the fee.
+    buy_unit: Decimal | None = None
+
+    def buy_cost(self, qty: int, fees: FeeRates) -> Decimal:
+        """What `qty` shares of a buy take at most, in the instrument's currency."""
+        if self.buy_unit is not None:
+            return self.buy_unit * qty
+        return self.price * qty * (ONE + fees.rate_for(self.instrument.currency))
 
 
 @dataclass(frozen=True)
@@ -204,7 +215,7 @@ def _cash_need(
     usd_short = ZERO
     for iid, n in buys.items():
         it = items[iid]
-        need = it.price * n * (ONE + inp.fees.rate_for(it.instrument.currency))
+        need = it.buy_cost(n, inp.fees)
         if it.instrument.currency is Currency.KRW:
             krw_short += need
         else:
@@ -294,6 +305,8 @@ def plan_rule(inp: PlanInput) -> Plan:
     }
     unit_cost = {
         iid: unit[iid] * (ONE + inp.fees.rate_for(it.instrument.currency))
+        if it.buy_unit is None
+        else unit_price_krw(it.buy_unit, it.instrument.currency, rate)
         for iid, it in items.items()
     }
     free_total = inp.free_krw + usd_in_krw(inp.free_usd, rate)
@@ -366,6 +379,8 @@ def plan_per_currency(inp: PlanInput) -> Plan:
     - Nothing is converted, and no market is sold to pay for the other.
     - Within one currency the rule's band works as in plan_rule, on the shares of that
       currency's money (it needs two instruments in one currency; '지수 반반' only ever buys).
+    - A buy is sized with the items' `buy_unit` (the send's cap: limit price and fee) when they
+      carry one, so the plan never counts a share the send cannot pay for at the plan price.
 
     The report stays the whole rule's (weights against the rule's targets, what the screens
     show); whether it is off by more than the band is the owner's to fix in the Toss app

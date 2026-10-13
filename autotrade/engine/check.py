@@ -438,6 +438,13 @@ def _check_body(
     parts = refresh_cash_parts(conn, ledger_id, at)
     waiting = buy_wait_krw(parts, quote.rate)
     held = withdraw_wait_amounts(parts)
+    # The live ledger sizes a buy as its send will pay for it (limit price and fee): a share the
+    # send cannot pay for at the plan price is never planned (PlanItem.buy_unit).
+    caps = (
+        live.buy_units(conn, cfg, {iid: c.price for iid, c in closes.items() if c is not None})
+        if ledger_id == live.LIVE
+        else {}
+    )
     items: list[PlanItem] = []
     for inst in insts:
         close = closes[inst.instrument_id]
@@ -450,6 +457,7 @@ def _check_body(
                 qty=state.qty_of(inst.instrument_id),
                 price=close.price,
                 buy_wait_krw=waiting.get(inst.instrument_id, Decimal(0)),
+                buy_unit=caps.get(inst.instrument_id),
             )
         )
 
