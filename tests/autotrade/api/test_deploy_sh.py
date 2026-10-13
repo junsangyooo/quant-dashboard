@@ -382,7 +382,7 @@ def test_the_old_app_deploys_and_rolls_back_as_before(sim: Sim) -> None:
     assert done.returncode == 0, done.stdout + done.stderr
     assert sim.head() == changed
     assert "systemctl restart dashboard.service" in sim.calls()
-    assert "python -m src.core.backup --only portfolio quant news" in sim.calls()
+    assert "python -m src.core.backup --only portfolio news" in sim.calls()
     assert "health OK (http://127.0.0.1:8888/api/accounts" in done.stdout
     restarts = sim.calls().count("systemctl restart dashboard.service")
     done = sim.deploy("rollback", "--yes")

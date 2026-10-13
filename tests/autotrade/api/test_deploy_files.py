@@ -74,14 +74,14 @@ def test_the_unit_is_sandboxed() -> None:
 
 def test_the_old_apps_unit_keeps_the_toss_keys_out() -> None:
     """Audit 2026-10-13 (10): the old app (portfolio.jsyoo.dev, internet-facing) loads the whole
-    secrets file; behind the old quant's PIN it can still arm and cancel orders on the live
-    account. Every Toss name src/ reads is unset, and the secrets folder is hidden too: the old
-    code's core.secrets.get() reads the file itself when the environment lacks a name."""
+    secrets file. It has no Toss client, and the live account's keys stay out of it all the same:
+    every Toss name is unset (and any src/ would read), and the secrets folder is hidden too: the
+    old code's core.secrets.get() reads the file itself when the environment lacks a name."""
     unit = directives((DEPLOY / "dashboard.service").read_text())
     unset = " ".join(v for k, v in unit if k == "UnsetEnvironment").split()
     read = set(re.findall(r"\b(TOSS_[A-Z_]+)\b", _src_text("secrets.get(")))
-    assert {"TOSS_CLIENT_ID", "TOSS_CLIENT_SECRET"} <= read  # what src/quant/broker reads
-    for name in read | {"TOSS_ACCOUNT_NO", "ANTHROPIC_API_KEY", "KRX_ID", "KRX_PW"}:
+    toss = {"TOSS_CLIENT_ID", "TOSS_CLIENT_SECRET", "TOSS_ACCOUNT_NO"}
+    for name in read | toss | {"ANTHROPIC_API_KEY", "KRX_ID", "KRX_PW"}:
         assert name in unset, name
     hidden = " ".join(v for k, v in unit if k == "InaccessiblePaths").split()
     assert "-/home/ubuntu/dotclaude/secrets" in hidden  # core.secrets._FILES on the server
