@@ -55,6 +55,16 @@ def deviation(ctx: LedgerContext) -> dict[str, Any]:
     return {"now": now, "atCheck": at_check}
 
 
+def action_stages(ctx: LedgerContext) -> list[str]:
+    """The legs of the rule's orders. The live ledger converts nothing (D47) and sells only to
+    buy within one currency, which takes two instruments in it ('지수 반반' only buys there)."""
+    if not ctx.live:
+        return ["sell", "fx", "buy"]
+    currencies = [inst.currency for inst in ctx.rule_instruments.values()]
+    within = any(currencies.count(c) >= 2 for c in set(currencies))
+    return ["sell", "buy"] if within else ["buy"]
+
+
 def tiles(ctx: LedgerContext) -> dict[str, Any]:
     targets = [fmt.pct1(t.weight) for t in ctx.rule.targets]
     return {
@@ -70,7 +80,7 @@ def tiles(ctx: LedgerContext) -> dict[str, Any]:
             "targetEach": targets,
             "deviation": deviation(ctx),
         },
-        "action": {"stages": ["sell", "fx", "buy"]},
+        "action": {"stages": action_stages(ctx)},
         "measured": INDEX_HALF_MEASURED,
         "now": {
             "status": ctx.status.value,

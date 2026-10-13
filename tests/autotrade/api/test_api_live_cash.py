@@ -217,3 +217,12 @@ def test_no_amount_from_old_prices(lw: Live, web: TestClient, world: World) -> N
     card = plan["rules"][0]
     assert (card["status"], card["fxSuggestion"]) == ("quote-wait", None)
     assert items_of(plan)["new-money-wait"]["krw"] == 1000000
+
+
+def test_the_rule_picture_of_the_live_ledger_has_no_conversion(lw: Live, web: TestClient) -> None:
+    first_buy(lw)
+    lw.at("2026-07-01 09:10")
+    # The rules screen reads the ledger of the mode (live here); paper keeps sell -> fx -> buy.
+    live = web.get("/api/rules/index_half").json()
+    assert live["display"]["action"] == {"stages": ["buy"]}
+    assert live["status"] == "fx-suggest"
