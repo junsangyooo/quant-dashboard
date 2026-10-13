@@ -42,7 +42,14 @@ def rule_list(ctx: LedgerContext) -> dict[str, Any]:
 
 def deviation(ctx: LedgerContext) -> dict[str, Any]:
     """The condition tile's two points: the largest deviation now (hollow) and at today's 08:30
-    check (orange); null when unknown (quote wait, no check today)."""
+    check (orange); null when unknown (quote wait, no check today).
+
+    The live ledger's is its mix of won and dollars (D47, LedgerContext.mix_deviation), and only
+    now: its checks record the whole rule's drift, which across the currencies triggers nothing.
+    """
+    if ctx.live:
+        off = None if ctx.status is RuleStatus.QUOTE_WAIT else ctx.mix_deviation()
+        return {"now": None if off is None else fmt.pp1(off), "atCheck": None}
     now = None
     if ctx.drift is not None and ctx.status is not RuleStatus.QUOTE_WAIT:
         now = fmt.pp1(ctx.drift.max_drift)
@@ -67,7 +74,7 @@ def action_stages(ctx: LedgerContext) -> list[str]:
 
 def tiles(ctx: LedgerContext) -> dict[str, Any]:
     targets = [fmt.pct1(t.weight) for t in ctx.rule.targets]
-    return {
+    out: dict[str, Any] = {
         "kind": "tiles",
         "what": {
             "instruments": [instrument_json(ctx.instruments[i]) for i in ctx.rule.instrument_ids],
@@ -88,6 +95,11 @@ def tiles(ctx: LedgerContext) -> dict[str, Any]:
             "nextCheckAt": fmt.iso(ctx.next_check),
         },
     }
+    if ctx.live:
+        # The live ledger runs on the money as deposited (D47): the band is where a conversion is
+        # suggested (its won and dollars, `deviation`), and it buys each currency's instruments.
+        out["mix"] = True
+    return out
 
 
 def rule_detail(ctx: LedgerContext) -> dict[str, Any]:

@@ -9,7 +9,7 @@ from autotrade.api.views.context import LedgerContext, event_kind
 from autotrade.api.views.live import fx_suggestion_json, new_money_json
 from autotrade.api.views.orders import waiting_retry
 from autotrade.api.views.refs import instrument as instrument_json
-from autotrade.api.views.series import long_record, period_start, snapshot_drift
+from autotrade.api.views.series import long_record, period_start, snapshot_drift, snapshot_mix
 from autotrade.domain.cash import Purpose
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, usd_in_krw
@@ -26,7 +26,9 @@ def rule_card(ctx: LedgerContext) -> dict[str, Any]:
     for target in ctx.rule.targets:
         inst = ctx.instruments[target.instrument_id]
         weight = None if report is None else report.weights.get(target.instrument_id)
-        drift = None if report is None else report.drifts.get(target.instrument_id)
+        # The live ledger never trades one currency into the other (D47): no '리밸런싱까지' on
+        # its rows; its gauge measures the mix of won and dollars ('환전 제안까지').
+        drift = None if report is None or ctx.live else report.drifts.get(target.instrument_id)
         rows.append(
             {
                 "instrument": instrument_json(inst),
@@ -134,7 +136,8 @@ def drift_history(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
     for snap in ctx.snapshots:
         if snap.date < since:
             continue
-        value = snapshot_drift(ctx, snap)
+        # Live: how far the won and dollars were from the targets (D47), like its gauge.
+        value = snapshot_mix(ctx, snap) if ctx.live else snapshot_drift(ctx, snap)
         points.append(
             {"date": fmt.day(snap.date), "value": None if value is None else fmt.pp1(value)}
         )
@@ -154,7 +157,7 @@ def drift_history(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
         if ev.event_date >= since
         and (ev.kind in LEDGER_EVENTS or (ev.kind == "rebalance" and ev.rule_id != AI_RULE))
     ]
-    return {
+    out: dict[str, Any] = {
         "periods": list(DRIFT_PERIODS) if long else None,
         "period": chosen,
         "since": fmt.day(since),
@@ -163,6 +166,9 @@ def drift_history(ctx: LedgerContext, period: str | None) -> dict[str, Any]:
         "events": events,
         "empty": "second-day" if len(ctx.snapshots) < 2 else None,
     }
+    if ctx.live:
+        out["mix"] = True  # the line is the mix of won and dollars, not a rebalance band
+    return out
 
 
 def plan(ctx: LedgerContext, drift_period: str | None) -> dict[str, Any]:

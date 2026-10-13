@@ -20,6 +20,7 @@ from typing import Any
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext, event_kind
 from autotrade.db.models import SnapshotRow
+from autotrade.domain.cash import Purpose
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, usd_in_krw
 from autotrade.domain.weights import drift_report
@@ -173,6 +174,35 @@ def snapshot_drift(ctx: LedgerContext, snap: SnapshotRow) -> Decimal | None:
     if not report.weights:
         return None
     return abs(report.max_drift)
+
+
+def snapshot_mix(ctx: LedgerContext, snap: SnapshotRow) -> Decimal | None:
+    """|한국's share - its target| of the live rule's money at a snapshot (D47), as
+    LedgerContext.mix_deviation reads it now: the rule's holdings and the cash of each currency,
+    cash leaving for a withdrawal left out (the live ledger has no AI share). None when the
+    snapshot's prices were stale or the rule held nothing."""
+    if snap.stale:
+        return None
+    kr = us = ZERO
+    for pos in snap.positions:
+        if str(pos.get("instrument_id")) not in ctx.rule.instrument_ids:
+            continue
+        value = Decimal(str(pos.get("value_krw")))
+        if pos.get("currency") == Currency.KRW.value:
+            kr += value
+        else:
+            us += value
+    for part in snap.cash_parts:
+        if part.get("purpose") == Purpose.WITHDRAW_WAIT.value:
+            continue
+        amount = Decimal(str(part.get("amount")))
+        if part.get("currency") == Currency.KRW.value:
+            kr += amount
+        else:
+            us += usd_in_krw(amount, snap.fx_rate)
+    if kr + us <= 0:
+        return None
+    return abs(kr / (kr + us) - ctx.target_kr)
 
 
 def month_key(d: date) -> str:

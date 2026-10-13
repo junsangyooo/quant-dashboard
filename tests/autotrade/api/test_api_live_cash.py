@@ -113,6 +113,13 @@ def test_the_plan_shows_the_mix_and_the_money_that_waits(lw: Live, web: TestClie
         3499000,
         {"kr": 76.9, "us": 23.1},
     )
+    # The gauge reads the same mix (the dollars wait as cash: the instruments' weights alone
+    # would still say 100 : 0).
+    assert plan["rules"][0]["gauge"]["needle"] == {
+        "now": {"kr": 76.9, "us": 23.1},
+        "deviation": 26.9,
+        "toThreshold": 0.0,
+    }
 
     # The mode and health screens say the same while live is on, beside the to-dos.
     mode = web.get("/api/mode").json()
@@ -226,3 +233,53 @@ def test_the_rule_picture_of_the_live_ledger_has_no_conversion(lw: Live, web: Te
     live = web.get("/api/rules/index_half").json()
     assert live["display"]["action"] == {"stages": ["buy"]}
     assert live["status"] == "fx-suggest"
+    # The band on live is where a conversion is suggested: the tile reads the mix (all won, 50%p
+    # over), and nothing from the check (its drift is the whole rule's, across the currencies).
+    assert live["display"]["mix"] is True
+    assert live["display"]["condition"]["deviation"] == {"now": 50.0, "atCheck": None}
+
+
+def test_no_live_screen_promises_a_rebalance_across_the_currencies(
+    lw: Live, web: TestClient, world: World
+) -> None:
+    """D47: the live ledger never trades won into dollars. Where paper says how far a weight is
+    from the band that rebalances ('리밸런싱까지'), live shows its won and dollars against the
+    targets with the same band as the conversion's threshold ('환전 제안까지')."""
+    first_buy(lw)
+    lw.at("2026-07-01 10:01")
+    plan = web.get("/api/plan?ledger=live").json()
+    card = plan["rules"][0]
+    mix_gauge = {
+        "kind": "mix",
+        "threshold": 2.0,
+        "needle": {"now": {"kr": 100.0, "us": 0.0}, "deviation": 50.0, "toThreshold": 0.0},
+    }
+    assert (card["status"], card["gauge"]) == ("fx-suggest", mix_gauge)
+    assert [(r["weight"], r["target"], r["toThreshold"]) for r in card["rows"]] == [
+        (100.0, 50.0, None),
+        (0.0, 50.0, None),
+    ]
+    assert web.get("/api/home?ledger=live").json()["planCard"]["gauge"] == mix_gauge
+    assert lw.snapshot("2026-07-01 16:05")["result"] == "ok"
+    lw.at("2026-07-01 16:10")
+    drift = web.get("/api/plan?ledger=live").json()["drift"]
+    assert drift["mix"] is True
+    assert drift["lines"][0]["points"][-1] == {"date": "2026-07-01", "value": 50.0}
+
+    # 16:20 the owner deposits; 7/2's check invests it in Korea: a plan of the rule that the
+    # whole-rule drift (+50%p) did not cause. The day and the record leave that drift out.
+    lw.fake.deposit("KRW", D("1000000"))
+    lw.sync("2026-07-01 16:20")
+    assert lw.reconcile()["result"] == "match"
+    flat = {"2026-07-02 08:25": "1392.0", "2026-07-02 16:00": "1391.5"}
+    for at, rate in flat.items():
+        world.rate(kst(at), rate)
+    lw.sync("2026-07-02 08:29")
+    assert lw.check("2026-07-02 08:30")["result"] == "rebalance"
+    lw.at("2026-07-02 08:40")
+    day = web.get("/api/day/2026-07-02?ledger=live").json()
+    assert (day["check"]["result"], day["check"]["band"]) == ("rebalance", None)
+    assert {"instrument", "weight", "toThreshold", "over"}.isdisjoint(day["check"])
+    history = web.get("/api/history?ledger=live").json()
+    plans = [e for m in history["months"] for e in m["events"] if e["kind"] == "in-progress"]
+    assert len(plans) == 1 and "deviation" not in plans[0]  # noqa: PT018

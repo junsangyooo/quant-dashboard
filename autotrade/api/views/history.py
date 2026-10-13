@@ -243,7 +243,9 @@ def history_event(data: DayData, ev: EventRow) -> dict[str, Any]:
             out["pending"] = {"side": waiting["kind"], "at": waiting["at"]}  # '매수 22:30'
         out["fill"] = ctx.executor
         max_drift = ev.payload.get("max_drift")
-        if max_drift is not None:
+        # A live plan only invests the money of each currency (D47): the whole rule's drift it
+        # records, across the currencies, is not why it ran ('리밸런싱 · 50.0%p 벗어남').
+        if max_drift is not None and not ctx.live:
             out["deviation"] = fmt.pp1(abs(Decimal(str(max_drift))))
         cause = rebalance_cause(ev.payload.get("reason"), ev.payload.get("withdraw_released"))
         if cause is not None:  # the screen says why: a band breach or new cash invested
@@ -452,7 +454,9 @@ def _check_json(ctx: LedgerContext, data: DayData, d: date) -> dict[str, Any]:
     if closed:
         out["holidayMarkets"] = closed
     drift = run.details.get("drift")
-    if not isinstance(drift, dict) or not drift.get("max_instrument"):
+    # The live check records the whole rule's drift, across the currencies: no band, '넘음 →
+    # 리밸런싱' or '리밸런싱까지' for it (D47: the live ledger never rebalances between them).
+    if ctx.live or not isinstance(drift, dict) or not drift.get("max_instrument"):
         out["band"] = None
         return out
     iid = str(drift["max_instrument"])

@@ -541,10 +541,10 @@ class LedgerContext:
         return first_check_after(self.cfg, self.today)
 
     @cached_property
-    def fx_suggestion(self) -> FxSuggestion | None:
-        """D47: the conversion that would bring the live rule's won and dollars back to its
-        targets, when they are off by more than the band. Information only. None on paper, before
-        the start, and while the prices or the rate are not fresh (no amount from old numbers)."""
+    def currency_mix(self) -> CurrencyMix | None:
+        """D47: the live rule's money in won and in dollars against its targets (what '환전 제안'
+        and the live gauge read). None on paper, before the start, and while the prices or the
+        rate are not fresh (no amount and no needle from old numbers)."""
         if not self.live or not self.started or self.from_snapshot:
             return None
         val = self.valuation
@@ -563,7 +563,12 @@ class LedgerContext:
                 kr += row.krw
             else:
                 us += row.krw
-        target_kr = sum(
+        return CurrencyMix(kr, us, self.target_kr)
+
+    @cached_property
+    def target_kr(self) -> Decimal:
+        """The rule's target share of its won instruments (0.5 for 지수 반반)."""
+        return sum(
             (
                 t.weight
                 for t in self.rule.targets
@@ -571,8 +576,25 @@ class LedgerContext:
             ),
             ZERO,
         )
-        mix = CurrencyMix(kr, us, target_kr)
+
+    @cached_property
+    def fx_suggestion(self) -> FxSuggestion | None:
+        """D47: the conversion that would bring the live rule's won and dollars back to its
+        targets, when they are off by more than the band. Information only (`currency_mix`)."""
+        mix, val = self.currency_mix, self.valuation
+        if mix is None or val is None or val.fx is None:
+            return None
         return suggest(mix, self.rule.threshold, val.fx.rate, self.cfg.fx_step_krw)
+
+    def mix_deviation(self) -> Decimal | None:
+        """한국's share of the live rule's money less its target (+ = more won than the target):
+        the live ledger's '벗어남' (D47). The band around it is where the screens suggest a
+        conversion; nothing rebalances across the currencies. None as `currency_mix`, or when the
+        rule holds no money yet."""
+        mix = self.currency_mix
+        if mix is None or mix.total <= 0:
+            return None
+        return mix.kr_share - mix.target_kr
 
     def _drift_within_currency(self) -> bool:
         """The live ledger trades back only a drift within one currency (D47)."""
@@ -700,6 +722,8 @@ class LedgerContext:
         return {"kind": "next-check", "at": fmt.iso(self.next_check)}
 
     def gauge(self) -> dict[str, Any]:
+        if self.live:
+            return self._mix_gauge()
         needle = None
         report = self.drift
         if (
@@ -714,6 +738,27 @@ class LedgerContext:
                 "toThreshold": fmt.pp1(report.to_threshold),
             }
         return {"kind": "drift", "threshold": fmt.pp1(self.rule.threshold), "needle": needle}
+
+    def _mix_gauge(self) -> dict[str, Any]:
+        """CONTRACT Gauge 'mix': the live ledger's won and dollars against the rule's targets
+        (D47). The whole rule's drift would promise a rebalance across the currencies that the
+        live ledger never makes; the same band here is where '환전 제안' starts."""
+        needle = None
+        off = self.mix_deviation()
+        mix = self.currency_mix
+        if (
+            off is not None
+            and mix is not None
+            and self.last_check is not None
+            and self.status is not RuleStatus.QUOTE_WAIT
+        ):
+            kr, us = fmt.allocate_pct1([mix.kr_krw, mix.us_krw])
+            needle = {
+                "now": {"kr": float(kr), "us": float(us)},
+                "deviation": fmt.pp1(off),
+                "toThreshold": fmt.pp1(max(ZERO, self.rule.threshold - abs(off))),
+            }
+        return {"kind": "mix", "threshold": fmt.pp1(self.rule.threshold), "needle": needle}
 
     @cached_property
     def target_pct(self) -> float:
