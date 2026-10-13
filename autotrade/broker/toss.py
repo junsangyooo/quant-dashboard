@@ -185,9 +185,10 @@ class TossExecutor:
         return _done(row)
 
     def fx(self, req: FxRequest) -> Outcome:
-        # Toss converts no currency through the API (PHASE3.md 1.1): the owner does it in the
-        # app, and the reconciliation books it on this order when the balances show it.
-        return Waiting("the owner converts in the Toss app")
+        # Toss converts no currency through the API (PHASE3.md 1.1), so a live plan never has a
+        # conversion (D47, engine/check.py refuses one). One here would wait forever: it fails,
+        # and after its retry it is a person's.
+        return Failed(FailureReason.OTHER, "live plans never convert (D47)")
 
 
 def _done(row: live_repo.BrokerOrderRow) -> Outcome:

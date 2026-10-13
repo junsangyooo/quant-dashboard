@@ -2,8 +2,10 @@
 
 Phase 1 has three data sources (Korean and US closes, the rate). The Toss link and the Toss
 balance check join them once the live link matters (autotrade/PHASE3.md 2.7, api/views/live.py),
-with the live to-dos (a cancel that failed, an account that does not match, a conversion to make,
-the link itself). Those show whatever the mode is. Push devices do not exist yet: no row.
+with the live to-dos (a cancel that failed, an account that does not match, the link itself).
+Those show whatever the mode is. While live is on, `liveCash` says what the live ledger's money
+waits for (D47·D48): it is never a to-do and never counted. Push devices do not exist yet: no
+row.
 
 'PIN 실패 급증' (autotrade/api/auth.py) is a red manual to-do, first in the list and counted in
 the header's '할 일 n', from the moment it is raised until `python -m autotrade.jobs unlock`.
@@ -386,4 +388,6 @@ def health(ctx: LedgerContext, *, include_live: bool = True) -> dict[str, Any]:
         "lastRun": last_run,
         # The push devices (what '알림 기기' expands to). Web push comes in phase 3: none yet.
         "devices": [],
+        # D47·D48 while live is on: information beside the to-dos, never one of them.
+        "liveCash": live_view.live_cash(ctx) if include_live else None,
     }

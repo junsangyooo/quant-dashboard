@@ -140,16 +140,23 @@ def test_a_conversion_nobody_asked_for_moves_money_between_the_accounts(lw: Live
     # Booked at the rate it was made: the ledger's money in does not move (a won of rounding).
     assert abs(state.contributions_krw - D("10000000")) <= 1
     assert verify_ledger(lw.conn, "live") == []
-    # At a rate far from the market it is not a conversion: money out and money in.
+    # At a rate no market gives (100,000원 for $999.80) won came in too: the owner deposited and
+    # converted within the same five minutes. The dollars are his conversion at the market rate
+    # (1,392.0: 1,391,722원), the rest of the won his deposit (1,291,722원).
     lw.fake.convert(D("100000"), D("999.80"))
     lw.sync("2026-06-30 22:05")
     lw.reconcile()
     later = [
-        (e.kind, e.payload["reason"])
+        (e.kind, e.amount, e.currency, e.payload["reason"])
         for e in repo.events_of_ledger(lw.conn, "live", ["deposit", "withdrawal"])
-        if e.payload["reason"] != "conversion"
+        if e.occurred_at == lw.now()
     ]
-    assert sorted(later) == [("deposit", "unexplained-in"), ("withdrawal", "unexplained-out")]
+    assert later == [
+        ("deposit", D("1291722"), Currency.KRW, "unexplained-in"),
+        ("withdrawal", D("1391722"), Currency.KRW, "conversion"),
+        ("deposit", D("999.80"), Currency.USD, "conversion"),
+    ]
+    assert verify_ledger(lw.conn, "live") == []
 
 
 def test_a_dividend_is_income_not_a_deposit(lw: Live, world: World) -> None:
@@ -263,8 +270,8 @@ def test_a_fill_after_live_off_is_still_booked(lw: Live) -> None:
     row = live_repo.broker_orders_of(lw.conn, "live")[0]
     assert (row.state, row.cancel_state) == ("done", "done")
     result = lw.reconcile()
-    assert {"late_fill": row.order_id, "qty": 156} in result["booked"]
-    assert lw.state().qty_of(KR) == 156
+    assert {"late_fill": row.order_id, "qty": 310} in result["booked"]
+    assert lw.state().qty_of(KR) == 310
     assert repo.get_order(lw.conn, row.order_id).status == "filled"
     assert lw.status().reconcile_state == "match"
     assert verify_ledger(lw.conn, "live") == []

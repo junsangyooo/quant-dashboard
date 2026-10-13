@@ -5,13 +5,13 @@ use. Every order the fake receives is counted: 'no duplicate' means exactly one 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
-from autotrade.broker.base import Failed, FailureReason, TradeRequest, Waiting
+from autotrade.broker.base import Failed, FailureReason, FxRequest, TradeRequest, Waiting
 from autotrade.broker.toss import (
     TossExecutor,
     client_order_id,
@@ -24,8 +24,17 @@ from autotrade.broker.toss_api import OrderRequest
 from autotrade.db import live_repo, repo
 from autotrade.db.connection import transaction
 from autotrade.domain.instruments import Currency, Kind, kr_etf, us_etf
-from autotrade.domain.planner import Side
+from autotrade.domain.planner import (
+    FxDirection,
+    FxOrder,
+    Plan,
+    Side,
+    StageKind,
+    TradeOrder,
+)
+from autotrade.domain.weights import drift_report
 from autotrade.engine import live
+from autotrade.engine.check import insert_stages_and_orders
 from autotrade.engine.rebuild import verify_ledger
 from autotrade.timeutil import KST
 
@@ -100,7 +109,7 @@ def test_no_order_leaves_once_the_mode_is_paper(lw: Live) -> None:
     off = lw.turn_off("2026-07-01 09:00")
     assert off.changed
     assert not off.cancel_requested
-    assert len(off.cancelled) == 3  # nothing had left: cancelled in the database
+    assert len(off.cancelled) == 1  # the Korean buy (won only, D47); it never left
     lw.sync("2026-07-01 09:05")
     assert lw.fake.ours() == []
     assert all(o.status == "cancelled" for o in repo.orders_of_ledger(lw.conn, "live"))
@@ -343,15 +352,70 @@ def test_a_sell_respects_the_sellable_quantity(lw: Live) -> None:
     lw.fake.hold("069500", D("300"), D("30000"), name="KODEX 200")
     lw.turn_on("2026-06-30 21:00")
     lw.sync("2026-07-01 08:29")
-    assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
-    sells = [o for o in repo.orders_of_ledger(lw.conn, "live") if o.side == "sell"]
-    assert sells
-    assert sells[0].instrument_id == "KR:069500"
-    lw.fake.holdings["069500"].qty = D("300")
+    # All Korean, no dollars: off the targets, but the live ledger never sells one market to pay
+    # for the other (D47). The owner converts if he wants 50:50.
+    assert lw.check("2026-07-01 08:30")["result"] == "in-range"
+    assert repo.orders_of_ledger(lw.conn, "live") == []
+    # A sell the rule would make within one currency (two instruments of one currency) goes out
+    # within the shares Toss says can be sold, at least 0.5% under the price.
+    sell = TradeOrder(
+        StageKind.SELL,
+        Side.SELL,
+        repo.get_instrument(lw.conn, "KR:069500"),
+        150,
+        D("32000"),
+        D("4800000"),
+        D("720"),
+    )
+    with transaction(lw.conn):
+        plan_id = repo.insert_plan(
+            lw.conn,
+            ledger_id="live",
+            rule_id="index_half",
+            plan_date=date(2026, 7, 1),
+            run_id=None,
+            reason="drift",
+            basis={},
+            weights_before={},
+            weights_after_est={},
+            created_at=lw.now(),
+        )
+        insert_stages_and_orders(
+            lw.conn,
+            lw.cfg,
+            "live",
+            "index_half",
+            Plan(drift_report({}, {}, {}, D("0.02")), D(0), D(0), None, sells=(sell,)),
+            plan_id,
+            date(2026, 7, 1),
+            lw.now(),
+        )
+    lw.fake.holdings["069500"].qty = D("100")  # only 100 can be sold today
     lw.sync("2026-07-01 09:05")
     sold = [o for o in lw.fake.ours() if o.side == "SELL"]
-    assert sold[0].price == D("31840")  # 32,000 x 0.995 on the 5-won tick
+    assert (sold[0].price, sold[0].quantity) == (D("31840"), D("100"))  # 32,000 x 0.995 on tick
     assert lw.stages()["result"] in ("done", "waiting")
+
+
+def test_a_live_plan_never_converts(lw: Live) -> None:
+    lw.turn_on("2026-06-30 21:00")
+    fx = Plan(
+        drift_report({}, {}, {}, D("0.02")),
+        D(0),
+        D(0),
+        None,
+        fx=FxOrder(FxDirection.KRW_TO_USD, D("1000000"), D("1392.0"), D("718.39"), ()),
+    )
+    with transaction(lw.conn), pytest.raises(ValueError, match="never converts"):
+        insert_stages_and_orders(
+            lw.conn, lw.cfg, "live", "index_half", fx, 1, date(2026, 7, 1), lw.now()
+        )
+    executor = TossExecutor(lw.conn)
+    request = FxRequest(
+        1, FxDirection.KRW_TO_USD, D("1000000"), lw.now(), D("1000000"), None, False
+    )
+    outcome = executor.fx(request)
+    assert isinstance(outcome, Failed) and "never convert" in outcome.detail  # noqa: PT018
 
 
 def test_executor_outcomes_from_the_records(lw: Live) -> None:

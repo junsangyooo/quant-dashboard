@@ -9,7 +9,11 @@
    The live ledger first matches the Toss account (engine/live.py reconcile, PHASE3.md 2.5):
    an account it cannot read as the truth, or that does not match, fails the check (0 orders).
 4-5. In-rule weights and drift; a plan to target when the band is exceeded or free cash can buy.
-6. Stages sell -> FX -> buy with their times.
+   The live ledger plans per currency on the money as deposited (D47, domain/planner.py
+   plan_per_currency): won buys the Korean instruments, dollars the US ones, nothing is
+   converted. The owner's money that arrived today is not used today (D48,
+   engine/common.py new_money_waiting): the check holds it back and records how much.
+6. Stages sell -> FX -> buy with their times (live plans have no FX stage).
 8. One plan per rule per day (UNIQUE) and one order per idempotency key: running the same check
    twice sends nothing twice.
 
@@ -30,15 +34,25 @@ from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.domain.instruments import Currency, Instrument, Market
 from autotrade.domain.ledger import CashFlowKind, apply_cash_flow
-from autotrade.domain.planner import Plan, PlanInput, PlanItem, StageKind, plan_rule
+from autotrade.domain.planner import (
+    Plan,
+    PlanInput,
+    PlanItem,
+    StageKind,
+    plan_per_currency,
+    plan_rule,
+)
 from autotrade.domain.stages import StageMarket, schedule, stage_specs
 from autotrade.domain.weights import DriftReport
 from autotrade.engine import live, sleeves
 from autotrade.engine.bootstrap import MODE, start_amount_key, start_date_key
 from autotrade.engine.common import (
+    HELD_BACK,
     buy_wait_krw,
+    capped,
     idem_key,
     load_rule,
+    new_money_waiting,
     refresh_cash_parts,
     slotter_for,
     withdraw_wait_amounts,
@@ -273,7 +287,9 @@ def insert_stages_and_orders(
     at: datetime,
 ) -> None:
     """A plan's stages (sell -> FX -> buy, with their times) and its orders, one
-    idempotency key each."""
+    idempotency key each. A live plan never converts (D47): Toss's API cannot."""
+    if ledger_id == live.LIVE and plan.fx is not None:
+        raise ValueError("a live plan with a conversion: the live ledger never converts (D47)")
     specs = stage_specs(plan)
     due = schedule(specs, at, slotter_for(cfg))
     stage_ids: dict[tuple[StageKind, StageMarket], int] = {}
@@ -437,24 +453,29 @@ def _check_body(
             )
         )
 
-    free_krw = state.cash_of(Currency.KRW) - held.get(Currency.KRW, Decimal(0))
-    free_usd = state.cash_of(Currency.USD) - held.get(Currency.USD, Decimal(0))
+    free = {
+        c: max(state.cash_of(c) - held.get(c, Decimal(0)), Decimal(0))
+        for c in (Currency.KRW, Currency.USD)
+    }
+    # D48: the owner's money of today waits for the next weekday's check.
+    new_money = capped(new_money_waiting(conn, ledger_id, at), free)
+    if new_money:
+        details[HELD_BACK] = {c.value: v for c, v in new_money.items()}
+    usable = {c: free[c] - new_money.get(c, Decimal(0)) for c in free}
     if open_plans:
         # Cash already waiting for those plans' buys is not free.
-        free_krw = free_usd = Decimal(0)
-    plan = plan_rule(
-        PlanInput(
-            items=tuple(items),
-            threshold=rule.threshold,
-            fx_rate=quote.rate,
-            free_krw=max(free_krw, Decimal(0)),
-            free_usd=max(free_usd, Decimal(0)),
-            fees=cfg.fees,
-            fx_step_krw=cfg.fx_step_krw,
-            # Live conversions are the owner's (PHASE3.md 2.4): ask only for what is missing.
-            net_free_cash=ledger_id == live.LIVE,
-        )
+        usable = dict.fromkeys(usable, Decimal(0))
+    inp = PlanInput(
+        items=tuple(items),
+        threshold=rule.threshold,
+        fx_rate=quote.rate,
+        free_krw=usable[Currency.KRW],
+        free_usd=usable[Currency.USD],
+        fees=cfg.fees,
+        fx_step_krw=cfg.fx_step_krw,
     )
+    # Paper converts (virtually) to the targets; live runs on the money as deposited (D47).
+    plan = plan_per_currency(inp) if ledger_id == live.LIVE else plan_rule(inp)
     details["drift"] = _report_json(plan.report)
 
     if open_plans:

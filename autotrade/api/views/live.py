@@ -1,5 +1,7 @@
 """What the screens show of the live link (autotrade/PHASE3.md 2.7): the health screen's Toss rows
-and to-dos, the orders a 'live off' could not cancel, and the header's counts.
+and to-dos, the orders a 'live off' could not cancel, and the header's counts. And what they show
+of the live ledger's money (D47·D48): the conversion that would bring the mix to the targets and
+the owner's money that waits for the next weekday's check (information, never a to-do).
 
 All of it comes from what the tick recorded (broker_status, broker_orders, the live ledger); the
 web service never reaches Toss. Live to-dos show whatever the mode is: after 'live off' a cancel
@@ -9,17 +11,23 @@ that failed must stay on the header until it is dealt with.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from autotrade.api.views import fmt
 from autotrade.api.views.orders import order_json
 from autotrade.config import Config
 from autotrade.db import live_repo, repo
-from autotrade.domain.instruments import Instrument
+from autotrade.domain.currency_mix import FxSuggestion
+from autotrade.domain.instruments import Currency, Instrument
+from autotrade.domain.planner import FxDirection
 from autotrade.engine import live
 from autotrade.engine.live import KEY_EXPIRY_WARN_DAYS, LinkCheck
+
+if TYPE_CHECKING:
+    from autotrade.api.views.context import LedgerContext
 
 TICK = timedelta(minutes=5)  # the next tick looks again (deploy/autotrade.cron)
 # Causes a person must fix on the server or in WTS; the others pass on their own (next tick).
@@ -243,30 +251,43 @@ def todos(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[dict[str
                 "effect": "orders-and-reconcile-stop",
             }
         )
-    for fx in live.fx_todos(conn, now):
-        order = fx.order
-        to_usd = fx.direction.value == "krw_to_usd"
-        received = order.est_received or Decimal(0)
-        facts = {
-            "direction": "krw-usd" if to_usd else "usd-krw",
-            "krw": fmt.krw(order.est_amount if to_usd else received),
-            "usd": fmt.usd(received if to_usd else order.est_amount),
-            "rate": fmt.rate(order.est_rate or Decimal(0)),
-            "orderId": order.order_id,
-        }
-        if fx.by is not None:
-            facts["by"] = fmt.iso(fx.by)
-        out.append(
-            {
-                "id": f"fx-manual:{order.order_id}",
-                "severity": "yellow",
-                "kind": "fx-manual",
-                "facts": facts,
-                "action": {"kind": "manual"},
-                "effect": "other",
-            }
-        )
     return out
+
+
+def fx_suggestion_json(found: FxSuggestion | None) -> dict[str, Any] | None:
+    """CONTRACT FxSuggestion (D47): the conversion that would bring the mix to the targets."""
+    if found is None:
+        return None
+    kr, us = fmt.allocate_pct1([found.mix.kr_krw, found.mix.us_krw])
+    target_kr = found.mix.target_kr
+    return {
+        "direction": "krw-usd" if found.direction is FxDirection.KRW_TO_USD else "usd-krw",
+        "krw": fmt.krw(found.krw),
+        "usd": fmt.usd(found.usd),
+        "rate": fmt.rate(found.rate),
+        "now": {"kr": float(kr), "us": float(us)},
+        "target": {"kr": fmt.pct1(target_kr), "us": fmt.pct1(1 - target_kr)},
+    }
+
+
+def new_money_json(amounts: Mapping[Currency, Decimal], usable_from: datetime) -> dict[str, Any]:
+    """CONTRACT NewMoneyWait (D48): the owner's money of today, and when it is used."""
+    return {
+        "krw": fmt.krw(amounts.get(Currency.KRW, Decimal(0))),
+        "usd": fmt.usd(amounts.get(Currency.USD, Decimal(0))),
+        "from": fmt.iso(usable_from),
+    }
+
+
+def live_cash(ctx: LedgerContext) -> dict[str, Any] | None:
+    """CONTRACT LiveCash: what the mode and health screens show of the live ledger's money while
+    live is on (the waiting new money, the conversion to the targets). None otherwise."""
+    if not ctx.live or not ctx.started or live.mode_of(ctx.conn) != live.LIVE:
+        return None
+    return {
+        "newMoney": new_money_json(ctx.new_money, ctx.new_money_from) if ctx.new_money else None,
+        "fxSuggestion": fx_suggestion_json(ctx.fx_suggestion),
+    }
 
 
 def header_counts(conn: sqlite3.Connection, cfg: Config, now: datetime) -> tuple[int, int]:

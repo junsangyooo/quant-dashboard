@@ -991,6 +991,17 @@ def events_of_ledger(
 CASH_FLOW_KINDS = ("start", "deposit", "withdrawal", "dividend")
 
 
+def events_on(
+    conn: sqlite3.Connection, ledger_id: str, d: date, kinds: Sequence[str]
+) -> list[EventRow]:
+    """The ledger's events of `kinds` dated `d` (the KST date), oldest first."""
+    sql = (
+        "SELECT * FROM events WHERE ledger_id = ? AND event_date = ?"
+        f" AND kind IN ({','.join('?' * len(kinds))}) ORDER BY occurred_at, event_id"
+    )
+    return [EventRow.from_row(r) for r in _all(conn, sql, [ledger_id, d.isoformat(), *kinds])]
+
+
 def inflows_since(
     conn: sqlite3.Connection, ledger_id: str, since: datetime | None
 ) -> dict[Currency, Decimal]:

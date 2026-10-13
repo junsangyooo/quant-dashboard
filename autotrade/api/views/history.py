@@ -278,10 +278,10 @@ def history(ctx: LedgerContext, year: int | None) -> dict[str, Any]:
     chosen = year or ctx.today.year
     years = sorted(
         {s.date.year for s in ctx.snapshots}
-        | {e.event_date.year for e in ctx.events}
+        | {e.event_date.year for e in ctx.listed_events}
         | ({ctx.today.year} if ctx.started else set())
     ) or [ctx.today.year]
-    year_events = [e for e in ctx.events if e.event_date.year == chosen]
+    year_events = [e for e in ctx.listed_events if e.event_date.year == chosen]
     rebalances = [e for e in year_events if e.kind == "rebalance"]
     rule_dividends = [
         e for e in year_events if e.kind == "dividend" and e.rule_id == ctx.rule.rule_id
@@ -470,7 +470,7 @@ def _check_json(ctx: LedgerContext, data: DayData, d: date) -> dict[str, Any]:
 
 def day_events(ctx: LedgerContext, data: DayData, d: date) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for ev in ctx.events:
+    for ev in ctx.listed_events:
         if ev.event_date != d:
             continue
         kind = event_kind(ev)
@@ -529,7 +529,7 @@ def day_events(ctx: LedgerContext, data: DayData, d: date) -> list[dict[str, Any
 
 def day(ctx: LedgerContext, d: date) -> dict[str, Any]:
     data = DayData(ctx)
-    event_dates = sorted({e.event_date for e in ctx.events})
+    event_dates = sorted({e.event_date for e in ctx.listed_events})
     before = [x for x in event_dates if x < d]
     after = [x for x in event_dates if x > d]
     change, total = data.day_change(d)

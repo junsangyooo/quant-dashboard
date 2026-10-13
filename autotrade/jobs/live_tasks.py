@@ -58,7 +58,7 @@ from autotrade.domain.instruments import Currency, Instrument, Market
 from autotrade.domain.money import ZERO, usd_in_krw
 from autotrade.domain.planner import Side
 from autotrade.engine import live, runner, sleeves
-from autotrade.engine.common import withdraw_wait_amounts
+from autotrade.engine.common import new_money_waiting, withdraw_wait_amounts
 from autotrade.market.calendar import CalendarRangeError, calendar_for
 from autotrade.timeutil import et_date, from_iso, kst_date, require_aware
 
@@ -291,7 +291,7 @@ class Sync:
         for stage in runner.eligible_stages(self.conn, LIVE, self.at):
             for order in repo.orders_of_stage(self.conn, stage.stage_id, ["pending"]):
                 if order.side == "fx" or order.instrument_id is None:
-                    continue  # conversions are the owner's (PHASE3.md 2.4)
+                    continue  # live plans never convert (D47): nothing to send
                 row = live_repo.get_broker_order(self.conn, order.order_id)
                 if row is not None and not self._send_again(row):
                     continue
@@ -361,8 +361,9 @@ class Sync:
         self, rule_id: str, inst: Instrument, side: Side, planned: int, limit: Decimal
     ) -> tuple[int, str | None]:
         """Whole shares that can go: a buy within the rule's cash (not the cash waiting for a
-        withdrawal) and the broker's buying power at the limit price with the commission; a
-        sell within the rule's shares and the broker's sellable quantity."""
+        withdrawal, nor the owner's money of today, D48) and the broker's buying power at the
+        limit price with the commission; a sell within the rule's shares and the broker's
+        sellable quantity."""
         view = sleeves.view(self.conn, LIVE, rule_id)
         if side is Side.BUY:
             held = (
@@ -370,7 +371,12 @@ class Sync:
                 if rule_id == sleeves.BASE_RULE
                 else {}
             )
-            ledger_cash = view.cash_of(inst.currency) - held.get(inst.currency, ZERO)
+            new_money = new_money_waiting(self.conn, LIVE, self.now())
+            ledger_cash = (
+                view.cash_of(inst.currency)
+                - held.get(inst.currency, ZERO)
+                - new_money.get(inst.currency, ZERO)
+            )
             power = self.client.buying_power(inst.currency)
             cash = min(power, ledger_cash)
             rate = max(self._commission(inst.market), self.cfg.fees.rate_for(inst.currency))

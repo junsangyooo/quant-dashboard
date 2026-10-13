@@ -247,15 +247,17 @@ def breakdown(ctx: LedgerContext, period: str | None, account: str | None = None
         start_value = value_on(ctx, since) or ZERO
         after = since
     deposit = withdrawal = dividend = ZERO
-    for ev in ctx.events:  # up to the moment `end` is of (ctx.as_of)
+    # Up to the moment `end` is of (ctx.as_of). The owner's conversions are not money in or out
+    # of the ledger (their won rounding and the rate after them fall in 'market').
+    for ev in ctx.listed_events:
         if ev.amount is None or ev.occurred_at > ctx.as_of:
             continue
         if after is not None and ev.event_date <= after:
             continue
         if ev.kind == "deposit":
-            deposit += ev.amount
+            deposit += event_krw(ev)
         elif ev.kind == "withdrawal":
-            withdrawal -= ev.amount
+            withdrawal -= event_krw(ev)
         elif ev.kind == "dividend":
             dividend += event_krw(ev)
     fees = -sum(

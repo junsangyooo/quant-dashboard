@@ -76,15 +76,22 @@ def test_the_mode_screen_before_turning_on(lw: Live, web: TestClient) -> None:
         ("KR:069500", 50.0),
         ("US:SPYM", 50.0),
     ]
-    stages = {s["kind"]: s for s in preview["stages"]}
-    # At 21:00 the US close is 6/29's ($65.90): 54 x 65.90 x 1.001 x 1,392.0 -> 4,959,000원.
-    assert stages["fx"]["orders"][0]["fx"] == {"krw": 4959000, "usd": 3562.5, "rate": 1392.0}
-    assert [(o["instrument"]["id"], o["qty"]) for o in stages["buy"]["orders"]] == [
-        ("KR:069500", 156),
-        ("US:SPYM", 54),
-    ]
-    assert stages["buy"]["orders"][0]["at"] == "2026-07-01T09:05:00+09:00"
+    # Won only: all of it buys the Korean ETF (D47). No conversion stage, no US order.
+    assert [s["kind"] for s in preview["stages"]] == ["buy"]
+    buys = preview["stages"][0]["orders"]
+    assert [(o["instrument"]["id"], o["qty"]) for o in buys] == [("KR:069500", 312)]
+    assert buys[0]["at"] == "2026-07-01T09:05:00+09:00"
     assert preview["outside"] == []
+    # What the owner could convert for 50:50: half of the won, at the 21:00 rate.
+    assert preview["fxSuggestion"] == {
+        "direction": "krw-usd",
+        "krw": 5000000,
+        "usd": 3591.95,
+        "rate": 1392.0,
+        "now": {"kr": 100.0, "us": 0.0},
+        "target": {"kr": 50.0, "us": 50.0},
+    }
+    assert preview["newMoney"] is None  # a first start: the account is the start, not new money
     assert live_repo.get_preview(lw.conn, preview["hash"]) is not None
     health = web.get("/api/health").json()
     link = next(s for s in health["sources"] if s["id"] == "toss-link")
@@ -166,11 +173,7 @@ def test_turning_off_cancels_at_the_broker_through_the_tick(lw: Live, web: TestC
     lw.sync("2026-07-01 09:05")
     mode = web.get("/api/mode").json()
     cancel = mode["offPreview"]["cancel"]
-    assert [(o["side"], o["market"]) for o in cancel] == [
-        ("fx", "KR"),
-        ("buy", "KR"),
-        ("buy", "US"),
-    ]
+    assert [(o["side"], o["market"]) for o in cancel] == [("buy", "KR")]
     lw.at("2026-07-01 09:06")
     off = web.post("/api/mode/paper").json()
     assert off["mode"] == "paper"
@@ -219,15 +222,20 @@ def test_health_shows_the_live_todos(
     health = web.get("/api/health").json()
     kinds = {t["kind"]: t for t in health["todos"]}
     assert kinds["order-rejected"]["facts"]["reason"] == "broker-rejected"
-    fx = kinds["fx-manual"]
-    assert fx["facts"]["direction"] == "krw-usd"
-    assert (fx["facts"]["krw"], fx["facts"]["usd"], fx["facts"]["rate"]) == (
-        4967000,
-        3568.24,
-        1392.0,
-    )
-    assert fx["facts"]["by"] == "2026-07-01T22:30:00+09:00"
-    assert fx["action"] == {"kind": "manual"}
+    # No conversion to make by hand (D47): the mix shows beside the to-dos, never among them.
+    assert set(kinds) == {"order-rejected"}
+    assert health["summary"]["todoCount"] == 1
+    assert health["liveCash"] == {
+        "newMoney": None,
+        "fxSuggestion": {
+            "direction": "krw-usd",
+            "krw": 5000000,
+            "usd": 3591.95,
+            "rate": 1392.0,
+            "now": {"kr": 100.0, "us": 0.0},
+            "target": {"kr": 50.0, "us": 50.0},
+        },
+    }
     balance = next(s for s in health["sources"] if s["id"] == "toss-balance")
     assert balance["basis"] == "match"
     # The key goes away while live: the link is red and named.

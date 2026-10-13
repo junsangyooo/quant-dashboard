@@ -18,8 +18,9 @@ Money into an account ('net in', in its currency)
   or going out is a deposit or withdrawal event in its own currency, dated when it arrived; a
   conversion a plan asked for (made by the owner in the Toss app) is the fx fill of its fx order.
   Two cases have no paper twin: a start or adopt-broker that moved both currencies carries each
-  one's amount ('by_currency'), and a conversion no plan asked for is two events (out of one
-  currency, into the other) marked 'conversion', read here as a transfer.
+  one's amount ('by_currency'), and the owner's conversion is two events (out of one currency,
+  into the other) marked 'conversion', read here as a transfer. Live plans never convert (D47):
+  every live conversion is the owner's, made in the Toss app.
 - Dividends (after tax), fees and taxes are not money in: they stay in the value of the account of
   their currency, so they are that account's P&L.
 - A fill counts from the moment the ledger took it: its order's execution time, which a snapshot
@@ -74,7 +75,7 @@ from autotrade.db.models import EventRow, FillRow, OrderRow, SnapshotRow
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, round_won
 from autotrade.domain.planner import FxDirection
-from autotrade.engine.live import CONVERSION
+from autotrade.engine.common import CONVERSION
 from autotrade.rules.discovery import RULE_ID as AI_RULE
 
 ACCOUNTS: tuple[tuple[str, Currency], ...] = (("kr", Currency.KRW), ("us", Currency.USD))

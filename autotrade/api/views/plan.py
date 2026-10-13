@@ -6,6 +6,7 @@ from typing import Any
 
 from autotrade.api.views import fmt
 from autotrade.api.views.context import LedgerContext, event_kind
+from autotrade.api.views.live import fx_suggestion_json, new_money_json
 from autotrade.api.views.orders import waiting_retry
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.api.views.series import long_record, period_start, snapshot_drift
@@ -38,7 +39,7 @@ def rule_card(ctx: LedgerContext) -> dict[str, Any]:
         )
     stale = ctx.stale_source() if ctx.status is RuleStatus.QUOTE_WAIT else None
     val = ctx.valuation
-    return {
+    card: dict[str, Any] = {
         "rule": ctx.rule_json(),
         "share": ctx.share(),
         "status": ctx.status.value,
@@ -56,6 +57,10 @@ def rule_card(ctx: LedgerContext) -> dict[str, Any]:
             "staleBasisDate": None if stale is None else stale[1],
         },
     }
+    if ctx.live:
+        # D47: the live ledger never converts; the owner does, and this says how much.
+        card["fxSuggestion"] = fx_suggestion_json(ctx.fx_suggestion)
+    return card
 
 
 def _cash_krw(ctx: LedgerContext, purpose: Purpose) -> int:
@@ -101,8 +106,16 @@ def schedule(ctx: LedgerContext) -> dict[str, Any]:
                 "until": fmt.day(ctx.withdraw_until),
             }
         )
-    if ctx.last_check is not None and _cash_krw(ctx, Purpose.NEW) > 0:
-        items.append({"kind": "new-cash", "krw": _cash_krw(ctx, Purpose.NEW)})
+    waiting = ctx.new_money
+    if waiting:
+        # D48: the owner's money of today is not used before the next weekday's check.
+        items.append({"kind": "new-money-wait", **new_money_json(waiting, ctx.new_money_from)})
+    # New cash the next check invests (the money of today waits longer: the item above).
+    new_krw = _cash_krw(ctx, Purpose.NEW) - fmt.krw(
+        waiting.get(Currency.KRW, ZERO) + usd_in_krw(waiting.get(Currency.USD, ZERO), ctx.fx_rate)
+    )
+    if ctx.last_check is not None and new_krw > 0:
+        items.append({"kind": "new-cash", "krw": new_krw})
     if _cash_krw(ctx, Purpose.SUB_SHARE) > 0:
         items.append({"kind": "sub-share-cash", "krw": _cash_krw(ctx, Purpose.SUB_SHARE)})
     if ai.shown:

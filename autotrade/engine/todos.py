@@ -10,9 +10,6 @@ Three kinds, with the ids the web API shows (autotrade/api/views/health.py, disc
 - 'ai-cli:failed:<task id>': an AI task that failed Config.ai_max_attempts times (or gave up at
   once on a fault that would only repeat). It waits for a person and blocks nothing meanwhile:
   a new hit asks a new confirmation (engine/watch.py).
-- 'fx-manual:<order id>' (live ledger, PHASE3.md 2.4): a conversion the owner makes in the Toss
-  app. It closes by itself when the balances show the conversion; resolving it says the owner
-  will not convert: the conversion stage ends and the buys after it use the cash there is.
 
 resolve() closes one after the owner has dealt with it (in the Toss app, for a live order):
 
@@ -43,7 +40,6 @@ from autotrade.timeutil import kst_date, require_aware
 ORDER_TODO = "order-failed"
 CHECK_TODO = "check-failed"
 AI_TODO = "ai-cli:failed"
-FX_TODO = "fx-manual"
 FAILED_RESULTS = ("failed", "todo")
 
 
@@ -171,37 +167,6 @@ def open_todos(
     if check is not None:
         out.append(check)
     out.extend(_ai_todos(conn, ledger_id, _max(max_attempts)))
-    out.extend(_fx_todos(conn, ledger_id))
-    return out
-
-
-def _fx_todos(conn: sqlite3.Connection, ledger_id: str) -> list[Todo]:
-    """Conversions the plan waits for (live only; due or not: the owner may convert early)."""
-    if ledger_id != "live":
-        return []
-    out: list[Todo] = []
-    for order in repo.pending_orders(conn, ledger_id):
-        if order.side != "fx":
-            continue
-        plan = repo.get_plan(conn, order.plan_id)
-        if plan.status not in repo.OPEN_PLAN_STATUSES:
-            continue
-        out.append(
-            Todo(
-                todo_id=f"{FX_TODO}:{order.order_id}",
-                kind=FX_TODO,
-                day=plan.plan_date,
-                plan_id=plan.plan_id,
-                facts={
-                    "direction": order.fx_direction,
-                    "amount": order.est_amount,
-                    "currency": order.currency.value,
-                    "est_received": order.est_received,
-                    "est_rate": order.est_rate,
-                    "due_at": repo.get_stage(conn, order.stage_id).due_at,
-                },
-            )
-        )
     return out
 
 
@@ -212,11 +177,11 @@ def _parse(todo_id: str) -> tuple[str, str]:
             raise TodoError("bad-id", f"not a task id: {value!r}")
         return AI_TODO, value
     kind, sep, value = todo_id.partition(":")
-    if not sep or kind not in (ORDER_TODO, CHECK_TODO, FX_TODO) or not value:
+    if not sep or kind not in (ORDER_TODO, CHECK_TODO) or not value:
         raise TodoError(
             "bad-id",
             f"not a todo id: {todo_id!r} (order-failed:<id>, check-failed:<date>,"
-            " ai-cli:failed:<task id>, fx-manual:<order id>)",
+            " ai-cli:failed:<task id>)",
         )
     return kind, value
 
@@ -236,54 +201,7 @@ def resolve(
         return _resolve_plan(conn, ledger_id, todo_id, value, at, note)
     if kind == AI_TODO:
         return _cancel_ai(conn, ledger_id, todo_id, int(value), at, note, _max(max_attempts))
-    if kind == FX_TODO:
-        return _resolve_fx(conn, ledger_id, todo_id, value, at, note)
     return _resolve_check(conn, ledger_id, todo_id, value, at, note)
-
-
-def _resolve_fx(
-    conn: sqlite3.Connection,
-    ledger_id: str,
-    todo_id: str,
-    value: str,
-    at: datetime,
-    note: str | None,
-) -> dict[str, Any]:
-    """The owner will not convert: the conversion order is closed and its stage ends at the
-    runner's next pass; the buys after it send what the cash there is can pay."""
-    if not value.isdigit():
-        raise TodoError("bad-id", f"not an order id: {value!r}")
-    ref = f"todo-resolved:fx:{value}"
-    done = repo.event_by_ref(conn, ledger_id, ref)
-    if done is not None:
-        return {"result": "already-resolved", "event_id": done.event_id}
-    open_ids = [t.todo_id for t in _fx_todos(conn, ledger_id)]
-    if todo_id not in open_ids:
-        raise TodoError("not-a-todo", f"{todo_id} is not an open conversion")
-    order = repo.get_order(conn, int(value))
-    repo.mark_order_failed(
-        conn,
-        order.order_id,
-        reason="other",
-        detail="closed by the owner: no conversion",
-        executor="toss",
-        executed_at=at,
-        retry_at=None,
-        manual=False,
-    )
-    conn.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = ?", (order.order_id,))
-    event_id = repo.insert_event(
-        conn,
-        ledger_id=ledger_id,
-        kind="todo-resolved",
-        event_date=kst_date(at),
-        occurred_at=at,
-        rule_id=repo.get_plan(conn, order.plan_id).rule_id,
-        ref=ref,
-        payload={"todo_id": todo_id, "order_id": order.order_id, "closed": [todo_id], "note": note},
-    )
-    refresh_cash_parts(conn, ledger_id, at)
-    return {"result": "resolved", "closed": [todo_id], "event_id": event_id}
 
 
 def _ai_task(conn: sqlite3.Connection, ledger_id: str, task_id: int) -> ai_repo.TaskRow:

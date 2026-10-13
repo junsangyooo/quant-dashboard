@@ -8,13 +8,16 @@ recorded (broker_status, broker_snapshots, broker_orders); it never calls Toss:
 - reconcile: before every plan (and whenever the account is quiet), the ledger is matched with
   the snapshot. What the broker did for our orders is booked first (late fills); then the
   account's fills the engine did not send (the owner's trades in the app, PHASE3.md 2.5); then
-  the cash nothing explains: a conversion (won and dollars in opposite directions at the market
-  rate), a dividend the ledger is owed, a deposit, a withdrawal. Last, the rule's holdings must
-  equal the broker's. Anything that does not fit is a mismatch: nothing is written (savepoint),
-  a red manual to-do shows it and no plan is made until it is fixed or `adopt-broker` accepts
-  the broker's numbers.
+  the cash nothing explains: the owner's conversion (won and dollars in opposite directions at
+  about the market rate), a dividend the ledger is owed, a conversion that came with a deposit
+  or a withdrawal in the same five minutes, a deposit, a withdrawal. Last, the rule's holdings
+  must equal the broker's. Anything that does not fit is a mismatch: nothing is written
+  (savepoint), a red manual to-do shows it and no plan is made until it is fixed or
+  `adopt-broker` accepts the broker's numbers.
 - preview: the first orders the rule would send for the account as it is, for the mode screen;
   the hash and total are kept so that turning live on can tell a changed preview (인계 13).
+  Like the check, it plans per currency (D47) and leaves out the owner's money of the day of the
+  next check (D48); it carries the conversion that would bring the mix to the targets.
 - turn_on / turn_off: the mode switch's database side (the web service runs it; the cancels at
   the broker are the tick's, as requests).
 - link_check and live_todos: what the mode and health screens show of the Toss link.
@@ -29,14 +32,14 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from autotrade.broker.base import FxFilled
 from autotrade.broker.toss import TossExecutor, fill_of
 from autotrade.broker.toss_api import BrokerHolding, BrokerOrder
 from autotrade.config import Config
 from autotrade.db import ai_repo, live_repo, repo
 from autotrade.db.connection import dumps
 from autotrade.db.live_repo import AccountSnapshot, NewExternalFill
-from autotrade.db.models import DividendRow, OrderRow
+from autotrade.db.models import DividendRow
+from autotrade.domain.currency_mix import CurrencyMix, FxSuggestion, suggest
 from autotrade.domain.dividends import after_tax
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.ledger import (
@@ -49,18 +52,21 @@ from autotrade.domain.ledger import (
     opening_state,
 )
 from autotrade.domain.money import CENT, WON, ZERO, round_won, usd_in_krw
-from autotrade.domain.planner import FxDirection, Plan, PlanInput, PlanItem, Side, plan_rule
+from autotrade.domain.planner import FxDirection, Plan, PlanInput, PlanItem, Side, plan_per_currency
 from autotrade.domain.stages import StageSpec, schedule, stage_specs
 from autotrade.engine import runner, sleeves
 from autotrade.engine.bootstrap import MODE
 from autotrade.engine.common import (
+    CONVERSION,
+    capped,
     load_rule,
+    new_money_waiting,
     refresh_cash_parts,
     slotter_for,
     withdraw_wait_amounts,
 )
 from autotrade.engine.dividends import dividend_ref, shares_before_ex_date, tax_rate
-from autotrade.engine.status import next_check_at
+from autotrade.engine.status import first_check_after, next_check_at
 from autotrade.market.calendar import KRX
 from autotrade.market.service import latest_close, market_freshness, rate_freshness
 from autotrade.market.types import FxQuote
@@ -75,9 +81,6 @@ DIVIDEND_WINDOW_AFTER = timedelta(days=3)  # an estimated pay date can be early
 DIVIDEND_MIN_SHARE = Decimal("0.5")  # cash of at least half the expected net is that dividend
 WITHDRAW_TRADING_DAYS = 2  # 인계 5: settlement date + 2 business days
 KEY_EXPIRY_WARN_DAYS = 14
-# The payload reason of the two events a conversion no plan asked for makes (api/views/accounts.py
-# reads them as a transfer between the accounts, not money in or out).
-CONVERSION = "conversion"
 
 
 # ── the start ────────────────────────────────────────────────────────────────────────────
@@ -371,9 +374,16 @@ def _reconcile_body(
     residual = _book_conversion(conn, cfg, at, snap, residual, result)
     seen_at = snap.taken_at  # the best-known time the money arrived or left
     for currency in Currency:
+        if residual[currency] > 0:
+            residual[currency] = _book_dividends(
+                conn, cfg, at, currency, residual[currency], started_at, result, seen_at
+            )
+    # A dividend may have hidden a conversion; then a conversion that came with a deposit or a
+    # withdrawal in the same five minutes.
+    residual = _book_conversion(conn, cfg, at, snap, residual, result)
+    residual = _book_mixed(conn, at, snap, residual, result)
+    for currency in Currency:
         amount = residual[currency]
-        if amount > 0:
-            amount = _book_dividends(conn, cfg, at, currency, amount, started_at, result, seen_at)
         if amount > 0:
             event_id = _flow(
                 conn,
@@ -637,13 +647,66 @@ def _consume_withdraw_waits(
             )
 
 
-def _pending_fx_order(conn: sqlite3.Connection, direction: FxDirection) -> OrderRow | None:
-    for order in repo.pending_orders(conn, LIVE):
-        if order.side != "fx" or order.fx_direction != direction.value:
-            continue
-        if repo.get_plan(conn, order.plan_id).status in repo.OPEN_PLAN_STATUSES:
-            return order
-    return None
+def _owner_conversion(
+    conn: sqlite3.Connection,
+    at: datetime,
+    direction: FxDirection,
+    source: Decimal,
+    target: Decimal,
+    rate: Decimal,
+    when: datetime,
+    basis: str,
+    result: ReconcileResult,
+) -> None:
+    """The owner's conversion in the Toss app: money moving between his two accounts. A
+    withdrawal from the currency he paid and a deposit into the one he got, at `rate` (so the
+    ledger's P&L moves as for a paper conversion), marked as a conversion: the accounts read it
+    as a transfer (api/views/accounts.py), the whole ledger's views do not list it, and D48
+    counts the money it brought as new (engine/common.py).
+
+    What it took is first the owner's money of the day in that currency (he converts what he
+    has just deposited), then cash that waited for a withdrawal: proceeds of a sale in the app
+    that he converts instead of withdrawing (D47's way to move money from 한국 to 미국 without
+    adding any) no longer hold the orders back until their settlement."""
+    fresh = new_money_waiting(conn, LIVE, when).get(direction.source, ZERO)
+    if source > fresh:
+        _consume_withdraw_waits(conn, direction.source, source - fresh, at)
+    extra: dict[str, Any] = {
+        "reason": CONVERSION,
+        "direction": direction.value,
+        "from": source,
+        "to": target,
+        "rate": rate,
+        "rate_basis": basis,  # 'balances': what the account showed; 'market': assumed
+    }
+    out_id = _flow(
+        conn,
+        at,
+        CashFlowKind.WITHDRAWAL,
+        source,
+        direction.source,
+        extra,
+        rate=rate if direction.source is Currency.USD else None,
+        occurred_at=when,
+    )
+    in_id = _flow(
+        conn,
+        at,
+        CashFlowKind.DEPOSIT,
+        target,
+        direction.target,
+        extra,
+        rate=rate if direction.target is Currency.USD else None,
+        occurred_at=when,
+    )
+    result.booked.append(
+        {
+            "conversion": direction.value,
+            "from": str(source),
+            "to": str(target),
+            "event_ids": [out_id, in_id],
+        }
+    )
 
 
 def _book_conversion(
@@ -654,13 +717,15 @@ def _book_conversion(
     residual: dict[Currency, Decimal],
     result: ReconcileResult,
 ) -> dict[Currency, Decimal]:
-    """Won and dollars that moved in opposite directions at about the market rate: the owner
-    converted in the app (PHASE3.md 2.4). The conversion the plan waits for gets it as its fill
-    (an fx fill of its fx order, executed at the snapshot that showed it: exactly a paper
-    conversion). One no plan asked for is the owner's money moving between the two accounts:
-    a withdrawal from the source currency and a deposit into the target one, at the rate it
-    was made (so the ledger's P&L moves as for a fill), marked as a conversion (a fill needs an
-    order of a plan, and Toss's API never converts for an order of ours, PHASE3.md 1.1)."""
+    """Won and dollars that moved in opposite directions at about the market rate (within
+    `live_fx_tolerance`): the owner converted in the app. Booked at the rate the balances show
+    (what he paid for what he got: the spread is a real cost, it stays in the P&L). Live plans
+    never convert (D47), so every conversion is the owner's (_owner_conversion).
+
+    A deposit or a withdrawal small enough to hide inside the band in the same five minutes
+    reads as part of the rate here; the balances cannot tell the two apart. This reading keeps
+    the P&L exact in the case that happens (a conversion on its own, with the spread it cost);
+    the other reading would turn every spread into a made-up withdrawal."""
     krw, usd = residual[Currency.KRW], residual[Currency.USD]
     if not ((krw < 0 < usd) or (usd < 0 < krw)):
         return residual
@@ -675,62 +740,65 @@ def _book_conversion(
         direction, source, target = FxDirection.KRW_TO_USD, -krw, usd
     else:
         direction, source, target = FxDirection.USD_TO_KRW, -usd, krw
-    order = _pending_fx_order(conn, direction)
+    _owner_conversion(conn, at, direction, source, target, rate, snap.taken_at, "balances", result)
+    return {Currency.KRW: ZERO, Currency.USD: ZERO}
+
+
+def _book_mixed(
+    conn: sqlite3.Connection,
+    at: datetime,
+    snap: AccountSnapshot,
+    residual: dict[Currency, Decimal],
+    result: ReconcileResult,
+) -> dict[Currency, Decimal]:
+    """Won and dollars that both moved, but not as one conversion: in the same direction (he
+    deposited 3,000,000원 and converted 1,000,000원 of it: won +2,000,000, dollars +$718), or at
+    a rate no market gave (he deposited 1,000,000원 and converted 3,000,000원). The owner moves
+    money in won and gets dollars only by converting, so the dollar change is his conversion
+    and the won left over his deposit or withdrawal.
+
+    Only the balances are known, so the conversion's own rate is not: it is booked at the market
+    rate. That reading keeps the ledger's P&L exact for what can be known: the conversion moves
+    no P&L, and the money in (won deposited, dollars at the market rate) is the same as two
+    deposits would have made it, to the won. Only the spread of that one conversion is out of
+    sight (it was paid inside the deposit). The deposit is booked before the conversion, the
+    withdrawal after it, so the cash never goes below zero on the way."""
+    krw, usd = residual[Currency.KRW], residual[Currency.USD]
+    if krw == 0 or usd == 0:
+        return residual
     when = snap.taken_at
-    if order is not None:
-        runner.book_fill(
-            conn,
-            cfg,
-            LIVE,
-            order,
-            FxFilled(source, target, rate, "owner:balances", filled_at=when),
-            TossExecutor.name,
-            at,
-        )
-        result.booked.append(
-            {
-                "conversion": direction.value,
-                "from": str(source),
-                "to": str(target),
-                "order_id": order.order_id,
-            }
-        )
+    rate = _rate(conn, when, at)
+    won = usd_in_krw(abs(usd), rate)
+    if usd > 0:
+        direction, source, target = FxDirection.KRW_TO_USD, won, usd
+        rest = krw + won  # the won that came in beyond what the conversion took
     else:
-        extra: dict[str, Any] = {
-            "reason": CONVERSION,
-            "direction": direction.value,
-            "from": source,
-            "to": target,
-            "rate": rate,
-        }
-        out_id = _flow(
-            conn,
-            at,
-            CashFlowKind.WITHDRAWAL,
-            source,
-            direction.source,
-            extra,
-            rate=rate if direction.source is Currency.USD else None,
-            occurred_at=when,
-        )
-        in_id = _flow(
+        direction, source, target = FxDirection.USD_TO_KRW, -usd, won
+        rest = krw - won
+    if rest > 0:
+        event_id = _flow(
             conn,
             at,
             CashFlowKind.DEPOSIT,
-            target,
-            direction.target,
-            extra,
-            rate=rate if direction.target is Currency.USD else None,
+            rest,
+            Currency.KRW,
+            {"reason": "unexplained-in", "with": CONVERSION},
             occurred_at=when,
         )
-        result.booked.append(
-            {
-                "conversion": direction.value,
-                "from": str(source),
-                "to": str(target),
-                "event_ids": [out_id, in_id],
-            }
+        result.booked.append({"deposit": str(rest), "currency": "KRW", "event_id": event_id})
+    _owner_conversion(conn, at, direction, source, target, rate, when, "market", result)
+    if rest < 0:
+        event_id = _flow(
+            conn,
+            at,
+            CashFlowKind.WITHDRAWAL,
+            -rest,
+            Currency.KRW,
+            {"reason": "unexplained-out", "with": CONVERSION},
+            occurred_at=when,
         )
+        _consume_withdraw_waits(conn, Currency.KRW, -rest, at)
+        result.booked.append({"withdrawal": str(-rest), "currency": "KRW", "event_id": event_id})
     return {Currency.KRW: ZERO, Currency.USD: ZERO}
 
 
@@ -1021,6 +1089,11 @@ class PreviewData:
     account_krw: Decimal  # what the account holds in won
     signature: str
     hash: str
+    # What the plan leaves out: the owner's money of the next check's day (D48, a ledger that
+    # has started), and the conversion that would bring the mix to the targets (D47).
+    new_money: dict[Currency, Decimal] = field(default_factory=dict)
+    new_money_from: datetime | None = None  # the check that uses it
+    suggestion: FxSuggestion | None = None
 
 
 @dataclass(frozen=True)
@@ -1059,12 +1132,16 @@ def preview_data(
         return NotComputable(at, "stale", "closes")
     rate = quote.rate
     started = repo.start_event(conn, LIVE) is not None
+    check_at = next_check_at(cfg, at)
+    new_money: dict[Currency, Decimal] = {}
     if started:
         state = sleeves.base_view(conn, LIVE)
         held = withdraw_wait_amounts(repo.cash_parts(conn, LIVE))
         cash = {c: max(state.cash_of(c) - held.get(c, ZERO), ZERO) for c in Currency}
         qty = {iid: state.qty_of(iid) for iid in instruments}
         outside = [h for h in snap.holdings if h.instrument_id not in ledger_instrument_ids(conn)]
+        # D48: what the owner brought on the day of that check waits for the one after it.
+        new_money = capped(new_money_waiting(conn, LIVE, check_at), cash)
     else:
         try:
             opening = opening_from(snap, instruments, rate)
@@ -1081,20 +1158,19 @@ def preview_data(
         close = closes[iid]
         assert close is not None  # checked above
         items.append(PlanItem(instruments[iid], rule.target_of(iid), qty[iid], close.price))
-    plan = plan_rule(
+    plan = plan_per_currency(
         PlanInput(
             items=tuple(items),
             threshold=rule.threshold,
             fx_rate=rate,
-            free_krw=cash[Currency.KRW],
-            free_usd=cash[Currency.USD],
+            free_krw=cash[Currency.KRW] - new_money.get(Currency.KRW, ZERO),
+            free_usd=cash[Currency.USD] - new_money.get(Currency.USD, ZERO),
             fees=cfg.fees,
             fx_step_krw=cfg.fx_step_krw,
-            net_free_cash=True,
         )
     )
     specs = stage_specs(plan)
-    due = schedule(specs, next_check_at(cfg, at), slotter_for(cfg))
+    due = schedule(specs, check_at, slotter_for(cfg))
     current: list[tuple[str, Instrument | None, Decimal]] = []
     if cash[Currency.KRW] > 0:
         current.append(("krw-cash", None, cash[Currency.KRW]))
@@ -1114,9 +1190,6 @@ def preview_data(
     for o in (*plan.sells, *plan.buys):
         total += _order_krw(o.est_gross, o.currency, rate)
         parts.append(f"{o.side.value}:{o.instrument.instrument_id}:{o.qty}")
-    if plan.fx is not None:
-        total += _order_krw(plan.fx.from_amount, plan.fx.direction.source, rate)
-        parts.append(f"fx:{plan.fx.direction.value}:{plan.fx.from_amount}")
     signature = "|".join(sorted(p.rsplit(":", 1)[0] for p in parts))
     material = {
         "current": [
@@ -1132,6 +1205,18 @@ def preview_data(
         (instruments[iid], (rule.target_of(iid) * _rule_share(conn)).quantize(Decimal("0.1")))
         for iid in rule.instrument_ids
     ]
+    mix = CurrencyMix(
+        kr_krw=sum((krw for label, i, krw in current if _of(label, i) is Currency.KRW), ZERO),
+        us_krw=sum((krw for label, i, krw in current if _of(label, i) is Currency.USD), ZERO),
+        target_kr=sum(
+            (
+                rule.target_of(iid)
+                for iid in rule.instrument_ids
+                if instruments[iid].currency is Currency.KRW
+            ),
+            ZERO,
+        ),
+    )
     return PreviewData(
         computed_at=at,
         snapshot=snap,
@@ -1148,7 +1233,17 @@ def preview_data(
         account_krw=account_krw,
         signature=signature,
         hash=digest,
+        new_money=new_money,
+        new_money_from=first_check_after(cfg, kst_date(check_at)),
+        suggestion=suggest(mix, rule.threshold, rate, cfg.fx_step_krw),
     )
+
+
+def _of(label: str, inst: Instrument | None) -> Currency:
+    """The currency of a preview's current row: a holding's, or the cash row's."""
+    if inst is not None:
+        return inst.currency
+    return Currency.USD if label == "usd-cash" else Currency.KRW
 
 
 def _holding_krw(h: BrokerHolding, rate: Decimal) -> Decimal:
@@ -1351,33 +1446,6 @@ def link_check(conn: sqlite3.Connection, cfg: Config, at: datetime) -> LinkCheck
     if days_left is not None and days_left < 0:
         return no("expired")
     return LinkCheck(True, None, status.ok_at, status.account_tail, expires, days_left)
-
-
-@dataclass(frozen=True)
-class FxTodo:
-    order: OrderRow
-    direction: FxDirection
-    by: datetime | None  # the time of the buy that waits for it
-
-
-def fx_todos(conn: sqlite3.Connection, at: datetime) -> list[FxTodo]:
-    """Conversions the owner has to make in the app: live fx orders whose stage is due."""
-    out: list[FxTodo] = []
-    for order in repo.pending_orders(conn, LIVE):
-        if order.side != "fx" or order.fx_direction is None:
-            continue
-        if repo.get_plan(conn, order.plan_id).status not in repo.OPEN_PLAN_STATUSES:
-            continue
-        stage = repo.get_stage(conn, order.stage_id)
-        if stage.due_at > at or stage.status != "pending":
-            continue
-        later = [
-            s.due_at
-            for s in repo.stages_of(conn, order.plan_id)
-            if stage.seq in s.depends_on and s.status == "pending"
-        ]
-        out.append(FxTodo(order, FxDirection(order.fx_direction), min(later) if later else None))
-    return out
 
 
 def cancel_failed(conn: sqlite3.Connection) -> list[live_repo.BrokerOrderRow]:

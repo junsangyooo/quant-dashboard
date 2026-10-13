@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from autotrade.config import Config
@@ -22,6 +22,12 @@ def next_check_at(cfg: Config, at: datetime) -> datetime:
         if candidate > at and is_weekday(candidate.date()):
             return candidate
     raise RuntimeError("no weekday within a week")  # pragma: no cover
+
+
+def first_check_after(cfg: Config, d: date) -> datetime:
+    """The first weekday check on a later day than `d` (KST): when the owner's money of day d
+    is used (D48)."""
+    return next_check_at(cfg, at_kst(d + timedelta(days=1), time(0, 0)))
 
 
 def ledger_status(

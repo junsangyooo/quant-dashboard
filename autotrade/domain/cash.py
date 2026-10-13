@@ -9,7 +9,9 @@ Every unit of cash is in exactly one part:
   dollars after the 09:10 conversion show as '달러 현금 · 매수 대기' in full (§1.1: $126.96,
   §4: $3,568.24) and count toward the instrument they will buy (인계 3).
 - new: cash that arrived since the last check (start amount, deposits, dividends); the next
-  check invests it per target ('첫 확인 때 매수').
+  check invests it per target ('첫 확인 때 매수'). On the live ledger it also holds the owner's
+  money that arrived today (D48: a deposit, or a conversion he made): no check uses it before
+  the next weekday's, so it is set aside first, before any pending buy could claim it.
 - sub_share: the rest — leftovers below one share ('1주 미만 대기'). It belongs to no rule.
 """
 
@@ -87,7 +89,10 @@ def partition(
     withdraw_waits: Iterable[WithdrawWait],
     claims: Iterable[Claim],
     new_cash: Mapping[Currency, Decimal],
+    held: Mapping[Currency, Decimal] | None = None,
 ) -> list[CashPart]:
+    """`held`: new money no check may use yet (the live ledger's money of today, D48). It is
+    'new' cash put aside right after the withdrawal waits."""
     waits = list(withdraw_waits)
     claim_list = list(claims)
     parts: list[CashPart] = []
@@ -103,8 +108,10 @@ def partition(
         free = balance - reserved
         if free <= 0:
             continue
+        kept = min(free, max(ZERO, (held or {}).get(currency, ZERO)))
+        free -= kept
         mine = [c for c in claim_list if c.currency is currency and c.amount > 0]
-        if mine:
+        if mine and free > 0:
             per_instrument: dict[str, Decimal] = {}
             for c in mine:
                 weight_sum = sum(c.split.values(), ZERO)
@@ -115,12 +122,12 @@ def partition(
             for iid, amount in shares.items():
                 if amount > 0:
                     parts.append(CashPart(currency, Purpose.BUY_WAIT, amount, instrument_id=iid))
-            continue
-        new = min(free, max(ZERO, new_cash.get(currency, ZERO)))
+            free = ZERO
+        new = kept + min(free, max(ZERO, new_cash.get(currency, ZERO) - kept))
         if new > 0:
             parts.append(CashPart(currency, Purpose.NEW, new))
-        if free - new > 0:
-            parts.append(CashPart(currency, Purpose.SUB_SHARE, free - new))
+        if free - (new - kept) > 0:
+            parts.append(CashPart(currency, Purpose.SUB_SHARE, free - (new - kept)))
     return parts
 
 

@@ -1,16 +1,18 @@
 """한국 계좌 · 미국 계좌 of the live ledger (api/views/accounts.py over engine/live.py).
 
 The live ledger records the way paper does, so its won P&L splits exactly as paper's does:
-한국 + 미국 × rate + 환율 효과 = ledger P&L. A conversion the plan asked for (the owner makes it in
-the Toss app) is the fx fill of its fx order, executed when the account showed it; deposits the
-reconciliation finds are events in their own currency, dated when they arrived; a start with
-dollars gives each account its own part. None of that money moving is a gain or a loss of either
-account. Against the fake Toss only (tests/autotrade/live_world.py).
+한국 + 미국 × rate + 환율 효과 = ledger P&L. Live plans never convert (D47): the owner converts in
+the Toss app, and his conversion is two events (out of one currency, into the other) that the
+accounts read as a transfer; deposits the reconciliation finds are events in their own currency,
+dated when they arrived; a start with dollars gives each account its own part. None of that money
+moving is a gain or a loss of either account. Against the fake Toss only
+(tests/autotrade/live_world.py).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -72,64 +74,68 @@ def assert_split_adds_up(home: dict[str, Any]) -> dict[str, int]:
 
 
 def first_day(lw: Live) -> None:
-    """예시-값표 §4 on the live ledger: the Korean buy at 09:05, the owner's conversion in the
-    app at 22:31 (4,967,000원 → $3,567.53), the US buy at 22:36 (as in test_live_flow.py)."""
+    """Won only on the live ledger (D47): the Korean buy at 09:05 (310 shares: the limit price
+    cuts the planned 312), then the owner deposits 5,000,000원 at 10:00 and converts 4,967,000원
+    of it in the app at 10:05 (→ $3,567.53)."""
     lw.turn_on("2026-06-30 21:00")
     lw.sync("2026-07-01 08:29")
     assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
     lw.fake.slip = D("160")
     lw.sync("2026-07-01 09:05")
     assert lw.stages()["result"] == "done"
-    lw.sync("2026-07-01 09:10")
-    lw.stages()
-    lw.fake.convert(D("4967000"), D("3567.53"))
-    lw.sync("2026-07-01 22:31")
+    lw.fake.deposit("KRW", D("5000000"))
+    lw.sync("2026-07-01 10:00")
     assert lw.reconcile()["result"] == "match"
-    lw.fake.slip = D("0.33")
-    lw.sync("2026-07-01 22:36")
-    assert lw.stages()["result"] == "done"
-    assert lw.reconcile()["result"] in ("match", "quiet")
+    lw.fake.convert(D("4967000"), D("3567.53"))
+    lw.sync("2026-07-01 10:05")
+    assert lw.reconcile()["booked"][0]["conversion"] == "krw_to_usd"
 
 
 def test_a_live_conversion_and_a_deposit_keep_the_split_exact(
     lw: Live, web: TestClient, world: World
 ) -> None:
     first_day(lw)
-    orders = {o.side: o for o in repo.orders_of_ledger(lw.conn, "live") if o.market != "US"}
-
-    # The conversion is the fx fill of the plan's fx order, like paper's: won paid, dollars
-    # credited, executed when the account showed it (22:31), not when the tick booked it.
-    fx = repo.get_order(lw.conn, orders["fx"].order_id)
-    fill = repo.fill_of_order(lw.conn, fx.order_id)
-    assert fill is not None
-    assert (fill.kind, fill.fx_direction, fill.gross, fill.received) == (
-        "fx",
-        "krw_to_usd",
-        D("4967000"),
-        D("3567.53"),
-    )
-    assert fx.executed_at == kst("2026-07-01 22:31")
-    # A trade of ours is executed at the broker's fill time too (the fake fills on arrival).
-    buy = repo.get_order(lw.conn, orders["buy"].order_id)
+    # The owner's conversion is two events at the rate the balances show (4,967,000 ÷ 3,567.53),
+    # dated when the account showed it (10:05): a transfer, not money in or out.
+    rows = [
+        e
+        for e in repo.events_of_ledger(lw.conn, "live", ["deposit", "withdrawal"])
+        if e.payload.get("reason") == "conversion"
+    ]
+    assert [(e.kind, e.amount, e.currency) for e in rows] == [
+        ("withdrawal", D("4967000"), Currency.KRW),
+        ("deposit", D("3567.53"), Currency.USD),
+    ]
+    assert {e.occurred_at for e in rows} == {kst("2026-07-01 10:05")}
+    assert D(str(rows[1].payload["krw_rate"])) == D("1392.2798")
+    assert repo.fills_of_ledger(lw.conn, "live")[0].kind == "trade"  # no fx fill: no fx order
+    # A trade of ours is executed at the broker's fill time (the fake fills on arrival).
+    buy = next(o for o in repo.orders_of_ledger(lw.conn, "live") if o.side == "buy")
     assert buy.executed_at == kst("2026-07-01 09:05")
 
-    # 7/2: the owner sends $200 and 300,000원 to the account; the next look finds them. (The
-    # paper ledger's jobs keep the closes and the rates; here market_data stands in for them.)
+    # 7/2: the owner sends $200, then 300,000원; the next looks find them. (The paper ledger's
+    # jobs keep the closes and the rates; here market_data stands in for them.)
     world.rate(kst("2026-07-02 09:10"), "1395.0")
     lw.at("2026-07-02 09:50")
     lw.market_data()
     lw.fake.deposit("USD", D("200"))
-    lw.fake.deposit("KRW", D("300000"))
     lw.sync("2026-07-02 10:00")
     seen = lw.now()
     assert lw.reconcile("2026-07-02 10:01")["result"] == "match"
-    deposits = repo.events_of_ledger(lw.conn, "live", ["deposit"])
-    assert sorted((e.currency.value, e.amount) for e in deposits if e.currency) == [
-        ("KRW", D("300000")),
-        ("USD", D("200")),
+    lw.fake.deposit("KRW", D("300000"))
+    lw.sync("2026-07-02 10:05")
+    assert lw.reconcile("2026-07-02 10:06")["result"] == "match"
+    deposits = [
+        e
+        for e in repo.events_of_ledger(lw.conn, "live", ["deposit"])
+        if e.payload.get("reason") == "unexplained-in" and e.event_date == date(2026, 7, 2)
     ]
-    assert {e.occurred_at for e in deposits} == {seen}  # when the money was first seen
-    usd_in = next(e for e in deposits if e.currency is Currency.USD)
+    assert [(e.currency, e.amount) for e in deposits] == [
+        (Currency.USD, D("200")),
+        (Currency.KRW, D("300000")),
+    ]
+    usd_in = deposits[0]
+    assert usd_in.occurred_at == seen  # when the money was first seen
     assert D(str(usd_in.payload["krw_rate"])) == D("1395.0")
     assert verify_ledger(lw.conn, "live") == []
 
@@ -143,10 +149,10 @@ def test_a_live_conversion_and_a_deposit_keep_the_split_exact(
     split = assert_split_adds_up(home)
     kr, us = account(home, "kr"), account(home, "us")
     # Each account: its value minus the money that came into it, in its own currency.
-    # 한국: 10,000,000 − 4,967,000 sent for dollars + 300,000 deposited.
-    assert kr["pnl"]["amount"] == kr["total"] - 5333000
-    # 미국: the $3,567.53 the conversion bought + the $200 deposited.
-    assert cents(us["pnl"]["amount"]) == cents(us["total"]) - 376753
+    # 한국: 10,000,000 + 5,000,000 deposited − 4,967,000 sent for dollars + 300,000 deposited.
+    assert kr["pnl"]["amount"] == kr["total"] - 10333000
+    # 미국: the $3,567.53 the conversion bought + the $200 deposited (cash only: no P&L).
+    assert cents(us["pnl"]["amount"]) == cents(us["total"]) - 376753 == 0
     # 환율 효과 is what the rate did to the dollars that came in: those bought (worth 3,567.53 ×
     # 1,388.5 now, against the 4,967,000 they cost) and those deposited (booked at 1,395.0).
     rate = D("1388.5")
@@ -160,6 +166,12 @@ def test_a_live_conversion_and_a_deposit_keep_the_split_exact(
         assert b["transfer"] == transfer
     b_us = web.get("/api/home/breakdown?ledger=live&account=us").json()
     assert (b_us["start"], b_us["deposit"]) == (0.0, 200.0)
+    # The whole ledger: the conversion is no money in or out; the dollars count at their won.
+    whole = web.get("/api/home/breakdown?ledger=live").json()
+    assert whole["deposit"] == 5000000 + 279000 + 300000
+    assert whole["withdrawal"] == 0
+    whole_parts = ("deposit", "withdrawal", "market", "dividend", "fees")
+    assert sum(whole[p] for p in whole_parts) == whole["end"] - whole["start"]
 
 
 def test_a_start_with_dollars_gives_each_account_its_own(lw: Live, web: TestClient) -> None:
@@ -193,33 +205,34 @@ def test_a_start_with_dollars_gives_each_account_its_own(lw: Live, web: TestClie
     assert b_kr["start"] == 10000000
 
 
-def test_an_outside_conversion_is_a_transfer_between_the_accounts(
+def test_a_deposit_and_a_conversion_in_one_look_keep_the_split_exact(
     lw: Live, web: TestClient
 ) -> None:
     first_day(lw)
-    # 7/2: the owner sends 2,000,000원, then converts 1,392,000원 of it on their own (no plan
-    # asked for it): money in for 한국 계좌, then a transfer to 미국 계좌.
-    lw.fake.deposit("KRW", D("2000000"))
+    # 7/2 09:00: the owner sends 3,000,000원 and converts 1,000,000원 of it before the next look
+    # (won +2,000,000, dollars +$718.39): a deposit and a conversion, at the market rate.
+    lw.fake.deposit("KRW", D("3000000"))
+    lw.fake.convert(D("1000000"), D("718.39"))
     lw.sync("2026-07-02 09:00")
-    assert lw.reconcile("2026-07-02 09:01")["booked"][0]["deposit"] == "2000000"
-    lw.fake.convert(D("1392000"), D("1000.00"))
-    lw.sync("2026-07-02 10:00")
-    assert lw.reconcile("2026-07-02 10:01")["booked"][0]["conversion"] == "krw_to_usd"
-    lw.at("2026-07-02 10:05")
+    booked = lw.reconcile("2026-07-02 09:01")["booked"]
+    assert booked[0] == {"deposit": "2999999", "currency": "KRW", "event_id": booked[0]["event_id"]}
+    assert booked[1]["conversion"] == "krw_to_usd"
+    assert (booked[1]["from"], booked[1]["to"]) == ("999999", "718.39")
+    lw.at("2026-07-02 09:05")
     home = web.get("/api/home?ledger=live").json()
     assert_split_adds_up(home)
     kr, us = account(home, "kr"), account(home, "us")
-    assert kr["pnl"]["amount"] == kr["total"] - (5033000 + 2000000 - 1392000)
-    assert cents(us["pnl"]["amount"]) == cents(us["total"]) - (356753 + 100000)
+    assert kr["pnl"]["amount"] == kr["total"] - (10033000 + 2000000)
+    assert cents(us["pnl"]["amount"]) == cents(us["total"]) - (356753 + 71839)
     b_us = web.get("/api/home/breakdown?ledger=live&account=us").json()
-    assert (b_us["transfer"], b_us["deposit"]) == (4567.53, 0.0)
+    assert (b_us["transfer"], b_us["deposit"]) == (4285.92, 0.0)
 
 
 def test_adopted_dollar_shares_are_money_into_the_us_account(lw: Live, web: TestClient) -> None:
     first_day(lw)
-    # 7/2: 5 more S&P 500 ETF shares arrive from another broker. The ledger cannot explain them
+    # 7/2: 5 S&P 500 ETF shares arrive from another broker. The ledger cannot explain them
     # (a mismatch: no order); the owner checks the app and adopts the account's numbers.
-    lw.fake.holdings["SPYM"].qty += D("5")
+    lw.fake.hold("SPYM", D("5"), D("66.00"), market="US")
     lw.sync("2026-07-02 10:00")
     assert lw.reconcile("2026-07-02 10:01")["result"] == "mismatch"
     lw.sync("2026-07-02 10:05")

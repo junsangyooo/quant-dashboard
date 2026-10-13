@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from autotrade.api.views import fmt
-from autotrade.api.views.context import LedgerContext, event_kind
+from autotrade.api.views.context import LedgerContext, event_kind, event_krw
 from autotrade.db.models import SnapshotRow
 from autotrade.domain.instruments import Currency
 from autotrade.domain.money import ZERO, usd_in_krw
@@ -61,16 +61,18 @@ def ret(value: Decimal, base: Decimal) -> float:
 
 
 def contributions_by_date(ctx: LedgerContext) -> dict[date, Decimal]:
-    """Net money in per day: start and deposits in, withdrawals out (dividends are income). Only
-    up to `ctx.as_of`, the moment the ledger's figures are of."""
+    """Net money in per day, in won: start and deposits in, withdrawals out (dividends are
+    income). A live dollar deposit counts its won value as booked (the ledger's money in moved
+    by that much); the owner's conversion is a withdrawal and a deposit of the same won, so it
+    nets to nothing. Only up to `ctx.as_of`, the moment the ledger's figures are of."""
     out: dict[date, Decimal] = {}
     for ev in ctx.events:
         if ev.amount is None or ev.occurred_at > ctx.as_of:
             continue
         if ev.kind in ("start", "deposit"):
-            out[ev.event_date] = out.get(ev.event_date, ZERO) + ev.amount
+            out[ev.event_date] = out.get(ev.event_date, ZERO) + event_krw(ev)
         elif ev.kind == "withdrawal":
-            out[ev.event_date] = out.get(ev.event_date, ZERO) - ev.amount
+            out[ev.event_date] = out.get(ev.event_date, ZERO) - event_krw(ev)
     return out
 
 
@@ -96,7 +98,7 @@ def event_markers(ctx: LedgerContext, since: date | None = None) -> list[dict[st
     """One marker per day (CONTRACT.md Trend.events): the day's first event kind, every kind of
     the day in `kinds`, and `count` when there are two or more (a bundle marker)."""
     by_date: dict[str, list[str]] = {}
-    for ev in ctx.events:
+    for ev in ctx.listed_events:
         if since is not None and ev.event_date < since:
             continue
         kind = event_kind(ev)

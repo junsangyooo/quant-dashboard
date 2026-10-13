@@ -42,9 +42,12 @@ interface RuleRef {
 }
 
 // 상태 칩 일곱 가지(SCR-PLAN 완료 조건). AI 규칙은 같은 칩에 다른 낱말을 쓴다(화면-맞춤.md ②, 'hold' = '유지').
+// 'fx-suggest'('환전 제안')는 실전 장부의 지수 반반만(D47): 원화·달러가 규칙 목표에서 띠(±2%p)보다 멀다.
+// 실전은 환전하지 않아서 주인이 토스 앱에서 바꾼다. 정보일 뿐이다(막는 것 없음). 우선순위는 '리밸런싱 예정' 다음, '목표 범위 안' 앞
 type RuleStatus =
   | 'in-range' | 'scheduled' | 'in-progress' | 'partial-failed'
   | 'holiday' | 'quote-wait' | 'withdraw-wait'
+  | 'fx-suggest'                                  // 실전 장부 전용(D47)
   | 'hold' | 'sell-scheduled' | 'buy-scheduled'   // AI 규칙 전용
 
 interface Basis {                 // '기준' 칩과 시트
@@ -58,7 +61,7 @@ interface Basis {                 // '기준' 칩과 시트
 
 interface Order {
   id: string
-  market: Market                  // 환전(fx)은 'KR'(원화 계좌에서 09:10에 한다)
+  market: Market                  // 환전(fx)은 'KR'(원화 계좌에서 09:10에 한다). 환전 주문은 모의투자 장부에만 있다(실전은 환전하지 않음, D47)
   side: Side
   instrument?: Instrument         // fx면 없음
   qty?: number                    // 주(코인은 소수)
@@ -79,7 +82,7 @@ interface Order {
 }
 
 interface Stage {
-  kind: 'sell' | 'fx' | 'buy'     // 매도 → 환전 → 매수. 주문 0건 단계는 보내지 않는다(화면이 숨김).
+  kind: 'sell' | 'fx' | 'buy'     // 매도 → 환전 → 매수. 주문 0건 단계는 보내지 않는다(화면이 숨김). 실전 계획에는 'fx'가 없다(D47)
   status: 'done' | 'pending' | 'failed'
   at: string                      // 대표 시각(09:05 / 09:10 / 22:30)
   orders: Order[]
@@ -326,6 +329,30 @@ interface RuleCard {
   }
   vsIndex?: { since: string; points: Array<{ date: string; value: number | null }> } | null
   // AI 규칙: '지수 대비 · [since]부터'(pp1). 종목마다 고른 날부터 같은 시장 지수 대비 초과 수익의 평균(채점과 같은 계산, 판 종목은 판 날에 고정)
+  fxSuggestion?: FxSuggestion | null
+  // 실전 장부의 지수 반반 카드에만 키가 있다(D47). null = 띠 안(또는 시세·환율이 낡아 계산 안 함). 모의투자 카드에는 키가 없다
+}
+
+// 실전 장부는 넣은 돈 그대로 굴린다(D47): 원화는 한국 종목, 달러는 미국 종목. 환전하지 않고, 한쪽을 팔아 다른 쪽을 사지 않는다.
+// 원화·달러 비율이 목표에서 띠보다 멀면 화면이 '약 X원을 달러로 바꾸면 50:50'을 보인다. 할 일이 아니고 아무것도 막지 않는다.
+interface FxSuggestion {
+  direction: 'krw-usd' | 'usd-krw'   // krw-usd = 한국이 많음: 원을 달러로 · usd-krw = 미국이 많음: 달러를 원으로
+  krw: number                        // krw. 바꿀 원(krw-usd) 또는 그 달러로 받을 원(usd-krw), 1,000원 단위
+  usd: number                        // usd. 그 원으로 받을 달러 또는 바꿀 달러(krw ÷ rate)
+  rate: number                       // rate. 계산에 쓴 환율(평가 기준과 같다)
+  now: { kr: number; us: number }    // pct1, 합 100.0. 규칙 돈의 지금 비율: 그 통화 종목 + 그 통화 현금(출금 대기 제외, 새로 들어온 돈 포함)
+  target: { kr: number; us: number } // pct1. 규칙 목표(지수 반반 50 · 50)
+}
+// 새로 들어온 돈은 다음 거래일부터 쓴다(D48): 대조가 주인의 돈으로 적은 것(입금, 주인이 한 환전으로 들어온 돈)이 KST로 오늘
+// 들어왔으면 오늘의 어떤 확인도 쓰지 않고, 그다음 평일 08:30 확인부터 쓴다. 배당·판 돈은 새 돈이 아니다
+interface NewMoneyWait {
+  krw: number                        // krw. 오늘 들어온 원(오늘 환전으로 나간 원을 뺌, 0 = 없음)
+  usd: number                        // usd. 오늘 들어온 달러(0 = 없음)
+  from: string                       // 쓰기 시작하는 확인 시각(다음 평일 08:30)
+}
+interface LiveCash {                 // 실전이 켜져 있을 때 모드·작동 화면에(할 일 옆, 할 일 아님)
+  newMoney: NewMoneyWait | null
+  fxSuggestion: FxSuggestion | null
 }
 type ScheduleItem =                  // ruleId는 한 규칙의 항목에만 있다. 확인·휴장·현금 항목은 장부 전체의 것이다
   | { kind: 'next-check'; at: string }
@@ -333,7 +360,8 @@ type ScheduleItem =                  // ruleId는 한 규칙의 항목에만 있
   | { kind: 'retry'; at: string; market: Market; side: Side; ruleId: string }   // 다시 낼 주문의 규칙
   | { kind: 'sub-share-cash'; krw: number }
   | { kind: 'withdraw-wait'; krw: number; until: string }
-  | { kind: 'new-cash'; krw: number }
+  | { kind: 'new-cash'; krw: number }                          // 다음 확인이 쓸 새 현금(아래 '새로 들어온 돈'은 빼고)
+  | ({ kind: 'new-money-wait' } & NewMoneyWait)                // 실전(D48): '새로 들어온 돈 [금액] · 다음 거래일 08:30부터 써요'
   | { kind: 'first-check'; at: string }
   | { kind: 'monthly-review'; at: string; ruleId: string }      // AI 규칙: 매달 1일 08:30(점검은 전날 22:00부터 돌아 그 확인 전에 끝난다)
   | { kind: 'discovery'; at: string; ruleId: string }           // AI 규칙: 4·6·9·12월 1일 08:30
@@ -536,7 +564,7 @@ interface HealthResponse {
     id: string
     severity: 'red' | 'yellow'
     kind: 'stale' | 'check-failed' | 'toss-expiring' | 'order-rejected' | 'order-failed' | 'cancel-failed' | 'push-undelivered' | 'ai-cli' | 'filings' | 'pin-failures'
-        | 'toss-link' | 'broker-mismatch' | 'fx-manual'   // 3단계 실전 연결(autotrade/PHASE3.md 2.7)
+        | 'toss-link' | 'broker-mismatch'   // 3단계 실전 연결(autotrade/PHASE3.md 2.7)
     // order-failed = 다시 시도까지 실패한 주문. order-rejected는 실전 브로커 거절(3단계)
     facts: Record<string, string | number>      // 화면 문구에 끼울 값. 종류마다 키가 정해져 있다(아래). 모르는 값은 키를 빼고 null을 넣지 않는다
     action: { kind: 'auto-retry'; at: string } | { kind: 'manual' }
@@ -563,6 +591,7 @@ interface HealthResponse {
   recent14: Array<{ date: string; state: CalendarState; run?: { at: string; result: string; seconds: number; reason?: 'no-quote' | 'other' } }>   // 최근 14일 중 평일만(10칸). reason은 result 'failed'·'todo'일 때
   lastRun: { at: string; result: string; seconds: number; reason?: 'no-quote' | 'other' } | null   // reason은 코드다(문장 아님)
   devices: Array<{ name: string; lastDelivery: string | null; ok: boolean }>   // '알림 기기'를 펼친 목록(AccountResponse와 같은 모양). 3단계 전에는 빈 배열
+  liveCash: LiveCash | null          // 실전이 켜져 있을 때만(D47·D48). todos가 아니고 summary·헤더 수에 들어가지 않는다
 }
 // todos[].facts 키(값은 날짜·시각·수·코드):
 //   stale: market('KR' | 'US' | 'FX'), basisDate, tradingDays, missingDates?(못 받은 거래일 'YYYY-MM-DD,YYYY-MM-DD', 환율은 없음)
@@ -588,8 +617,6 @@ interface HealthResponse {
 //           reason 'positions' | 'cash'(설명 안 되는 현금 변화, currency) | 'external-fill' | 'fractional' | 'sleeves' | 'other'.
 //           id 'broker-mismatch:order:<id>'는 결과를 가를 수 없는 우리 주문 { reason: 'order-unknown', market, side }.
 //           effect 'orders-zero-live-blocked'(대조가 맞을 때까지 실전 주문 0건)
-//   fx-manual(3단계, 노랑·직접): { direction: 'krw-usd' | 'usd-krw', krw, usd, rate, orderId, by? }(토스 API는 환전을 못 한다:
-//           주인이 토스 앱에서 바꾸면 다음 대조가 그 금액을 환전 주문의 체결로 적고 미국 매수가 이어진다. by = 기다리는 매수 시각)
 //   cancel-failed(3단계 facts): { at(대기 시각), market, side }
 // sources[].age(주기 대비 나이): 토스 연결(cadence '90d')은 지난 날 ÷ 90일(새로 연결한 날 0, 만료일에 1)
 //   3단계 실제 연결은 cadence 'per-check'다(토스 API에 키 만료가 없다, PHASE3.md 1.6):
@@ -630,7 +657,10 @@ interface ModeResponse {
     | { kind: 'ok'; computedAt: string; hash: string; basis: { balanceAt: string; priceAt: string; fxRate: number; fxAt: string };
         current: Array<{ label: 'krw-cash' | 'usd-cash' | 'holding'; instrument?: Instrument; krw: number }>;
         target: Array<{ ruleId: string; instrument: Instrument; pct: number }>;
-        stages: Stage[]; outside: Array<{ instrument: Instrument; qty: number; approxKrw: number }> }
+        stages: Stage[]; outside: Array<{ instrument: Instrument; qty: number; approxKrw: number }>;
+        // stages는 매도·매수뿐이다(실전은 환전하지 않음, D47). 원화만 있으면 한국 매수뿐이고 fxSuggestion이 바꿀 금액을 말한다
+        newMoney: NewMoneyWait | null      // 다시 켤 때: 다음 확인 날 들어온 돈(그 확인이 쓰지 않음, D48). 처음 켤 때는 null(계좌가 시작 금액)
+        fxSuggestion: FxSuggestion | null }
     | { kind: 'not-computable'; at: string; cause: 'stale' | 'other' }
   cancelFailed: Order[] | null
   cancelPending: Order[] | null          // 3단계: 끄기·계획 종료로 토스에 취소를 요청했고 다음 확인(5분 안)이 처리할 주문(실패하면 cancelFailed로)
@@ -641,6 +671,7 @@ interface ModeResponse {
     cancel: Order[]                      // 실전 장부의 열린 계획에서 아직 대기 중인 주문
     cash: Array<{ currency: 'KRW'; krw: number } | { currency: 'USD'; usd: number; krw: number }>   // 0보다 큰 현금만. 달러의 krw는 지금 환율로
   }
+  liveCash: LiveCash | null              // 실전이 켜져 있을 때만(D47·D48): 새로 들어온 돈과 환전 제안
 }
 // twoLedgers·preflight·preview는 실전이 생기는 3단계부터 채운다. 1·2단계는 null이다
 ```
@@ -738,7 +769,8 @@ type NotifyEvent =
   - rules.index-half, rules.momentum, rules.first-day
   - health.todo, health.stale, health.unknown, health.failed
   - mode.paper, mode.live, mode.turning-on, mode.off-confirm, mode.off-failed, mode.blocked, mode.short
-  - 3단계 실전 연결(그림 없음): mode.cancel-pending(토스에 요청한 취소가 남아 켜기 닫힘), mode.link-off(토스 연결 ✕: 원인과 할 일, 자료 최신은 같은 원인), health.live(실전 할 일: 잔고 불일치·토스 연결·토스 앱 환전)
+  - 3단계 실전 연결(그림 없음): mode.cancel-pending(토스에 요청한 취소가 남아 켜기 닫힘), mode.link-off(토스 연결 ✕: 원인과 할 일, 자료 최신은 같은 원인), health.live(실전 할 일: 잔고 불일치·토스 연결, 할 일 옆에 새로 들어온 돈·환전 제안)
+  - 넣은 돈 그대로(D47·D48, 그림 없음): plan.live-mix(실전 카드 '환전 제안'과 바꿀 금액, 예정의 '새로 들어온 돈'), mode.live-cash(실전 켜짐: 새로 들어온 돈·환전 제안 카드)
   - account.default, account.no-push
   - pin.entering, pin.error, pin.locked
 - 위 목록은 Figma 디자인 페이지의 프레임 50장과 일대일이다. 그림이 없는 상태(명세에만 있는 것)는 같은 규칙으로 이름을 붙여 더한다.
@@ -759,3 +791,4 @@ type NotifyEvent =
 - 2026-10-12: 계좌별 보기와 설정 정리(웹 세션, 주인 요청 '국장과 미장은 엄연히 다른 화폐단위'). `HomeResponse.accounts`(한국 계좌·미국 계좌를 각 통화로: 값·손익·선·구성, 선의 점마다 원금 `netIn`, 30거래일 규칙은 계좌 기록으로, 리밸런싱 표식은 그 계획이 닿은 계좌에만)와 `split`(전체 손익 = 한국 + 미국 원화 환산 + 환율 효과, 원 단위까지 맞음)을 더했다. 환전은 계좌 사이를 옮기는 돈이고 손익이 아니다. '손대지 않았을 때'는 전체에만 둔다. `/api/home/breakdown?account=`(`Breakdown.currency`·`transfer`)를 더했다. 설정의 알림은 `notifications.available`이 false인 동안(1·2단계) 화면이 한 줄로 접는다(API는 그대로). 고정 자료 home.account-kr·home.account-us·home.before-fill·home.us-cash·home.us-empty를 더했다.
 - 2026-10-13: 계좌 pct·ret·periodPnl.pct를 수정 디츠(평균으로 머문 돈 대비)로 바꿨다(가벼운 확인: 손익 ÷ 들어온 돈은 환전마다 휘었다). 평가가 실패해 값이 마지막 스냅숏일 때는 그 뒤 옮긴 돈을 세지 않고 stale을 켠다. accounts가 null인 경우에 '평가도 스냅숏도 없을 때'를 적었다. 화면: 점선 이름 '원금' → '들어온 돈'과 한 줄 설명, 설정 알림 줄 문구, 미국 계좌 변동 분해의 입금·출금 줄은 값이 있을 때만, 전체에서 연 계좌 보기는 뒤로 가기가 전체로(스위치도). 값이 마지막 스냅숏일 때(지금 평가를 못 함) 숫자는 모두 그 스냅숏 시각 기준이다: 전체 손익은 그 스냅숏까지 들어온 돈을 빼고, 변동 분해·월 변동·기간 손익·그날 변동도 돈의 출입을 그 시각까지만 센다(그 뒤 입금이 손실로 보이지 않게, 월 변동의 합 = 손익 유지). basis는 그 스냅숏의 것(시각·종가일·환율)이고 stale에 셋 다를 넣는다.
 - 2026-10-13: 3단계 실전 연결(토스 세션, autotrade/PHASE3.md). 작동 화면 할 일에 `toss-link`(원인 `TossLinkCause`, 실전이면 빨강, 사람이 고칠 원인만 직접 할 일)·`broker-mismatch`(대조가 맞지 않음: 보유 수량·현금·결과를 모르는 주문, 그동안 실전 주문 0건)·`fx-manual`(토스 앱에서 할 환전: 방향·원화·달러·환율·기다리는 매수 시각)을 더하고 `cancel-failed`의 facts를 정했다. 토스 연결 줄은 'per-check'다(토스 API에 키 만료가 없다): tick이 마지막으로 본 결과, `extra.cause`·`account`, 주인이 알려 준 키 만료일이 있을 때만 basis·`daysLeft`(14일 안이면 'late'). '90d'는 1·2단계 그림의 값으로 남는다. `/api/mode`에 `cancelPending`(토스에 요청한 취소, 다음 확인이 처리)과 `canTurnOn.cause` 'cancel-pending'을, 켜기 전 점검 toss-link의 facts(`checkedAt`·`account` 또는 `cause`)를 더했다. `POST /api/mode/paper`·`/cancel-retry`가 `cancelPending`을 준다. 켜기 전 점검의 자료 최신이 토스 계좌 사진 탓에 ✕이고 토스 연결도 ✕이면 `sameCauseAs: 'toss-link'`(원인 하나). 고정 자료 mode.cancel-pending·mode.link-off·health.live를 더했다. 실전 장부는 계좌별 보기가 읽는 대로 적는다: 계획의 환전은 그 환전 주문의 fx 체결(주문의 `executed_at`은 계좌가 보여 준 시각), 실전 체결 주문의 `executed_at`은 브로커 시각, 대조가 찾은 입·출금·배당은 그 통화의 사건(`occurred_at` = 계좌에서 처음 보인 시각). 달러가 있는 시작과 adopt-broker는 payload `by_currency`(통화마다 들어온 돈, 부호 있음)를, 계획에 없던 환전(주인이 앱에서)은 'conversion' 표시가 붙은 출금·입금 사건 둘을 남기고 계좌별 보기는 이를 계좌 사이의 이동으로 읽는다.
+- 2026-10-13: 넣은 돈 그대로(D47)·새 돈은 다음 거래일부터(D48)(토스 세션, 주인의 결정). 실전 장부는 환전하지 않는다: 원화는 한국 종목, 달러는 미국 종목에 넣고, 한쪽을 팔아 다른 쪽을 사지 않는다. 할 일 `fx-manual`을 뺐다(모의투자는 만든 적이 없고, 실전 장부는 서버에서 시작된 적이 없다). 실전 계획과 켜기 미리보기의 단계에 'fx'가 없다. 원화·달러 비율이 띠 밖이면 상태 `fx-suggest`('환전 제안', 실전 지수 반반만)와 `FxSuggestion`(계획 카드 `fxSuggestion`, 미리보기 `fxSuggestion`, 모드·작동 화면 `liveCash`)을 준다: 정보일 뿐 할 일이 아니고 수에 들어가지 않는다. 대조가 주인의 돈으로 적은 돈(입금, 주인이 한 환전으로 들어온 돈)은 들어온 날(KST)의 확인이 쓰지 않는다: 예정 항목 `new-money-wait`(`NewMoneyWait`: 원·달러·쓰기 시작하는 확인), 미리보기 `newMoney`, `liveCash.newMoney`. `new-cash`는 그 돈을 뺀 값이다. 주인의 환전('conversion' 사건 둘)은 장부 전체의 기록·그날·자산 표식·변동 분해의 입금·출금에 넣지 않는다(돈이 들어오거나 나간 것이 아니다. 계좌별 보기는 이동으로 읽는다). 장부 전체의 변동 분해·월 변동·그날 변동은 달러 입금을 그 사건의 원화 값으로 센다(전에는 달러 금액을 원으로 읽었다). 고정 자료 plan.live-mix·mode.live-cash를 더하고 mode.paper 등 켜기 미리보기를 원화만 있는 계좌(한국 매수 + 환전 제안)로 바꿨다.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -18,9 +18,19 @@ from autotrade.domain.stages import Slotter
 from autotrade.engine.sleeves import BASE_RULE, base_view
 from autotrade.market.calendar import KRX, NYSE
 from autotrade.rules.model import RuleDef
+from autotrade.timeutil import kst_date
 
 PAPER = "paper"
 LIVE = "live"
+# The payload reason of the two events an owner's conversion makes on the live ledger (out of
+# one currency, into the other: engine/live.py). api/views/accounts.py reads them as a transfer
+# between the accounts; the whole ledger's views do not list them (no money came or went).
+CONVERSION = "conversion"
+# Money the reconciliation books as the owner's money in (engine/live.py): a deposit it could not
+# explain otherwise, and the money a conversion of his brought. Not dividends, not sale proceeds.
+OWNER_IN = ("unexplained-in", CONVERSION)
+# The key of a check run's details that records the new money it held back (D48).
+HELD_BACK = "new_money_wait"
 
 
 def idem_key(
@@ -71,28 +81,89 @@ def pending_claims(
     return claims
 
 
-def refresh_cash_parts(
-    conn: sqlite3.Connection, ledger_id: str, at: datetime, checked_at: datetime | None = None
-) -> list[CashPart]:
+def new_money_waiting(
+    conn: sqlite3.Connection, ledger_id: str, at: datetime
+) -> dict[Currency, Decimal]:
+    """D48 (2026-10-13): the owner's money in that arrived on the KST date of `at` (`OWNER_IN`:
+    a deposit, or the money a conversion of his brought), less what his conversions of that day
+    took out of the same currency. No check uses it on that date: it waits for the first
+    weekday 08:30 check after it, so the owner can convert won he has just deposited at any
+    time of the day before the Korean ETF is bought with it. Live ledger only (paper: {}).
+
+    'Arrived' is when the account first showed it (the event's time, engine/live.py). A
+    withdrawal does not shorten the wait (it may be the proceeds of a sale leaving): money
+    already there may then wait a day too, never the other way. The caller caps the amounts at
+    the free cash."""
+    if ledger_id != LIVE:
+        return {}
+    out: dict[Currency, Decimal] = {}
+    for ev in repo.events_on(conn, ledger_id, kst_date(at), ("deposit", "withdrawal")):
+        if ev.amount is None or ev.occurred_at > at or ev.payload.get("source") != "broker":
+            continue
+        currency = ev.currency or Currency.KRW
+        reason = ev.payload.get("reason")
+        if ev.kind == "deposit" and reason in OWNER_IN:
+            out[currency] = out.get(currency, ZERO) + ev.amount
+        elif ev.kind == "withdrawal" and reason == CONVERSION:
+            out[currency] = out.get(currency, ZERO) - ev.amount
+    return {c: v for c, v in out.items() if v > 0}
+
+
+def capped(
+    waiting: Mapping[Currency, Decimal], free: Mapping[Currency, Decimal]
+) -> dict[Currency, Decimal]:
+    """The waiting new money within the free cash of each currency."""
+    out: dict[Currency, Decimal] = {}
+    for currency, amount in waiting.items():
+        kept = min(amount, max(ZERO, free.get(currency, ZERO)))
+        if kept > 0:
+            out[currency] = kept
+    return out
+
+
+def held_back(details: Mapping[str, object]) -> dict[Currency, Decimal]:
+    """The new money a check held back (its run details, written by engine/check.py)."""
+    raw = details.get(HELD_BACK)
+    if not isinstance(raw, dict):
+        return {}
+    return {Currency(str(k)): Decimal(str(v)) for k, v in raw.items()}
+
+
+def refresh_cash_parts(conn: sqlite3.Connection, ledger_id: str, at: datetime) -> list[CashPart]:
     """Recompute and store what each part of the base rule's cash is for (pending_cash).
 
     Other rules' sleeves keep their cash apart (autotrade/engine/sleeves.py): their cash, their
     pending orders and their part of new money are left out here.
+
+    New cash is what came in since the last check that judged the cash, and what that check held
+    back (D48: it is still to be used), less what the owner's conversions took out of it since.
+    Today's money of the owner (live) is set aside first.
     """
     state = base_view(conn, ledger_id)
-    if checked_at is None:
-        last = repo.last_cash_check(conn, ledger_id)
-        checked_at = None if last is None else last.started_at
+    last = repo.last_cash_check(conn, ledger_id)
+    checked_at = None if last is None else last.started_at
     new_cash = dict(repo.inflows_since(conn, ledger_id, checked_at))
     for flow in ai_repo.sleeve_flows_since(
         conn, ledger_id, checked_at, ("start", "deposit", "dividend")
     ):
         new_cash[flow.currency] = new_cash.get(flow.currency, ZERO) - flow.amount
+    if last is not None:
+        for currency, amount in held_back(last.details).items():
+            new_cash[currency] = new_cash.get(currency, ZERO) + amount
+    if ledger_id == LIVE:
+        for ev in repo.events_of_ledger(conn, ledger_id, ["withdrawal"]):
+            if ev.payload.get("reason") != CONVERSION or ev.amount is None:
+                continue
+            if checked_at is not None and ev.occurred_at <= checked_at:
+                continue
+            currency = ev.currency or Currency.KRW
+            new_cash[currency] = new_cash.get(currency, ZERO) - ev.amount
     parts = partition(
         state.cash,
         repo.withdraw_waits(conn, ledger_id),
         pending_claims(conn, ledger_id, BASE_RULE),
         new_cash,
+        held=new_money_waiting(conn, ledger_id, at),
     )
     repo.replace_cash_parts(conn, ledger_id, parts, at)
     return parts

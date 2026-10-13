@@ -26,7 +26,7 @@ from autotrade.db import live_repo, repo
 from autotrade.db.connection import transaction
 from autotrade.domain.instruments import Currency, Instrument, Kind, Market
 from autotrade.domain.money import usd_in_krw
-from autotrade.domain.planner import Plan, StageKind
+from autotrade.domain.planner import Plan
 from autotrade.domain.stages import StageMarket
 from autotrade.engine import live
 from autotrade.engine.live import NotComputable, PreviewData
@@ -118,9 +118,10 @@ def _outside_instrument(h: Any) -> dict[str, Any]:
 
 
 def _stage_orders(data: PreviewData) -> list[dict[str, Any]]:
-    """The first orders as CONTRACT Stage objects (sell -> fx -> buy, approximate amounts)."""
+    """The first orders as CONTRACT Stage objects (sell -> buy, approximate amounts). The live
+    ledger never converts (D47): no 'fx' stage; the conversion that would bring the mix to the
+    targets is the preview's `fxSuggestion`, the owner's to make."""
     plan: Plan = data.plan
-    rate = data.rate.rate
     due_of = {(spec.kind, spec.market): data.due[spec.seq] for spec in data.specs}
     by_kind: dict[str, list[dict[str, Any]]] = {}
     for n, o in enumerate((*plan.sells, *plan.buys), start=1):
@@ -143,28 +144,8 @@ def _stage_orders(data: PreviewData) -> list[dict[str, Any]]:
             order["amountUsd"] = fmt.usd(o.est_gross)
             order["fee"] = {"usd": fmt.usd(o.est_fee)}
         by_kind.setdefault(o.stage.value, []).append(order)
-    if plan.fx is not None:
-        fx = plan.fx
-        at = due_of[(StageKind.FX, StageMarket.FX)]
-        to_usd = fx.direction.value == "krw_to_usd"
-        krw = fx.from_amount if to_usd else fx.est_to_amount
-        usd = fx.est_to_amount if to_usd else fx.from_amount
-        by_kind["fx"] = [
-            {
-                "id": "preview-fx",
-                "market": "KR",
-                "side": "fx",
-                "direction": "krw-usd" if to_usd else "usd-krw",
-                "fx": {"krw": fmt.krw(krw), "usd": fmt.usd(usd), "rate": fmt.rate(rate)},
-                "amountKrw": fmt.krw(krw),
-                "amountUsd": fmt.usd(usd),
-                "approx": True,
-                "at": fmt.iso(at),
-                "status": "pending",
-            }
-        ]
     out: list[dict[str, Any]] = []
-    for kind in ("sell", "fx", "buy"):
+    for kind in ("sell", "buy"):
         orders = by_kind.get(kind)
         if not orders:
             continue
@@ -200,6 +181,11 @@ def preview_json(data: PreviewData | NotComputable) -> dict[str, Any]:
             {"instrument": _outside_instrument(h), "qty": float(h.qty), "approxKrw": fmt.krw(krw)}
             for h, krw in data.outside
         ],
+        # D48: the owner's money of the next check's day, which that check leaves for the next.
+        "newMoney": None
+        if not data.new_money or data.new_money_from is None
+        else live_view.new_money_json(data.new_money, data.new_money_from),
+        "fxSuggestion": live_view.fx_suggestion_json(data.suggestion),  # D47
     }
 
 
@@ -348,7 +334,11 @@ def mode(ctx: LedgerContext) -> dict[str, Any]:
         "cancelPending": pending or None,
         "canTurnOn": {"ok": True},
         "offPreview": off_preview(ctx) if current == "live" else None,
+        "liveCash": None,
     }
+    if current == "live":
+        live_ctx = ctx if ctx.ledger_id == "live" else LedgerContext(conn, cfg, "live", now)
+        out["liveCash"] = live_view.live_cash(live_ctx)
     if current == "paper":
         found = checks(paper, now)
         out["preflight"] = found.preflight

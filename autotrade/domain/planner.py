@@ -20,12 +20,19 @@ How the numbers are chosen (each rule reproduces 예시-값표, see tests/autotr
    1,380.6 = 172,471 -> 173,000. §1.6: ($2,870.40 + $529.20) x 1.001 x 1,382.4 -> 4,705,000.
 5. If the cash cannot cover the buys, buys are cut one share at a time, starting with the
    instrument that would end furthest above its target.
+
+That is the paper ledger: its conversions are virtual and it measures the strategy. The live
+ledger plans with `plan_per_currency` (D47, 2026-10-13): Toss converts nothing for an order
+(autotrade/PHASE3.md 1.1), so the live ledger runs on the money as the owner deposited it. Each
+currency's cash goes to the rule's instruments of that currency; nothing is converted and no
+market is sold to pay for the other. The owner moves money between the currencies in the Toss
+app (autotrade/domain/currency_mix.py says how much would bring the mix back to the targets).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import Enum
 
@@ -95,9 +102,9 @@ class PlanInput:
     free_usd: Decimal
     fees: FeeRates
     fx_step_krw: Decimal = Decimal("1000")
-    # Live (PHASE3.md 2.4): the owner converts by hand, so the plan asks only for what the cash
-    # already in the target currency does not cover. Paper keeps its dollars as a buffer (4.).
-    net_free_cash: bool = False
+    # False: no conversion is planned (plan_per_currency, D47). Each currency's buys are cut to
+    # that currency's cash instead.
+    convert: bool = True
 
     def __post_init__(self) -> None:
         total = sum((it.target for it in self.items), ZERO)
@@ -212,18 +219,18 @@ def _cash_need(
             usd_short -= net
 
     fx: FxOrder | None = None
-    usd_need = usd_short - (inp.free_usd if inp.net_free_cash else ZERO)
-    krw_need = krw_short - (inp.free_krw if inp.net_free_cash else ZERO)
-    if usd_short > 0 and usd_need > 0:
-        from_krw = fx_krw_needed(usd_need, rate, inp.fx_step_krw)
+    if not inp.convert:
+        return _Cash(krw_short, usd_short, None)
+    if usd_short > 0:
+        from_krw = fx_krw_needed(usd_short, rate, inp.fx_step_krw)
         to_usd = krw_to_usd(from_krw, rate)
         funds = tuple(i for i in buys if items[i].instrument.currency is Currency.USD)
         fx = FxOrder(FxDirection.KRW_TO_USD, from_krw, rate, to_usd, funds)
         krw_short += from_krw
         usd_short -= to_usd
-    elif krw_need > 0 and usd_short < 0:
+    elif krw_short > 0 and usd_short < 0:
         # Dollars from US sells pay for Korean buys: convert what the buys need.
-        to_krw_target = ceil_to_step(krw_need, inp.fx_step_krw)
+        to_krw_target = ceil_to_step(krw_short, inp.fx_step_krw)
         from_usd = ceil_cents(to_krw_target / rate)
         to_krw = usd_to_krw(from_usd, rate)
         funds = tuple(i for i in buys if items[i].instrument.currency is Currency.KRW)
@@ -333,5 +340,84 @@ def plan_rule(inp: PlanInput) -> Plan:
         sells=sell_orders,
         fx=cash.fx,
         buys=buy_orders,
+        weights_after=weights_after,
+    )
+
+
+def _relative(items: list[PlanItem]) -> tuple[PlanItem, ...]:
+    """The items of one currency with their targets as shares of that currency's money: the
+    rule's weights within it (0.3 and 0.2 of the rule -> 0.6 and 0.4). The last takes the rest,
+    so they add up to exactly 1."""
+    share = sum((it.target for it in items), ZERO)
+    out: list[PlanItem] = []
+    used = ZERO
+    for n, it in enumerate(items):
+        weight = ONE - used if n == len(items) - 1 else it.target / share
+        used += weight
+        out.append(replace(it, target=weight))
+    return tuple(out)
+
+
+def plan_per_currency(inp: PlanInput) -> Plan:
+    """The live ledger's plan (D47): the money as the owner deposited it.
+
+    - The won goes to the rule's Korean instruments and the dollars to its US ones, each by its
+      weight within that currency ('지수 반반': all won to KR:069500, all dollars to US:SPYM).
+    - Nothing is converted, and no market is sold to pay for the other.
+    - Within one currency the rule's band works as in plan_rule, on the shares of that
+      currency's money (it needs two instruments in one currency; '지수 반반' only ever buys).
+
+    The report stays the whole rule's (weights against the rule's targets, what the screens
+    show); whether it is off by more than the band is the owner's to fix in the Toss app
+    (currency_mix.suggest), never the plan's.
+    """
+    items = {it.instrument.instrument_id: it for it in inp.items}
+    rate = inp.fx_rate
+    values = {
+        iid: position_value_krw(it.qty, it.price, it.instrument.currency, rate)
+        for iid, it in items.items()
+    }
+    report = drift_report(
+        values,
+        {iid: it.buy_wait_krw for iid, it in items.items()},
+        {iid: it.target for iid, it in items.items()},
+        inp.threshold,
+    )
+    free_total = inp.free_krw + usd_in_krw(inp.free_usd, rate)
+    sells: list[TradeOrder] = []
+    buys: list[TradeOrder] = []
+    investable = ZERO
+    reasons: set[PlanReason] = set()
+    for currency in Currency:
+        group = [it for it in inp.items if it.instrument.currency is currency]
+        if not group:
+            continue
+        own = plan_rule(
+            replace(
+                inp,
+                items=_relative(group),
+                free_krw=inp.free_krw if currency is Currency.KRW else ZERO,
+                free_usd=inp.free_usd if currency is Currency.USD else ZERO,
+                convert=False,
+            )
+        )
+        sells.extend(own.sells)
+        buys.extend(own.buys)
+        investable += own.investable_cash_krw
+        if own.reason is not None and (own.sells or own.buys):
+            reasons.add(own.reason)
+    if not sells and not buys:
+        return Plan(report, free_total, investable, None)
+    sold = {o.instrument.instrument_id: o.qty for o in sells}
+    bought = {o.instrument.instrument_id: o.qty for o in buys}
+    weights_after, _ = in_rule_weights(_held_after(items, sold, bought, rate), {})
+    return Plan(
+        report=report,
+        free_cash_krw=free_total,
+        investable_cash_krw=investable,
+        reason=PlanReason.DRIFT if PlanReason.DRIFT in reasons else PlanReason.NEW_CASH,
+        sells=tuple(sells),
+        fx=None,
+        buys=tuple(buys),
         weights_after=weights_after,
     )

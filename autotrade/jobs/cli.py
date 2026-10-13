@@ -7,7 +7,8 @@ Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, -
              autotrade/jobs/schedule.py for the times and how late each may still run), for the
              paper ledger, then the live ledger (autotrade/PHASE3.md 2.8), then the backup.
              One JSON line per task that ran; nothing when nothing is due.
-  check      08:30 weekdays: data, weights, plan (sell -> FX -> buy)
+  check      08:30 weekdays: data, weights, plan (sell -> FX -> buy; live: per currency,
+             no FX, D47)
   retry      09:30: runs the check again only if today's check failed or did not run
   stage      run the stages that are due (KR 09:05, FX 09:10, US open); safe to run often
   snapshot   16:00 valuation and the untouched baseline
@@ -29,8 +30,7 @@ Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, -
              again, unless --ask-again). `resolve ai-cli:failed:<id>` gives it up instead
   todos      list the open '직접 할 일' (manual actions) with their ids
   resolve    resolve <todo-id> [--note TEXT]: close a manual action after handling it (e.g. in
-             the Toss app); the rule plans again at the next check. `fx-manual:<order id>`
-             closes a conversion the owner will not make: the buys use the cash there is
+             the Toss app); the rule plans again at the next check
   broker     the live ledger's Toss sync once (what the tick runs; only with
              AUTOTRADE_LIVE_ORDERS=1, it reads the account and sends due live orders)
   reconcile  match the live ledger with the latest account snapshot

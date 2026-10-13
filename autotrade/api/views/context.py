@@ -26,6 +26,12 @@ from autotrade.config import Config
 from autotrade.db import ai_repo, repo
 from autotrade.db.models import EventRow, FillRow, LedgerRow, PlanRow, RunRow, SnapshotRow
 from autotrade.domain.cash import CashPart, Purpose
+from autotrade.domain.currency_mix import (
+    CurrencyMix,
+    FxSuggestion,
+    drift_within_currencies,
+    suggest,
+)
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.ledger import LedgerState
 from autotrade.domain.money import ZERO, round_won, usd_in_krw
@@ -33,8 +39,15 @@ from autotrade.domain.status import RuleStatus, StatusFlags, rule_status
 from autotrade.domain.weights import DriftReport, drift_report
 from autotrade.engine import sleeves
 from autotrade.engine.bootstrap import MODE, start_amount_key, start_date_key
-from autotrade.engine.common import buy_wait_krw, load_rule
-from autotrade.engine.status import next_check_at
+from autotrade.engine.common import (
+    CONVERSION,
+    buy_wait_krw,
+    capped,
+    load_rule,
+    new_money_waiting,
+    withdraw_wait_amounts,
+)
+from autotrade.engine.status import first_check_after, next_check_at
 from autotrade.engine.valuation import Valuation, ValuationError, value_ledger
 from autotrade.market.calendar import KRX, NYSE, CalendarRangeError
 from autotrade.rules.discovery import RULE_ID as AI_RULE
@@ -81,6 +94,13 @@ class Composition:
 # 'todo-resolved' notes that the owner closed a manual action (engine/todos.py); the screens
 # show it on the rebalance row instead ('resolvedOn').
 INTERNAL_EVENT_KINDS = ("todo-resolved",)
+
+
+def is_conversion(ev: EventRow) -> bool:
+    """One of the two events of the owner's conversion on the live ledger (engine/live.py): money
+    moving between his accounts, not into or out of the ledger. The whole ledger's lists and
+    markers leave it out; the accounts read it as a transfer (accounts.py)."""
+    return ev.payload.get("reason") == CONVERSION
 
 
 def event_kind(ev: EventRow) -> str:
@@ -190,6 +210,13 @@ class LedgerContext:
             for e in repo.events_of_ledger(self.conn, self.ledger_id)
             if e.occurred_at <= self.now and e.kind not in INTERNAL_EVENT_KINDS
         ]
+
+    @cached_property
+    def listed_events(self) -> list[EventRow]:
+        """The events the whole ledger's lists and markers show: the owner's conversions are left
+        out (money moving between his accounts, not into or out of the ledger; the account
+        views read them as transfers)."""
+        return [e for e in self.events if not is_conversion(e)]
 
     @cached_property
     def next_check(self) -> datetime:
@@ -469,7 +496,8 @@ class LedgerContext:
         return value_krw * (qty - ai_qty) / qty
 
     @cached_property
-    def drift(self) -> DriftReport | None:
+    def _rule_values(self) -> dict[str, Decimal] | None:
+        """'지수 반반''s value of each of its instruments, in won (None without a valuation)."""
         val = self.valuation
         if val is None:
             return None
@@ -478,10 +506,88 @@ class LedgerContext:
             iid = p.instrument.instrument_id
             if iid in values:
                 values[iid] = self.base_value(iid, p.qty, p.value_krw, val.at)
+        return values
+
+    @cached_property
+    def drift(self) -> DriftReport | None:
+        values = self._rule_values
+        if values is None:
+            return None
         waiting = buy_wait_krw(self.parts, self.fx_rate)
         targets = {t.instrument_id: t.weight for t in self.rule.targets}
         report = drift_report(values, waiting, targets, self.rule.threshold)
         return report if report.weights else None
+
+    # ── the live ledger's money as deposited (D47, D48) ──────────────────────────────────
+
+    @property
+    def live(self) -> bool:
+        return self.ledger_id == "live"
+
+    @cached_property
+    def new_money(self) -> dict[Currency, Decimal]:
+        """D48: the owner's money that came today, which no check uses before the next weekday's
+        (engine/common.py new_money_waiting), within the free cash. Live only."""
+        if not self.live or not self.started:
+            return {}
+        state = sleeves.base_view(self.conn, self.ledger_id)
+        held = withdraw_wait_amounts(self.parts)
+        free = {c: state.cash_of(c) - held.get(c, ZERO) for c in Currency}
+        return capped(new_money_waiting(self.conn, self.ledger_id, self.now), free)
+
+    @cached_property
+    def new_money_from(self) -> datetime:
+        """When the waiting new money is used: the first weekday check after today."""
+        return first_check_after(self.cfg, self.today)
+
+    @cached_property
+    def fx_suggestion(self) -> FxSuggestion | None:
+        """D47: the conversion that would bring the live rule's won and dollars back to its
+        targets, when they are off by more than the band. Information only. None on paper, before
+        the start, and while the prices or the rate are not fresh (no amount from old numbers)."""
+        if not self.live or not self.started or self.from_snapshot:
+            return None
+        val = self.valuation
+        if val is None or val.fx is None or self.stale_series:
+            return None
+        last = self.last_check
+        if last is not None and last.result == "quote-wait":
+            return None
+        kr = us = ZERO
+        for row in self.composition.rows:
+            if row.group not in (self.rule.rule_id, "cash"):
+                continue  # the AI rule's part and holdings outside the rules are not this rule's
+            if row.purpose is Purpose.WITHDRAW_WAIT:
+                continue  # leaving the account
+            if (row.currency or Currency.KRW) is Currency.KRW:
+                kr += row.krw
+            else:
+                us += row.krw
+        target_kr = sum(
+            (
+                t.weight
+                for t in self.rule.targets
+                if self.rule_instruments[t.instrument_id].currency is Currency.KRW
+            ),
+            ZERO,
+        )
+        mix = CurrencyMix(kr, us, target_kr)
+        return suggest(mix, self.rule.threshold, val.fx.rate, self.cfg.fx_step_krw)
+
+    def _drift_within_currency(self) -> bool:
+        """The live ledger trades back only a drift within one currency (D47)."""
+        values = self._rule_values
+        if values is None:
+            return False
+        targets = {t.instrument_id: t.weight for t in self.rule.targets}
+        currencies = {iid: inst.currency for iid, inst in self.rule_instruments.items()}
+        return drift_within_currencies(
+            values,
+            buy_wait_krw(self.parts, self.fx_rate),
+            targets,
+            currencies,
+            self.rule.threshold,
+        )
 
     @cached_property
     def check_freshness(self) -> dict[str, Any]:
@@ -516,6 +622,12 @@ class LedgerContext:
     @cached_property
     def status(self) -> RuleStatus:
         last = self.last_check
+        if self.live:
+            # The live ledger runs on the money as deposited (D47): only a drift within one
+            # currency is traded back; the mix of the two is the owner's ('환전 제안').
+            exceeded = self._drift_within_currency()
+        else:
+            exceeded = self.drift is not None and self.drift.exceeded
         flags = StatusFlags(
             quote_wait=last is not None and last.result == "quote-wait",
             partial_failed=self.open_plan is not None
@@ -523,8 +635,8 @@ class LedgerContext:
             in_progress=self.open_plan is not None and self.open_plan.status == "in-progress",
             withdraw_wait=self.withdraw_until is not None,
             holiday=last is not None and last.run_date == self.today and last.result == "holiday",
-            scheduled=last is None
-            or (self.drift is not None and self.drift.exceeded and self.open_plan is None),
+            scheduled=last is None or (exceeded and self.open_plan is None),
+            fx_suggest=self.fx_suggestion is not None,
         )
         return rule_status(flags)
 
