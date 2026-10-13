@@ -311,10 +311,29 @@ export function useHealth(): UseQueryResult<HealthResponse> {
   });
 }
 
+/** How often the mode screen asks again while turning live on waits on a fresh account picture. */
+export const MODE_WAIT_POLL_MS = 60_000;
+
+/**
+ * Turning live on waits on a fresh Toss account picture (the 자료 최신 check fails on
+ * 'toss-balance'). At night the tick looks every 30 minutes, but this screen's GET asks it for a
+ * look within 5 (autotrade/PHASE3.md 2.8), so the screen asks again each minute until the
+ * picture is in, instead of waiting for a reload.
+ */
+export function modeWaitsForSnapshot(data: ModeResponse | undefined): boolean {
+  if (data?.mode !== 'paper' || data.preflight === null) return false;
+  return data.preflight.some(
+    (row) => row.id === 'freshness' && !row.ok && row.facts.source === 'toss-balance',
+  );
+}
+
 export function useMode(): UseQueryResult<ModeResponse> {
   return useQuery({
     queryKey: queryKeys.mode,
     queryFn: ({ signal }) => api.get<ModeResponse>('/api/mode', undefined, signal),
+    refetchInterval: (query) =>
+      modeWaitsForSnapshot(query.state.data) ? MODE_WAIT_POLL_MS : false,
+    refetchIntervalInBackground: false,
   });
 }
 

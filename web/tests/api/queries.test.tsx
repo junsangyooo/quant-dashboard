@@ -2,10 +2,23 @@ import { focusManager } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { configureClient } from '../../src/api/client';
-import { headerStatusView, useHeaderStatus, useHome, useTurnLiveOn } from '../../src/api/queries';
+import {
+  MODE_WAIT_POLL_MS,
+  headerStatusView,
+  modeWaitsForSnapshot,
+  queryKeys,
+  useHeaderStatus,
+  useHome,
+  useMode,
+  useTurnLiveOn,
+} from '../../src/api/queries';
 import type { HomeResponse, ShellResponse } from '../../src/api/types';
 import { ModeChangedChip, OfflineChip } from '../../src/components/State';
 import homePaper from '../../src/fixtures/bundles/home.paper';
+import modeCancelPending from '../../src/fixtures/bundles/mode.cancel-pending';
+import modeLinkOff from '../../src/fixtures/bundles/mode.link-off';
+import modeLiveBundle from '../../src/fixtures/bundles/mode.live';
+import modePaperBundle from '../../src/fixtures/bundles/mode.paper';
 import { fixtureFetch } from '../../src/fixtures/runtime';
 import type { FixtureBundle } from '../../src/fixtures/types';
 import { answerFrom, renderWithData } from '../helpers';
@@ -87,6 +100,29 @@ describe('/api/shell', () => {
     } finally {
       focusManager.setFocused(undefined);
     }
+  });
+});
+
+function ModeProbe() {
+  const mode = useMode();
+  return <p data-testid="mode">{mode.data?.mode ?? 'skeleton'}</p>;
+}
+
+describe('/api/mode', () => {
+  it('asks again each minute only while turning on waits on a fresh account picture', async () => {
+    expect(modeWaitsForSnapshot(modeLinkOff.responses['/api/mode'])).toBe(true);
+    expect(modeWaitsForSnapshot(modeCancelPending.responses['/api/mode'])).toBe(true);
+    expect(modeWaitsForSnapshot(modePaperBundle.responses['/api/mode'])).toBe(false);
+    expect(modeWaitsForSnapshot(modeLiveBundle.responses['/api/mode'])).toBe(false);
+    answerFrom(modeLinkOff);
+    const { client } = renderWithData(<ModeProbe />);
+    expect(await screen.findByText('paper')).toBeInTheDocument();
+    const query = client.getQueryCache().find({ queryKey: queryKeys.mode });
+    if (!query) throw new Error('no mode query');
+    const options = query.observers[0]?.options;
+    const interval = options?.refetchInterval;
+    expect(typeof interval === 'function' ? interval(query) : interval).toBe(MODE_WAIT_POLL_MS);
+    expect(options?.refetchIntervalInBackground).toBe(false);
   });
 });
 
