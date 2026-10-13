@@ -286,8 +286,108 @@ def test_extract_fills_the_metric_table(
     assert call.input.endswith(text)
     assert "뽑을 지표" in call.input
     assert "- revenue: 매출" in call.input
+    assert "표에 이미 있는 값" not in call.input  # a first extraction asks for everything
     assert call.prompt.startswith("너는 공시 원문에서")
     assert values[("revenue", "2026Q3")].call_id == call.call_id
+
+
+def _store(
+    conn: sqlite3.Connection, metric: str, period: str, value: str, fid: int | None = None
+) -> None:
+    with transaction(conn):
+        ai_repo.upsert_metric_value(
+            conn,
+            instrument_id=OCEAN,
+            metric=metric,
+            period=period,
+            value=D(value),
+            unit="KRW",
+            filing_id=fid,
+            quote="전 보고서",
+            source="extract",
+            call_id=None,
+            at=kst("2026-08-14 10:00"),
+        )
+
+
+def test_extract_asks_only_for_what_the_table_lacks(
+    p2ctx: JobContext, p2conn: sqlite3.Connection, world: World
+) -> None:
+    """The comparison periods of an earnings report (the prior quarter, the prior year) are
+    usually in the table from the reports before it. The model is told what is there and asked
+    only for the rest; a restated value still replaces the stored one, and an identical value
+    that comes back anyway leaves the row of the filing it came from."""
+    old = filing(p2conn, OCEAN, "R0", "반기보고서 (2026.06)")
+    _store(p2conn, "revenue", "2026Q2", "2900000000000", old)
+    _store(p2conn, "revenue", "2025Q3", "2500000000000", old)
+    _store(p2conn, "operating_income", "2025Q3", "150000000000", old)
+    fid = filing(p2conn, OCEAN, "R1", "분기보고서 (2026.09)")
+    world.texts["R1"] = "매출액 3조 1,000억원 (전년 동기 2조 5,000억원)\n영업이익 2,100억원"
+    tid = task(p2conn, "extract", pick_of(p2conn, OCEAN).pick_id, "extract:R1", "filing", fid)
+    row = {"unit": "KRW", "quote": "x"}
+    runner = ScriptedRunner()
+    runner.add(
+        "extract",
+        {
+            "metrics": [
+                {**row, "metric": "revenue", "period": "2026Q3", "value": 3.1e12},
+                {**row, "metric": "revenue", "period": "2025Q3", "value": 2.5e12},  # the same
+                {**row, "metric": "operating_income", "period": "2025Q3", "value": 1.6e11},
+                {
+                    **row,
+                    "metric": "operating_income",
+                    "period": "2026Q3",
+                    "value": 2.1e11,
+                    "quote": "영업이익 2,100억원" + " 가" * 100,
+                },
+            ],
+            "notes": "",
+        },
+    )
+    assert run(p2ctx, runner)["result"] == "ok"
+    assert (
+        "## 표에 이미 있는 값 (지표: 기간 값 단위)\n"
+        "- operating_income: 2025Q3 150000000000 KRW\n"
+        "- revenue: 2026Q2 2900000000000 KRW · 2025Q3 2500000000000 KRW\n\n## 원문"
+    ) in runner.prompts("extract")[0]
+    values = {(v.metric, v.period): v for v in ai_repo.metric_values(p2conn, OCEAN)}
+    same = values[("revenue", "2025Q3")]
+    assert (same.value, same.filing_id, same.quote) == (D("2500000000000"), old, "전 보고서")
+    restated = values[("operating_income", "2025Q3")]
+    assert (restated.value, restated.filing_id) == (D("160000000000.0"), fid)
+    assert values[("revenue", "2026Q2")].filing_id == old  # not in the answer: kept
+    assert len(values[("operating_income", "2026Q3")].quote or "") == flows.QUOTE_MAX
+    done = ai_repo.get_task(p2conn, tid)
+    assert done.result is not None
+    assert done.result["stored"] == [
+        "revenue.2026Q3",
+        "operating_income.2025Q3",
+        "operating_income.2026Q3",
+    ]
+    assert done.result["unchanged"] == ["revenue.2025Q3"]
+
+
+def test_the_known_values_are_the_newest_periods_of_the_wanted_metrics(
+    p2conn: sqlite3.Connection,
+) -> None:
+    for i in range(18):  # 2022Q1 .. 2026Q2
+        _store(p2conn, "revenue", f"{2022 + i // 4}Q{i % 4 + 1}", str(1000 + i))
+    _store(p2conn, "backlog", "2026Q2", "5")  # not asked for by this call
+    lines = flows.known_values(p2conn, OCEAN, ["revenue", "net_income"])
+    assert len(lines) == 1
+    assert lines[0].startswith("- revenue: 2026Q2 1017 KRW · 2026Q1 1016 KRW")
+    periods = [part.split(" ")[0] for part in lines[0].removeprefix("- revenue: ").split(" · ")]
+    assert len(periods) == flows.KNOWN_PERIODS
+    assert periods[-1] == "2022Q3"
+
+
+def test_the_quote_is_a_short_locator() -> None:
+    """A quote finds the value in the filing; the whole sentence (300 characters before) was a
+    large part of every answer."""
+    prompt = load("extract")
+    quote = prompt.schema["properties"]["metrics"]["items"]["properties"]["quote"]
+    assert quote["maxLength"] == flows.QUOTE_MAX
+    assert "80자 이내" in prompt.steps
 
 
 def test_a_relevant_filing_asks_for_the_two_step_confirmation(
@@ -1086,6 +1186,7 @@ def test_python_m_autotrade_jobs_ai_runs_the_cli(
     fid = filing(p2conn, OCEAN, "R9", "분기보고서 (2026.09)")
     world.texts["R9"] = "영업이익 2,100억원"
     task(p2conn, "extract", None, "extract:R9", "filing", fid)
+    _store(p2conn, "operating_income", "2026Q2", "190000000000")
     wrapper = tmp_path / "claude"
     fake = Path(__file__).with_name("fake_claude.py")
     wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$@"\n')
@@ -1133,9 +1234,16 @@ def test_python_m_autotrade_jobs_ai_runs_the_cli(
     )
     assert seen["args"][:2] == ["-p", seen["args"][1]]
     assert seen["args"][2:5] == ["--safe-mode", "--model", "haiku"]
+    # what the table already holds is on the command line, and the quote is a short locator
+    assert "- operating_income: 2026Q2 190000000000 KRW" in seen["args"][1]
+    schema = json.loads(seen["args"][seen["args"].index("--json-schema") + 1])
+    assert schema["properties"]["metrics"]["items"]["properties"]["quote"]["maxLength"] == 100
     assert os.listdir(p2cfg.db_path.parent / "ai-cwd") == []  # neutral and empty
     value = ai_repo.metric_values(p2conn, OCEAN, "operating_income")
-    assert [(v.period, v.value) for v in value] == [("2026Q3", D("210000000000.0"))]
+    assert [(v.period, v.value) for v in value] == [
+        ("2026Q2", D("190000000000")),
+        ("2026Q3", D("210000000000.0")),
+    ]
     # Nothing due: nothing written. The tasks wait without the owner's go.
     out.clear()
     assert (

@@ -44,7 +44,7 @@ from autotrade.domain import metrics
 from autotrade.domain.conditions import ConditionError, condition_json, parse_condition
 from autotrade.domain.instruments import MARKET_CURRENCY, Currency, Instrument, Kind, Market
 from autotrade.domain.money import ZERO, round_half_up, round_won, trade_fee, usd_in_krw
-from autotrade.domain.periods import PeriodError, parse_period
+from autotrade.domain.periods import PeriodError, is_period, parse_period
 from autotrade.engine.common import load_rule
 from autotrade.engine.tax import us_tax
 from autotrade.engine.watch import FILINGS_SEEN
@@ -292,12 +292,53 @@ def fit_text(
         limit = int(limit * 0.8)
 
 
+# The longest quote stored with a value. The prompt asks for a locator of 80 characters or fewer
+# (enough to find the sentence in the filing); the schema leaves a little room above that so a
+# slightly long locator does not make the CLI ask the model again.
+QUOTE_MAX = 100
+# How many stored periods of one metric the extraction is told about, newest first. A filing
+# compares with the prior quarter and the prior year (an annual report with three years), so
+# older periods are not worth the prompt; one that does appear is simply extracted again.
+KNOWN_PERIODS = 16
+
+
+def _plain(value: Decimal) -> str:
+    """A stored value as the model writes one: digits, no exponent, no trailing zeros."""
+    return format(value.normalize(), "f")
+
+
+def known_values(conn: sqlite3.Connection, instrument_id: str, wanted: Sequence[str]) -> list[str]:
+    """The values the metric table already holds for the wanted metrics, one line per metric.
+
+    The extraction leaves these (metric, period) pairs out unless the filing states them
+    differently (a restatement), so each filing pays only for what is new: the comparison
+    periods of an earnings report (the prior quarter, the prior year) are usually already in the
+    table from the reports that came before. With nothing stored (a company's first extraction)
+    the list is empty and everything is asked for."""
+    rows: dict[str, list[ai_repo.MetricValueRow]] = {}
+    for row in ai_repo.metric_values(conn, instrument_id):
+        if row.metric in wanted and is_period(row.period):
+            rows.setdefault(row.metric, []).append(row)
+    lines = []
+    for key in sorted(rows):
+        newest = sorted(rows[key], key=lambda r: _period_order(r.period), reverse=True)
+        known = " · ".join(f"{r.period} {_plain(r.value)} {r.unit}" for r in newest[:KNOWN_PERIODS])
+        lines.append(f"- {key}: {known}")
+    return lines
+
+
+def _period_order(key: str) -> tuple[int, int]:
+    period = parse_period(key)
+    return period.year, period.sub
+
+
 def prepare_extract(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     if task.filing_id is None:
         raise SkipTaskError("no filing")
     filing = ai_repo.get_filing(env.conn, task.filing_id)
     inst = repo.get_instrument(env.conn, filing.instrument_id)
     wanted = wanted_metrics(env.conn, inst.instrument_id)
+    known = known_values(env.conn, inst.instrument_id, wanted)
     text = _filing_text(env, filing)
 
     def build(body: str) -> str:
@@ -310,6 +351,7 @@ def prepare_extract(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
             ],
             ["## 뽑을 지표"]
             + [f"- {k}: {metrics.label(k)} — {metrics.resolve(k)[0].description}" for k in wanted],
+            ["## 표에 이미 있는 값 (지표: 기간 값 단위)", *known] if known else [],
             [f"## 원문{cut}", body],
         )
 
@@ -336,7 +378,7 @@ def _metric_item(
     unit = str(item.get("unit"))
     if not metrics.unit_fits(str(key), unit):
         raise FlowError(f"{key} is not measured in {unit}")
-    return str(key), period, value, unit, str(item.get("quote") or "")[:300]
+    return str(key), period, value, unit, str(item.get("quote") or "")[:QUOTE_MAX]
 
 
 def apply_extract(
@@ -350,17 +392,25 @@ def apply_extract(
     items = output.get("metrics")
     if not isinstance(items, list):
         raise FlowError("no metrics list")
+    instrument_id = prepared.context["instrument_id"]
+    table = {(v.metric, v.period): v for v in ai_repo.metric_values(env.conn, instrument_id)}
     stored: list[str] = []
     dropped: list[str] = []
+    unchanged: list[str] = []
     for item in items:
         try:
             key, period, value, unit, quote = _metric_item(item, prepared.context["wanted"])
         except (FlowError, PeriodError) as exc:
             dropped.append(str(exc))
             continue
+        held = table.get((key, period))
+        if held is not None and held.value == value and held.unit == unit:
+            # Already in the table as stated: the row keeps the filing it came from.
+            unchanged.append(f"{key}.{period}")
+            continue
         ai_repo.upsert_metric_value(
             env.conn,
-            instrument_id=prepared.context["instrument_id"],
+            instrument_id=instrument_id,
             metric=key,
             period=period,
             value=value,
@@ -374,7 +424,10 @@ def apply_extract(
         stored.append(f"{key}.{period}")
     if task.filing_id is not None:
         ai_repo.set_filing_status(env.conn, task.filing_id, "done")
-    return {"stored": stored, "dropped": dropped, "notes": output.get("notes")}
+    summary: dict[str, Any] = {"stored": stored, "dropped": dropped, "notes": output.get("notes")}
+    if unchanged:
+        summary["unchanged"] = unchanged
+    return summary
 
 
 # ── screen ───────────────────────────────────────────────────────────────────────────────────
