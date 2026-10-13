@@ -1141,13 +1141,23 @@ def adopt_broker(
     """`python -m autotrade.jobs adopt-broker`: after a mismatch the owner checked (a split, a
     trade the API does not list, shares moved in), set the rule's holdings and the cash to the
     account's. Each difference is booked at today's price as money in or out (no gain), so the
-    ledger's gains so far stay as they were. The caller owns the transaction."""
+    ledger's gains so far stay as they were. Our own fills the ledger has not booked yet are
+    booked first, as the trades they are: the account holds them, and the reconciliation that
+    follows would book them again on top of the adopted numbers (a mismatch past any adoption;
+    the reconciliation that would have booked them rolled back on the mismatch). The caller owns
+    the transaction."""
     snap = live_repo.latest_snapshot(conn)
     reason = busy_reason(conn, cfg, snap, at)
     if reason is not None or snap is None:
         return {"result": "busy", "reason": reason or "no-snapshot"}
     if repo.start_event(conn, LIVE) is None:
         return {"result": "not-started"}
+    try:
+        late = book_late_fills(conn, cfg, at)
+    except LedgerError as exc:
+        # The ledger's cash cannot pay a fill it planned (money it never booked paid for it):
+        # nothing is adopted, and the owner sees why.
+        return {"result": "refused", "reason": f"late fill: {exc}"}
     rate = _rate_or_none(conn, at)
     state = repo.load_state(conn, LIVE)
     own = ledger_instrument_ids(conn)
@@ -1216,7 +1226,8 @@ def adopt_broker(
         by_currency[currency] += diff
         cash_changes[currency.value] = str(diff)
     if not changes and not cash_changes:
-        return {"result": "nothing-to-adopt"}
+        # Booking our late fills may have been all it took.
+        return {"result": "nothing-to-adopt", **({"lateFills": late} if late else {})}
     adopted = type(state)(
         cash=new_cash,
         positions=positions,
@@ -1252,7 +1263,8 @@ def adopt_broker(
         booked_at=at,
     )
     refresh_cash_parts(conn, LIVE, at)
-    return {"result": "adopted", "event_id": event_id, "positions": changes, "cash": cash_changes}
+    out = {"result": "adopted", "event_id": event_id, "positions": changes, "cash": cash_changes}
+    return {**out, "lateFills": late} if late else out
 
 
 def _rate_or_none(conn: sqlite3.Connection, at: datetime) -> Decimal | None:

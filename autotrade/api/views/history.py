@@ -88,10 +88,11 @@ class DayData:
                 self.runs.setdefault(run.run_date, []).append(run)
         self.plans: dict[date, PlanRow] = {}
         self.plans_by_id: dict[int, PlanRow] = {}
-        # A live plan that bought nothing is no rebalance day (LedgerContext.events).
+        # A live plan that bought nothing is no rebalance day (LedgerContext.events), the first
+        # one too: it hangs on the start (engine/check.py), which itself stays listed.
         untraded = {
             e.plan_id
-            for e in repo.events_of_ledger(ctx.conn, ctx.ledger_id, ["rebalance"])
+            for e in repo.events_of_ledger(ctx.conn, ctx.ledger_id, ["rebalance", "start"])
             if e.payload.get("untraded")
         }
         for plan in repo.plans_of_ledger(ctx.conn, ctx.ledger_id):

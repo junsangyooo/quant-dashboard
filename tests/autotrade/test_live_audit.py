@@ -512,6 +512,42 @@ def test_the_fills_an_adoption_took_in_are_not_booked_again(
     assert held == (8 if symbol == "069500" else 5)
 
 
+@pytest.mark.parametrize("extra", [D("0"), D("20000000")])  # and with money it never booked
+def test_an_adoption_books_our_late_fill_first(lw: Live, extra: Decimal) -> None:
+    """Our buy filled after live was turned off; before the reconciliation booked it, shares
+    moved in from another broker (a mismatch, so that reconciliation rolled back with the fill).
+    The adoption books our fill as the trade it is, then takes the rest of the account: the next
+    reconciliations match and the fill is booked once (it used to come back on top of the
+    adopted numbers: 625 shares against 315, or a cash error that undid the adoption)."""
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-07-01 08:29")
+    assert lw.check("2026-07-01 08:30")["result"] == "rebalance"
+    lw.fake.fill_mode = "open"
+    lw.sync("2026-07-01 09:05")  # our buy is sent and stays open
+    ours = lw.fake.ours()[0].order_id
+    lw.turn_off("2026-07-01 09:50")  # the plan closes, a cancel is requested
+    lw.at("2026-07-01 09:55")
+    lw.fake.fill_open(ours, price=D("32000"))  # it fills before the cancel reaches Toss
+    lw.at("2026-07-01 10:00")
+    held = lw.fake.holdings["069500"].qty
+    lw.fake.hold("069500", held + D("5"), D("32000"), name="KODEX 200")
+    if extra:
+        lw.fake.deposit("KRW", extra)
+    lw.sync("2026-07-01 10:05")
+    assert lw.reconcile()["result"] == "mismatch"
+    lw.sync("2026-07-03 09:00")
+    adopted = adopt_job(lw.ctx, lw.now(), note="checked in the app")
+    assert adopted["result"] == "adopted"
+    assert [f["qty"] for f in adopted["lateFills"]] == [310]
+    assert [(c["from"], c["to"]) for c in adopted["positions"]] == [(310, 315)]
+    for t in ("2026-07-03 09:05", "2026-07-06 09:00"):
+        lw.sync(t)
+        lw.reconcile(t)
+        assert lw.status().reconcile_state == "match"
+    assert lw.state().qty_of("KR:069500") == 315
+    assert len(repo.fills_of_ledger(lw.conn, "live")) == 1
+
+
 # ── 6. a one-share top-up ────────────────────────────────────────────────────────────────
 
 
@@ -597,6 +633,26 @@ def test_the_plan_screens_leave_out_an_order_that_bought_nothing(lw: Live) -> No
     assert [e.kind for e in ctx.events if e.event_date == date(2026, 7, 2)] == []
     assert all(m["date"] != "2026-07-02" for m in event_markers(ctx))
     assert history.DayData(ctx).calendar_state(date(2026, 7, 2)) == "normal"
+
+
+def test_a_first_plan_that_bought_nothing_is_no_rebalance_day(lw: Live) -> None:
+    """The live ledger's first plan hangs on its start event (engine/check.py): when it buys
+    nothing, the start stays listed and the day is no rebalance day on the calendar either."""
+    from autotrade.api.views import history
+    from autotrade.api.views.context import LedgerContext
+
+    lw.fake.cash["KRW"] = D("32300")
+    lw.turn_on("2026-06-30 21:00")
+    lw.sync("2026-07-01 08:29")
+    plan_id = lw.check("2026-07-01 08:30")["plan_id"]
+    lw.fake.prices["069500"] = D("32400")
+    lw.sync("2026-07-01 09:05")
+    assert lw.stages()["result"] == "done"
+    event = repo.event_of_plan(lw.conn, plan_id)
+    assert event is not None and (event.kind, event.payload.get("untraded")) == ("start", True)  # noqa: PT018
+    ctx = LedgerContext(lw.conn, lw.cfg, "live", lw.at("2026-07-01 16:10"))
+    assert "start" in [e.kind for e in ctx.listed_events]
+    assert history.DayData(ctx).calendar_state(date(2026, 7, 1)) == "normal"
 
 
 # ── 7. withdraw waits: a conversion caps them, a live wait holds its own money ───────────
