@@ -13,6 +13,7 @@
   - `ret2`: 수익률 %, 소수 2자리(2.44)
 - **시각은 ISO 8601이고 시간대를 붙인다**(KST는 `+09:00`). 종가 기준일은 `YYYY-MM-DD`와 시장(`KR`/`US`)으로 준다. 미국 종가는 화면이 '(ET)'를 붙인다.
 - **장부는 `paper`(모의투자)와 `live`(실전) 둘이다.** 읽기 API는 `?ledger=`를 받는다. 없으면 지금 모드의 장부다. 다른 장부를 열면 화면은 '장부 칩'을 보인다(SCR-HISTORY.paper-ledger).
+- **돈의 출입은 평가 시각으로 기간에 넣는다.** 날마다의 값은 16:00 평가다. 그래서 한 기간(그날·그달·기간 손익·변동 분해)의 변동은 '닫는 평가의 손익 − 여는 평가의 손익'이고(손익 = 그 평가의 값 − 그때까지 들어온 돈, 스냅숏은 둘을 같은 순간에 적는다), 돈은 여는 평가 뒤에 들어와 닫는 평가 때까지 들어온 것만 그 기간의 것이다. 16:00 뒤의 입금은 그날이 아니라 다음 평가의 것이고(그날의 손실로 보이지 않는다), 달 마지막 평일 저녁의 입금은 다음 달의 것이다. 닫는 평가는 지금이면 지금 값이다(값이 마지막 스냅숏이면 그 시각). 실전을 그날 평가 뒤에 켜서 그날 스냅숏이 없으면 그 시작이 여는 평가다(값 = 시작 금액, 손익 0). 사건 표식·기록의 날짜는 그대로 그 돈이 들어온 날이다.
 - 모든 `/api/*`는 세션 쿠키가 필요하다(`/api/auth/*`·`/api/healthz` 제외). 인가 실패는 403 JSON이다. 401은 쓰지 않는다(브라우저 인증 창과 충돌).
 - 오류 응답: `{"error": "<code>", "detail"?: {...}}`. 404도 JSON이다. 코드는 '오류 코드' 표에 있다.
 
@@ -140,7 +141,7 @@ type Banner =
   | { kind: 'partial-retry'; date: string; market: Market; side: Side; retryAt: string; link: 'plan' }
   | { kind: 'partial-todo'; date: string; market: Market; side: Side; reason: 'broker-rejected' | 'retry-failed'; link: 'health' }   // retry-failed = 다시 시도까지 실패(모의투자는 이것뿐)
   | { kind: 'check-failed'; at: string; retryAt: string | null; link: 'health' }
-  | { kind: 'cancel-failed'; market: Market; side: Side; link: 'mode' }
+  | { kind: 'cancel-failed'; market: Market; side: Side; link: 'mode' }   // 실전이 켜진 채로도 온다(장 끝에 남은 주문·직접 처리로 닫은 계획의 주문): 화면은 ShellResponse.mode로 문구를 가른다
   | { kind: 'push-undelivered'; days: number; link: 'account' }
 ```
 
@@ -201,7 +202,7 @@ interface HomeAccount {
 interface Trend {
   periods: Array<'1m' | '3m' | '1y' | 'all'> | null   // 기록 30거래일 미만이면 null(기간 칩 숨김)
   period: '1m' | '3m' | '1y' | 'all'
-  periodPnl: { amount: number; pct: number } | null    // '전체'거나 기록이 짧으면 null
+  periodPnl: { amount: number; pct: number } | null    // '전체'거나 기록이 짧으면 null. amount = 지금 손익 − 기간 시작 평가의 손익(원칙 '돈의 출입은 평가 시각으로'), pct = amount ÷ 그 평가의 값
   series: Array<{ date: string; value: number; ret: number; baseline: number | null; baselineRet: number | null }>
   events: Array<{ date: string; kind: EventKind; kinds: EventKind[]; count?: number }>
   // 하루에 표식 하나. kind는 그날 첫 사건, kinds는 그날 사건 전부(순서대로), 둘 이상이면 count(묶음 표식).
@@ -225,6 +226,11 @@ interface PlanCard {
 type Gauge =
   | { kind: 'drift'; threshold: number; needle: null | {      // null = 바늘 숨김(시세 대기·첫 확인 전)
       instrument: Instrument; deviation: number; toThreshold: number } }   // pp1
+  | { kind: 'mix'; threshold: number; needle: null | {        // 실전 장부의 지수 반반(D47): 원화·달러 비율
+      now: { kr: number; us: number }                         // pct1, 합 100.0: 규칙 돈의 비율(FxSuggestion.now와 같은 셈)
+      deviation: number; toThreshold: number } }              // pp1: 한국 − 한국 목표(+ = 원화가 많음), 환전 제안까지(띠 밖이면 0)
+  // 실전 장부는 통화 사이로 리밸런싱하지 않으므로 규칙 전체의 벗어남 대신 이것을 준다. 띠(threshold)는 '환전 제안'의 문턱이다.
+  // needle null: 시세 대기·첫 확인 전, 평가가 낡았거나(FxSuggestion이 계산되지 않는 때와 같음) 규칙 돈이 없을 때
   | { kind: 'sell-condition'; needle: null | {                // AI 규칙(D34)
       instrument: Instrument; progress: number; metric: MetricRef; margin: Margin } }
 
@@ -278,6 +284,8 @@ interface Breakdown { from: string; to: string; start: number; deposit: number; 
   transfer?: number                  // account가 있을 때만: 환전으로 들어오고(+) 나간(−) 돈, 그 통화
 }
 // krw. 부호 있음: withdrawal·fees는 0 이하. deposit + withdrawal + market + dividend + fees = end - start(market이 반올림 나머지를 받는다).
+// 기간이면 start = 기간 시작 평가(그날이나 그 전 마지막 스냅숏, 없으면 실전의 시작)의 값이고, 입금·출금·배당은 그 평가 뒤에 들어온 것만이다.
+// 수수료는 아직 날짜로 센다(그 평가 날 저녁의 미국 체결 수수료는 market에 든다).
 // 'all'(기록 30거래일 미만이면 항상 'all')은 from = 시작일, start = 시작 금액이다. 시작 금액은 deposit에 넣지 않는다.
 // account('kr' | 'us'): 그 계좌의 변동을 그 통화로(달러는 센트). deposit + withdrawal + transfer + market + dividend + fees
 // = end − start. 'all'의 start는 한국 계좌가 시작 금액, 미국 계좌가 0. 30거래일 규칙은 그 계좌 기록으로 센다(HomeAccount.trend).
@@ -304,6 +312,7 @@ interface PlanResponse {
     events: Array<{ date: string; kind: EventKind; ruleId: string | null }>
     // 규칙의 리밸런싱은 그 규칙 선 위에(ruleId), 시작·실전 켬·끔은 장부 전체의 사건이라 ruleId null. AI 규칙은 선이 없어 여기 없다
     empty: null | 'second-day'
+    mix?: true                       // 실전 장부만(D47): 선이 원화·달러 비율의 벗어남 |한국 − 목표|(Gauge 'mix'와 같은 셈)이고 띠는 환전 제안의 문턱
   }
 }
 interface RuleCard {
@@ -316,7 +325,7 @@ interface RuleCard {
     instrument: Instrument
     weight: number | null            // pct1, null = '—'(시세 대기)
     target: number                   // pct1
-    toThreshold: number | null       // pp1
+    toThreshold: number | null       // pp1. 실전 장부는 null('리밸런싱까지' 없음, D47: 통화 사이로 리밸런싱하지 않는다)
     // AI 규칙(sell-condition 게이지): 팔 조건까지
     progress?: number; metric?: MetricRef; margin?: Margin
   }>
@@ -388,7 +397,7 @@ interface HistoryResponse {
     rules: Array<{ rule: RuleRef; count: number }>   // 규칙의 리밸런싱 + 그 규칙 종목의 배당. AI 규칙은 그 규칙의 계획 + AI 판단 사건
     kinds: Array<{ kind: 'rebalance' | 'deposit' | 'withdrawal' | 'dividend' | 'failed' | 'ai'; count: number }>   // 'ai'는 AI 규칙이 있을 때만
   }
-  months: Array<{ month: string; change: number; events: HistoryEvent[] }>   // 최신순, 월 변동의 합 = 손익
+  months: Array<{ month: string; change: number; events: HistoryEvent[] }>   // 최신순, 월 변동의 합 = 손익. 월 변동 = 그달 마지막 평가의 손익 − 전달 마지막 평가의 손익
   offPeriods: Array<{ from: string; to: string }>
 }
 interface HistoryEvent {
@@ -399,7 +408,7 @@ interface HistoryEvent {
   weightsMini?: { before: number[]; after: number[]; target: number[] }   // target = 목표 눈금(pct1). AI 규칙은 빈 배열
   pending?: { side: Side; at: string }   // 리밸런싱 중: 기다리는 단계와 그 시각('매수 22:30')
   fill?: 'paper' | 'live'
-  deviation?: number                  // '2.3%p 벗어남'
+  deviation?: number                  // '2.3%p 벗어남'. 실전 장부에는 없다(D47: 그 계획은 통화마다 넣은 돈을 산 것이지 벗어남 때문이 아니다)
   cause?: RebalanceCause              // 지수 반반의 리밸런싱 사건만(AI 규칙의 계획은 없음)
   fees?: number
   amount?: number                     // 시작·입출금·배당(krw. 달러 배당은 받은 날 환율로 원화)
@@ -409,7 +418,7 @@ interface HistoryEvent {
   recoveredOn?: string                // 확인 실패 → '9/10 정상'
   resolvedOn?: string                 // 직접 할 일을 처리했다고 닫은 날(일부 실패·확인 실패) → '10/9 직접 처리'
   treatment?: 'pnl-excluded' | 'income' | 'invest-next-check' | 'withdraw-wait'
-  dayChange: number | null
+  dayChange: number | null           // 그날 변동(DayResponse.change.amount와 같다)
   dayTotal: number
 }
 ```
@@ -422,13 +431,15 @@ interface DayResponse {
   example: boolean
   prev: string | null; next: string | null      // 이전·다음 사건 날짜
   total: number; change: { amount: number; pct: number } | null
+  // change = 그날 16:00 평가의 손익 − 그 전 평가의 손익(그날 저녁 입금은 다음 평가의 것). 평가가 없는 날은 null이고 total은 그 전 마지막 값,
+  // 첫 평가 전이면 시작 금액(그날 평가 뒤에 켠 실전의 시작일)
   events: DayEvent[]
   check: {
     at: string | null                             // null = 주말·확인 없음
     result: 'rebalance' | 'in-range' | 'partial-failed' | 'failed' | 'holiday' | 'quote-wait' | 'weekend'
           | 'in-progress' | 'withdraw-wait' | 'no-run'   // no-run = 평일인데 확인 기록이 없음(기록 전·작업 안 돎)
     holidayMarkets?: Market[]
-    band: { threshold: number; before: number | null; after: number | null } | null   // pp1
+    band: { threshold: number; before: number | null; after: number | null } | null   // pp1. 실전 장부는 null이고 instrument·weight·toThreshold·over도 없다(D47: 확인이 적은 규칙 전체의 벗어남은 통화 사이라 아무것도 하지 않는다)
     ruleId?: string; rule?: RuleRef                 // 확인한 규칙(이름은 rule)
     instrument?: Instrument; weight?: number; toThreshold?: number; over?: number
     failure?: { reason: 'no-quote' | 'other'; recoveredOn?: string }   // result 'failed': 코드와 날짜('시세 응답 없음 · 9/10 정상')
@@ -501,9 +512,13 @@ interface TilesDisplay {                       // 고정 규칙: 타일 6칸
     deviation: { now: number | null; atCheck: number | null }
     // pp1. now = 지금 가장 큰 벗어남(빈 점, 시세 대기면 null), atCheck = 오늘 08:30 확인 때 값(주황 점, 오늘 확인이 없거나 보유가 없으면 null)
   }
-  action: { stages: Array<'sell' | 'fx' | 'buy'> }
+  action: { stages: Array<'sell' | 'fx' | 'buy'> }   // 모의투자 ['sell', 'fx', 'buy']. 실전 장부는 ['buy'](D47: 환전하지 않고, 지수 반반은 통화마다 한 종목이라 팔 일도 없다)
   measured: { median: number; worst: number; badYear: number; period: string; afterTax: boolean; source: string } | null   // 측정되지 않으면 null(그리지 않음)
   now: { status: RuleStatus; stages: Stage[] | null; nextCheckAt: string }
+  mix?: true
+  // 실전 장부만(D47 넣은 돈 그대로): condition.deviation.now는 원화·달러 비율(한국 − 목표, pp1)이고 atCheck는 null이다
+  // (확인이 적은 규칙 전체의 벗어남은 통화 사이라 아무것도 하지 않는다). 띠를 넘으면 '환전 제안'(정보)이고, 행동은 통화마다
+  // 그 통화의 돈으로 그 통화 종목을 산다(action.stages ['buy'])
 }
 interface FlowDisplay {                        // AI 규칙: 흐름 카드(D34)
   kind: 'flow'
@@ -770,7 +785,9 @@ type NotifyEvent =
   - health.todo, health.stale, health.unknown, health.failed
   - mode.paper, mode.live, mode.turning-on, mode.off-confirm, mode.off-failed, mode.blocked, mode.short
   - 3단계 실전 연결(그림 없음): mode.cancel-pending(토스에 요청한 취소가 남아 켜기 닫힘), mode.link-off(토스 연결 ✕: 원인과 할 일, 자료 최신은 같은 원인), health.live(실전 할 일: 잔고 불일치·토스 연결, 할 일 옆에 새로 들어온 돈·환전 제안)
-  - 넣은 돈 그대로(D47·D48, 그림 없음): plan.live-mix(실전 카드 '환전 제안'과 바꿀 금액, 예정의 '새로 들어온 돈'), mode.live-cash(실전 켜짐: 새로 들어온 돈·환전 제안 카드)
+  - 넣은 돈 그대로(D47·D48, 그림 없음): plan.live-mix(실전 카드 '환전 제안'과 바꿀 금액, 예정의 '새로 들어온 돈'), mode.live-cash(실전 켜짐: 새로 들어온 돈·환전 제안 카드), rules.live(실전 타일: '±2%p 넘으면 환전 제안', '매수 주문 · 원화로 한국 · 달러로 미국 종목')
+  - mode.live-cancel-failed(실전이 켜진 채로 취소 실패: 빨간 카드가 먼저, 원화 · 달러와 실전 끄기는 그대로, 배너에 '모의투자로 바뀜' 없음)
+  - 실전 고정 자료(home.live·home.live-todo·home.live-first·home.withdraw·plan.live·plan.live-todo·plan.live-mix·plan.withdraw·history.paper-ledger의 실전)는 D47을 따른다: 규칙은 지수 반반 하나(몫 100), 환전 단계 없음, 게이지 'mix'
   - account.default, account.no-push
   - pin.entering, pin.error, pin.locked
 - 위 목록은 Figma 디자인 페이지의 프레임 50장과 일대일이다. 그림이 없는 상태(명세에만 있는 것)는 같은 규칙으로 이름을 붙여 더한다.
@@ -792,3 +809,4 @@ type NotifyEvent =
 - 2026-10-13: 계좌 pct·ret·periodPnl.pct를 수정 디츠(평균으로 머문 돈 대비)로 바꿨다(가벼운 확인: 손익 ÷ 들어온 돈은 환전마다 휘었다). 평가가 실패해 값이 마지막 스냅숏일 때는 그 뒤 옮긴 돈을 세지 않고 stale을 켠다. accounts가 null인 경우에 '평가도 스냅숏도 없을 때'를 적었다. 화면: 점선 이름 '원금' → '들어온 돈'과 한 줄 설명, 설정 알림 줄 문구, 미국 계좌 변동 분해의 입금·출금 줄은 값이 있을 때만, 전체에서 연 계좌 보기는 뒤로 가기가 전체로(스위치도). 값이 마지막 스냅숏일 때(지금 평가를 못 함) 숫자는 모두 그 스냅숏 시각 기준이다: 전체 손익은 그 스냅숏까지 들어온 돈을 빼고, 변동 분해·월 변동·기간 손익·그날 변동도 돈의 출입을 그 시각까지만 센다(그 뒤 입금이 손실로 보이지 않게, 월 변동의 합 = 손익 유지). basis는 그 스냅숏의 것(시각·종가일·환율)이고 stale에 셋 다를 넣는다.
 - 2026-10-13: 3단계 실전 연결(토스 세션, autotrade/PHASE3.md). 작동 화면 할 일에 `toss-link`(원인 `TossLinkCause`, 실전이면 빨강, 사람이 고칠 원인만 직접 할 일)·`broker-mismatch`(대조가 맞지 않음: 보유 수량·현금·결과를 모르는 주문, 그동안 실전 주문 0건)·`fx-manual`(토스 앱에서 할 환전: 방향·원화·달러·환율·기다리는 매수 시각)을 더하고 `cancel-failed`의 facts를 정했다. 토스 연결 줄은 'per-check'다(토스 API에 키 만료가 없다): tick이 마지막으로 본 결과, `extra.cause`·`account`, 주인이 알려 준 키 만료일이 있을 때만 basis·`daysLeft`(14일 안이면 'late'). '90d'는 1·2단계 그림의 값으로 남는다. `/api/mode`에 `cancelPending`(토스에 요청한 취소, 다음 확인이 처리)과 `canTurnOn.cause` 'cancel-pending'을, 켜기 전 점검 toss-link의 facts(`checkedAt`·`account` 또는 `cause`)를 더했다. `POST /api/mode/paper`·`/cancel-retry`가 `cancelPending`을 준다. 켜기 전 점검의 자료 최신이 토스 계좌 사진 탓에 ✕이고 토스 연결도 ✕이면 `sameCauseAs: 'toss-link'`(원인 하나). 고정 자료 mode.cancel-pending·mode.link-off·health.live를 더했다. 실전 장부는 계좌별 보기가 읽는 대로 적는다: 계획의 환전은 그 환전 주문의 fx 체결(주문의 `executed_at`은 계좌가 보여 준 시각), 실전 체결 주문의 `executed_at`은 브로커 시각, 대조가 찾은 입·출금·배당은 그 통화의 사건(`occurred_at` = 계좌에서 처음 보인 시각). 달러가 있는 시작과 adopt-broker는 payload `by_currency`(통화마다 들어온 돈, 부호 있음)를, 계획에 없던 환전(주인이 앱에서)은 'conversion' 표시가 붙은 출금·입금 사건 둘을 남기고 계좌별 보기는 이를 계좌 사이의 이동으로 읽는다.
 - 2026-10-13: 넣은 돈 그대로(D47)·새 돈은 다음 거래일부터(D48)(토스 세션, 주인의 결정). 실전 장부는 환전하지 않는다: 원화는 한국 종목, 달러는 미국 종목에 넣고, 한쪽을 팔아 다른 쪽을 사지 않는다. 할 일 `fx-manual`을 뺐다(모의투자는 만든 적이 없고, 실전 장부는 서버에서 시작된 적이 없다). 실전 계획과 켜기 미리보기의 단계에 'fx'가 없다. 원화·달러 비율이 띠 밖이면 상태 `fx-suggest`('환전 제안', 실전 지수 반반만)와 `FxSuggestion`(계획 카드 `fxSuggestion`, 미리보기 `fxSuggestion`, 모드·작동 화면 `liveCash`)을 준다: 정보일 뿐 할 일이 아니고 수에 들어가지 않는다. 대조가 주인의 돈으로 적은 돈(입금, 주인이 한 환전으로 들어온 돈)은 들어온 날(KST)의 확인이 쓰지 않는다: 예정 항목 `new-money-wait`(`NewMoneyWait`: 원·달러·쓰기 시작하는 확인), 미리보기 `newMoney`, `liveCash.newMoney`. `new-cash`는 그 돈을 뺀 값이다. 주인의 환전('conversion' 사건 둘)은 장부 전체의 기록·그날·자산 표식·변동 분해의 입금·출금에 넣지 않는다(돈이 들어오거나 나간 것이 아니다. 계좌별 보기는 이동으로 읽는다). 장부 전체의 변동 분해·월 변동·그날 변동은 달러 입금을 그 사건의 원화 값으로 센다(전에는 달러 금액을 원으로 읽었다). 고정 자료 plan.live-mix·mode.live-cash를 더하고 mode.paper 등 켜기 미리보기를 원화만 있는 계좌(한국 매수 + 환전 제안)로 바꿨다.
+- 2026-10-13: 실전 화면 감사 수정(화면 세션). 돈의 출입은 평가 시각으로 기간에 넣는다(원칙): 그날·월 변동, 기간 손익, 장부 전체 변동 분해의 입출금·배당, 기록 줄의 그날 변동은 여는 평가 뒤에 들어와 닫는 평가 때까지 들어온 돈만 센다(16:00 뒤 입금은 다음 평가의 것, 달 마지막 평일 저녁 입금은 다음 달의 것). 그날 스냅숏이 없는 실전 시작일의 total은 시작 금액이고, 그런 시작이 기간 시작이면 여는 평가가 된다. 수수료는 아직 날짜로 센다. 실전 장부는 리밸런싱을 말하지 않는다(D47): 게이지 `mix`(원화·달러 비율, '환전 제안까지'), 규칙 카드 줄 `toThreshold` null, 벗어남 흐름 `drift.mix`(선은 원화·달러 비율의 벗어남), 규칙 타일 `TilesDisplay.mix`(조건은 원화·달러 비율·atCheck null, 행동 stages ['buy']), 그날 확인 `band` null, 기록 줄 `deviation` 없음. cancel-failed 배너는 실전이 켜진 채로도 온다(화면이 모드로 문구를 가른다). 고정 자료 rules.live·mode.live-cancel-failed를 더하고 실전 고정 자료를 D47로 고쳤다(환전 단계·둘째 규칙 없음, 몫 100).

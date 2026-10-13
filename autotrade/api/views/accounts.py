@@ -15,12 +15,11 @@ Money into an account ('net in', in its currency)
   한국 계좌 and puts the dollars it bought into 미국 계좌; dollars → won the other way. It is a
   transfer, never a gain or a loss of either account.
 - The live ledger (engine/live.py) records the same way: what the reconciliation finds coming in
-  or going out is a deposit or withdrawal event in its own currency, dated when it arrived; a
-  conversion a plan asked for (made by the owner in the Toss app) is the fx fill of its fx order.
-  Two cases have no paper twin: a start or adopt-broker that moved both currencies carries each
-  one's amount ('by_currency'), and the owner's conversion is two events (out of one currency,
-  into the other) marked 'conversion', read here as a transfer. Live plans never convert (D47):
-  every live conversion is the owner's, made in the Toss app.
+  or going out is a deposit or withdrawal event in its own currency, dated when it arrived. Live
+  plans never convert (D47), so it has no fx fill: every live conversion is the owner's, made in
+  the Toss app. Two cases have no paper twin: a start or adopt-broker that moved both currencies
+  carries each one's amount ('by_currency'), and the owner's conversion is two events (out of one
+  currency, into the other) marked 'conversion', read here as a transfer.
 - Dividends (after tax), fees and taxes are not money in: they stay in the value of the account of
   their currency, so they are that account's P&L.
 - A fill counts from the moment the ledger took it: its order's execution time, which a snapshot
