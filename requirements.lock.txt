@@ -1,4 +1,5 @@
-# Oracle venv pip freeze (2026-09-06) — source of truth for deployment.
+# Oracle venv pip freeze (2026-09-06) — source of truth for the server's .venv
+# (python3.10 -m venv .venv && .venv/bin/pip install -r requirements.lock.txt).
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0

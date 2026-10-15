@@ -254,7 +254,7 @@
 4. 서버 확인 단계(5절)를 허락한다(읽기만).
 5. tick 줄에 열쇠 1을 넣는다(crontab, AI 줄의 `AUTOTRADE_AI_CALLS=1`과 같은 방식):
    ```
-   */5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_LIVE_ORDERS=1 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
+   */5 * * * * cd /home/ubuntu/quant-dashboard && AUTOTRADE_LIVE_ORDERS=1 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
    ```
    이것만으로는 주문이 나가지 않는다(모드가 모의투자). 5분 안에 모드 화면의 '토스 연결'이 ✓가 된다.
 6. 모드 화면에서 미리보기를 보고 체크 + PIN → 실전 켜기.
@@ -264,7 +264,7 @@
 
 ## 5. 서버 확인 단계(읽기만, 유준상 허락 뒤)
 ```
-cd ~/portfolio-dashboard
+cd ~/quant-dashboard
 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env .venv/bin/python -m autotrade.jobs toss-check
 ```
 - 주문·취소를 부르지 않는다(코드에 그 경로가 없다). 토큰을 하나 받는다(같은 키로 받은 다른 토큰은 무효가 된다).

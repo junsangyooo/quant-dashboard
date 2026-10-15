@@ -397,13 +397,13 @@ def test_the_live_ledger_ticks_quietly_until_it_matters(world: World, db: Path) 
 def test_the_crontab_block(tmp_path: Path) -> None:
     text = (Path(__file__).resolve().parents[2] / "deploy" / "autotrade.cron").read_text()
     [tick, ai] = [x for x in text.splitlines() if x and not x.startswith("#")]
-    assert tick.startswith("*/5 * * * * cd /home/ubuntu/portfolio-dashboard && ")
+    assert tick.startswith("*/5 * * * * cd /home/ubuntu/quant-dashboard && ")
     assert " flock -n data/autotrade.db-cron.lock timeout 10m " in tick
     assert "AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env" in tick  # DART key only
     # Live orders: the first key is on the tick's line since the owner's go (2026-10-13), the tick
     # alone; the second is the mode 'live' the owner sets with the PIN (PHASE3.md 4).
     assert tick.startswith(
-        "*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_LIVE_ORDERS=1 "
+        "*/5 * * * * cd /home/ubuntu/quant-dashboard && AUTOTRADE_LIVE_ORDERS=1 "
     )
     assert ".venv/bin/python -m autotrade.jobs tick" in tick
     assert tick.endswith(">> data/logs/autotrade-jobs.log 2>&1")
@@ -411,7 +411,7 @@ def test_the_crontab_block(tmp_path: Path) -> None:
     # (2026-10-12). cron's PATH has no `claude`: the line names the server's wrapper (audit E1);
     # the runner reads Korean filing texts, so it gets the DART key's file like the tick (E3).
     assert ai.startswith(
-        "*/5 * * * * cd /home/ubuntu/portfolio-dashboard"
+        "*/5 * * * * cd /home/ubuntu/quant-dashboard"
         " && AUTOTRADE_AI_CALLS=1 AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude"
         " AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n "
     )

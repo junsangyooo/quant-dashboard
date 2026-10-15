@@ -5,52 +5,22 @@ __pycache__/
 .env
 STATUS.md
 
+# ── Runtime data (written on the server, never in git) ───────────────
+# autotrade.db with its -wal/-shm and locks, autotrade.secret, autotrade-toss/ (the tick's
+# token cache), ai-cwd/, backup/, deploy/ (history.jsonl), logs/
+data/
 
-# ── Runtime data (Oracle 단방향, NEVER git add) ─────────────────────
-data/portfolio.db
-data/portfolio.db-*
-data/quant.db
-data/quant.db-*
-data/quant/
-data/universe/
-data/market.db
-data/market.db-*
-data/news.db
-data/news.db-*
-data/market/
-data/analysis/
-data/logs/
-data/backup/
-# the deleted listing collector's output (2026-10-13). No code writes it any more, but
-# this laptop still has the folder: keep the line until the folder is gone, or
-# `git add -A` (qdc) would commit it.
-data/listings/
-models/
-docs_cache/
-
-# ── Catch-all by extension (defense in depth) ───────────────────────
-*.parquet
-*.csv
-*.log
-*.pid
-*.png
-!src/dashboard_web/static/icons/*.png
-
-# ── Docs symlinked to Obsidian Vault (local-only, breaks on Oracle) ──
+# ── Local-only folders ───────────────────────────────────────────────
 docs/
-
-# session signing secret (Oracle-generated, never commit)
-data/.session_secret
-
-# local research caches (large, never committed)
 tmp/
 
-# ── 새 quant (autotrade/ + web/) ───────────────────────────────
-data/autotrade.db
-data/autotrade.db-*
-data/autotrade.secret
-data/autotrade-toss/
-data/deploy/
+# ── Catch-all by extension (defense in depth) ───────────────────────
+*.log
+*.pid
+*.parquet
+*.csv
+
+# ── web/ ─────────────────────────────────────────────────────────────
 web/node_modules/
 # On the server web/dist is a symlink to web/releases/<id> (deploy/deploy.sh): no trailing slash,
 # or the link would not match.
@@ -59,4 +29,3 @@ web/releases/
 web/test-results/
 web/playwright-report/
 web/coverage/
-!web/public/**/*.png

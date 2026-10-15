@@ -79,8 +79,7 @@ def two_commits(repo: Path) -> tuple[str, str]:
         "autotrade/__init__.py": "",
         "autotrade/db/__init__.py": "",
         "web/package.json": "{}\n",
-        "src/app.py": "print('old app')\n",
-        "deploy/dashboard.service": "[Service]\n",
+        "README.md": "quant\n",
     }
     a = commit(repo, {**base, "autotrade/db/migrations.py": migrations(2)}, "a")
     b = commit(repo, {"autotrade/db/migrations.py": migrations(3)}, "b: a migration")
@@ -437,11 +436,8 @@ def test_rollback_plan_restores_when_the_schema_went_back(
     assert plan["schema"] == {"stored": 3, "code": 2}
     assert plan["restore"] == str(deployed.backups / "autotrade-predeploy-20261010-093000.db")
     assert plan["release"] == rel.find_release(deployed, a)
-    assert (plan["autotrade"], plan["dashboardChanged"], plan["serviceActive"]) == (
-        True,
-        False,
-        True,
-    )
+    assert (plan["autotrade"], plan["serviceActive"]) == (True, True)
+    assert "dashboardChanged" not in plan
     assert "leaves the live DB" in plan["say"][1]
 
 
@@ -474,10 +470,10 @@ def test_rollback_keeps_the_database_when_the_schema_did_not_change(
 ) -> None:
     _, b = two_commits
     paths = rel.Paths(repo)
-    c = commit(repo, {"src/app.py": "print('old app, changed')\n"}, "c: old app only")
+    c = commit(repo, {"README.md": "quant, changed\n"}, "c: no schema change")
     make_db(paths.db, 3, rows=["kept"])
     plan = rel.rollback_plan(paths, b, FakeSystemd("inactive"))
-    assert (plan["restore"], plan["dashboardChanged"], plan["serviceActive"]) == (None, True, False)
+    assert (plan["restore"], plan["serviceActive"]) == (None, False)
     assert plan["release"] is None  # never built: deploy.sh builds it first
     assert "fits that code" in plan["say"][1]
     systemd = FakeSystemd("inactive")
@@ -513,12 +509,12 @@ def test_rollback_plan_other_refusals(repo: Path, two_commits: tuple[str, str]) 
         rel.rollback_plan(paths, b, FakeSystemd())
     with pytest.raises(rel.ReleaseError, match="no deploy record"):
         rel.rollback_plan(paths, None, FakeSystemd())
-    (repo / "src" / "app.py").write_text("edited on the server")
+    (repo / "README.md").write_text("edited on the server")
     with pytest.raises(rel.ReleaseError, match="working tree has changes"):
         rel.rollback_plan(paths, a, FakeSystemd())
     with pytest.raises(rel.ReleaseError, match="working tree has changes"):
         rel.rollback_apply(paths, a, None, None, T0, FakeSystemd(), 0.1, 0.1)
-    sh(repo, "checkout", "-q", "--", "src/app.py")
+    sh(repo, "checkout", "-q", "--", "README.md")
     sh(repo, "rm", "-q", "-r", "autotrade")
     gone = commit(repo, {}, "no autotrade")
     make_db(paths.db, 3)
@@ -666,7 +662,7 @@ def test_without_a_restore_the_live_ledger_stays_where_it_is(
 ) -> None:
     """A rollback that keeps the database (same schema) keeps the live ledger and its Toss code."""
     _, b = two_commits
-    commit(repo, {"src/app.py": "print('old app, changed')\n"}, "c: old app only")
+    commit(repo, {"README.md": "quant, changed\n"}, "c: no schema change")
     paths = rel.Paths(repo)
     make_db(paths.db, 3)
     add_live(paths.db, start=True, mode="live", orders=[("sent", None)])

@@ -5,11 +5,11 @@
 #
 # Install or update (with the owner's go; deploy.sh warns when the installed copy differs):
 #   sudo cp /etc/systemd/system/autotrade.service /etc/systemd/system/autotrade.service.bak  (an update)
-#   sudo cp ~/portfolio-dashboard/deploy/autotrade.service /etc/systemd/system/autotrade.service
-#   sudo touch ~/portfolio-dashboard/data/logs/autotrade.log
-#   sudo chown ubuntu:ubuntu ~/portfolio-dashboard/data/logs/autotrade.log
+#   sudo cp ~/quant-dashboard/deploy/autotrade.service /etc/systemd/system/autotrade.service
+#   sudo touch ~/quant-dashboard/data/logs/autotrade.log
+#   sudo chown ubuntu:ubuntu ~/quant-dashboard/data/logs/autotrade.log
 #      (systemd opens the log as root and would create it root-owned; logrotate's copytruncate
-#       runs as ubuntu, deploy/logrotate-dashboard — the same step dashboard.log needed)
+#       runs as ubuntu, deploy/logrotate-quant)
 #   sudo systemd-analyze verify /etc/systemd/system/autotrade.service   (no output = fine)
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now autotrade      (first time)  |  sudo systemctl restart autotrade
@@ -47,7 +47,7 @@
 # never connects anywhere (no market data, no AI calls: those are the jobs').
 # - ProtectHome=tmpfs + BindReadOnlyPaths= + BindPaths=: /home is empty except the repository
 #   (read-only) and data/ (writable). ~/.claude, ~/dotclaude, ~/.ssh and the rest of the home
-#   directory do not exist for it. Inside data/ the old app's secrets are hidden as well.
+#   directory do not exist for it. Inside data/ the backups and the tick's token cache are hidden.
 # - RestrictAddressFamilies=AF_INET AF_INET6: no unix sockets. User ubuntu is in the docker group
 #   (the docker socket is root) and sudo: no socket means no docker, LXD, D-Bus or snapd, whatever
 #   the groups; NoNewPrivileges= makes sudo powerless. asyncio's self-pipe is a socketpair(),
@@ -56,7 +56,7 @@
 # - Considered and left out: MemoryDenyWriteExecute= (libffi/ctypes callbacks need writable code
 #   pages; a crash at runtime is worse than the gain), PrivateUsers= (supplementary groups stay
 #   effective inside it anyway), RemoveIPC= (it would delete the IPC objects of every process of
-#   user ubuntu, the old app's too, whenever this unit stops), UMask=0077 (systemd creates a
+#   user ubuntu, other apps' too, whenever this unit stops), UMask=0077 (systemd creates a
 #   missing log file with the unit's umask: root-owned 0600, unreadable for ubuntu; the database
 #   file itself is created by the jobs, not by this process).
 
@@ -69,12 +69,12 @@ Wants=network-online.target
 Type=simple
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/portfolio-dashboard
-ExecStart=/home/ubuntu/portfolio-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890 --no-proxy-headers --no-server-header
+WorkingDirectory=/home/ubuntu/quant-dashboard
+ExecStart=/home/ubuntu/quant-dashboard/.venv/bin/python -m uvicorn autotrade.api.app:app --host 127.0.0.1 --port 8890 --no-proxy-headers --no-server-header
 Restart=on-failure
 RestartSec=10
-StandardOutput=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
-StandardError=append:/home/ubuntu/portfolio-dashboard/data/logs/autotrade.log
+StandardOutput=append:/home/ubuntu/quant-dashboard/data/logs/autotrade.log
+StandardError=append:/home/ubuntu/quant-dashboard/data/logs/autotrade.log
 
 Environment=PYTHONDONTWRITEBYTECODE=1
 UnsetEnvironment=AUTOTRADE_LIVE_ORDERS AUTOTRADE_DEV AUTOTRADE_FAKE_NOW AUTOTRADE_DB AUTOTRADE_SECRETS_ENV DART_API_KEY ANTHROPIC_API_KEY KRX_ID KRX_PW TOSS_CLIENT_ID TOSS_CLIENT_SECRET TOSS_ACCOUNT_NO
@@ -83,9 +83,9 @@ NoNewPrivileges=yes
 CapabilityBoundingSet=
 ProtectSystem=strict
 ProtectHome=tmpfs
-BindReadOnlyPaths=/home/ubuntu/portfolio-dashboard
-BindPaths=/home/ubuntu/portfolio-dashboard/data
-InaccessiblePaths=-/home/ubuntu/portfolio-dashboard/data/quant -/home/ubuntu/portfolio-dashboard/data/.session_secret -/home/ubuntu/portfolio-dashboard/data/backup -/home/ubuntu/portfolio-dashboard/data/portfolio.db -/home/ubuntu/portfolio-dashboard/data/quant.db -/home/ubuntu/portfolio-dashboard/data/autotrade-toss
+BindReadOnlyPaths=/home/ubuntu/quant-dashboard
+BindPaths=/home/ubuntu/quant-dashboard/data
+InaccessiblePaths=-/home/ubuntu/quant-dashboard/data/backup -/home/ubuntu/quant-dashboard/data/autotrade-toss
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes

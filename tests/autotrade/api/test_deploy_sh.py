@@ -70,7 +70,6 @@ FAKE_PYTHON = """#!/bin/bash
 if [ "$1" = "-m" ]; then
   echo "python $*" >> "$SIM_STATE/calls"
   case "$2 $3" in
-    "src.core.backup "*) exit 0 ;;
     "autotrade.jobs backup") exec "$REAL_PYTHON" "$SIM_TOOLS/engine.py" backup ;;
     "autotrade.jobs migrate") exec "$REAL_PYTHON" "$SIM_TOOLS/engine.py" migrate "${@:4}" ;;
   esac
@@ -201,7 +200,6 @@ def sim(tmp_path: Path) -> Sim:
         "autotrade/db/__init__.py": "",
         "autotrade/db/migrations.py": migrations(2),
         "web/package.json": "{}\n",
-        "src/app.py": "print('old app')\n",
     }
     for name, text in files.items():
         (laptop / name).parent.mkdir(parents=True, exist_ok=True)
@@ -209,7 +207,7 @@ def sim(tmp_path: Path) -> Sim:
     git(laptop, "add", "-A")
     git(laptop, "commit", "-q", "-m", "first")
     git(laptop, "push", "-q", "-u", "origin", "main")
-    server = home / "portfolio-dashboard"
+    server = home / "quant-dashboard"
     git(tmp_path, "clone", "-q", str(origin), str(server))
     dot_origin, dot = tmp_path / "dotclaude.git", home / "dotclaude"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(dot_origin))
@@ -343,18 +341,16 @@ def test_a_busy_migrate_says_to_deploy_again(sim: Sim) -> None:
 
 def test_a_pull_only_deploy_warns_about_a_pending_schema(sim: Sim) -> None:
     assert sim.deploy("autotrade").returncode == 0
-    sim.commit(
-        {"autotrade/db/migrations.py": migrations(3), "src/app.py": "print('changed')\n"}, "both"
-    )
+    sim.commit({"autotrade/db/migrations.py": migrations(3)}, "schema 3")
+    restarts = [c for c in sim.calls() if c.startswith("systemctl restart")]
     done = sim.deploy()
     assert done.returncode == 0, done.stdout + done.stderr
     assert (
         "ticks refuse to run and quant answers 503 until ./deploy/deploy.sh autotrade"
         in done.stdout
     )
-    assert "dashboard.service was not restarted" in done.stdout
     assert sim.schema() == 2  # nothing migrated
-    assert not any(c.startswith("systemctl restart") for c in sim.calls()[-5:])
+    assert [c for c in sim.calls() if c.startswith("systemctl restart")] == restarts
 
 
 def test_an_uninstalled_unit_is_not_restarted(sim: Sim) -> None:
@@ -368,30 +364,16 @@ def test_an_uninstalled_unit_is_not_restarted(sim: Sim) -> None:
 def test_unknown_service_names_stop_before_anything(sim: Sim) -> None:
     done = sim.deploy("autotrad")
     assert done.returncode != 0
-    assert "unknown service 'autotrad'" in done.stderr
+    assert "unknown mode 'autotrad'" in done.stderr
     assert sim.calls() == []
 
 
-def test_the_old_app_deploys_and_rolls_back_as_before(sim: Sim) -> None:
-    """qdd (deploy.sh dashboard): pull, the old app's backup, restart and its health check. A
-    rollback restarts it only when its code (src/) differs between the two commits."""
-    assert sim.deploy("autotrade").returncode == 0  # autotrade's database exists (schema 2)
-    before = sim.head()
-    changed = sim.commit({"src/app.py": "print('old app, fixed')\n"}, "old app change")
+def test_the_old_modes_are_gone(sim: Sim) -> None:
+    """This repository deploys quant only: the portfolio app's mode is unknown here."""
     done = sim.deploy("dashboard")
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert sim.head() == changed
-    assert "systemctl restart dashboard.service" in sim.calls()
-    assert "python -m src.core.backup --only portfolio news" in sim.calls()
-    assert "health OK (http://127.0.0.1:8888/api/accounts" in done.stdout
-    restarts = sim.calls().count("systemctl restart dashboard.service")
-    done = sim.deploy("rollback", "--yes")
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert "old app: src/ differs, dashboard.service will be restarted" in done.stdout
-    assert "autotrade DB: schema 2 fits that code, it stays as it is" in done.stdout
-    assert sim.head() == before
-    assert sim.calls().count("systemctl restart dashboard.service") == restarts + 1
-    assert sim.schema() == 2  # nothing restored
+    assert done.returncode != 0
+    assert "unknown mode 'dashboard'" in done.stderr
+    assert sim.calls() == []
 
 
 def test_a_rollback_keeps_the_live_ledger_unless_told(sim: Sim) -> None:

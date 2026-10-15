@@ -3,7 +3,7 @@ rollback, the deploy record and the health check. Standard library only; never i
 
 deploy.sh pipes this file to the server's Python:
 
-    ssh oracle-instance 'cd ~/portfolio-dashboard && .venv/bin/python - <command> …' < this file
+    ssh oracle-instance 'cd ~/quant-dashboard && .venv/bin/python - <command> …' < this file
 
 so a rollback runs this (the laptop's) version, not the one of the commit it checks out. Every
 command prints one JSON object on stdout ({"result": "failed", "error": …} and exit 1 on failure);
@@ -788,14 +788,6 @@ def rollback_plan(
     release = find_release(paths, target) if code is not None else None
     if code is not None:
         say.append(f"web: release {release}" if release else f"web: build from {target[:12]}")
-    old_app = git(
-        paths.root, "diff", "--name-only", target, head, "--", "src", "deploy/dashboard.service"
-    )
-    say.append(
-        "old app: src/ differs, dashboard.service will be restarted"
-        if old_app
-        else "old app: unchanged, dashboard.service keeps running"
-    )
     active = sysctl(["is-active", SERVICE])
     say.append(
         f"autotrade.service: {active}"
@@ -810,7 +802,6 @@ def rollback_plan(
         "live": None if live is None else live.json(),  # set only when --drop-live lets it go
         "release": release,
         "autotrade": code is not None,
-        "dashboardChanged": bool(old_app),
         "serviceActive": active == "active",
         "say": say,
     }

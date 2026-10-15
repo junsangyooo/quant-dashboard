@@ -109,7 +109,7 @@ class Config:
     ai_monthly_budget: int = 2_000_000
     ai_max_attempts: int = 3  # a task that failed this often waits for a person
     dart_api_key: str | None = None
-    edgar_user_agent: str = "portfolio-dashboard/1.0 (contact: admin@jsyoo.dev)"
+    edgar_user_agent: str = "quant-dashboard/1.0 (contact: admin@jsyoo.dev)"
     discovery_max_picks: int = 20
     # Price shocks against the same market's index (T28): a day at -8% or 20 trading days at
     # -20%; once set off, the stock is not counted again for 20 trading days.

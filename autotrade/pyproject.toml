@@ -1,8 +1,8 @@
-# Tool settings for the new quant engine (autotrade/) and its tests (tests/autotrade/).
+# Tool settings for the quant engine (autotrade/) and its tests (tests/autotrade/).
 #
-# Scope: only autotrade/ and tests/autotrade/. The old code (src/, tests/test_*.py) is never
-# linted or type-checked by these settings. There is deliberately no [project] table: this file
-# configures tools, it does not make autotrade/ an installable package of its own.
+# Scope: autotrade/ and tests/autotrade/ (web/ has its own tooling in web/package.json). There is
+# deliberately no [project] table: this file configures tools, it does not make autotrade/ an
+# installable package of its own.
 #
 # Run everything from the repository root (Python 3.10, the server's version):
 #
@@ -23,8 +23,8 @@
 #       ruff format --config autotrade/pyproject.toml --check autotrade tests/autotrade
 #
 # `pytest tests/autotrade` picks up tests/autotrade/pytest.ini (same options as below), which
-# makes tests/autotrade the rootdir and confcutdir: the old suite's tests/conftest.py (it imports
-# src/) is not loaded. `pytest -c autotrade/pyproject.toml tests/autotrade` uses this file instead;
+# makes tests/autotrade the rootdir and confcutdir. `pytest -c autotrade/pyproject.toml
+# tests/autotrade` uses this file instead;
 # give the path explicitly (pytest only applies testpaths when run from the rootdir).
 
 [tool.ruff]

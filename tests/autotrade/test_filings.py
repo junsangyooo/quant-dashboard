@@ -238,7 +238,7 @@ def test_edgar_lists_8k_and_6k_filings_and_reads_the_press_release() -> None:
         }
     )
     source = EdgarFilingSource(
-        "portfolio-dashboard/1.0 (contact: admin@jsyoo.dev)", http, sleep=lambda s: None
+        "quant-dashboard/1.0 (contact: admin@jsyoo.dev)", http, sleep=lambda s: None
     )
     found = source.fetch_filings(AVGO, date(2026, 6, 9), date(2026, 10, 13))
     assert [(f.source_ref, f.form, f.items, f.title) for f in found] == [
@@ -246,7 +246,7 @@ def test_edgar_lists_8k_and_6k_filings_and_reads_the_press_release() -> None:
         ("0001730168-26-000100", "8-K", "2.02,9.01", "8-K 2.02,9.01"),
     ]
     assert found[1].url == f"{folder}/avgo-8k2.htm"
-    assert http.calls[0][2]["User-Agent"] == "portfolio-dashboard/1.0 (contact: admin@jsyoo.dev)"
+    assert http.calls[0][2]["User-Agent"] == "quant-dashboard/1.0 (contact: admin@jsyoo.dev)"
     text = source.fetch_text(found[1])
     title = "Broadcom Inc. Announces Third Quarter Fiscal Year 2026 Results"
     assert text == f"{title}\nAI revenue | $6.2 billion"

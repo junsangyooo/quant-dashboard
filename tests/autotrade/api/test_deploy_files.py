@@ -1,10 +1,15 @@
 """The deploy files keep their safety properties (audit A2, A4, A8): the unit's environment and
-sandbox, nginx's origin gate and headers, and the order of deploy.sh's steps."""
+sandbox, nginx's origin gate and headers, the order of deploy.sh's steps, and the crontab block
+installer."""
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
+from types import ModuleType
+
+import pytest
 
 from autotrade.config import REPO_ROOT
 
@@ -52,8 +57,8 @@ def test_the_unit_is_sandboxed() -> None:
         "CapabilityBoundingSet": "",
         "ProtectSystem": "strict",
         "ProtectHome": "tmpfs",
-        "BindReadOnlyPaths": "/home/ubuntu/portfolio-dashboard",
-        "BindPaths": "/home/ubuntu/portfolio-dashboard/data",
+        "BindReadOnlyPaths": "/home/ubuntu/quant-dashboard",
+        "BindPaths": "/home/ubuntu/quant-dashboard/data",
         "PrivateTmp": "yes",
         "PrivateDevices": "yes",
         # No unix sockets: the docker socket (user ubuntu is in the docker group) and D-Bus.
@@ -66,35 +71,13 @@ def test_the_unit_is_sandboxed() -> None:
         assert unit.get(key) == value, key
     assert "RemoveIPC" not in unit  # it would remove the IPC objects of every ubuntu process
     # The tick's Toss token cache is not the web's to read.
-    assert "-/home/ubuntu/portfolio-dashboard/data/autotrade-toss" in unit["InaccessiblePaths"]
+    assert unit["InaccessiblePaths"].split() == [
+        "-/home/ubuntu/quant-dashboard/data/backup",
+        "-/home/ubuntu/quant-dashboard/data/autotrade-toss",
+    ]
     assert "ReadWritePaths" not in unit  # data/ (BindPaths) is the only writable place
     assert "--host 127.0.0.1" in unit["ExecStart"]
-    assert unit["StandardError"].startswith("append:/home/ubuntu/portfolio-dashboard/data/logs/")
-
-
-def test_the_old_apps_unit_keeps_the_toss_keys_out() -> None:
-    """Audit 2026-10-13 (10): the old app (portfolio.jsyoo.dev, internet-facing) loads the whole
-    secrets file. It has no Toss client, and the live account's keys stay out of it all the same:
-    every Toss name is unset (and any src/ would read), and the secrets folder is hidden too: the
-    old code's core.secrets.get() reads the file itself when the environment lacks a name."""
-    unit = directives((DEPLOY / "dashboard.service").read_text())
-    unset = " ".join(v for k, v in unit if k == "UnsetEnvironment").split()
-    read = set(re.findall(r"\b(TOSS_[A-Z_]+)\b", _src_text("secrets.get(")))
-    toss = {"TOSS_CLIENT_ID", "TOSS_CLIENT_SECRET", "TOSS_ACCOUNT_NO"}
-    for name in read | toss | {"ANTHROPIC_API_KEY", "KRX_ID", "KRX_PW"}:
-        assert name in unset, name
-    hidden = " ".join(v for k, v in unit if k == "InaccessiblePaths").split()
-    assert "-/home/ubuntu/dotclaude/secrets" in hidden  # core.secrets._FILES on the server
-    assert "-/home/ubuntu/.claude/secrets" in hidden
-    assert ("EnvironmentFile", "/home/ubuntu/dotclaude/secrets/.env") in unit
-
-
-def _src_text(marker: str) -> str:
-    """The lines of the old app's code (src/) that contain `marker`."""
-    out = []
-    for path in sorted((REPO_ROOT / "src").rglob("*.py")):
-        out += [line for line in path.read_text().splitlines() if marker in line]
-    return "\n".join(out)
+    assert unit["StandardError"].startswith("append:/home/ubuntu/quant-dashboard/data/logs/")
 
 
 def code_lines(text: str) -> str:
@@ -134,7 +117,6 @@ def test_deploy_sh_order_and_syntax() -> None:
     steps = [
         "helper web-build",  # 1. build outside the live tree
         "git pull --ff-only",  # 2. move the tree
-        "src.core.backup",  # 3. the old app's books
         "autotrade.jobs migrate --predeploy",  # 4.-5. a fresh copy, then the only migration,
         # under the tick's and the AI runner's locks (one command: nothing falls between)
         "helper web-switch",  # 6. then the web
@@ -150,3 +132,48 @@ def test_npm_installs_without_scripts() -> None:
     assert '"ci", "--ignore-scripts"' in release
     # Only release.py installs (without scripts); deploy.sh never calls npm itself.
     assert "npm " not in code_lines((DEPLOY / "deploy.sh").read_text())
+
+
+def _install_cron() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("install_cron", DEPLOY / "install_cron.py")
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_install_cron_replaces_only_the_quant_block() -> None:
+    install = _install_cron()
+    block = (DEPLOY / "autotrade.cron").read_text()
+    assert block.startswith("# >>> quant (deploy/autotrade.cron) >>>\n")
+    assert block.rstrip("\n").endswith("# <<< quant <<<")
+    current = (
+        "0 1 * * * other app\n"
+        "# >>> quant (old) >>>\n*/5 * * * * old tick\n# <<< quant <<<\n"
+        "# >>> portfolio >>>\n0 2 * * * portfolio job\n# <<< portfolio <<<\n"
+    )
+    new = install.replace_block(current, block)
+    assert "old tick" not in new
+    assert new.startswith("0 1 * * * other app\n# >>> quant (deploy/autotrade.cron) >>>\n")
+    assert new.endswith("# >>> portfolio >>>\n0 2 * * * portfolio job\n# <<< portfolio <<<\n")
+    jobs = [line for line in new.splitlines() if line and not line.startswith("#")]
+    assert jobs == [
+        "0 1 * * * other app",
+        *[line for line in block.splitlines() if line and not line.startswith("#")],
+        "0 2 * * * portfolio job",
+    ]
+
+
+def test_install_cron_refuses_instead_of_appending() -> None:
+    install = _install_cron()
+    block = "# >>> quant >>>\n*/5 * * * * tick\n# <<< quant <<<\n"
+    with pytest.raises(SystemExit):  # no block in the crontab
+        install.replace_block("0 1 * * * other app\n", block)
+    two = "# >>> quant >>>\na\n# <<< quant <<<\n# >>> quant >>>\nb\n# <<< quant <<<\n"
+    with pytest.raises(SystemExit):  # two blocks
+        install.replace_block(two, block)
+    with pytest.raises(SystemExit):  # a block file without its markers
+        install.replace_block("# >>> quant >>>\na\n# <<< quant <<<\n", "*/5 * * * * tick\n")
+    with pytest.raises(SystemExit):  # another app's block is not this one
+        install.replace_block("# >>> quantx >>>\na\n# <<< quantx <<<\n", block)

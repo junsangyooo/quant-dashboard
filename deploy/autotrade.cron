@@ -1,7 +1,10 @@
+# >>> quant (deploy/autotrade.cron) >>>
 # autotrade (quant.jsyoo.dev) — the crontab block for user ubuntu on the Oracle server.
-# NOT installed. Installing it needs the owner's go (ops notes 안전), then:
+# Changing it needs the owner's go (ops notes 안전). Install or update only this block (the
+# lines from `# >>> quant` to `# <<< quant`; other apps' lines pass through untouched):
 #   crontab -l > ~/crontab.bak.$(date +\%F)        (keep the old table)
-#   (crontab -l; cat deploy/autotrade.cron) | crontab -
+#   crontab -l | python3 deploy/install_cron.py deploy/autotrade.cron | crontab -
+# The first install into a table without the markers is done by hand (crontab -e).
 # Remove: delete the block from `crontab -e`. Nothing else is installed by it.
 #
 # Times: the server's clock and cron run in UTC. This block has no time of day in it on
@@ -29,12 +32,12 @@
 #   records it for the web. Taking the key off this line stops every Toss call at the next tick;
 #   the mode stays whatever it was.
 # - One JSON line per task that ran goes to data/logs/autotrade-jobs.log (rotated daily with the
-#   other data/logs/*.log by deploy/logrotate-dashboard). A tick with nothing due writes nothing.
+#   other data/logs/*.log by deploy/logrotate-quant). A tick with nothing due writes nothing.
 # - The line has no % (crontab would cut it there; ops notes §8).
 # - Only `python -m autotrade.jobs migrate` (deploy.sh) changes the schema. A job that finds the
 #   database at another schema (between a deploy's `git pull` and its `migrate`, or before the
 #   first `migrate`) writes one line {"result": "schema-mismatch", ...} and exits 3, doing nothing.
-*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_LIVE_ORDERS=1 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
+*/5 * * * * cd /home/ubuntu/quant-dashboard && AUTOTRADE_LIVE_ORDERS=1 AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-cron.lock timeout 10m .venv/bin/python -m autotrade.jobs tick >> data/logs/autotrade-jobs.log 2>&1
 #
 # The AI rule's questions (PHASE2.md §6): `python -m autotrade.jobs ai` takes the due AI tasks
 # (filing extraction and screening, sell and buy confirmations, the monthly review, the quarterly
@@ -56,4 +59,5 @@
 #   uses the server user's own `claude` login under ~/.claude.
 # - One JSON line per run with work goes to data/logs/autotrade-ai.log; the traceback of a task
 #   that broke goes there too (stderr).
-*/5 * * * * cd /home/ubuntu/portfolio-dashboard && AUTOTRADE_AI_CALLS=1 AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-ai-cron.lock .venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1
+*/5 * * * * cd /home/ubuntu/quant-dashboard && AUTOTRADE_AI_CALLS=1 AUTOTRADE_CLAUDE_BIN=/usr/local/bin/claude AUTOTRADE_SECRETS_ENV=/home/ubuntu/dotclaude/secrets/.env flock -n data/autotrade.db-ai-cron.lock .venv/bin/python -m autotrade.jobs ai >> data/logs/autotrade-ai.log 2>&1
+# <<< quant <<<
