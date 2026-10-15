@@ -12,6 +12,10 @@ same amount for held picks the rule does not own yet (the seed, a confirmed new 
 candidate), the Korean equal weight on the month's first planning day once that month's reviews
 are done (D35), and idle money into the index ETF of its currency.
 
+- The live ledger (3단계 몫, 2026-10-15): the same plan per currency (no conversion, D47), its
+  buys sized as the send pays them (limit price and fee), its part of the owner's money of the
+  day left for the next day (D48), and no buy of a company the account also holds outside the
+  ledger (the reconciliation could no longer tell his shares from the rule's).
 - The equal weight waits while a review of the month is pending, being asked, or failed with
   attempts left. A review that failed for good waits for a person (a red 'to do'); the equal
   weight then goes on without that pick (its shares stay as they are: it is not traded on a
@@ -30,14 +34,16 @@ from decimal import Decimal
 from typing import Any
 
 from autotrade.config import Config
-from autotrade.db import ai_repo, repo
+from autotrade.db import ai_repo, live_repo, repo
 from autotrade.domain.discovery_plan import DiscoveryInput, Holding, plan_discovery
 from autotrade.domain.instruments import Currency, Instrument, Market
+from autotrade.domain.ledger import LedgerState
 from autotrade.domain.money import ZERO, round_won, usd_in_krw
+from autotrade.domain.planner import Plan
 from autotrade.domain.stages import StageMarket, schedule, stage_specs
-from autotrade.engine import reviews, sleeves
+from autotrade.engine import live, reviews, sleeves
 from autotrade.engine.check import insert_stages_and_orders
-from autotrade.engine.common import load_rule, slotter_for
+from autotrade.engine.common import PAPER, capped, load_rule, new_money_of_rule, slotter_for
 from autotrade.market.calendar import KRX, calendar_for
 from autotrade.market.freshness import expected_session
 from autotrade.market.service import latest_close, rate_freshness
@@ -70,17 +76,24 @@ def parking_ids(conn: sqlite3.Connection) -> dict[Currency, Instrument]:
     return {instruments[i].currency: instruments[i] for i in rule.instrument_ids}
 
 
+def judging_ledger(ledger_id: str) -> str:
+    """The ledger whose AI tasks judge this ledger's picks: the live ledger follows the paper
+    ledger's judgment (engine/live_discovery.py follow), every other ledger judges its own."""
+    return PAPER if ledger_id == live.LIVE else ledger_id
+
+
 def ew_month(conn: sqlite3.Connection, ledger_id: str, d: date, max_attempts: int) -> str | None:
     """The month whose Korean equal weight is due today, if any: its reviews were queued and
     none is still to be asked (pending, running, or failed with attempts left), and no discovery
-    plan of the month has equalized yet."""
+    plan of the month has equalized yet. The reviews are the judging ledger's."""
     month = d.replace(day=1)
     key = f"{month:%Y-%m}"
-    if not reviews.queued_for(conn, ledger_id, month):
+    judge = judging_ledger(ledger_id)
+    if not reviews.queued_for(conn, judge, month):
         return None
     open_reviews = [
         t
-        for t in ai_repo.open_tasks(conn, max_attempts, kind="monthly-review", ledger_id=ledger_id)
+        for t in ai_repo.open_tasks(conn, max_attempts, kind="monthly-review", ledger_id=judge)
         if t.detail.get("month") == key
     ]
     if open_reviews:
@@ -91,13 +104,15 @@ def ew_month(conn: sqlite3.Connection, ledger_id: str, d: date, max_attempts: in
     return key
 
 
-def unreviewed(conn: sqlite3.Connection, ledger_id: str, key: str, max_attempts: int) -> set[int]:
-    """Picks the month's review did not judge: it failed for good, or it was cancelled (by the
-    owner, or because the pick had a decision). The equal weight leaves them out."""
+def unreviewed(conn: sqlite3.Connection, ledger_id: str, key: str, max_attempts: int) -> set[str]:
+    """Companies the month's review did not judge: it failed for good, or it was cancelled (by
+    the owner, or because the pick had a decision). The equal weight leaves them out. The
+    reviews are the judging ledger's."""
+    judge = judging_ledger(ledger_id)
     return {
-        t.pick_id
+        ai_repo.get_pick(conn, t.pick_id).instrument_id
         for t in ai_repo.tasks_of(conn, kind="monthly-review", statuses=("failed", "cancelled"))
-        if t.ledger_id == ledger_id
+        if t.ledger_id == judge
         and t.detail.get("month") == key
         and t.pick_id is not None
         and (t.status == "cancelled" or t.is_stuck(max_attempts))
@@ -163,24 +178,115 @@ def has_work(conn: sqlite3.Connection, ledger_id: str, at: datetime, max_attempt
     return any(p.decided_at is not None and p.decided_at > prior.started_at for p in decided)
 
 
-def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime) -> PlanOutcome:
-    """Reconcile, then plan in the caller's transaction (the job downloaded the closes)."""
-    d = kst_date(at)
-    details: dict[str, Any] = {"reconciled": reconcile(conn, ledger_id, at)}
-    state = sleeves.view(conn, ledger_id, RULE_ID)
-    held = ai_repo.picks_of(conn, ledger_id, RULE_ID, ("held",))
-    parking = parking_ids(conn)
+def outside_held(conn: sqlite3.Connection, ledger_id: str) -> set[str]:
+    """Live: instruments the account holds that the ledger does not hold all of (the owner's own
+    shares, outside the rules). None of them is bought for the rule."""
+    if ledger_id != live.LIVE:
+        return set()
+    snap = live_repo.latest_snapshot(conn)
+    if snap is None:
+        return set()
+    state = repo.load_state(conn, ledger_id)
+    return {h.instrument_id for h in snap.holdings if h.qty > state.qty_of(h.instrument_id)}
+
+
+def _usable_rate(conn: sqlite3.Connection, cfg: Config, at: datetime) -> Decimal | None:
     fx_fresh, quote = rate_freshness(conn, cfg, at)
-    rate = quote.rate if quote is not None and fx_fresh.usable else None
-    holdings: dict[str, Holding] = {}
+    return quote.rate if quote is not None and fx_fresh.usable else None
+
+
+def priced_holdings(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    ledger_id: str,
+    at: datetime,
+    state: LedgerState,
+    rate: Decimal | None,
+) -> tuple[dict[str, Holding], list[str]]:
+    """What the plan may touch, at fresh closes (and the instruments still waiting for one).
+    Live: a share is planned only if the send can pay it (the limit price and the fee)."""
+    prices: dict[str, Decimal] = {}
     waiting: list[str] = []
     for inst in needed_instruments(conn, ledger_id):
         price = _fresh_price(conn, cfg, inst, at)
         if price is None or (inst.currency is Currency.USD and rate is None):
             waiting.append(inst.instrument_id)
             continue
-        holdings[inst.instrument_id] = Holding(inst, state.qty_of(inst.instrument_id), price)
+        prices[inst.instrument_id] = price
+    units = live.buy_units(conn, cfg, prices) if ledger_id == live.LIVE else {}
+    holdings = {
+        iid: Holding(
+            repo.get_instrument(conn, iid), state.qty_of(iid), price, buy_unit=units.get(iid)
+        )
+        for iid, price in prices.items()
+    }
+    return holdings, waiting
+
+
+def first_plan(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    ledger_id: str,
+    at: datetime,
+    cash: dict[Currency, Decimal],
+) -> Plan | None:
+    """The rule's first orders in a ledger that has not started, given the cash the start will
+    give it (the live mode screen's preview, PHASE3.md 2.7): every held pick the same amount,
+    the rest in the index ETF of its currency, per currency for the live ledger (D47). None
+    when the rule has no held pick there. Reads only."""
+    held = ai_repo.picks_of(conn, ledger_id, RULE_ID, ("held",))
+    if not held:
+        return None
+    rate = _usable_rate(conn, cfg, at)
+    holdings, _ = priced_holdings(conn, cfg, ledger_id, at, LedgerState(), rate)
+    outside = outside_held(conn, ledger_id)
+    value = cash.get(Currency.KRW, ZERO)
+    if rate is not None:
+        value += usd_in_krw(cash.get(Currency.USD, ZERO), rate)
+    parking = parking_ids(conn)
+    return plan_discovery(
+        DiscoveryInput(
+            holdings=holdings,
+            sell=[],
+            buy=[
+                p.instrument_id
+                for p in held
+                if p.instrument_id in holdings and p.instrument_id not in outside
+            ],
+            equalize=[],
+            parking={c: i.instrument_id for c, i in parking.items() if i.instrument_id in holdings},
+            per_pick_krw=round_won(value / len(held)),
+            cash_krw=cash.get(Currency.KRW, ZERO),
+            cash_usd=cash.get(Currency.USD, ZERO) if rate is not None else ZERO,
+            fx_rate=rate or Decimal(1),
+            fees=cfg.fees,
+            fx_step_krw=cfg.fx_step_krw,
+            convert=ledger_id != live.LIVE,
+        )
+    )
+
+
+def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime) -> PlanOutcome:
+    """Reconcile, then plan in the caller's transaction (the job downloaded the closes)."""
+    d = kst_date(at)
+    is_live = ledger_id == live.LIVE
+    details: dict[str, Any] = {"reconciled": reconcile(conn, ledger_id, at)}
+    state = sleeves.view(conn, ledger_id, RULE_ID)
+    held = ai_repo.picks_of(conn, ledger_id, RULE_ID, ("held",))
+    parking = parking_ids(conn)
+    rate = _usable_rate(conn, cfg, at)
+    holdings, waiting = priced_holdings(conn, cfg, ledger_id, at, state, rate)
     details["waiting"] = waiting
+    cash = {c: state.cash_of(c) for c in Currency}
+    if is_live:
+        # D48: the rule's part of the owner's money of today waits for tomorrow.
+        new_money = capped(new_money_of_rule(conn, ledger_id, RULE_ID, at), cash)
+        if new_money:
+            details["new_money_wait"] = {c.value: v for c, v in new_money.items()}
+        cash = {c: v - new_money.get(c, ZERO) for c, v in cash.items()}
+    outside = outside_held(conn, ledger_id)
+    if outside & {p.instrument_id for p in held}:
+        details["outside_held"] = sorted(outside & {p.instrument_id for p in held})
     if rate is None:
         details["fx"] = "stale"
     month = ew_month(conn, ledger_id, d, cfg.ai_max_attempts)
@@ -190,18 +296,21 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
     buy = [
         p.instrument_id
         for p in keep
-        if p.instrument_id in holdings and holdings[p.instrument_id].qty == 0
+        if p.instrument_id in holdings
+        and holdings[p.instrument_id].qty == 0
+        and p.instrument_id not in outside
     ]
     equalize = [
         p.instrument_id
         for p in keep
         if month is not None
-        and p.pick_id not in left_out
+        and p.instrument_id not in left_out
         and p.instrument_id in holdings
+        and p.instrument_id not in outside
         and holdings[p.instrument_id].instrument.market is Market.KR
         and holdings[p.instrument_id].qty > 0
     ]
-    skipped = sorted(p.instrument_id for p in keep if p.pick_id in left_out)
+    skipped = sorted(p.instrument_id for p in keep if p.instrument_id in left_out)
     value = sum(
         (
             h.price * h.qty
@@ -211,9 +320,9 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
         ),
         ZERO,
     )
-    value += state.cash_of(Currency.KRW)
+    value += cash[Currency.KRW]
     if rate is not None:
-        value += usd_in_krw(state.cash_of(Currency.USD), rate)
+        value += usd_in_krw(cash[Currency.USD], rate)
     per_pick = round_won(value / len(keep)) if keep else ZERO
     plan = plan_discovery(
         DiscoveryInput(
@@ -223,11 +332,12 @@ def plan_ai(conn: sqlite3.Connection, cfg: Config, ledger_id: str, at: datetime)
             equalize=equalize,
             parking={c: i.instrument_id for c, i in parking.items() if i.instrument_id in holdings},
             per_pick_krw=per_pick,
-            cash_krw=state.cash_of(Currency.KRW),
-            cash_usd=state.cash_of(Currency.USD) if rate is not None else ZERO,
+            cash_krw=cash[Currency.KRW],
+            cash_usd=cash[Currency.USD] if rate is not None else ZERO,
             fx_rate=rate or Decimal(1),
             fees=cfg.fees,
             fx_step_krw=cfg.fx_step_krw,
+            convert=not is_live,
         )
     )
     details.update(

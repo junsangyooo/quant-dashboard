@@ -35,7 +35,7 @@ import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from typing import Any
 
 from autotrade.broker.toss import TossExecutor, buy_unit, fee_rate, fill_of
@@ -66,6 +66,7 @@ from autotrade.engine.common import (
     CONVERSION,
     capped,
     load_rule,
+    new_money_of_rule,
     new_money_waiting,
     refresh_cash_parts,
     slotter_for,
@@ -77,10 +78,12 @@ from autotrade.engine.dividends import (
     shares_before_ex_date,
     tax_rate,
 )
+from autotrade.engine.live_discovery import OWNER_SOLD
 from autotrade.engine.status import first_check_after, next_check_at
 from autotrade.market.calendar import KRX, NYSE, CalendarRangeError
 from autotrade.market.service import latest_close, market_freshness, rate_freshness
 from autotrade.market.types import FxQuote
+from autotrade.rules.discovery import RULE_ID as AI_RULE
 from autotrade.rules.index_half import RULE_ID
 from autotrade.timeutil import KST, et_date, from_iso, kst_date, require_aware, to_iso
 
@@ -383,7 +386,12 @@ def _reconcile_body(
     money, not a cash shortfall. Nothing is written until all of it is known (_book_in_order)."""
     result = ReconcileResult("match", snapshot_id=snap.snapshot_id)
     opening = repo.load_state(conn, LIVE).cash
-    late = book_late_fills(conn, cfg, at)
+    try:
+        late = book_late_fills(conn, cfg, at)
+    except LedgerError as exc:
+        # A fill of ours the rule's records cannot pay (engine/runner.py execute_stage): nothing
+        # is sent until the owner looks and adopt-broker books it (it covers the rule).
+        raise _MismatchError("rule-cash", {"why": str(exc)}) from exc
     result.booked.extend(late)
     ours = [repo.fill_of_order(conn, int(b["late_fill"])) for b in late]
     own = ledger_instrument_ids(conn)
@@ -562,7 +570,7 @@ def _book_in_order(
         if trade is not None:
             for move in funds:
                 _book_move(conn, cfg, at, move, when, day, result)
-            result.booked.append(_book_external_trade(conn, cfg, at, trade, own))
+            result.booked.append(_book_external_trade(conn, cfg, at, trade, own, snap))
     for move in moves:
         if id(move) not in early:
             _book_move(conn, cfg, at, move, seen, day, result)
@@ -590,6 +598,7 @@ def _book_move(
         rate=move.rate,
         occurred_at=when,
         event_day=day,
+        parts=None if move.conversion is None else _conversion_parts(conn, move),
     )
     if move.consume_waits:
         _consume_withdraw_waits(conn, move.currency, move.amount, at)
@@ -606,7 +615,38 @@ def _book_move(
     )
 
 
-def book_late_fills(conn: sqlite3.Connection, cfg: Config, at: datetime) -> list[dict[str, Any]]:
+def _conversion_parts(conn: sqlite3.Connection, move: _Move) -> dict[str, Decimal] | None:
+    """The rules' parts of one side of the owner's conversion (None: the ledger has no sleeve).
+    Each rule gives of the currency he paid what sleeves.withdrawal_parts takes (worked out once,
+    on the side booked first, with that currency's cash before the conversion) and gets the same
+    proportion of the currency he got: a conversion moves no money between the rules."""
+    log = move.conversion
+    assert log is not None
+    if not sleeves.sleeve_rule_ids(conn, LIVE):
+        return None
+    direction = FxDirection(log["conversion"])
+    source, target = Decimal(str(log["from"])), Decimal(str(log["to"]))
+    kept = log.get("sleeves")
+    if kept is None:
+        cash = repo.load_state(conn, LIVE).cash_of(direction.source)
+        try:
+            taken = sleeves.withdrawal_parts(conn, LIVE, source, direction.source, cash)
+        except LedgerError as exc:
+            raise _MismatchError(
+                "sleeves", {"conversion": direction.value, "why": str(exc)}
+            ) from exc
+        kept = {r: str(v) for r, v in taken.items()}
+        log["sleeves"] = kept
+    given = {r: Decimal(v) for r, v in kept.items()}
+    if move.kind is CashFlowKind.WITHDRAWAL:
+        return given
+    unit = _unit(direction.target)
+    return {r: (target * v / source).quantize(unit, rounding=ROUND_FLOOR) for r, v in given.items()}
+
+
+def book_late_fills(
+    conn: sqlite3.Connection, cfg: Config, at: datetime, *, cover: bool = False
+) -> list[dict[str, Any]]:
     """Fills the broker reported for our orders that the ledger has not booked: after the plan
     was closed (live off, a resolved to-do), or before the stage runner got to them. An order
     that ended with nothing filled and whose plan is closed is marked cancelled."""
@@ -615,7 +655,9 @@ def book_late_fills(conn: sqlite3.Connection, cfg: Config, at: datetime) -> list
         order = repo.get_order(conn, row.order_id)
         filled = fill_of(row)
         if filled is not None:
-            booked = runner.book_fill(conn, cfg, LIVE, order, filled, TossExecutor.name, at)
+            booked = runner.book_fill(
+                conn, cfg, LIVE, order, filled, TossExecutor.name, at, cover=cover
+            )
             if booked is not None:
                 out.append({"late_fill": order.order_id, "qty": filled.qty})
             continue
@@ -652,8 +694,21 @@ def _book_external_trade(
     at: datetime,
     order: BrokerOrder,
     own: set[str],
+    snap: AccountSnapshot | None = None,
 ) -> dict[str, Any]:
-    """A fill the engine did not send (the owner's, in the app or WTS)."""
+    """A fill the engine did not send (the owner's, in the app or WTS).
+
+    With rules sharing the ledger (3단계 몫, D49), whose shares he traded decides where it goes:
+    - the index rule's ETFs (069500, SPYM): '지수 반반''s; a sale beyond what it holds comes
+      out of the other rules' parts that hold the ETF (their share of the sale);
+    - another company the ledger holds (a '3년 발굴' pick): his buy is his, outside the ledger
+      (money out, shares outside: the rule never buys while he holds some, discovery_plan
+      outside_held); his sale is his own shares first (what the account still holds beyond
+      the ledger after the reconciliation's trades), then the rule's (its part sells; a pick
+      left with none is closed, OWNER_SOLD, and not taken back while the paper judgment stays
+      the same, live_discovery.follow);
+    - anything else: outside the ledger.
+    A part nobody holds is a mismatch (nothing written, a red to-do)."""
     when = order.filled_at or at
     qty = order.filled_qty
     amounts = _trade_amounts(order)
@@ -662,7 +717,6 @@ def _book_external_trade(
     gross, fee = amounts
     currency = order.currency
     rate = _rate(conn, when, at) if currency is Currency.USD else None
-    fee_krw = fee if rate is None else usd_in_krw(fee, rate)
     side = Side.BUY if order.side == "BUY" else Side.SELL
     iid = order.instrument_id
     base: dict[str, Any] = {
@@ -673,46 +727,179 @@ def _book_external_trade(
         "gross": str(gross),
         "fee": str(fee),
     }
-    if iid in own:
-        if qty != qty.to_integral_value():
-            raise _MismatchError("fractional", {"instrument_id": iid, "qty": str(qty)})
-        if sleeves.sleeve_rule_ids(conn, LIVE):
-            raise _MismatchError("sleeves", {"instrument_id": iid})
-        trade = TradeFill(iid, currency, side, int(qty), gross / qty, fee, rate, gross)
-        try:
-            state = apply_trade(repo.load_state(conn, LIVE), trade)
-        except LedgerError as exc:
-            raise _MismatchError("external-fill", {"instrument_id": iid, "why": str(exc)}) from exc
-        repo.save_state(conn, LIVE, state, at)
-        live_repo.insert_external(
-            conn,
-            NewExternalFill(
-                ledger_id=LIVE,
-                broker_order_id=order.order_id,
-                kind="trade",
-                treatment="ledger",
-                instrument_id=iid,
-                symbol=order.symbol,
-                name=None,
-                side=side.value,
-                currency=currency,
-                qty=int(qty),
-                gross=gross,
-                fee=fee,
-                fee_krw=fee_krw,
-                krw_rate=rate,
-                received=None,
-                filled_at=when,
-                settlement_date=order.settlement_date,
-            ),
-            at,
+    if iid not in own:
+        return _book_outside(conn, at, order, side, gross, fee, rate, when, base, first=True)
+    if qty != qty.to_integral_value():
+        raise _MismatchError("fractional", {"instrument_id": iid, "qty": str(qty)})
+    q = int(qty)
+    index = iid in rule_instruments(conn)
+    rules = sleeves.sleeve_rule_ids(conn, LIVE)
+    if side is Side.BUY:
+        if rules and not index:
+            return _book_outside(conn, at, order, side, gross, fee, rate, when, base, first=True)
+        parts: list[tuple[str | None, int]] = [(None, q)]
+    else:
+        parts = []
+        left = q
+        if rules and not index:
+            ledger_qty = repo.load_state(conn, LIVE).qty_of(iid)
+            final = ZERO
+            if snap is not None:
+                final = sum((h.qty for h in snap.holdings if h.instrument_id == iid), ZERO)
+            from_ledger = min(q, max(0, ledger_qty - int(final)))
+            if q - from_ledger > 0:
+                parts.append(("outside", q - from_ledger))
+            left = from_ledger
+        holders: list[tuple[str | None, int]] = [
+            (None, sleeves.base_view(conn, LIVE).qty_of(iid) if rules else q)
+        ]
+        holders += [(r, ai_repo.load_sleeve(conn, LIVE, r).qty_of(iid)) for r in rules]
+        for rule_id, held in holders:
+            take = min(left, held)
+            if take > 0:
+                parts.append((rule_id, take))
+                left -= take
+        if left > 0:
+            raise _MismatchError(
+                "sleeves", {"instrument_id": iid, "why": f"{left} sold shares nobody holds"}
+            )
+    out: list[dict[str, Any]] = []
+    gross_left, fee_left, qty_left = gross, fee, q
+    unit = _unit(currency)
+    for n, (rule_id, part_qty) in enumerate(parts):
+        last = n == len(parts) - 1
+        part_gross = gross_left if last else (gross * part_qty / q).quantize(unit)
+        part_fee = fee_left if last else (fee * part_qty / q).quantize(unit)
+        gross_left, fee_left, qty_left = (
+            gross_left - part_gross,
+            fee_left - part_fee,
+            qty_left - part_qty,
         )
-        if side is Side.SELL:
-            until = withdraw_until(order.settlement_date, kst_date(when))
-            repo.add_withdraw_wait(conn, LIVE, currency, gross - fee, until, at)
-            base["withdraw_wait_until"] = until.isoformat()
-        return base
-    # Outside the rules: the money leaves the ledger for that holding, or comes back from it.
+        if rule_id == "outside":
+            out.append(
+                _book_outside(
+                    conn, at, order, side, part_gross, part_fee, rate, when, {}, first=n == 0
+                )
+            )
+            continue
+        out.append(
+            _book_ledger_part(
+                conn,
+                at,
+                order,
+                iid,
+                side,
+                part_qty,
+                part_gross,
+                part_fee,
+                rate,
+                when,
+                rule_id,
+                first=n == 0,
+            )
+        )
+    if len(out) == 1:
+        return {**base, **out[0]}
+    return {**base, "parts": out}
+
+
+def _book_ledger_part(
+    conn: sqlite3.Connection,
+    at: datetime,
+    order: BrokerOrder,
+    iid: str,
+    side: Side,
+    qty: int,
+    gross: Decimal,
+    fee: Decimal,
+    rate: Decimal | None,
+    when: datetime,
+    rule_id: str | None,
+    *,
+    first: bool,
+) -> dict[str, Any]:
+    """The part of his trade that is the ledger's: '지수 반반''s (rule_id None) or a rule's."""
+    currency = order.currency
+    fee_krw = fee if rate is None else usd_in_krw(fee, rate)
+    trade = TradeFill(iid, currency, side, qty, gross / qty, fee, rate, gross)
+    try:
+        state = apply_trade(repo.load_state(conn, LIVE), trade)
+    except LedgerError as exc:
+        raise _MismatchError("external-fill", {"instrument_id": iid, "why": str(exc)}) from exc
+    out: dict[str, Any] = {"qty": qty, "rule_id": rule_id}
+    if rule_id is not None:
+        part = apply_trade(ai_repo.load_sleeve(conn, LIVE, rule_id), trade)
+        ai_repo.save_sleeve(conn, LIVE, rule_id, part, at)
+        if part.qty_of(iid) == 0:
+            pick = ai_repo.open_pick(conn, LIVE, rule_id, iid)
+            if pick is not None and pick.status == "held":
+                ai_repo.update_pick(
+                    conn,
+                    pick.pick_id,
+                    at,
+                    status="sold",
+                    closed_on=kst_date(when),
+                    closed_reason=OWNER_SOLD,
+                    decision=None,
+                )
+                out["pick_closed"] = pick.pick_id
+    # '지수 반반''s part must fit in what it holds (the other parts moved by their own records).
+    rest = state
+    try:
+        for other in sleeves.sleeve_rule_ids(conn, LIVE):
+            rest = sleeves.subtract(rest, ai_repo.load_sleeve(conn, LIVE, other))
+    except LedgerError as exc:
+        raise _MismatchError("sleeves", {"instrument_id": iid, "why": str(exc)}) from exc
+    repo.save_state(conn, LIVE, state, at)
+    live_repo.insert_external(
+        conn,
+        NewExternalFill(
+            ledger_id=LIVE,
+            broker_order_id=order.order_id if first else None,
+            kind="trade",
+            treatment="ledger",
+            instrument_id=iid,
+            symbol=order.symbol,
+            name=None,
+            side=side.value,
+            currency=currency,
+            qty=qty,
+            gross=gross,
+            fee=fee,
+            fee_krw=fee_krw,
+            krw_rate=rate,
+            received=None,
+            filled_at=when,
+            settlement_date=order.settlement_date,
+            rule_id=rule_id,
+        ),
+        at,
+    )
+    if side is Side.SELL and rule_id is None:
+        until = withdraw_until(order.settlement_date, kst_date(when))
+        repo.add_withdraw_wait(conn, LIVE, currency, gross - fee, until, at)
+        out["withdraw_wait_until"] = until.isoformat()
+    return out
+
+
+def _book_outside(
+    conn: sqlite3.Connection,
+    at: datetime,
+    order: BrokerOrder,
+    side: Side,
+    gross: Decimal,
+    fee: Decimal,
+    rate: Decimal | None,
+    when: datetime,
+    base: dict[str, Any],
+    *,
+    first: bool,
+) -> dict[str, Any]:
+    """His trade outside the ledger: the money leaves the ledger for that holding, or comes back
+    from it (and waits for a withdrawal)."""
+    currency = order.currency
+    iid = order.instrument_id
+    fee_krw = fee if rate is None else usd_in_krw(fee, rate)
     if side is Side.BUY:
         event_id = _flow(
             conn,
@@ -743,7 +930,7 @@ def _book_external_trade(
         conn,
         NewExternalFill(
             ledger_id=LIVE,
-            broker_order_id=order.order_id,
+            broker_order_id=order.order_id if first else None,
             kind="trade",
             treatment="outside",
             instrument_id=iid,
@@ -779,6 +966,7 @@ def _flow(
     rate: Decimal | None = None,
     occurred_at: datetime | None = None,
     event_day: date | None = None,
+    parts: dict[str, Decimal] | None = None,
 ) -> int:
     """A deposit or withdrawal the account shows (an event, as the screens list them), in its
     own currency, at the best-known time the money moved (`occurred_at`: the fill's time for a
@@ -809,7 +997,13 @@ def _flow(
         payload=payload,
         booked_at=at,
     )
-    sleeves.split_inflow(conn, LIVE, kind, amount, currency, rate, event_id, at)
+    try:
+        # The rules' shares of it (`parts`: a side of the owner's conversion, _conversion_parts).
+        sleeves.split_inflow(conn, LIVE, kind, amount, currency, rate, event_id, at, parts)
+    except LedgerError as exc:
+        raise _MismatchError(
+            "sleeves", {"currency": currency.value, "amount": str(amount), "why": str(exc)}
+        ) from exc
     return event_id
 
 
@@ -1128,12 +1322,18 @@ def _book_dividend(
 
 
 def _check_positions(conn: sqlite3.Connection, snap: AccountSnapshot, own: set[str]) -> None:
+    """The ledger's shares are the account's. Of a company that is not the index rule's ETF,
+    the account may hold more: the owner's own shares, outside the ledger (_book_external_trade);
+    never fewer."""
     state = repo.load_state(conn, LIVE)
     broker = {h.instrument_id: h.qty for h in snap.holdings}
+    index = set(rule_instruments(conn))
     off: list[dict[str, str]] = []
     for iid in sorted(own | set(state.positions)):
         ledger_qty = Decimal(state.qty_of(iid))
         broker_qty = broker.get(iid, ZERO)
+        if iid not in index and broker_qty > ledger_qty and sleeves.sleeve_rule_ids(conn, LIVE):
+            continue  # his own shares beside the rule's
         if ledger_qty != broker_qty:
             off.append({"instrument_id": iid, "ledger": str(ledger_qty), "broker": str(broker_qty)})
     if off:
@@ -1170,7 +1370,7 @@ def adopt_broker(
         return {"result": "refused", "reason": reason}
 
     try:
-        late = book_late_fills(conn, cfg, at)
+        late = book_late_fills(conn, cfg, at, cover=True)
     except LedgerError as exc:
         # The ledger's cash cannot pay a fill it planned (money it never booked paid for it).
         return refused(f"late fill: {exc}")
@@ -1183,6 +1383,8 @@ def adopt_broker(
     positions = dict(state.positions)
     value_in = ZERO
     by_currency = dict.fromkeys(Currency, ZERO)  # money in per account, in its currency
+    index = set(rule_instruments(conn))
+    shared = bool(sleeves.sleeve_rule_ids(conn, LIVE))
     for iid in sorted(own):
         inst = instruments[iid]
         held = broker.get(iid)
@@ -1192,6 +1394,8 @@ def adopt_broker(
         new_qty = int(broker_qty)
         old = positions.get(iid)
         old_qty = 0 if old is None else old.qty
+        if iid not in index and new_qty > old_qty and shared:
+            continue  # the owner's own shares of a pick stay outside (_check_positions)
         if new_qty == old_qty:
             continue
         price = None if held is None or held.last_price <= 0 else held.last_price
@@ -1253,6 +1457,14 @@ def adopt_broker(
         contributions_krw=state.contributions_krw + value_in,
         income_krw=state.income_krw,
     )
+    # The other rules' parts stay as their records have them (engine/sleeves.py): the account
+    # must still hold them, or '지수 반반' would hold less than nothing.
+    rest = adopted
+    try:
+        for rule_id in sleeves.sleeve_rule_ids(conn, LIVE):
+            rest = sleeves.subtract(rest, ai_repo.load_sleeve(conn, LIVE, rule_id))
+    except LedgerError as exc:
+        return refused(f"sleeves: {exc}")
     repo.save_state(conn, LIVE, adopted, at)
     kind = "deposit" if value_in >= 0 else "withdrawal"
     payload: dict[str, Any] = {
@@ -1350,14 +1562,15 @@ class NotComputable:
 def buy_units(
     conn: sqlite3.Connection, cfg: Config, prices: Mapping[str, Decimal]
 ) -> dict[str, Decimal]:
-    """What one share of a live buy of each rule instrument takes at most at its plan price: the
-    limit the send caps it at (on the tick) plus Toss's fee (broker/toss.py buy_unit). The live
-    plan (the check, the preview) sizes its buys with it: PlanItem.buy_unit."""
+    """What one share of a live buy of each instrument in `prices` takes at most at its plan
+    price: the limit the send caps it at (on the tick) plus Toss's fee (broker/toss.py buy_unit).
+    The live plans (the check, the preview, '3년 발굴') size their buys with it:
+    PlanItem.buy_unit, discovery Holding.buy_unit."""
     status = live_repo.get_status(conn)
     commissions = {} if status is None else status.commissions
     out: dict[str, Decimal] = {}
-    for iid, inst in rule_instruments(conn).items():
-        price = prices.get(iid)
+    for iid, price in prices.items():
+        inst = repo.get_instrument(conn, iid)
         if price is not None and price > 0:
             rate = fee_rate(cfg, commissions, inst)
             out[iid] = buy_unit(inst, price, cfg.live_limit_slippage, rate)
@@ -1395,20 +1608,38 @@ def preview_data(
     started = repo.start_event(conn, LIVE) is not None
     check_at = next_check_at(cfg, at)
     new_money: dict[Currency, Decimal] = {}
+    others: Plan | None = None  # the AI rule's first orders, at the first start
     if started:
         state = sleeves.base_view(conn, LIVE)
         held = withdraw_wait_amounts(repo.cash_parts(conn, LIVE))
         cash = {c: max(state.cash_of(c) - held.get(c, ZERO), ZERO) for c in Currency}
+        plan_cash = cash
         qty = {iid: state.qty_of(iid) for iid in instruments}
         outside = [h for h in snap.holdings if h.instrument_id not in ledger_instrument_ids(conn)]
         # D48: what the owner brought on the day of that check waits for the one after it.
-        new_money = capped(new_money_waiting(conn, LIVE, check_at), cash)
+        new_money = capped(new_money_of_rule(conn, LIVE, sleeves.BASE_RULE, check_at), cash)
     else:
         try:
             opening = opening_from(snap, instruments, rate)
         except LiveStartError as exc:
             return NotComputable(at, "other", f"{exc.code}: {exc}")
-        cash = opening.cash
+        cash = dict(opening.cash)
+        # The start gives the other rules their shares of the cash (start_live): '지수 반반''s
+        # first orders spend the rest (its holdings at the start are its own), and '3년 발굴''s
+        # first orders, planned the same way the tick will (engine/discovery_plan.py), are shown
+        # with them. (Imported here: the discovery planner imports this module.)
+        from autotrade.engine import discovery_plan
+
+        plan_cash = dict(cash)
+        ai_cash = dict.fromkeys(Currency, ZERO)
+        for currency, amount in opening.cash.items():
+            if amount > 0:
+                for rule_id, part in sleeves.share_parts(conn, LIVE, amount, currency).items():
+                    plan_cash[currency] -= part
+                    if rule_id == AI_RULE:
+                        ai_cash[currency] += part
+        if any(v > 0 for v in ai_cash.values()):
+            others = discovery_plan.first_plan(conn, cfg, LIVE, at, ai_cash)
         qty = {
             iid: opening.positions[iid].qty if iid in opening.positions else 0
             for iid in instruments
@@ -1429,12 +1660,15 @@ def preview_data(
             items=tuple(items),
             threshold=rule.threshold,
             fx_rate=rate,
-            free_krw=cash[Currency.KRW] - new_money.get(Currency.KRW, ZERO),
-            free_usd=cash[Currency.USD] - new_money.get(Currency.USD, ZERO),
+            free_krw=plan_cash[Currency.KRW] - new_money.get(Currency.KRW, ZERO),
+            free_usd=plan_cash[Currency.USD] - new_money.get(Currency.USD, ZERO),
             fees=cfg.fees,
             fx_step_krw=cfg.fx_step_krw,
         )
     )
+    if others is not None and others.has_orders:
+        # Shown and compared as one list: the orders of both rules go out at the same times.
+        plan = replace(plan, sells=plan.sells + others.sells, buys=plan.buys + others.buys)
     specs = stage_specs(plan)
     due = schedule(specs, check_at, slotter_for(cfg))
     current: list[tuple[str, Instrument | None, Decimal]] = []

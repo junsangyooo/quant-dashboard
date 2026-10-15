@@ -832,6 +832,14 @@ CREATE TABLE live_previews (
 )
 """
 
+# V7 (2026-10-15, D49): with '3년 발굴' in the live ledger, an owner's trade in the Toss app can
+# take a rule's part (he sold shares the AI rule holds): external_fills.rule_id names that rule
+# (NULL: '지수 반반', or outside the ledger); the rule's part is rebuilt from it
+# (engine/sleeves.py).
+V7 = """
+ALTER TABLE external_fills ADD COLUMN rule_id TEXT REFERENCES rules(rule_id)
+"""
+
 MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (1, "initial schema", V1),
     (2, "pin, sessions, lockout, notification preferences", V2),
@@ -839,6 +847,7 @@ MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (4, "the AI rule: shares, sleeves, picks, metrics, filings, AI tasks and calls", V4),
     (5, "the AI runner: source tries, kept answers, heartbeat", V5),
     (6, "live orders: Toss link, account snapshots, broker orders, external fills", V6),
+    (7, "external fills by rule: the owner's app trades of a rule's part", V7),
 )
 LATEST_VERSION = MIGRATIONS[-1][0]  # the schema this code reads and writes
 

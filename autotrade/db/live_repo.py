@@ -544,6 +544,7 @@ class ExternalFill:
     filled_at: datetime
     settlement_date: date | None
     event_id: int | None
+    rule_id: str | None = None  # a rule's part the owner traded (schema 7); None: '지수 반반'
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> ExternalFill:
@@ -568,6 +569,7 @@ class ExternalFill:
             filled_at=from_iso(str(row["filled_at"])),
             settlement_date=None if settlement is None else date.fromisoformat(str(settlement)),
             event_id=None if row["event_id"] is None else int(row["event_id"]),
+            rule_id=None if row["rule_id"] is None else str(row["rule_id"]),
         )
 
 
@@ -591,14 +593,15 @@ class NewExternalFill:
     filled_at: datetime
     settlement_date: date | None
     event_id: int | None = None
+    rule_id: str | None = None
 
 
 def insert_external(conn: sqlite3.Connection, fill: NewExternalFill, at: datetime) -> int:
     cur = conn.execute(
         "INSERT INTO external_fills (ledger_id, broker_order_id, kind, treatment, instrument_id,"
         " symbol, name, side, currency, qty, gross, fee, fee_krw, krw_rate, received, filled_at,"
-        " settlement_date, event_id, recorded_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " settlement_date, event_id, rule_id, recorded_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             fill.ledger_id,
             fill.broker_order_id,
@@ -618,6 +621,7 @@ def insert_external(conn: sqlite3.Connection, fill: NewExternalFill, at: datetim
             to_iso(fill.filled_at),
             None if fill.settlement_date is None else fill.settlement_date.isoformat(),
             fill.event_id,
+            fill.rule_id,
             to_iso(at),
         ),
     )

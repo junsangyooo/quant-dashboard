@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from autotrade.broker.base import Executor, executor_for
@@ -475,6 +476,28 @@ def adopt_job(
         if outcome.get("result") == "adopted":
             live.reconcile(ctx.conn, ctx.cfg, at)  # the status shows the match at once
     return {**base, **outcome}
+
+
+def live_discovery_job(
+    ctx: JobContext, at: datetime, *, pct: int | None, yes: bool
+) -> dict[str, Any]:
+    """`live-discovery --pct N [--yes]`: '3년 발굴' gets N% of the live ledger and the paper
+    ledger's picks (engine/live_discovery.py). Without --yes it only shows the change."""
+    from autotrade.engine import live_discovery
+
+    require_aware(at)
+    base: dict[str, Any] = {"job": live_discovery.JOB, "ledger": "live", "at": at}
+    if pct is None:
+        return {**base, "result": "refused", "reason": "bad-pct", "error": "give --pct N"}
+    with transaction(ctx.conn, rollback=not yes):
+        try:
+            change = live_discovery.prepare(ctx.conn, Decimal(pct))
+        except live_discovery.LiveDiscoveryRefusedError as exc:
+            return {**base, "result": "refused", "reason": exc.code, "error": str(exc)}
+        out = live_discovery.report(ctx.conn, ctx.cfg, change, at, applied=yes)
+        if yes and not change.nothing:
+            out["new_picks"] = live_discovery.apply(ctx.conn, change, at)
+    return {**base, **out}
 
 
 # Results that make the CLI exit with 1 ('failed', a manual action, a todo that cannot be closed).

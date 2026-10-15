@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from autotrade.config import Config
 from autotrade.db import ai_repo, repo
-from autotrade.db.models import OrderRow
+from autotrade.db.models import EventRow, OrderRow
 from autotrade.domain.cash import CashPart, Claim, Purpose, partition
 from autotrade.domain.instruments import Currency, Instrument
 from autotrade.domain.money import ZERO, usd_in_krw
@@ -94,18 +94,58 @@ def new_money_waiting(
     dated earlier because an app buy spent it keeps that day). A withdrawal does not shorten the
     wait (it may be the proceeds of a sale leaving): money already there may then wait a day
     too, never the other way. The caller caps the amounts at the free cash."""
-    if ledger_id != LIVE:
-        return {}
     out: dict[Currency, Decimal] = {}
+    for ev, sign in _new_money_events(conn, ledger_id, at):
+        assert ev.amount is not None
+        currency = ev.currency or Currency.KRW
+        out[currency] = out.get(currency, ZERO) + sign * ev.amount
+    return {c: v for c, v in out.items() if v > 0}
+
+
+def _new_money_events(
+    conn: sqlite3.Connection, ledger_id: str, at: datetime
+) -> list[tuple[EventRow, int]]:
+    """The events new_money_waiting counts, with their sign (+1 in, -1 a conversion out)."""
+    if ledger_id != LIVE:
+        return []
+    out: list[tuple[EventRow, int]] = []
     for ev in repo.events_on(conn, ledger_id, kst_date(at), ("deposit", "withdrawal")):
         if ev.amount is None or ev.occurred_at > at or ev.payload.get("source") != "broker":
             continue
-        currency = ev.currency or Currency.KRW
         reason = ev.payload.get("reason")
         if ev.kind == "deposit" and reason in OWNER_IN:
-            out[currency] = out.get(currency, ZERO) + ev.amount
+            out.append((ev, 1))
         elif ev.kind == "withdrawal" and reason == CONVERSION:
-            out[currency] = out.get(currency, ZERO) - ev.amount
+            out.append((ev, -1))
+    return out
+
+
+def new_money_of_rule(
+    conn: sqlite3.Connection, ledger_id: str, rule_id: str, at: datetime
+) -> dict[Currency, Decimal]:
+    """The part of new_money_waiting a rule holds (D48 for a ledger shared by rules): a sleeve's
+    is its part of each of those events (engine/sleeves.py split_inflow), the base rule's the
+    rest. With no sleeve it is new_money_waiting itself."""
+    events = _new_money_events(conn, ledger_id, at)
+    if not events:
+        return {}
+    sign_of = {ev.event_id: sign for ev, sign in events}
+    sleeve_rules = [r for r in ai_repo.sleeve_rules(conn, ledger_id) if r != BASE_RULE]
+    parts: dict[str, dict[Currency, Decimal]] = {}
+    for r in sleeve_rules:
+        mine: dict[Currency, Decimal] = {}
+        for flow in ai_repo.sleeve_flows(conn, ledger_id, r):
+            sign = sign_of.get(flow.event_id) if flow.event_id is not None else None
+            if sign is not None:
+                mine[flow.currency] = mine.get(flow.currency, ZERO) + sign * flow.amount
+        parts[r] = mine
+    if rule_id != BASE_RULE:
+        return {c: v for c, v in parts.get(rule_id, {}).items() if v > 0}
+    out = new_money_waiting(conn, ledger_id, at)
+    for mine in parts.values():
+        for currency, amount in mine.items():
+            if amount > 0 and currency in out:
+                out[currency] -= amount
     return {c: v for c, v in out.items() if v > 0}
 
 
@@ -163,7 +203,7 @@ def refresh_cash_parts(conn: sqlite3.Connection, ledger_id: str, at: datetime) -
         repo.withdraw_waits(conn, ledger_id),
         pending_claims(conn, ledger_id, BASE_RULE),
         new_cash,
-        held=new_money_waiting(conn, ledger_id, at),
+        held=new_money_of_rule(conn, ledger_id, BASE_RULE, at),
     )
     repo.replace_cash_parts(conn, ledger_id, parts, at)
     return parts

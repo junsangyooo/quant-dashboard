@@ -66,7 +66,7 @@ from autotrade.domain.instruments import Currency, Instrument, Market
 from autotrade.domain.money import ZERO, usd_in_krw
 from autotrade.domain.planner import Side
 from autotrade.engine import live, runner, sleeves
-from autotrade.engine.common import new_money_waiting, withdraw_wait_amounts
+from autotrade.engine.common import new_money_of_rule, withdraw_wait_amounts
 from autotrade.market.calendar import CalendarRangeError, calendar_for
 from autotrade.timeutil import KST, et_date, from_iso, kst_date, require_aware
 
@@ -413,11 +413,12 @@ class Sync:
                 if rule_id == sleeves.BASE_RULE
                 else {}
             )
-            new_money = new_money_waiting(self.conn, LIVE, self.now())
+            new_money = new_money_of_rule(self.conn, LIVE, rule_id, self.now())
             ledger_cash = (
                 view.cash_of(inst.currency)
                 - held.get(inst.currency, ZERO)
                 - new_money.get(inst.currency, ZERO)
+                - self._committed(rule_id, inst)
             )
             power = self.client.buying_power(inst.currency)
             cash = min(power, ledger_cash)
@@ -431,6 +432,36 @@ class Sync:
         whole = int(sellable.to_integral_value(rounding=ROUND_FLOOR))
         qty = min(planned, view.qty_of(inst.instrument_id), whole)
         return qty, None if qty > 0 else "nothing-to-sell"
+
+    def _committed(self, rule_id: str, inst: Instrument) -> Decimal:
+        """What the rule's buys already sent in `inst`'s currency will take once booked: the
+        rule's cash in the records has not paid them yet, and the broker's buying power is the
+        whole account's (it includes the other rule's money, so it cannot stop an overdraw). A
+        filled one at what it cost, an open one at its limit price with the fee."""
+        total = ZERO
+        rules: dict[int, str] = {}
+        for row in live_repo.broker_orders_of(self.conn, LIVE, (*live_repo.OPEN_STATES, "done")):
+            request = row.request
+            if request is None or request.side != "BUY" or request.currency is not inst.currency:
+                continue
+            order = repo.get_order(self.conn, row.order_id)
+            if order.status != "pending" or repo.fill_of_order(self.conn, order.order_id):
+                continue  # booked: the records' cash has paid it
+            if order.plan_id not in rules:
+                rules[order.plan_id] = repo.get_plan(self.conn, order.plan_id).rule_id
+            if rules[order.plan_id] != rule_id:
+                continue
+            if row.state == "done":  # over: what it filled (nothing if it filled nothing)
+                if row.filled_amount is not None:
+                    total += row.filled_amount + (row.commission or ZERO) + (row.tax or ZERO)
+                continue
+            bought = repo.get_instrument(self.conn, order.instrument_id or "")
+            total += (
+                request.price
+                * request.quantity
+                * (1 + fee_rate(self.cfg, self._commissions(), bought))
+            )
+        return total
 
     def _commissions(self) -> dict[str, Decimal]:
         status = live_repo.get_status(self.conn)

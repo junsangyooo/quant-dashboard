@@ -10,11 +10,14 @@ Inputs are the rule's own part of the ledger (its sleeve), the latest closes and
    a pick dearer than its amount is left for later (the cash waits).
 4. Funding, per currency: cash and the sales first, then the index ETF that held money for the
    rule (sold to pay), then a conversion from the other currency, and last the buys are cut one
-   share at a time, the largest first.
+   share at a time, the largest first. The live ledger never converts (D47, `convert=False`):
+   each currency pays its own buys.
 5. Parking: money left in a currency after the plan buys that currency's index ETF ('판 돈은
    다음에 살 때까지 같은 나라 지수 ETF에 둔다'), whole shares only.
 
 A Korean stock sale pays the transaction tax (FeeRates.kr_stock_sell_tax) on top of the fee.
+A holding's `buy_unit` (live: the send's limit price and fee, autotrade/broker/toss.py buy_unit)
+sizes its buys instead of the close and the fee, so a planned share is one the send can pay.
 """
 
 from __future__ import annotations
@@ -47,6 +50,7 @@ class Holding:
     instrument: Instrument
     qty: int  # shares in the rule's part of the ledger
     price: Decimal  # plan price (latest close), instrument currency
+    buy_unit: Decimal | None = None  # the most one bought share takes (live), its currency
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,7 @@ class DiscoveryInput:
     fx_rate: Decimal
     fees: FeeRates
     fx_step_krw: Decimal = Decimal("1000")
+    convert: bool = True  # False: the live ledger, each currency on its own (D47)
 
 
 def _krw(h: Holding, amount: Decimal, rate: Decimal) -> Decimal:
@@ -77,11 +82,15 @@ def sell_net(h: Holding, qty: int, fees: FeeRates) -> Decimal:
 
 
 def buy_cost(h: Holding, qty: int, fees: FeeRates) -> Decimal:
+    if h.buy_unit is not None:
+        return h.buy_unit * qty
     gross = h.price * qty
     return gross + trade_fee(h.instrument.currency, gross, fees)
 
 
 def _unit_cost_krw(h: Holding, inp: DiscoveryInput) -> Decimal:
+    if h.buy_unit is not None:
+        return _krw(h, h.buy_unit, inp.fx_rate)
     rate_fee = ONE + inp.fees.rate_for(h.instrument.currency)
     return _krw(h, h.price * rate_fee, inp.fx_rate)
 
@@ -195,7 +204,7 @@ def plan_discovery(inp: DiscoveryInput) -> Plan:
             if left[currency] < 0:
                 _sell_parking(inp, book, currency, -left[currency])
         left = _balance(inp, book)
-        fx = _conversion(inp, left)
+        fx = _conversion(inp, left) if inp.convert else None
         after = _after_fx(left, fx)
         if all(v >= 0 for v in after.values()) or not book.buys:
             break

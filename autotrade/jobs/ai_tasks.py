@@ -225,3 +225,15 @@ def plan_job(
     if errors or fx_error:
         out["fetch_errors"] = {**errors, **({"fx": fx_error} if fx_error else {})}
     return out
+
+
+def follow_job(ctx: JobContext, at: datetime, *, dry_run: bool = False) -> dict[str, Any]:
+    """The live ledger's picks follow the paper ledger's judgment (engine/live_discovery.py):
+    database only, no AI. 'quiet' when nothing changed (the tick then writes nothing)."""
+    from autotrade.engine import live_discovery
+
+    require_aware(at)
+    base: dict[str, Any] = {"job": "follow", "ledger": "live", "at": at, "dry_run": dry_run}
+    with transaction(ctx.conn, rollback=dry_run):
+        changes = live_discovery.follow(ctx.conn, at)
+    return {**base, "result": "ok" if changes else "quiet", "changes": changes}

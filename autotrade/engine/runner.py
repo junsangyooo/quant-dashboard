@@ -34,12 +34,13 @@ from autotrade.config import Config
 from autotrade.db import repo
 from autotrade.db.models import OrderRow, PlanRow, StageRow
 from autotrade.domain.instruments import Currency, Market
-from autotrade.domain.ledger import FxFill, TradeFill, apply_fx, apply_trade
+from autotrade.domain.ledger import FxFill, LedgerError, TradeFill, apply_fx, apply_trade
 from autotrade.domain.money import ZERO
 from autotrade.domain.planner import FxDirection, Side
 from autotrade.domain.stages import StageMarket
 from autotrade.engine import sleeves
 from autotrade.engine.common import (
+    LIVE,
     idem_key,
     refresh_cash_parts,
     slotter_for,
@@ -172,6 +173,8 @@ def _apply_trade_fill(
     filled: TradeFilled,
     executor_name: str,
     at: datetime,
+    *,
+    cover: bool = False,
 ) -> dict[str, Any]:
     if order.instrument_id is None:
         raise ValueError("trade fill without instrument")
@@ -196,7 +199,9 @@ def _apply_trade_fill(
     )
     state = apply_trade(repo.load_state(conn, ledger_id), fill)
     repo.save_state(conn, ledger_id, state, at)
-    sleeves.apply_trade_fill(conn, ledger_id, plan.rule_id, fill, at)
+    covered = sleeves.apply_trade_fill(
+        conn, ledger_id, plan.rule_id, fill, at, when=filled.filled_at or stage.due_at, cover=cover
+    )
     fee_krw = fill.to_krw(filled.fee)
     repo.insert_fill(
         conn,
@@ -222,7 +227,7 @@ def _apply_trade_fill(
     )
     # Live: the broker's time (paper has none: the time the runner took it).
     repo.mark_order_filled(conn, order.order_id, executor_name, filled.filled_at or at)
-    return {
+    out: dict[str, Any] = {
         "order_id": order.order_id,
         "outcome": "filled",
         "instrument_id": inst.instrument_id,
@@ -233,6 +238,9 @@ def _apply_trade_fill(
         "fee": filled.fee,
         "fee_krw": fee_krw,
     }
+    if covered:
+        out["covered"] = covered  # moved from '지수 반반''s cash to the rule (adopt-broker)
+    return out
 
 
 def _apply_fx_fill(
@@ -466,9 +474,31 @@ def execute_stage(
     for order in repo.orders_of_stage(conn, stage.stage_id, [PENDING]):
         outcome = _execute(conn, cfg, ledger_id, stage, order, at, executor, fetch)
         if isinstance(outcome, TradeFilled):
-            result.orders.append(
-                _apply_trade_fill(conn, ledger_id, plan, stage, order, outcome, executor.name, at)
-            )
+            if ledger_id != LIVE:
+                result.orders.append(
+                    _apply_trade_fill(
+                        conn, ledger_id, plan, stage, order, outcome, executor.name, at
+                    )
+                )
+                continue
+            # Live: a fill the rule's records cannot book (its cash cannot pay it) stays unbooked,
+            # the order pending; the reconciliation then reads the account as not matching (a red
+            # to-do, nothing more is sent) until adopt-broker books it (engine/live.py).
+            conn.execute("SAVEPOINT live_fill")
+            try:
+                booked = _apply_trade_fill(
+                    conn, ledger_id, plan, stage, order, outcome, executor.name, at
+                )
+            except LedgerError as exc:
+                conn.execute("ROLLBACK TO live_fill")
+                conn.execute("RELEASE live_fill")
+                waiting = True
+                result.orders.append(
+                    {"order_id": order.order_id, "outcome": "unbooked", "detail": str(exc)}
+                )
+                continue
+            conn.execute("RELEASE live_fill")
+            result.orders.append(booked)
         elif isinstance(outcome, FxFilled):
             result.orders.append(
                 _apply_fx_fill(conn, ledger_id, stage, order, outcome, executor.name, at)
@@ -540,6 +570,8 @@ def book_fill(
     filled: TradeFilled | FxFilled,
     executor_name: str,
     at: datetime,
+    *,
+    cover: bool = False,
 ) -> dict[str, Any] | None:
     """Book a fill the broker reported for `order` outside the stage loop: a conversion the
     reconciliation saw in the balances, or a fill that came after its plan was closed (live off,
@@ -552,7 +584,9 @@ def book_fill(
     if isinstance(filled, FxFilled):
         out = _apply_fx_fill(conn, ledger_id, stage, order, filled, executor_name, at)
     else:
-        out = _apply_trade_fill(conn, ledger_id, plan, stage, order, filled, executor_name, at)
+        out = _apply_trade_fill(
+            conn, ledger_id, plan, stage, order, filled, executor_name, at, cover=cover
+        )
     if (
         stage.status == PENDING
         and stage.due_at <= at

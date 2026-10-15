@@ -44,7 +44,7 @@ from autotrade.engine.common import (
     buy_wait_krw,
     capped,
     load_rule,
-    new_money_waiting,
+    new_money_of_rule,
     withdraw_wait_amounts,
 )
 from autotrade.engine.status import first_check_after, next_check_at
@@ -537,7 +537,9 @@ class LedgerContext:
         state = sleeves.base_view(self.conn, self.ledger_id)
         held = withdraw_wait_amounts(self.parts)
         free = {c: state.cash_of(c) - held.get(c, ZERO) for c in Currency}
-        return capped(new_money_waiting(self.conn, self.ledger_id, self.now), free)
+        return capped(
+            new_money_of_rule(self.conn, self.ledger_id, sleeves.BASE_RULE, self.now), free
+        )
 
     @cached_property
     def new_money_from(self) -> datetime:

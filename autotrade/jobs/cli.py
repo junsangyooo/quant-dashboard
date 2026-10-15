@@ -43,6 +43,11 @@ Options: --ledger paper|live (default paper; tick: both), --dry-run, --at ISO, -
              Reads only; never orders. Needs AUTOTRADE_SECRETS_ENV (PHASE3.md 5)
   adopt-broker  --note TEXT: after a mismatch the owner checked, make the live ledger's holdings
              and cash the account's (the difference is booked as money in or out)
+  live-discovery  --pct N [--yes]: before the live ledger starts, give '3년 발굴' N% of it
+             ('지수 반반' 100 - N) and copy the paper ledger's open picks (their conditions and
+             judgment, none of the paper money). Without --yes it prints what it would change
+             and the first amounts it expects; with --yes it writes. Again: nothing to do.
+             A started live ledger is refused (autotrade/engine/live_discovery.py)
   status     read-only summary
   migrate    create or upgrade data/autotrade.db and write its fixed rows (deploy.sh runs it);
              the only command that changes the schema. The file is made 0600 (and -wal/-shm),
@@ -101,6 +106,7 @@ from autotrade.jobs.tasks import (
     backup_job,
     check_job,
     dividend_job,
+    live_discovery_job,
     resolve_job,
     snapshot_job,
     stage_job,
@@ -134,6 +140,7 @@ COMMANDS = (
     "reconcile",
     "toss-check",
     "adopt-broker",
+    "live-discovery",
 )
 LOCKED = (
     "tick",
@@ -151,6 +158,7 @@ LOCKED = (
     "reconcile",
     "toss-check",
     "adopt-broker",
+    "live-discovery",
 )
 LOCK_WAIT_S = 120.0
 MIGRATE_AI_WAIT_S = 900.0  # an AI call has no time limit (as the rollback, api/release.py)
@@ -196,6 +204,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--world", choices=("first-day", "paper", "discovery"), help="dev-seed: the world"
     )
     parser.add_argument("--pin", help="dev-seed only: the owner PIN of the new database")
+    parser.add_argument(
+        "--pct", type=int, help="live-discovery: the share of '3년 발굴' in the live ledger"
+    )
+    parser.add_argument("--yes", action="store_true", help="live-discovery: write the change")
     return parser
 
 
@@ -325,6 +337,8 @@ def _dispatch(
         return toss_check(ctx.cfg, ctx.conn, transport=ctx.toss_transport, today=kst_date(at))
     if args.command == "adopt-broker":
         return adopt_job(ctx, at, note=args.note, dry_run=dry)
+    if args.command == "live-discovery":
+        return live_discovery_job(ctx, at, pct=args.pct, yes=args.yes)
     if args.command in TAKES_ID and not args.todo_id:
         error = f"give the todo id: {args.command} <id>"
         return {"job": args.command, "result": "bad-id", "error": error}
@@ -470,6 +484,8 @@ def main(
         parser.error("--ask-again is only for ai-retry")
     if args.pick is not None and args.command != "resolve":
         parser.error("--pick is only for resolve")
+    if (args.pct is not None or args.yes) and args.command != "live-discovery":
+        parser.error("--pct and --yes are only for live-discovery")
     if args.command == "adopt-broker" and not args.note:
         parser.error("adopt-broker needs --note (what you checked in the Toss app)")
     if args.command != "dev-seed" and (args.pin is not None or args.world is not None):

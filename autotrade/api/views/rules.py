@@ -10,8 +10,9 @@ from autotrade.api.views.context import LedgerContext
 from autotrade.api.views.refs import instrument as instrument_json
 from autotrade.domain.status import RuleStatus
 
-# '과거 1년 수익' tile: measured, never expected. Vault 3-시험/T09 (주식 비중과 공격몫), as
-# summarised in 5-설계/파이프라인.md '장투': after tax, one-year holding, 100% stocks, 2015–25 —
+# '과거 1년 수익' tile: measured, never expected. Vault quant-dashboard/시행착오.md T09
+# (주식 비중과 공격몫), as summarised in 5-설계/파이프라인.md '장투': after tax, one-year
+# holding, 100% stocks, 2015–25 —
 # median +9.5%, a bad year (10th percentile) −13.6%, worst −33.5%.
 INDEX_HALF_MEASURED: dict[str, Any] = {
     "median": 9.5,

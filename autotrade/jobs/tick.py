@@ -11,7 +11,11 @@ One tick runs the paper ledger, then the live ledger (run_all, autotrade/PHASE3.
 the backup once. The live ledger's turn: the Toss sync (broker: the only code that calls Toss,
 and only with AUTOTRADE_LIVE_ORDERS=1), the stages (the Toss executor reads what the sync
 recorded), the reconciliation, the check and its retry (while the mode is live, from the first
-weekday check after it was turned on: never a 'missed-check' plan minutes after), the snapshot
+weekday check after it was turned on: never a 'missed-check' plan minutes after), where '3년 발굴'
+has a share of it: 'follow' (its picks take the paper ledger's judgment, database only, every
+tick) and the rule's plan (the same conditions as the check, never on an account that does not
+match). The live turn asks the AI nothing: no watch, no review queue (one judgment, the paper
+ledger's; engine/live_discovery.py). Then the snapshot
 (whenever the ledger has started: an account that is off still counts, 인계 15). Live dividends
 come from the account (the reconciliation), not from the paper ledger's dividend job. A task
 whose report says 'quiet' (nothing changed) prints nothing.
@@ -30,9 +34,9 @@ from typing import Any
 
 from autotrade.broker.toss import env_live
 from autotrade.db import live_repo, repo
-from autotrade.engine import live
+from autotrade.engine import live, live_discovery
 from autotrade.engine.check import FAILED
-from autotrade.jobs.ai_tasks import plan_job, queue_job, watch_job
+from autotrade.jobs.ai_tasks import follow_job, plan_job, queue_job, watch_job
 from autotrade.jobs.live_tasks import broker_job, reconcile_job
 from autotrade.jobs.schedule import (
     Due,
@@ -40,6 +44,7 @@ from autotrade.jobs.schedule import (
     backup_due,
     check_due,
     dividends_due,
+    live_checked_today,
     queue_due,
     retry_due,
     snapshot_due,
@@ -68,7 +73,16 @@ TASKS = (
 )
 # The live ledger's turn (PHASE3.md 2.8): the sync first, so the stages read fresh broker
 # records and the check reconciles a fresh snapshot.
-LIVE_TASKS = ("broker", "stages", "reconcile", "check", "retry", "snapshot")
+LIVE_TASKS = (
+    "broker",
+    "stages",
+    "reconcile",
+    "check",
+    "retry",
+    "follow",
+    "ai-plan",
+    "snapshot",
+)
 # The live tasks that read what the sync records: when one runs on a tick, the sync runs first
 # on the same tick whatever its cadence.
 SYNC_READERS = ("stages", "check", "retry", "snapshot")
@@ -135,7 +149,9 @@ def _live_due(task: str, ctx: JobContext, at: datetime) -> Due | None:
         return _broker_due(ctx, at)
     if task == "reconcile":
         return Due("reconcile", "every-tick") if started else None
-    if task in ("check", "retry"):
+    if task == "follow":
+        return Due("follow", "every-tick") if live_discovery.follows(ctx.conn) else None
+    if task in ("check", "retry", "ai-plan"):
         if not (started and on):
             return None
         first = live.first_live_check(ctx.conn, ctx.cfg)
@@ -143,7 +159,11 @@ def _live_due(task: str, ctx: JobContext, at: datetime) -> Due | None:
             return None  # turned on after a check time: the next weekday's check is the first
         if task == "check":
             return check_due(ctx.conn, ctx.cfg, live.LIVE, at)
-        return retry_due(ctx.conn, ctx.cfg, live.LIVE, at)
+        if task == "retry":
+            return retry_due(ctx.conn, ctx.cfg, live.LIVE, at)
+        if not live_checked_today(ctx.conn, ctx.cfg, at):
+            return None  # only on an account today's check read and that matches now
+        return ai_plan_due(ctx.conn, ctx.cfg, live.LIVE, at)
     if task == "snapshot":
         return snapshot_due(ctx.conn, ctx.cfg, live.LIVE, at) if started else None
     if task == "stages":
@@ -199,6 +219,8 @@ def _run(task: str, ctx: JobContext, ledger_id: str, at: datetime) -> dict[str, 
         return queue_job(ctx, ledger_id, at)
     if task == "ai-plan":
         return plan_job(ctx, ledger_id, at)
+    if task == "follow":
+        return follow_job(ctx, at)
     return backup_job(ctx, at)
 
 

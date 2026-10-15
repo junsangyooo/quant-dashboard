@@ -437,7 +437,7 @@ def test_the_equal_weight_waits_for_reviews_with_attempts_left_only(
         for _ in range(2):
             ai_repo.finish_task(p2conn, stuck.task_id, kst("2026-08-01 02:00"), status="failed")
     assert discovery_plan.ew_month(p2conn, "paper", date(2026, 8, 3), 3) == "2026-08"
-    assert discovery_plan.unreviewed(p2conn, "paper", "2026-08", 3) == {ocean.pick_id}
+    assert discovery_plan.unreviewed(p2conn, "paper", "2026-08", 3) == {ocean.instrument_id}
     # The plan of that day leaves the unreviewed pick out of the equal weight.
     world.rate(kst("2026-08-03 08:25"), "1400.0")
     seed_prices(p2conn, world, ["2026-07-31", "2026-08-03"], "10000")

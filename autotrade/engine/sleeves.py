@@ -27,7 +27,8 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import ROUND_FLOOR, Decimal
 
-from autotrade.db import ai_repo, repo
+from autotrade.db import ai_repo, live_repo, repo
+from autotrade.db.live_repo import ExternalFill
 from autotrade.db.models import FillRow
 from autotrade.domain.dividends import HeldFill, qty_before_ex_date
 from autotrade.domain.instruments import Currency, Market
@@ -44,7 +45,7 @@ from autotrade.domain.ledger import (
     same_to_the_won,
 )
 from autotrade.domain.money import CENT, WON, ZERO, usd_in_krw
-from autotrade.domain.planner import FxDirection
+from autotrade.domain.planner import FxDirection, Side
 from autotrade.timeutil import et_date, kst_date
 
 BASE_RULE = "index_half"
@@ -102,19 +103,70 @@ class OwnBook:
 def own_book(fills: Iterable[FillRow]) -> OwnBook:
     """Fold trade fills with the ledger's own arithmetic (cash is not the point here). A sale of
     shares the fills never bought (a ledger seeded mid-way) marks that instrument a gap."""
+    return fold_own(
+        f.trade()
+        for f in fills
+        if f.kind == "trade" and f.instrument_id is not None and f.qty is not None
+        if f.price is not None
+    )
+
+
+def fold_own(trades: Iterable[TradeFill]) -> OwnBook:
     state = LedgerState(cash=dict.fromkeys(Currency, Decimal("1e18")))
     gaps: set[str] = set()
-    for fill in fills:
-        if fill.kind != "trade" or fill.instrument_id is None or fill.qty is None:
+    for trade in trades:
+        if trade.instrument_id in gaps:
             continue
-        if fill.price is None or fill.instrument_id in gaps:
-            continue
-        trade = fill.trade()
         try:
             state = apply_trade(state, trade)
         except LedgerError:
-            gaps.add(fill.instrument_id)
+            gaps.add(trade.instrument_id)
     return OwnBook(dict(state.positions), state.realized_krw, frozenset(gaps))
+
+
+def _external_trade(ext: ExternalFill) -> TradeFill:
+    if ext.instrument_id is None or ext.qty is None or ext.qty <= 0:
+        raise ValueError(f"external fill {ext.ext_id}: incomplete trade")
+    return TradeFill(
+        instrument_id=ext.instrument_id,
+        currency=ext.currency,
+        side=Side(ext.side),
+        qty=ext.qty,
+        price=ext.gross / ext.qty,
+        fee=ext.fee,
+        krw_rate=ext.krw_rate,
+        gross_amount=ext.gross,
+    )
+
+
+def rule_externals(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> list[ExternalFill]:
+    """The owner's app trades booked to a rule's part (schema 7): '지수 반반''s are the ledger's
+    own trades with no rule named, another rule's name it."""
+    out: list[ExternalFill] = []
+    for ext in live_repo.externals_of(conn, ledger_id):
+        if ext.kind != "trade":
+            continue
+        if rule_id == BASE_RULE:
+            if ext.rule_id is None and ext.treatment == "ledger":
+                out.append(ext)
+        elif ext.rule_id == rule_id:
+            out.append(ext)
+    return out
+
+
+def rule_trades(
+    conn: sqlite3.Connection, ledger_id: str, rule_id: str
+) -> list[tuple[datetime, TradeFill]]:
+    """Every trade of a rule's part, in time order: its plans' fills and the owner's app trades
+    booked to it."""
+    items: list[tuple[datetime, int, int, TradeFill]] = []
+    for f in repo.fills_of_rule(conn, ledger_id, rule_id):
+        if f.kind == "trade" and f.instrument_id and f.qty and f.price is not None:
+            items.append((f.filled_at, 0, f.fill_id, f.trade()))
+    for ext in rule_externals(conn, ledger_id, rule_id):
+        items.append((ext.filled_at, 1, ext.ext_id, _external_trade(ext)))
+    items.sort(key=lambda x: (x[0], x[1], x[2]))
+    return [(when, trade) for when, _, _, trade in items]
 
 
 def with_own_costs(rest: LedgerState, book: OwnBook) -> LedgerState:
@@ -146,7 +198,8 @@ def base_view(conn: sqlite3.Connection, ledger_id: str) -> LedgerState:
         return state  # the ledger is the base rule's alone
     for rule_id in rules:
         state = subtract(state, ai_repo.load_sleeve(conn, ledger_id, rule_id))
-    return with_own_costs(state, own_book(repo.fills_of_rule(conn, ledger_id, BASE_RULE)))
+    trades = [t for _, t in rule_trades(conn, ledger_id, BASE_RULE)]
+    return with_own_costs(state, fold_own(trades))
 
 
 def view(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> LedgerState:
@@ -159,6 +212,73 @@ def _floor(amount: Decimal, currency: Currency) -> Decimal:
     return amount.quantize(WON if currency is Currency.KRW else CENT, rounding=ROUND_FLOOR)
 
 
+def share_parts(
+    conn: sqlite3.Connection, ledger_id: str, amount: Decimal, currency: Currency
+) -> dict[str, Decimal]:
+    """Each sleeve's part of money coming in: its target share, rounded down to the won or
+    cent (the base rule keeps the rest)."""
+    shares = ai_repo.shares(conn, ledger_id)
+    parts = {
+        r: _floor(amount * shares.get(r, ZERO) / HUNDRED, currency)
+        for r in sleeve_rule_ids(conn, ledger_id)
+    }
+    return {r: p for r, p in parts.items() if p > 0}
+
+
+def _pending_buys(
+    conn: sqlite3.Connection, ledger_id: str, rule_id: str, currency: Currency
+) -> Decimal:
+    """Cash the rule's pending buys of `currency` will spend (their estimate and fee)."""
+    rules: dict[int, str] = {}
+    total = ZERO
+    for o in repo.pending_orders(conn, ledger_id):
+        if o.side != "buy" or o.currency is not currency:
+            continue
+        if o.plan_id not in rules:
+            rules[o.plan_id] = repo.get_plan(conn, o.plan_id).rule_id
+        if rules[o.plan_id] == rule_id:
+            total += o.est_amount + o.est_fee
+    return total
+
+
+def withdrawal_parts(
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    amount: Decimal,
+    currency: Currency,
+    ledger_cash: Decimal,
+) -> dict[str, Decimal]:
+    """Each sleeve's part of money leaving the ledger (`ledger_cash`: the ledger's cash of that
+    currency before it leaves). By the target shares, rounded down, but a sleeve gives at most
+    the cash it holds beyond its pending buys (money it spends is not there to take); and when
+    the base rule's cash cannot pay the rest, the sleeves pay it from what they still hold. The
+    live owner's withdrawals, conversions and buys outside the rules come out of a ledger whose
+    rules hold most of their money in shares: by the shares alone, a part bigger than the
+    sleeve's cash would stop the reconciliation (ops notes 3단계 몫)."""
+    shares = ai_repo.shares(conn, ledger_id)
+    rules = sleeve_rule_ids(conn, ledger_id)
+    room: dict[str, Decimal] = {}
+    held = ZERO
+    for rule_id in rules:
+        cash = ai_repo.load_sleeve(conn, ledger_id, rule_id).cash_of(currency)
+        held += cash
+        room[rule_id] = max(ZERO, cash - _pending_buys(conn, ledger_id, rule_id, currency))
+    parts = {
+        r: min(_floor(amount * shares.get(r, ZERO) / HUNDRED, currency), room[r]) for r in rules
+    }
+    short = (amount - sum(parts.values(), ZERO)) - (ledger_cash - held)
+    for rule_id in rules:
+        if short <= 0:
+            break
+        more = min(short, room[rule_id] - parts[rule_id])
+        if more > 0:
+            parts[rule_id] += more
+            short -= more
+    if short > 0:
+        raise LedgerError(f"{currency.value} {amount} out: the rules' cash cannot pay it")
+    return {r: p for r, p in parts.items() if p > 0}
+
+
 def split_inflow(
     conn: sqlite3.Connection,
     ledger_id: str,
@@ -168,15 +288,25 @@ def split_inflow(
     krw_rate: Decimal | None,
     event_id: int | None,
     at: datetime,
+    parts: dict[str, Decimal] | None = None,
 ) -> dict[str, Decimal]:
-    """Give each sleeve its share of a start, deposit or withdrawal. Returns the parts."""
+    """Give each sleeve its share of a start, deposit or withdrawal. Returns the parts.
+
+    The caller has booked the flow on the ledger already. A withdrawal's parts follow
+    withdrawal_parts; `parts` gives them instead (the two legs of an owner's conversion, which
+    move each rule's money in the same proportion: engine/live.py)."""
     if kind is CashFlowKind.DIVIDEND:
         raise ValueError("dividends follow the shares held, see split_dividend")
-    parts: dict[str, Decimal] = {}
-    shares = ai_repo.shares(conn, ledger_id)
-    for rule_id in sleeve_rule_ids(conn, ledger_id):
-        pct = shares.get(rule_id, ZERO)
-        part = _floor(amount * pct / HUNDRED, currency)
+    if parts is None:
+        if kind is CashFlowKind.WITHDRAWAL:
+            before = repo.load_state(conn, ledger_id).cash_of(currency) + amount
+            wanted = withdrawal_parts(conn, ledger_id, amount, currency, before)
+        else:
+            wanted = share_parts(conn, ledger_id, amount, currency)
+    else:
+        wanted = dict(parts)
+    out: dict[str, Decimal] = {}
+    for rule_id, part in sorted(wanted.items()):
         if part <= 0:
             continue
         state = apply_cash_flow(
@@ -194,8 +324,8 @@ def split_inflow(
             krw_rate=krw_rate,
             occurred_at=at,
         )
-        parts[rule_id] = part
-    return parts
+        out[rule_id] = part
+    return out
 
 
 def _session(market: Market, at: datetime) -> date:
@@ -222,9 +352,9 @@ def split_dividend(
     for rule_id in sleeve_rule_ids(conn, ledger_id):
         state = ai_repo.load_sleeve(conn, ledger_id, rule_id)
         fills = [
-            HeldFill(_session(inst.market, f.filled_at), f.qty if f.side == "buy" else -f.qty)
-            for f in repo.fills_of_rule(conn, ledger_id, rule_id)
-            if f.instrument_id == instrument_id and f.qty
+            HeldFill(_session(inst.market, when), t.qty if t.side is Side.BUY else -t.qty)
+            for when, t in rule_trades(conn, ledger_id, rule_id)
+            if t.instrument_id == instrument_id
         ]
         held = qty_before_ex_date(state.qty_of(instrument_id), fills, ex_date)
         if held <= 0:
@@ -250,12 +380,52 @@ def split_dividend(
 
 
 def apply_trade_fill(
-    conn: sqlite3.Connection, ledger_id: str, rule_id: str, fill: TradeFill, at: datetime
-) -> None:
+    conn: sqlite3.Connection,
+    ledger_id: str,
+    rule_id: str,
+    fill: TradeFill,
+    at: datetime,
+    *,
+    when: datetime | None = None,
+    cover: bool = False,
+) -> Decimal:
+    """Book a fill of a rule's plan in its part. A buy its cash cannot pay raises LedgerError
+    (the live send sizes every buy within the rule's cash: it cannot happen unless a fill came
+    dearer than its limit); with `cover` (adopt-broker: the owner looked at the account) the
+    shortfall moves from '지수 반반''s cash to the rule first, as a sleeve deposit dated at the
+    fill (`when`), and the cover is returned (0 otherwise)."""
     if rule_id == BASE_RULE:
-        return
-    state = apply_trade(ai_repo.load_sleeve(conn, ledger_id, rule_id), fill)
+        return ZERO
+    sleeve = ai_repo.load_sleeve(conn, ledger_id, rule_id)
+    covered = ZERO
+    if cover and fill.side is Side.BUY:
+        cost = fill.gross + fill.fee
+        short = cost - sleeve.cash_of(fill.currency)
+        if short > 0:
+            base_cash = repo.load_state(conn, ledger_id).cash_of(fill.currency) + cost
+            for other in sleeve_rule_ids(conn, ledger_id):
+                base_cash -= ai_repo.load_sleeve(conn, ledger_id, other).cash_of(fill.currency)
+            if base_cash < short:
+                raise LedgerError(f"{fill.currency.value}: no rule has the cash for this fill")
+            stamp = when or at
+            sleeve = apply_cash_flow(
+                sleeve, CashFlowKind.DEPOSIT, short, fill.currency, fill.krw_rate
+            )
+            ai_repo.insert_sleeve_flow(
+                conn,
+                ledger_id=ledger_id,
+                rule_id=rule_id,
+                event_id=None,
+                kind=CashFlowKind.DEPOSIT.value,
+                amount=short,
+                currency=fill.currency,
+                krw_rate=fill.krw_rate,
+                occurred_at=stamp,
+            )
+            covered = short
+    state = apply_trade(sleeve, fill)
     ai_repo.save_sleeve(conn, ledger_id, rule_id, state, at)
+    return covered
 
 
 def apply_fx_fill(
@@ -286,6 +456,8 @@ def rebuild_sleeve(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> Le
         items.append((flow.occurred_at, order, flow.flow_id, flow))
     for fill in repo.fills_of_rule(conn, ledger_id, rule_id):
         items.append((fill.filled_at, 1, fill.fill_id, fill))
+    for ext in rule_externals(conn, ledger_id, rule_id):  # the owner's app trades of its part
+        items.append((ext.filled_at, 1, -ext.ext_id, ext))
     items.sort(key=lambda x: (x[0], x[1], x[2]))
     state = LedgerState()
     for _, _, _, item in items:
@@ -293,6 +465,9 @@ def rebuild_sleeve(conn: sqlite3.Connection, ledger_id: str, rule_id: str) -> Le
             state = apply_cash_flow(
                 state, CashFlowKind(item.kind), item.amount, item.currency, item.krw_rate
             )
+            continue
+        if isinstance(item, ExternalFill):
+            state = apply_trade(state, _external_trade(item))
             continue
         assert isinstance(item, FillRow)
         if item.kind == "fx":
@@ -326,7 +501,7 @@ def verify_sleeves(conn: sqlite3.Connection, ledger_id: str) -> list[str]:
         rest = repo.load_state(conn, ledger_id)
         for rule_id in rules:
             rest = subtract(rest, ai_repo.load_sleeve(conn, ledger_id, rule_id))
-        book = own_book(repo.fills_of_rule(conn, ledger_id, BASE_RULE))
+        book = fold_own(t for _, t in rule_trades(conn, ledger_id, BASE_RULE))
         for iid in sorted(set(rest.positions) | set(book.positions) | book.gaps):
             own = book.positions[iid].qty if iid in book.positions else 0
             if iid in book.gaps or own != rest.qty_of(iid):

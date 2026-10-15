@@ -54,7 +54,7 @@ from autotrade.engine.common import (
     capped,
     idem_key,
     load_rule,
-    new_money_waiting,
+    new_money_of_rule,
     refresh_cash_parts,
     slotter_for,
     withdraw_wait_amounts,
@@ -473,7 +473,7 @@ def _check_body(
         for c in (Currency.KRW, Currency.USD)
     }
     # D48: the owner's money of today waits for the next weekday's check.
-    new_money = capped(new_money_waiting(conn, ledger_id, at), free)
+    new_money = capped(new_money_of_rule(conn, ledger_id, sleeves.BASE_RULE, at), free)
     if new_money:
         details[HELD_BACK] = {c.value: v for c, v in new_money.items()}
     usable = {c: free[c] - new_money.get(c, Decimal(0)) for c in free}

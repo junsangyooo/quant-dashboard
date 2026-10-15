@@ -51,11 +51,21 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from autotrade.config import Config
-from autotrade.db import ai_repo, repo
+from autotrade.db import ai_repo, live_repo, repo
 from autotrade.engine import discovery_plan, reviews
 from autotrade.engine import watch as watch_engine
 from autotrade.engine.bootstrap import start_date_key
-from autotrade.engine.check import FAILED, TODO
+from autotrade.engine.check import (
+    ALREADY_PLANNED,
+    FAILED,
+    HOLIDAY,
+    IN_PROGRESS,
+    IN_RANGE,
+    PARTIAL_FAILED,
+    REBALANCE,
+    TODO,
+)
+from autotrade.engine.common import LIVE
 from autotrade.engine.runner import eligible_stages
 from autotrade.jobs.backup import backup_path
 from autotrade.market.calendar import KRX, NYSE
@@ -221,6 +231,40 @@ def queue_due(conn: sqlite3.Connection, ledger_id: str, now: datetime) -> Due | 
     return Due("ai-queue", "on-time" if kst_date(now) < month else "late")
 
 
+# Check results that read the account and found it matching (engine/check.py: the live check
+# reconciles before it weighs; a quote wait stops before that).
+LIVE_SEEN = (REBALANCE, IN_RANGE, HOLIDAY, ALREADY_PLANNED, IN_PROGRESS, PARTIAL_FAILED)
+
+
+def _live_checked(conn: sqlite3.Connection, ledger_id: str, since: datetime) -> bool:
+    """The live ledger's first check ran and planned nothing for '지수 반반' (the account held its
+    targets at the start): the AI rule need not wait for that rule's first plan. A first check
+    that waited for quotes or a market (quote-wait, holiday) keeps it waiting: the long-term
+    rule's first plan belongs to the start event."""
+    if ledger_id != LIVE:
+        return False
+    return any(
+        r.result == IN_RANGE and r.started_at >= since
+        for r in repo.runs_of_ledger(conn, ledger_id, "check")
+    )
+
+
+def live_checked_today(conn: sqlite3.Connection, cfg: Config, now: datetime) -> bool:
+    """The live AI plan's conditions beside the paper ones: today's live check read the account
+    (LIVE_SEEN), and the latest reconciliation matched it within broker_max_age (15 minutes),
+    as the check's own does. A busy, stale or mismatched account plans nothing."""
+    d = kst_date(now)
+    if not any(r.result in LIVE_SEEN for r in repo.runs_on(conn, LIVE, "check", d)):
+        return False
+    status = live_repo.get_status(conn)
+    return (
+        status is not None
+        and status.reconcile_state == "match"
+        and status.reconciled_at is not None
+        and now - status.reconciled_at <= cfg.broker_max_age
+    )
+
+
 def ai_plan_due(conn: sqlite3.Connection, cfg: Config, ledger_id: str, now: datetime) -> Due | None:
     """The AI rule's plan: weekdays in [check time, Korean order time), after the ledger's
     first plan, with no discovery plan today or still running, and something to plan."""
@@ -229,7 +273,9 @@ def ai_plan_due(conn: sqlite3.Connection, cfg: Config, ledger_id: str, now: date
     if not is_weekday(d) or not start <= now < end or not reviews.rule_active(conn, ledger_id):
         return None
     first = repo.start_event(conn, ledger_id)
-    if first is None or first.plan_id is None:
+    if first is None:
+        return None
+    if first.plan_id is None and not _live_checked(conn, ledger_id, first.occurred_at):
         return None  # the start event's plan (the long-term rule's first buy) comes first
     if repo.plan_on(conn, ledger_id, DISCOVERY, d) is not None:
         return None
