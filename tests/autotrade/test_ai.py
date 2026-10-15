@@ -134,7 +134,7 @@ def test_the_command_line_is_the_t26_one(tmp_path: Path, monkeypatch: pytest.Mon
         "질문",
         "--safe-mode",
         "--model",
-        "haiku",
+        "claude-haiku-5-5",
         "--output-format",
         "json",
         "--json-schema",
@@ -722,7 +722,7 @@ def test_a_confirmed_buy_takes_a_slot_or_asks_to_switch(
     assert "흐름은 맞지만 비싸다" not in said[0]
     assert "지시가 아니다" in said[0]
     cmd = runner.calls[0]["cmd"]
-    assert cmd[cmd.index("--model") + 1 :][:3] == ["sonnet", "--output-format", "json"]
+    assert cmd[cmd.index("--model") + 1 :][:3] == ["claude-sonnet-5-5", "--output-format", "json"]
     assert cmd[-2:] == ["--tools", ""]  # no web
     assert [c.purpose for c in ai_repo.calls_of_task(p2conn, tid)] == [
         "buy-confirm#1",
@@ -1009,7 +1009,7 @@ def test_the_quarterly_discovery_adds_picks_and_candidates(
     assert pick_of(p2conn, "US:AAPL").buy == [{"type": "price", "op": "<=", "value": 220}]
     assert ai_repo.get_pick(p2conn, old).status == "expired"
     cmd = runner.calls[0]["cmd"]
-    assert cmd[cmd.index("--model") + 1] == "opus"
+    assert cmd[cmd.index("--model") + 1] == "claude-opus-5-5"
     assert "--effort" not in cmd
     assert cmd[-5:] == ["--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch", "WebFetch"]
     assert "slots_left 5" in runner.prompts("discovery")[0]
@@ -1233,7 +1233,7 @@ def test_python_m_autotrade_jobs_ai_runs_the_cli(
         os.path.realpath(p2cfg.db_path.parent / "ai-cwd"),
     )
     assert seen["args"][:2] == ["-p", seen["args"][1]]
-    assert seen["args"][2:5] == ["--safe-mode", "--model", "haiku"]
+    assert seen["args"][2:5] == ["--safe-mode", "--model", "claude-haiku-5-5"]
     # what the table already holds is on the command line, and the quote is a short locator
     assert "- operating_income: 2026Q2 190000000000 KRW" in seen["args"][1]
     schema = json.loads(seen["args"][seen["args"].index("--json-schema") + 1])

@@ -45,6 +45,11 @@ from typing import Any
 from autotrade.timeutil import UTC
 
 MODELS = ("haiku", "sonnet", "opus")
+# The tier names above are what flows and the database speak; the CLI gets a pinned id. A bare
+# alias followed whatever the CLI release called 'sonnet' (2.1.268: Sonnet 5, Haiku 4.5) and
+# changed models without a commit. 2.1.280 or newer knows the 5.5 ids (checked on the server
+# with 2.1.300, 2026-10-15).
+MODEL_IDS = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5"}
 USAGE_KEYS = (
     "input_tokens",
     "cache_creation_input_tokens",
@@ -278,7 +283,7 @@ class ClaudeCli:
             call.prompt.replace("\x00", ""),
             "--safe-mode",
             "--model",
-            call.model,
+            MODEL_IDS.get(call.model, call.model),
             "--output-format",
             "json",
             "--json-schema",
