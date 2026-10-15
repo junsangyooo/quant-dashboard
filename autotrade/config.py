@@ -19,7 +19,7 @@ The AI runner (phase 2) reads these on every run:
   AUTOTRADE_CLAUDE_BIN          the CLI to run; unset or not found: `claude` on PATH, then
                                 /usr/local/bin/claude, then the newest nvm install
                                 (autotrade/ai/cli.py find_claude; cron's PATH has none of them)
-  AUTOTRADE_AI_BUDGET           monthly token budget for the health screen (default 600,000)
+  AUTOTRADE_AI_BUDGET           monthly token budget for the health screen (default 2,000,000)
   DART_API_KEY                  DART open API key (Korean filings); without it DART is 'no-key'
   AUTOTRADE_SECRETS_ENV         a KEY=VALUE file to read DART_API_KEY from when it is not set
                                 (on the server: /home/ubuntu/dotclaude/secrets/.env). The tick
@@ -104,7 +104,9 @@ class Config:
     # The AI rule '3년 발굴' (PHASE2.md, autotrade/ai/).
     ai_calls_enabled: bool = False  # AUTOTRADE_AI_CALLS=1
     claude_bin: str | None = None  # AUTOTRADE_CLAUDE_BIN; None = look for it (find_claude)
-    ai_monthly_budget: int = 600_000  # tokens; over it the health screen shows a yellow todo
+    # tokens; over it the health screen shows a yellow todo. Measured 2026-10-15 on the 5.5 models:
+    # a usual month ~480,000, a discovery month ~1,660,000 (the discovery alone ~1,180,000).
+    ai_monthly_budget: int = 2_000_000
     ai_max_attempts: int = 3  # a task that failed this often waits for a person
     dart_api_key: str | None = None
     edgar_user_agent: str = "portfolio-dashboard/1.0 (contact: admin@jsyoo.dev)"

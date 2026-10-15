@@ -262,7 +262,7 @@ def test_health_lists_filings_ai_cli_and_the_metric_table(
     assert sources["ai-cli"]["basis"] == "sonnet"
     assert sources["ai-cli"]["extra"] == {
         "monthTokens": 8800,
-        "budget": 600000,
+        "budget": 2000000,
         "enabled": 1,  # the runner's own gate, from its heartbeat (not this process's env)
         "due": 0,
         "cli": "ok",

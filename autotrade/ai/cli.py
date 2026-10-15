@@ -202,15 +202,29 @@ class CliResult:
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
+MODEL_USAGE_KEYS = ("inputTokens", "cacheCreationInputTokens", "cacheReadInputTokens", "outputTokens")
+
+
+def _int(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def count_tokens(usage: Mapping[str, Any] | None) -> int:
+    """All tokens the call spent. `usage` covers the asked model only; a web search runs on
+    another model (Haiku 5.5 searched 38 times for one discovery: 565,372 tokens that `usage`
+    left out, measured 2026-10-15). The envelope's per-model counts (kept as `model_usage`)
+    hold every model, so they win when present."""
     if not usage:
         return 0
-    total = 0
-    for key in USAGE_KEYS:
-        value = usage.get(key)
-        if isinstance(value, int) and not isinstance(value, bool):
-            total += value
-    return total
+    per_model = usage.get("model_usage")
+    if isinstance(per_model, Mapping) and per_model:
+        return sum(
+            _int(counts.get(key))
+            for counts in per_model.values()
+            if isinstance(counts, Mapping)
+            for key in MODEL_USAGE_KEYS
+        )
+    return sum(_int(usage.get(key)) for key in USAGE_KEYS)
 
 
 def _cost(value: Any) -> Decimal | None:
@@ -231,6 +245,8 @@ def parse_envelope(stdout: str) -> tuple[Any, dict[str, Any] | None, Decimal | N
     if not isinstance(envelope, dict):
         return None, None, None, "the envelope is not an object"
     usage = envelope.get("usage") if isinstance(envelope.get("usage"), dict) else None
+    if isinstance(envelope.get("modelUsage"), dict) and envelope["modelUsage"]:
+        usage = {**(usage or {}), "model_usage": envelope["modelUsage"]}
     cost = _cost(envelope.get("total_cost_usd"))
     if envelope.get("is_error"):
         detail = envelope.get("result") or envelope.get("subtype") or "error"

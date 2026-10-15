@@ -1259,3 +1259,23 @@ def test_python_m_autotrade_jobs_ai_runs_the_cli(
     )
     assert json.loads(out[0])["result"] == "disabled"
     assert json.loads(out[0])["due"] == 1
+
+
+def test_tokens_count_every_model_the_call_used():
+    """A discovery's web searches run on Haiku and only `modelUsage` carries them (2026-10-15:
+    614,889 on Opus + 565,372 on Haiku; `usage` alone showed 614,889)."""
+    from autotrade.ai.cli import count_tokens, parse_envelope
+    envelope = {
+        "structured_output": {"ok": True},
+        "usage": {"input_tokens": 28, "cache_creation_input_tokens": 73071,
+                  "cache_read_input_tokens": 519201, "output_tokens": 22589},
+        "modelUsage": {
+            "claude-opus-5-5": {"inputTokens": 28, "cacheCreationInputTokens": 73071,
+                                "cacheReadInputTokens": 519201, "outputTokens": 22589},
+            "claude-haiku-5-5": {"inputTokens": 520928, "cacheCreationInputTokens": 0,
+                                 "cacheReadInputTokens": 0, "outputTokens": 44444},
+        },
+    }
+    _, usage, _, error = parse_envelope(json.dumps(envelope))
+    assert error is None and count_tokens(usage) == 614_889 + 565_372
+    assert count_tokens({"input_tokens": 3, "output_tokens": 4}) == 7   # an older envelope

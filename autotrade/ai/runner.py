@@ -28,7 +28,7 @@ Whatever goes wrong is recorded on the task and never stops the other tasks (aud
 Every run writes a heartbeat (ai_runner): its gate, the CLI it found, whether it has a DART key,
 the task it is asking and since when. The web service reads it (it never has the runner's
 environment). Without AUTOTRADE_AI_CALLS=1 nothing is asked and only the heartbeat is written.
-The month's tokens are counted against the budget (default 600,000); going over shows a yellow
+The month's tokens are counted against the budget (default 2,000,000); going over shows a yellow
 'to do' on the health screen and never stops the runner (a sale must not wait for a budget).
 """
 
