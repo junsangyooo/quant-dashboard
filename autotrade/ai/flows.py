@@ -1,17 +1,20 @@
 """The questions of '3년 발굴', one flow per task kind (PHASE2.md §6·§7, D27·D30·D31·D35~D37).
 
-  kind            model (effort)   calls  what the answer does
-  extract         haiku            1      metric values into the metric table (T27)
-  screen          haiku            1      'relevant' -> a sell confirmation (filing)
-  sell-confirm    sonnet (low)     2      both '반증' -> sell (D27); else hold, recorded. A shock
-                                          is checked against the news with the web (D31)
-  buy-confirm     sonnet (low)     2      both '근거 있음' -> buy, or a switch question when no
-                                          slot; else no buy, recorded (audit 2026-10-10, E5)
-  monthly-review  sonnet (low)     1      verdict, sell conditions rewritten; '반증' or two months
-                                          of '약화' -> a sell confirmation
-  discovery       opus + web       1      new picks (each asked as a buy confirmation before any
-                                          money moves), candidates with buy conditions
-  switch          sonnet (low)     2      both '바꾼다' and beating the code's costs -> switch (D37)
+  kind            model (effort)     calls  what the answer does   (models 5.5, budgets 2026-10-15)
+  extract         haiku (medium)     1      metric values into the metric table (T27)
+  screen          haiku (low)        1      'relevant' -> a sell confirmation (filing)
+  sell-confirm    sonnet (medium)    2      both '반증' -> sell (D27); else hold, recorded. A shock
+                                            is checked against the news with the web (D31)
+  buy-confirm     sonnet (medium)    2      both '근거 있음' -> buy, or a switch question when no
+                                            slot; else no buy, recorded (audit 2026-10-10, E5)
+  monthly-review  sonnet (low)       1      verdict, sell conditions rewritten; '반증' or two months
+                                            of '약화' -> a sell confirmation
+  discovery       opus (high) + web  1      new picks (each asked as a buy confirmation before any
+                                            money moves), candidates with buy conditions
+  switch          sonnet (medium)    2      both '바꾼다' and beating the code's costs -> switch (D37)
+
+Budgets: money-moving pairs think more (medium); a yes/no screen and the routine monthly
+review stay low; numbers read off a filing get medium; the quarterly discovery is high.
 
 A buy rests on two independent answers, like a sale: the quarterly discovery reads the web (open
 to what a fetched page says), so its new picks are candidates until two web-free calls on a
@@ -357,7 +360,7 @@ def prepare_extract(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
 
     prompt = load("extract")
     packet = fit_text(text, keywords(wanted), TEXT_LIMIT, prompt.steps, build)
-    call = _call(prompt, "extract", packet, "haiku", schema=prompt.with_metrics(wanted))
+    call = _call(prompt, "extract", packet, "haiku", "medium", schema=prompt.with_metrics(wanted))
     return Prepared([call], packet, {"wanted": wanted, "instrument_id": inst.instrument_id})
 
 
@@ -462,7 +465,7 @@ def prepare_screen(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
 
     prompt = load("screen")
     packet = fit_text(text, _sell_words(pick), TEXT_LIMIT // 2, prompt.steps, build)
-    return Prepared([_call(prompt, "screen", packet, "haiku")], packet)
+    return Prepared([_call(prompt, "screen", packet, "haiku", "low")], packet)
 
 
 def apply_screen(
@@ -572,7 +575,7 @@ def prepare_sell_confirm(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     packet = _pick_packet(env, task, pick, inst, quotes)
     prompt = load("sell_confirm")
     web = is_shock(task)
-    calls = [_call(prompt, f"sell-confirm#{i}", packet, "sonnet", "low", web=web) for i in (1, 2)]
+    calls = [_call(prompt, f"sell-confirm#{i}", packet, "sonnet", "medium", web=web) for i in (1, 2)]
     return Prepared(calls, packet, {"instrument": inst.instrument_id, "web": web})
 
 
@@ -727,7 +730,7 @@ def prepare_buy_confirm(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     quotes = pk.quotes_for_pick(env.sources, pick, inst, kst_date(env.at))
     packet = buy_packet(env, task, pick, inst, quotes)
     prompt = load("buy_confirm")
-    calls = [_call(prompt, f"buy-confirm#{i}", packet, "sonnet", "low") for i in (1, 2)]
+    calls = [_call(prompt, f"buy-confirm#{i}", packet, "sonnet", "medium") for i in (1, 2)]
     return Prepared(calls, packet, {"instrument": inst.instrument_id})
 
 
@@ -1041,7 +1044,7 @@ def prepare_discovery(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
         pk.dictionary_rows(),
         [pk.CONDITION_FORM],
     )
-    call = _call(load("discovery"), "discovery", packet, "opus", web=True)
+    call = _call(load("discovery"), "discovery", packet, "opus", "high", web=True)
     return Prepared([call], packet, {"slots": slots, "month": task.detail.get("month")})
 
 
@@ -1437,7 +1440,7 @@ def prepare_switch(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
         cost_rows,
     )
     prompt = load("switch")
-    calls = [_call(prompt, f"switch#{i}", packet, "sonnet", "low") for i in (1, 2)]
+    calls = [_call(prompt, f"switch#{i}", packet, "sonnet", "medium") for i in (1, 2)]
     return Prepared(calls, packet, {"costs": costs.as_json()})
 
 

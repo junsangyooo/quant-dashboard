@@ -278,7 +278,7 @@ def test_extract_fills_the_metric_table(
     call = ai_repo.calls_of_task(p2conn, tid)[0]
     assert (call.model, call.effort, call.web, call.tokens, call.purpose) == (
         "haiku",
-        None,
+        "medium",  # numbers read off a filing (budgets 2026-10-15)
         False,
         4400,
         "extract",
@@ -473,7 +473,7 @@ def test_two_invalidations_sell(
     assert "급락 2026-10-12" in prompts[0]
     assert "| now.close | 100 (2026-10-12) |" in prompts[0]
     effort = runner.calls[0]["cmd"]
-    assert effort[effort.index("--effort") + 1] == "low"
+    assert effort[effort.index("--effort") + 1] == "medium"  # money-moving pair
     # A shock is checked against the news: the web is on for both calls (D31).
     for call in runner.calls:
         assert call["cmd"][-5:] == [
@@ -1010,7 +1010,7 @@ def test_the_quarterly_discovery_adds_picks_and_candidates(
     assert ai_repo.get_pick(p2conn, old).status == "expired"
     cmd = runner.calls[0]["cmd"]
     assert cmd[cmd.index("--model") + 1] == "claude-opus-5-5"
-    assert "--effort" not in cmd
+    assert cmd[cmd.index("--effort") + 1] == "high"
     assert cmd[-5:] == ["--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch", "WebFetch"]
     assert "slots_left 5" in runner.prompts("discovery")[0]
     event = repo.event_by_ref(p2conn, "paper", "discovery:2026-12")
