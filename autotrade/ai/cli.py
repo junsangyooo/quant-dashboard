@@ -202,7 +202,12 @@ class CliResult:
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
-MODEL_USAGE_KEYS = ("inputTokens", "cacheCreationInputTokens", "cacheReadInputTokens", "outputTokens")
+MODEL_USAGE_KEYS = (
+    "inputTokens",
+    "cacheCreationInputTokens",
+    "cacheReadInputTokens",
+    "outputTokens",
+)
 
 
 def _int(value: Any) -> int:

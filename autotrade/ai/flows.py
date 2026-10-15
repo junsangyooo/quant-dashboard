@@ -11,7 +11,8 @@
                                             of '약화' -> a sell confirmation
   discovery       opus (high) + web  1      new picks (each asked as a buy confirmation before any
                                             money moves), candidates with buy conditions
-  switch          sonnet (medium)    2      both '바꾼다' and beating the code's costs -> switch (D37)
+  switch          sonnet (medium)    2      both '바꾼다' and beating the code's costs
+                                            -> switch (D37)
 
 Budgets: money-moving pairs think more (medium); a yes/no screen and the routine monthly
 review stay low; numbers read off a filing get medium; the quarterly discovery is high.
@@ -575,7 +576,9 @@ def prepare_sell_confirm(env: FlowEnv, task: ai_repo.TaskRow) -> Prepared:
     packet = _pick_packet(env, task, pick, inst, quotes)
     prompt = load("sell_confirm")
     web = is_shock(task)
-    calls = [_call(prompt, f"sell-confirm#{i}", packet, "sonnet", "medium", web=web) for i in (1, 2)]
+    calls = [
+        _call(prompt, f"sell-confirm#{i}", packet, "sonnet", "medium", web=web) for i in (1, 2)
+    ]
     return Prepared(calls, packet, {"instrument": inst.instrument_id, "web": web})
 
 
