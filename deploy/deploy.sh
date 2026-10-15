@@ -183,11 +183,13 @@ REMOTE_HEAD=$(ssh "$HOST" "git -C $SERVER_DIR rev-parse HEAD")
 echo "[deploy] HEAD verified: ${REMOTE_HEAD:0:7}"
 record "{\"kind\": \"deploy\", \"service\": \"$SERVICE\", \"from\": \"$PREV_HEAD\", \"to\": \"$LOCAL_HEAD\", \"release\": \"$RELEASE\"}"
 
-# Config drift (warn only — never auto-apply): nginx and the autotrade unit are installed by hand.
+# Config drift (warn only — never auto-apply): nginx, the autotrade unit and logrotate are installed by hand.
 ssh "$HOST" "test ! -e /etc/nginx/sites-available/quant || sudo -n diff -q $SERVER_DIR/deploy/nginx-quant.conf /etc/nginx/sites-available/quant >/dev/null 2>&1" \
   || echo "[deploy] WARN: nginx quant config drift (deployed != git) — see deploy/nginx-quant.conf"
 ssh "$HOST" "test ! -e /etc/systemd/system/autotrade.service || diff -q $SERVER_DIR/deploy/autotrade.service /etc/systemd/system/autotrade.service >/dev/null 2>&1" \
   || echo "[deploy] WARN: autotrade.service drift (installed != git) — see deploy/autotrade.service"
+ssh "$HOST" "diff -q $SERVER_DIR/deploy/logrotate-quant /etc/logrotate.d/quant-dashboard >/dev/null 2>&1" \
+  || echo "[deploy] WARN: logrotate drift (installed != git) — see deploy/logrotate-quant"
 
 if [ "$SERVICE" = "autotrade" ]; then
   # One command under the tick's and the AI runner's locks: the predeploy copy, then the
