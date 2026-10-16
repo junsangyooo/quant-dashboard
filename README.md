@@ -1,52 +1,227 @@
 # quant-dashboard
 
-quant.jsyoo.dev의 저장소다. 자동매매 엔진과 API(`autotrade/`), 그 화면(`web/`)이 들어 있다.
+A self-hosted engine and dashboard that runs my personal portfolio across the Korean and US
+markets. It collects market data, applies portfolio rules on a fixed daily schedule, asks an LLM
+for the judgment calls that code can't make on its own, sends the orders to a broker, and shows
+every step of that on a mobile-first web app.
 
-- 엔진은 규칙대로 장부를 굴리고 사건과 기록을 남긴다. 정기 작업(5분마다 도는 tick, AI 작업)은 cron이 부르고, 웹 API는 그 기록을 읽어 화면에 내준다.
-- 모의 장부와 실전 장부가 있다. 실전 주문은 두 열쇠(cron 줄의 `AUTOTRADE_LIVE_ORDERS=1`과 화면에서 PIN으로 켠 '실전' 모드)가 모두 있을 때만 나간다.
+This is a personal project for my own money. It is not a product, a service or investment advice.
 
-## 폴더
+## Highlights
+
+- **One engine, two ledgers.** A paper ledger (simulated fills at the session open) and a live
+  ledger (real orders through a brokerage API) share the same planner, stage runner and
+  reconciliation code.
+- **Rules as data.** A rule is a JSON definition plus display hints. The engine executes it, and the
+  web app draws it as allocation tiles or as a flow of decision lanes, so a new strategy shows up
+  on screen without new UI code.
+- **LLM judgment, kept on a leash.** Model calls answer narrow, schema-bound questions about
+  packets the code builds. Money moves only when independent answers agree, and every call is
+  recorded with its token usage.
+- **Everything visible.** Asset trend, composition, drift against targets, the day's plan,
+  per-day event timelines, rule flows and source health are drawn as charts and gauges instead of
+  log lines.
+- **Built to be left alone.** Cron wakes the jobs every 5 minutes, the code decides what is due in
+  market time, and failures turn into retries or a visible to-do instead of silent gaps.
+
+## How the rules were found
+
+The portfolio rules running today were chosen from more than 10,000 backtested variants over
+10+ years of daily Korean and US market history. Fees, FX spreads, taxes and dividends were
+modelled, and candidates were checked out of sample before anything was trusted with real money.
+
+In short, there are two kinds of rule:
+
+- **Fixed allocation.** Target weights across a few instruments, rebalanced when drift leaves a
+  band.
+- **AI-assisted discovery.** A long-horizon stock sleeve. Candidates and their conditions come
+  from model judgment, while the conditions themselves are checked by code against measured
+  numbers every trading day.
+
+The details of the rules are deliberately left out. The point of this repository is the platform
+that runs and shows a rule, whatever the rule is.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Sources["External"]
+        MD["Market data<br/>(prices, FX, dividends,<br/>filings, news)"]
+        BR["Brokerage<br/>Open API"]
+        LLM["Claude<br/>(headless CLI)"]
+    end
+
+    subgraph Server["Ubuntu VM"]
+        CRON["cron<br/>every 5 min"]
+        TICK["tick job<br/>check · stages · snapshot · backup"]
+        AI["AI runner<br/>task queue"]
+        DB[("SQLite<br/>ledger · events · AI calls")]
+        API["FastAPI<br/>(uvicorn, systemd)"]
+        NGINX["nginx"]
+    end
+
+    WEB["React SPA<br/>(mobile-first)"]
+
+    CRON --> TICK
+    CRON --> AI
+    MD --> TICK
+    MD --> AI
+    TICK <--> BR
+    TICK <--> DB
+    AI <--> LLM
+    AI <--> DB
+    DB --> API
+    API --> NGINX
+    NGINX -->|Cloudflare| WEB
+```
+
+### The daily loop
+
+All times live in code (Korea time, and New York time for the US session with daylight saving),
+not in cron fields. Every 5 minutes the tick asks what is due and runs it at most once a day.
+
+1. **Collect.** Prices, FX, dividends and filings are pulled from several sources, with
+   fallbacks, retries and a freshness record per source.
+2. **Check.** Before the market opens, each rule compares the ledger against its targets and
+   conditions and writes a plan.
+3. **Stages.** Orders go out in stages tied to each market's session: Korean equities, then FX,
+   then US equities at the NYSE open. A stage waits on the ones before it, and a failed stage is
+   retried on the next trading day before it becomes a manual to-do.
+4. **Reconcile.** On the live ledger the broker's account is read every 5 minutes and matched
+   against the engine's own records.
+5. **Snapshot.** After the close, positions are valued, metrics and tax estimates are updated,
+   and the database is backed up.
+
+### AI tasks
+
+A separate runner takes AI tasks one at a time, cheapest and most urgent first. Each task is
+`prepare → call → record → apply`: the code assembles the evidence packet, the model answers
+against a JSON schema, the call and its tokens are written down before anything else can fail,
+and the effects are applied in one transaction.
+
+| Task | Model tier | What the answer is used for |
+| --- | --- | --- |
+| Extract | Haiku | Reads figures out of filings into a metric table |
+| Screen | Haiku | Decides whether a new filing matters to a holding |
+| Buy / sell confirmation | Sonnet × 2 | Two independent calls; both must agree before money moves |
+| Monthly review | Sonnet | Re-evaluates each holding and rewrites its conditions |
+| Switch | Sonnet × 2 | Weighs swapping one holding for another, net of costs |
+| Discovery | Opus + web search | Proposes new candidates on a quarterly cycle |
+
+How the calls are made:
+
+- The model runs through the headless CLI (`claude -p --output-format json --json-schema …`) on a
+  subscription login, with pinned model IDs (`claude-haiku-5-5`, `claude-sonnet-5-5`,
+  `claude-opus-5-5`) and a reasoning effort chosen per task.
+- Prompts and their output schemas are versioned files under `autotrade/ai/prompts/`.
+- The CLI runs in an empty working directory with a scrubbed environment (no API keys, cloud
+  credentials or repository secrets), with tools off except where a task needs the web.
+- Tokens are counted against a monthly budget that shows up on the health screen. Going over the
+  budget never blocks a sale.
+- Failures are sorted: a source that is down waits an hour, a bad answer counts as an attempt, and
+  a bug fails at once with its traceback logged. One broken task never stops the others.
+
+### Safety around real money
+
+- **Two keys for live orders.** An environment flag on the cron line, plus the "live" mode, which
+  can only be switched on from the app with a PIN. Without both, the live ledger only reads the
+  account.
+- Every amount is an exact `Decimal`. Orders carry idempotency keys, and the broker's token is
+  shared carefully so that two processes never revoke each other.
+- The web app sits behind a PIN with a `__Host-` session cookie, a strict CSP, same-origin checks
+  on writes, and a lockout after repeated wrong PINs.
+- The API never migrates the database. Only the deploy step does, after a backup, and until then
+  the API answers `503 schema`.
+- The service runs as a hardened systemd unit: read-only code, a private `/tmp`, no capabilities,
+  and no access to backups or broker tokens.
+
+## Tech stack
+
+| Layer | Tools |
+| --- | --- |
+| Engine & API | Python 3.10, FastAPI, Starlette, Pydantic v2, uvicorn, pandas, NumPy |
+| Storage | SQLite with versioned migrations, nightly backups |
+| AI | Claude (Haiku / Sonnet / Opus 5.5) through the headless CLI, JSON-schema structured output |
+| Broker | Toss Securities Open API (token-bucket rate limiting per API group, injected transport) |
+| Web | React 19, TypeScript 6, Vite 8, TanStack Query 5, React Router, CSS Modules |
+| Charts | Hand-built SVG components (line, gauge, waterfall, drift band, composition bar, calendar) driven by pure, unit-tested geometry modules; no chart library |
+| Design | Tokens in `web/design/tokens.json`, generated into CSS; Pretendard, Lucide icons |
+| Infra | Ubuntu VM, systemd, cron + `flock`, nginx behind Cloudflare, logrotate |
+| Quality | pytest, ruff, mypy (strict), Vitest, Testing Library, Playwright e2e with axe accessibility checks, ESLint (jsx-a11y), Prettier |
+
+## Screens
+
+| Screen | Shows |
+| --- | --- |
+| Home | Total assets and their trend, composition by asset and currency, today's plan |
+| Plan | Drift against targets as gauges, order stages and their schedule |
+| History | Asset history, a run calendar and a filterable event list |
+| Day | One day replayed: the check, each stage, AI judgments, fills |
+| Rules | Each rule drawn as allocation tiles or as a decision flow |
+| Health | Data-source freshness, the job and AI runner heartbeats, open to-dos, token budget |
+| Mode | Paper vs. live, side by side, and the guarded switch between them |
+| Account | PIN, sessions and devices, notification settings |
+
+## Repository layout
 
 ```
-autotrade/   엔진·API (Python 3.10)
-  api/       FastAPI 앱, 배포 도우미(release.py)
-  engine/    단계 실행·대조·스냅숏
-  domain/    비중·주문 계획·금액 계산
-  jobs/      cron 진입점(tick, ai, migrate, backup)
-  broker/    모의 체결, 토스 실주문 클라이언트
-  market/    시세·환율·공시 소스, 거래소 달력
-  ai/        모델 호출(구독 CLI)과 그 일감
-  db/        SQLite 스키마와 마이그레이션
-web/         화면 (React + Vite)
-tests/autotrade/   엔진·API·배포 파일 테스트
-deploy/      deploy.sh · autotrade.service · autotrade.cron · nginx-quant.conf
-             logrotate-quant · install_cron.py
+autotrade/          engine and API (Python 3.10)
+  api/              FastAPI app, routes, view models, auth, release helper
+  engine/           check, stage runner, reconciliation, valuation, snapshots
+  domain/           weights, planner, ledger, money, tax, conditions
+  rules/            rule model and rule definitions
+  ai/               CLI client, task flows, evidence packets, prompts + schemas
+  jobs/             cron entry points (tick, ai, migrate, backup) and the scheduler
+  broker/           paper executor and live broker client
+  market/           data sources, exchange calendars, freshness
+  db/               SQLite schema, migrations, repositories
+  dev/              scripted market "worlds" for local development
+web/                React + Vite app
+  src/charts/       SVG charts and their geometry
+  src/screens/      one folder per screen
+  src/fixtures/     scripted API responses for every screen state
+tests/autotrade/    engine, API and deploy-file tests
+deploy/             deploy script, systemd unit, cron block, nginx, logrotate
 ```
 
-운영 데이터는 서버의 `data/`에 있고 git에 들어가지 않는다(`autotrade.db`, 토큰 캐시, 백업, 로그).
+Production data (`data/`: the database, broker token cache, backups and logs) lives on the
+server and is never committed.
 
-## 테스트
+## Development
 
 ```bash
-# Python (서버와 같은 3.10)
+# Python 3.10 (the server's version)
 python -m pytest tests/autotrade -q
 ruff check --config autotrade/pyproject.toml autotrade tests/autotrade
 mypy --config-file autotrade/pyproject.toml autotrade tests/autotrade
 
-# web
+# Web
 cd web && npm ci && npm run lint && npm run typecheck && npm test
+npm run e2e          # Playwright against fixture states
 ```
 
-`autotrade/pyproject.toml` 머리에 의존성을 고정한 `uv run` 명령이 있다.
+`autotrade/pyproject.toml` has pinned `uv run` one-liners for the same checks.
 
-## 배포
+There are two ways to see the app without touching a market or a model:
 
-노트북에서 실행한다. 서버 폴더는 `~/quant-dashboard`다.
+- **Fixture mode.** `npm run dev`, then open any screen with `?fixture=<state>`. Each loading,
+  empty, error, stale and permission state has a scripted bundle. Production builds can't import
+  this code.
+- **Dev worlds.** `python -m autotrade.jobs dev-seed --db <path> --world <name>` replays the real
+  engine, tick by tick, over a scripted market, with a scripted model answering the AI tasks. The
+  result is a full database the API can serve.
+
+The suite has more than 1,200 automated tests across the engine, the API, the deploy files and
+the web app. They run against fake market sources, a fake broker and a fake CLI, and never reach
+the network.
+
+## Deployment
 
 ```bash
-./deploy/deploy.sh autotrade          # 웹 빌드 → 코드 이동 → DB 백업·마이그레이션 → 웹 전환 → 재시작·헬스체크
-./deploy/deploy.sh                    # push와 서버 pull만 (재시작 없음)
-./deploy/deploy.sh rollback [<commit>] [--yes] [--drop-live]
+./deploy/deploy.sh autotrade                       # build web → ship code → back up + migrate DB → switch web → restart + health check
+./deploy/deploy.sh                                 # push and pull only, no restart
+./deploy/deploy.sh rollback [<commit>] [--yes]     # roll back to a previous release
 ```
 
-각 단계와 되돌리기 규칙은 `deploy/deploy.sh` 머리 주석에 있다. systemd·cron·nginx·logrotate 설치 방법은 각 파일 머리 주석에 있다.
+Each step and its rollback rules are documented at the top of `deploy/deploy.sh`. The install
+steps for the systemd unit, the cron block, nginx and logrotate are at the top of each file.
