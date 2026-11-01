@@ -1,0 +1,104 @@
+/* MVP/입력 칸 */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-primary);
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  height: 48px;
+  padding: 0 var(--space-row);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+}
+
+.box:focus-within {
+  border-color: var(--focus-ring);
+}
+
+.invalid,
+.invalid:focus-within {
+  border: 2px solid var(--status-error);
+}
+
+.disabled {
+  background: var(--bg-subtle);
+}
+
+.input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+
+.input::placeholder,
+.area::placeholder {
+  color: var(--text-muted);
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.input:disabled {
+  color: var(--text-muted);
+}
+
+.unit {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.hint {
+  color: var(--text-muted);
+  margin-top: calc(-1 * var(--space-tight));
+}
+
+.error {
+  color: var(--status-error);
+  margin-top: calc(-1 * var(--space-tight));
+}
+
+.errorSlot {
+  margin-top: var(--space-tight);
+}
+
+.area {
+  min-height: 92px;
+  padding: var(--space-row);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  font-family: inherit;
+  resize: vertical;
+}
+
+.area:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+}
+
+.tall {
+  min-height: 200px;
+}
+
+.area.invalid {
+  border: 2px solid var(--status-error);
+}

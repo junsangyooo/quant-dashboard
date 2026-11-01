@@ -1,0 +1,86 @@
+/* Shared MVP helpers (text colors used across screens). Values are tokens only. */
+
+.c-muted {
+  color: var(--text-muted);
+}
+
+.c-accent {
+  color: var(--accent-default);
+}
+
+.c-gain {
+  color: var(--pnl-gain);
+}
+
+.c-loss {
+  color: var(--pnl-loss);
+}
+
+.c-flat {
+  color: var(--pnl-flat);
+}
+
+.c-warn {
+  color: var(--status-warning);
+}
+
+.c-error {
+  color: var(--status-error);
+}
+
+.c-success {
+  color: var(--status-success);
+}
+
+.full {
+  width: 100%;
+}
+
+.buttons {
+  display: flex;
+  gap: var(--space-inline);
+}
+
+.buttons > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.textLink {
+  align-self: flex-start;
+  color: var(--accent-default);
+}
+
+.dangerLink {
+  align-self: flex-start;
+  color: var(--status-error);
+}
+
+.stack-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.stack-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+}
+
+.stack-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+/* 줄바꿈하지 않는 묶음(금액 + 단위 등). */
+.nw {
+  white-space: nowrap;
+}

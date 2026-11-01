@@ -1,0 +1,38 @@
+/* 칩/기간 · 칩/정보 — geometry from Figma (strokes are included in layout, so CSS borders add size). */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+  flex: none;
+}
+
+button.chip {
+  cursor: pointer;
+}
+
+.outlined {
+  background: var(--bg-default);
+  border: 1px solid var(--border-default);
+}
+
+/* 칩/기간 — selected is filled without a border (Figma: 26px vs 28px tall). */
+.period {
+  padding: var(--space-tight) var(--chip-padding-x);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.period[aria-pressed='true'] {
+  border: 0;
+  background: var(--accent-default);
+  color: var(--text-inverse);
+}
+
+/* 칩/정보 */
+.info {
+  color: var(--text-muted);
+}

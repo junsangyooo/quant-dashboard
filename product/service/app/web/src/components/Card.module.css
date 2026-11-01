@@ -1,0 +1,53 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  min-width: 0;
+}
+
+.subtle {
+  background: var(--bg-subtle);
+}
+
+.outline {
+  background: var(--bg-default);
+  border: 1px solid var(--border-default);
+}
+
+.white {
+  background: var(--bg-default);
+  border-radius: var(--radius-control);
+  padding: var(--space-row);
+}
+
+.kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-block);
+}
+
+.kvLabel {
+  color: var(--text-muted);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.align-start {
+  align-items: flex-start;
+}
+
+.align-baseline {
+  align-items: baseline;
+}

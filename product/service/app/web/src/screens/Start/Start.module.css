@@ -1,0 +1,94 @@
+/* 시작하기 · 예시 카드(Figma CV-4). */
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  padding: var(--card-padding);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+.stepsHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+  padding: var(--space-block) var(--space-row);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  min-width: 0;
+}
+
+.stepCur {
+  border-color: var(--accent-default);
+  box-shadow: 0 0 0 1px var(--accent-default);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-section);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+  height: 100%;
+  padding: var(--space-section);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-default);
+  color: var(--text-primary);
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.cardChev {
+  margin-left: auto;
+}
+
+.exChip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-tight) var(--space-inline);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: var(--bg-default);
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .stepRow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-row);
+  }
+
+  .cards2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

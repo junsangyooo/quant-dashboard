@@ -1,0 +1,175 @@
+quant-strategy/3 app>=1.0
+{
+  "name": "대형주 돌파",
+  "graph": {
+    "blocks": [
+      {
+        "id": "b1",
+        "stage": "universe",
+        "match": "all",
+        "rows": [
+          {
+            "item": "manual_list",
+            "op": "pick",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": null
+          }
+        ],
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "b2",
+        "stage": "signal",
+        "match": "all",
+        "rows": [
+          {
+            "item": "high_n",
+            "op": "cross_up",
+            "params": {
+              "n": null
+            },
+            "value": null,
+            "value2": null,
+            "exec": null
+          }
+        ],
+        "x": 280,
+        "y": 0
+      },
+      {
+        "id": "b3",
+        "stage": "filter",
+        "match": "all",
+        "rows": [
+          {
+            "item": "turnover",
+            "op": "gte",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": null
+          }
+        ],
+        "x": 560,
+        "y": 0
+      },
+      {
+        "id": "b4",
+        "stage": "select",
+        "match": "all",
+        "rows": [
+          {
+            "item": "top_n",
+            "op": "top_n",
+            "params": {
+              "by": "strength",
+              "order": "desc"
+            },
+            "value": null,
+            "value2": null,
+            "exec": null
+          }
+        ],
+        "x": 840,
+        "y": 0
+      },
+      {
+        "id": "b5",
+        "stage": "buy",
+        "match": "all",
+        "rows": [
+          {
+            "item": "next_open",
+            "op": "fixed",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": null
+          }
+        ],
+        "x": 1120,
+        "y": 0
+      },
+      {
+        "id": "b6",
+        "stage": "sell",
+        "match": "any",
+        "rows": [
+          {
+            "item": "stop_loss",
+            "op": "fixed",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": "intraday"
+          },
+          {
+            "item": "take_profit",
+            "op": "fixed",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": "intraday"
+          },
+          {
+            "item": "max_hold",
+            "op": "fixed",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": "close"
+          }
+        ],
+        "x": 1400,
+        "y": 0
+      },
+      {
+        "id": "b7",
+        "stage": "weight",
+        "match": "all",
+        "rows": [
+          {
+            "item": "equal",
+            "op": "fixed",
+            "params": {},
+            "value": null,
+            "value2": null,
+            "exec": null
+          }
+        ],
+        "x": 1120,
+        "y": 240
+      }
+    ],
+    "edges": [
+      {
+        "from": "b1",
+        "to": "b2"
+      },
+      {
+        "from": "b2",
+        "to": "b3"
+      },
+      {
+        "from": "b3",
+        "to": "b4"
+      },
+      {
+        "from": "b4",
+        "to": "b5"
+      },
+      {
+        "from": "b7",
+        "to": "b5"
+      },
+      {
+        "from": "b5",
+        "to": "b6"
+      }
+    ]
+  }
+}
+check: f6d308820f59

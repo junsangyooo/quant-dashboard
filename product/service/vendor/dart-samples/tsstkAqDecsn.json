@@ -1,0 +1,19 @@
+{
+  "status": "000",
+  "message": "정상",
+  "list": [
+    {
+      "rcept_no": "20261102000123",
+      "corp_cls": "Y",
+      "corp_code": "00126380",
+      "corp_name": "삼성전자",
+      "aqpln_stk_ostk": "10,000,000",
+      "aqpln_stk_estk": "-",
+      "aqpln_prc_ostk": "700,000,000,000",
+      "aqpln_prc_estk": "-",
+      "aq_pp": "주가안정 및 주주가치 제고",
+      "aq_mth": "유가증권시장을 통한 장내 직접 취득",
+      "bddd": "2026년 11월 02일"
+    }
+  ]
+}

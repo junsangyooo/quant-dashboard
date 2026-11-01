@@ -1,0 +1,73 @@
+/* MVP tags */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex: none;
+}
+
+.icon {
+  color: var(--text-primary);
+}
+
+.paper .icon {
+  color: var(--accent-default);
+}
+
+.ready {
+  border-color: var(--border-strong);
+}
+
+.edit {
+  border-color: var(--text-primary);
+}
+
+.version {
+  border-color: var(--bg-subtle);
+  background: var(--bg-subtle);
+}
+
+.plain {
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+}
+
+.side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-pill);
+  background: var(--bg-default);
+  white-space: nowrap;
+  flex: none;
+}
+
+.buy {
+  border: 1px solid var(--pnl-gain);
+  color: var(--pnl-gain);
+}
+
+.sell {
+  border: 1px solid var(--pnl-loss);
+  color: var(--pnl-loss);
+}
+
+.stepNo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  border-radius: var(--radius-control);
+  background: var(--mode-paper-bg);
+  color: var(--accent-default);
+  flex: none;
+}

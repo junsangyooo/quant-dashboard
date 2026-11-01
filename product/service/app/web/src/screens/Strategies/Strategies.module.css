@@ -1,0 +1,209 @@
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-row);
+  padding: var(--space-section) 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.emptyButtons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}
+
+.templates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.templates legend {
+  margin-bottom: var(--space-row);
+}
+
+.template {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-row);
+  width: 100%;
+  padding: var(--space-block) var(--space-block);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-default);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+button.template,
+a.template {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.templateOn {
+  border-color: var(--accent-default);
+  box-shadow: 0 0 0 1px var(--accent-default);
+}
+
+.templateHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-row);
+  width: 100%;
+  text-align: left;
+}
+
+.exList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.exItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  width: 100%;
+  padding: var(--space-inline) var(--space-row);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.exOn {
+  background: var(--bg-subtle);
+}
+
+.template:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.templateText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  flex: 1 1 0;
+}
+
+/* 전략 상세 */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-inline);
+}
+
+.stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: var(--space-inline);
+  row-gap: var(--space-tight);
+}
+
+.stageLabel {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.stageText {
+  grid-column: 2;
+}
+
+.versionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.pastRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  color: inherit;
+}
+
+.pastRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.copyLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  align-self: flex-start;
+  color: var(--accent-default);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+@media (min-width: 900px) {
+  .emptyButtons {
+    flex-direction: row;
+  }
+}
+
+.sideTop {
+  padding-top: var(--space-grid);
+}
+
+.graphHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.graphButton {
+  display: block;
+  width: 100%;
+  padding: var(--space-inline) 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}

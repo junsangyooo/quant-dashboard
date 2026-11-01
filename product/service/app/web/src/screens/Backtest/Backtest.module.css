@@ -1,0 +1,137 @@
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+}
+
+.inputs {
+  gap: var(--space-block);
+}
+
+.output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  min-width: 0;
+}
+
+.dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-inline);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-inline);
+}
+
+.resultHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-inline);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: var(--space-row);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+
+.chartCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-row);
+  padding: var(--space-block);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+.legend {
+  display: flex;
+  gap: var(--space-block);
+  color: var(--text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.swatch {
+  width: 16px;
+  height: 2px;
+  background: var(--chart-series-1);
+}
+
+.swatchDashed {
+  width: 16px;
+  height: 0;
+  border-top: 2px dashed var(--chart-series-2);
+}
+
+.trades {
+  border-top: 1px solid var(--border-default);
+}
+
+.trade {
+  display: grid;
+  grid-template-columns: 64px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-row);
+  padding: var(--space-row) 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.startButton {
+  width: 100%;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-grid);
+  border-radius: var(--radius-card);
+  background: var(--bg-subtle);
+}
+
+.wideOnly {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .layout {
+    display: grid;
+    grid-template-columns: 400px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-grid);
+  }
+
+  .wideOnly {
+    display: flex;
+  }
+
+  .startButton {
+    width: auto;
+    align-self: flex-start;
+  }
+}

@@ -1,0 +1,68 @@
+/* MVP/머리 390 (56) and MVP/머리 1440 (64, 1200 column, centred tabs). */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg-default);
+  border-bottom: 1px solid var(--border-default);
+  padding-top: env(safe-area-inset-top);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-inline);
+  height: 55px;
+  padding: 0 var(--space-inline) 0 var(--space-block);
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.noLive {
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 40px;
+}
+
+.tabs {
+  display: none;
+}
+
+.tabList {
+  display: flex;
+  gap: var(--space-section);
+}
+
+@media (min-width: 900px) {
+  .inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    height: 63px;
+    max-width: calc(var(--layout-content-max) + 2 * var(--space-grid));
+    margin: 0 auto;
+    padding: 0 var(--space-grid);
+  }
+
+  .tabs {
+    display: flex;
+  }
+}

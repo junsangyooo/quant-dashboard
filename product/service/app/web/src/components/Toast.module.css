@@ -1,0 +1,37 @@
+/* One line near the bottom (MVP 전략 편집 '조건 삭제 뒤'). Screens leave room under their last
+   button while it shows (Toast spacer), so it never covers the save button. */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-block) + env(safe-area-inset-bottom));
+  z-index: 40;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-block);
+  max-width: calc(100% - 2 * var(--space-block));
+  padding: var(--space-row) var(--space-block);
+  border-radius: var(--radius-control);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  white-space: nowrap;
+}
+
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.action {
+  color: var(--text-inverse);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* Room under the page while a toast shows. */
+.spacer {
+  height: 72px;
+  flex: none;
+}

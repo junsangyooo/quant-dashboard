@@ -1,0 +1,26 @@
+# 앱이 만드는 것 · 내려받는 것 · 빌드 결과 (레포에 올리지 않아요)
+data/
+.venv/
+.verify*/
+.build*/
+static/
+__pycache__/
+*.db
+*.db-*
+*.log
+*.pid
+
+# 화면(web) 빌드 · 시험 결과
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+
+# pytest 임시 폴더(pytest.ini의 --basetemp)
+tests/.tmp/
+
+# 키 · 비밀 값 (키 파일은 레포 밖 고정 경로에 둬요 · 여기는 실수로 들어오는 것을 막는 그물)
+*.key
+keyfile*
+.env*
+secrets/

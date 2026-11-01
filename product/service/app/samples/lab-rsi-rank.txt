@@ -1,0 +1,89 @@
+quant-strategy/1 app>=0.1
+{
+  "name": "눌림목 RSI 순위",
+  "template": "rank",
+  "slots": {
+    "universe": [
+      {
+        "piece": "manual_list",
+        "params": {
+          "symbols": [
+            "005930",
+            "000660",
+            "373220",
+            "207940",
+            "005380",
+            "000270",
+            "068270",
+            "035420",
+            "105560",
+            "055550"
+          ]
+        }
+      }
+    ],
+    "signal": [
+      {
+        "piece": "rsi_below",
+        "params": {
+          "period": null,
+          "level": null
+        }
+      }
+    ],
+    "filter": [
+      {
+        "piece": "min_price",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "select": [
+      {
+        "piece": "top_n",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "buy": [
+      {
+        "piece": "next_open",
+        "params": {}
+      }
+    ],
+    "sell": [
+      {
+        "piece": "stop_loss",
+        "params": {
+          "pct": null
+        }
+      },
+      {
+        "piece": "ma_break_down",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "weight": [
+      {
+        "piece": "equal",
+        "params": {}
+      },
+      {
+        "piece": "rebalance_every",
+        "params": {
+          "n": null
+        }
+      }
+    ]
+  },
+  "source": {
+    "from": "실험실",
+    "id": "lab-0587",
+    "title": "눌림목 RSI 순위"
+  }
+}
+check: f311105e1ba7

@@ -1,0 +1,11 @@
+# product/ 전용 규칙. 레포 뿌리 .gitignore가 *.csv · *.log 같은 꼴을 빼므로,
+# product 쪽 시험 자료 · 견본은 아래처럼 다시 넣어요(부모 폴더가 빠지지 않은 경우에만 동작해요).
+!service/app/tests/fixtures/**/*.csv
+!service/app/web/tests/fixtures/**/*.csv
+!service/vendor/**
+
+# 키 · 비밀 값은 product 어디에도 두지 않아요
+*.key
+keyfile*
+.env*
+secrets/

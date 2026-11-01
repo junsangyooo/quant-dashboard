@@ -1,0 +1,89 @@
+quant-strategy/1 app>=0.1
+{
+  "name": "대형주 이동평균 돌파",
+  "template": "event",
+  "slots": {
+    "universe": [
+      {
+        "piece": "manual_list",
+        "params": {
+          "symbols": [
+            "005930",
+            "000660",
+            "005380",
+            "035420",
+            "051910"
+          ]
+        }
+      }
+    ],
+    "signal": [
+      {
+        "piece": "ma_cross_up",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "filter": [
+      {
+        "piece": "min_turnover",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "select": [
+      {
+        "piece": "top_n",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "buy": [
+      {
+        "piece": "next_open",
+        "params": {}
+      }
+    ],
+    "sell": [
+      {
+        "piece": "stop_loss",
+        "params": {
+          "pct": null
+        }
+      },
+      {
+        "piece": "take_profit",
+        "params": {
+          "pct": null
+        }
+      },
+      {
+        "piece": "max_hold",
+        "params": {
+          "n": null
+        }
+      }
+    ],
+    "weight": [
+      {
+        "piece": "equal",
+        "params": {}
+      },
+      {
+        "piece": "max_per_stock",
+        "params": {
+          "pct": null
+        }
+      }
+    ]
+  },
+  "source": {
+    "from": "실험실",
+    "id": "lab-0412",
+    "title": "대형주 이동평균 돌파"
+  }
+}
+check: c4ffcc5732f7

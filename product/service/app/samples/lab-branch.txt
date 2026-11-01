@@ -1,0 +1,140 @@
+quant-strategy/2 app>=0.2
+{
+  "name": "실험실 돌파 둘 중 하나",
+  "graph": {
+    "nodes": [
+      {
+        "id": "u1",
+        "piece": "manual_list",
+        "params": {
+          "symbols": [
+            "005930",
+            "000660",
+            "373220",
+            "207940",
+            "005380",
+            "000270",
+            "068270",
+            "035420",
+            "105560",
+            "005490"
+          ]
+        },
+        "x": 25,
+        "y": 196
+      },
+      {
+        "id": "s1",
+        "piece": "high_breakout",
+        "params": {
+          "n": null
+        },
+        "x": 241,
+        "y": 132
+      },
+      {
+        "id": "s2",
+        "piece": "ma_cross_up",
+        "params": {
+          "n": null
+        },
+        "x": 241,
+        "y": 256
+      },
+      {
+        "id": "f1",
+        "piece": "min_turnover",
+        "params": {
+          "n": null
+        },
+        "x": 457,
+        "y": 256
+      },
+      {
+        "id": "k1",
+        "piece": "top_n",
+        "params": {
+          "n": null
+        },
+        "x": 673,
+        "y": 196
+      },
+      {
+        "id": "b1",
+        "piece": "next_open",
+        "params": {},
+        "x": 241,
+        "y": 520
+      },
+      {
+        "id": "x1",
+        "piece": "stop_loss",
+        "params": {
+          "pct": null
+        },
+        "x": 457,
+        "y": 470
+      },
+      {
+        "id": "x2",
+        "piece": "max_hold",
+        "params": {
+          "n": null
+        },
+        "x": 457,
+        "y": 590
+      },
+      {
+        "id": "w1",
+        "piece": "equal",
+        "params": {},
+        "x": 25,
+        "y": 610
+      }
+    ],
+    "edges": [
+      {
+        "from": "u1",
+        "to": "s1"
+      },
+      {
+        "from": "u1",
+        "to": "s2"
+      },
+      {
+        "from": "s1",
+        "to": "k1"
+      },
+      {
+        "from": "s2",
+        "to": "f1"
+      },
+      {
+        "from": "f1",
+        "to": "k1"
+      },
+      {
+        "from": "k1",
+        "to": "b1"
+      },
+      {
+        "from": "b1",
+        "to": "x1"
+      },
+      {
+        "from": "b1",
+        "to": "x2"
+      },
+      {
+        "from": "w1",
+        "to": "b1"
+      }
+    ]
+  },
+  "source": {
+    "from": "실험실",
+    "id": "lab-either-1",
+    "title": "돌파 둘 중 하나"
+  }
+}
+check: 99317a56bf08

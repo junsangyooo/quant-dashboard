@@ -1,0 +1,45 @@
+/* 체크 */
+
+.checkLabel {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-inline);
+  cursor: pointer;
+}
+
+/* The native input stays focusable and clickable, on top of the drawn box. */
+.checkInput {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  /* Figma 체크 radius is an unbound 6px — no token exists for it. */
+  border-radius: 6px;
+  background: var(--bg-default);
+  border: 2px solid var(--border-strong);
+  color: var(--text-inverse);
+  flex: none;
+}
+
+.checkBoxOn {
+  background: var(--accent-default);
+  border: 0;
+}
+
+.checkInput:focus-visible + .checkBox {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
