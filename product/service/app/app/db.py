@@ -281,6 +281,53 @@ class DB:
                 self.conn.execute("ROLLBACK")
                 raise
 
+    # ── 백업 · 복원 · 삭제(T-53) ──────────────────────────────────────────
+
+    def backup_to(self, dst: Path) -> None:
+        """지금 파일을 한 장으로 복사해요(쓰는 중이어도 일관된 사진 · sqlite backup)."""
+        with self.lock:
+            out = sqlite3.connect(str(dst))
+            try:
+                self.conn.backup(out)
+            finally:
+                out.close()
+        with contextlib.suppress(OSError):
+            os.chmod(dst, 0o600)
+
+    def replace_with(self, src: Path | None, *, keep: bool = True) -> None:
+        """파일을 통째로 바꿔요(src가 없으면 빈 새 파일). 같은 DB 객체를 쓰는 곳은 그대로 이어서 써요.
+
+        keep이면 바꾸기 전 파일을 `<이름>.before-replace` 한 장으로 남겨요(덮어씀). 삭제는 keep=False.
+        """
+        if str(self.path) == ":memory:":
+            raise RuntimeError("memory db")
+        with self.lock:
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self.conn.close()
+            kept = self.path.with_name(self.path.name + ".before-replace")
+            with contextlib.suppress(FileNotFoundError):
+                if keep:
+                    os.replace(self.path, kept)
+                else:
+                    os.remove(self.path)
+                    for old in (kept, self.path.with_name(self.path.name + ".v1-backup")):
+                        with contextlib.suppress(FileNotFoundError):
+                            os.remove(old)
+            for ext in ("-wal", "-shm"):
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(str(self.path) + ext)
+            if src is not None:
+                with open(src, "rb") as fi, open(self.path, "wb") as fo:
+                    fo.write(fi.read())
+            self.conn = sqlite3.connect(str(self.path), check_same_thread=False, isolation_level=None)
+            self.conn.row_factory = sqlite3.Row
+            with contextlib.suppress(OSError):
+                os.chmod(self.path, 0o600)
+                os.chmod(kept, 0o600)
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.migrated_from = None
+            self._open_schema()
+
     def get_meta(self, k: str) -> str | None:
         row = self.one("SELECT v FROM meta WHERE k=?", (k,))
         return None if row is None else str(row["v"])

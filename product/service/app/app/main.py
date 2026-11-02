@@ -38,6 +38,8 @@ from . import strategy as st
 from . import copytext as ct
 from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
+from . import datamgmt as dm
+from . import updates
 from .schedule import Scheduler
 from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
@@ -232,6 +234,10 @@ def create_app(
             return _err(exc.message, 400, kind="graph", title=ct.BAD_LINKS, detail=exc.detail)
         return _err(exc.message, 400, kind=exc.kind)
 
+    @app.exception_handler(dm.DataError)
+    async def on_data(_: Request, exc: dm.DataError) -> JSONResponse:
+        return _err(exc.message, exc.status)
+
     @app.exception_handler(TelegramError)
     async def on_telegram(_: Request, exc: TelegramError) -> JSONResponse:
         return _err(exc.message, exc.status, kind=exc.kind)
@@ -297,6 +303,7 @@ def create_app(
             "unlocked": vault.unlocked,
             "locked_for": vault.locked_for(),
             "restarted": vault.is_setup() and not vault.opened_since_start,
+            "update_chip": updates.status(data)["chip"],  # 머리 칩 '업데이트 중'(5-10)
             "version": APP_VERSION_TEXT,
         }
 
@@ -430,6 +437,55 @@ def create_app(
         need_confirm(request, "dart_key_delete")
         conns.delete_dart()
         return conns.view()
+
+    # ── 설정 › 데이터(V2-53 · T-53) ───────────────────────────────────────
+
+    @app.get("/api/data")
+    def data_view() -> dict[str, Any]:
+        return dm.overview(db)
+
+    @app.get("/api/data/backup")
+    async def data_backup() -> Response:
+        raw = await asyncio.to_thread(dm.backup_bytes, db)
+        name = dm.backup_name(now().astimezone(KST).date().isoformat())
+        return Response(raw, media_type="application/octet-stream",
+                        headers={"content-disposition": f'attachment; filename="{name}"'})
+
+    @app.post("/api/data/restore")
+    async def data_restore(request: Request) -> Response:
+        need_confirm(request, "restore")
+        raw = await request.body()
+        await asyncio.to_thread(dm.restore, db, raw, now_iso=_now())
+        vault.reload()  # 계정 · 비밀번호가 백업 것으로 바뀌어요: 다시 로그인
+        conns.drop()
+        resp = JSONResponse({"ok": True, "line": dm.RESTORE_LINE})
+        resp.delete_cookie(COOKIE, path="/")
+        resp.delete_cookie(CSRF_COOKIE, path="/")
+        return resp
+
+    @app.delete("/api/data")
+    def data_delete(request: Request) -> Response:
+        if dm.live_running(db):
+            raise dm.DataError(dm.RUNNING_LIVE, 409)  # 비밀번호 창보다 먼저 알려요
+        need_confirm(request, "data_delete")
+        vault.forget_keyfile()
+        dm.delete_all(db)
+        vault.reload()
+        conns.drop()
+        resp = JSONResponse({"ok": True})
+        resp.delete_cookie(COOKIE, path="/")
+        resp.delete_cookie(CSRF_COOKIE, path="/")
+        return resp
+
+    @app.get("/api/history/csv")
+    def history_csv(run_id: int | None = None) -> Response:
+        name = f"quant-history-{now().astimezone(KST).date().isoformat().replace('-', '')}.csv"
+        return Response(dm.history_csv(db, run_id), media_type="text/csv; charset=utf-8",
+                        headers={"content-disposition": f'attachment; filename="{name}"'})
+
+    @app.get("/api/update")
+    def update_status() -> dict[str, Any]:
+        return updates.status(data)
 
     # ── 설정 › 알림 · 텔레그램(V2-08 · V2-52) ─────────────────────────────
 
@@ -970,9 +1026,10 @@ def create_app(
                 # 세션이 만료됐으면 요청이 없어도 30초 안에 데이터 키와 연결 객체를 지운다
                 _ = vault.unlocked
                 await asyncio.to_thread(auto_tick)
-                if first:  # 켜질 때 한 번: 꺼져 있던 날을 이어서 채워요(R-V4)
+                if first:  # 켜질 때 한 번: 꺼져 있던 날을 이어서 채워요(R-V4) · 업데이트 끝 알림(5-10)
                     first = False
                     await asyncio.to_thread(paper2.tick)
+                    updates.announce(data, db, lambda text: telegram.notify("info", text))
                 await asyncio.to_thread(sched.run_due)
                 await asyncio.to_thread(telegram.poll)  # `/상태` · `/멈춤`(등록 대화방만)
             except Exception as exc:  # 루프는 멈추지 않는다

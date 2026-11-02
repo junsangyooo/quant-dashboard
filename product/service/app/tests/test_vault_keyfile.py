@@ -240,6 +240,11 @@ NOT_MONEY: dict[tuple[str, str], str] = {
     ("POST", "/api/telegram/test"): "시험 보내기",
     ("PUT", "/api/telegram/events"): "알림 스위치(끌 수 없는 것은 잠김)",
 }
+# 앱 데이터 삭제 · 복원은 비밀번호(아래 시험이 따로 확인: 몸통이 백업 파일이어야 해서)
+GUARDED_ELSEWHERE: dict[tuple[str, str], str] = {
+    ("POST", "/api/data/restore"): "restore",
+    ("DELETE", "/api/data"): "data_delete",
+}
 
 # 비밀번호(1회용 토큰)를 받는 길 → 일. 처음 키 넣기는 로그인만(바꾸기 · 삭제가 비밀번호 · SPEC 7-4).
 MONEY_ROUTES: dict[tuple[str, str], str] = {
@@ -258,7 +263,7 @@ NOT_BUILT: dict[str, str] = {
     "todo_match_account": "T-70", "todo_corp_action": "T-70", "todo_big_order": "T-70",
     "toss_key_view": "T-55", "dart_key_view": "T-55",
     "telegram_key_view": "T-55",
-    "restore": "T-53", "install_place": "T-55", "data_delete": "T-53", "unknown_order_record": "T-70",
+    "install_place": "T-55", "unknown_order_record": "T-70",
 }
 
 
@@ -277,11 +282,11 @@ def _routes(routes: list[Any]) -> list[tuple[str, str]]:
 def test_every_changing_route_is_classified(tmp_path: Path) -> None:
     app = create_app(tmp_path / "data", scheduler=False, keyfile=False)
     found = set(_routes(app.routes))
-    unknown = found - set(NOT_MONEY) - set(MONEY_ROUTES)
+    unknown = found - set(NOT_MONEY) - set(MONEY_ROUTES) - set(GUARDED_ELSEWHERE)
     assert not unknown, f"분류 안 된 바꾸는 길: {sorted(unknown)}"
     assert set(MONEY_ROUTES) <= found
     # SPEC 7-4 목록 전부가 길(비밀번호) 또는 아직 없음으로 적혀 있어요
-    assert set(MONEY_ROUTES.values()) | set(NOT_BUILT) == set(MONEY_ACTIONS)
+    assert set(MONEY_ROUTES.values()) | set(GUARDED_ELSEWHERE.values()) | set(NOT_BUILT) == set(MONEY_ACTIONS)
 
 
 @pytest.mark.parametrize(("method", "path"), list(MONEY_ROUTES))
@@ -314,3 +319,14 @@ def test_first_key_needs_login_only(tmp_path: Path) -> None:
     assert c.put("/api/connect/dart", json={"key": "fake-dart-key-0000"}).status_code == 200
     r = c.post("/api/confirm", json={"password": "wrong password", "action": "toss_key_change"})
     assert r.status_code == 401 and r.json()["tries_left"] == 4
+
+
+def test_data_routes_need_password(tmp_path: Path) -> None:
+    c = boot(tmp_path / "data", toss_server())
+    setup_owner(c)
+    raw = c.get("/api/data/backup").content
+    r = c.post("/api/data/restore", content=raw)
+    assert r.status_code == 403 and r.json()["action"] == "restore"
+    r = c.delete("/api/data")
+    assert r.status_code == 403 and r.json()["action"] == "data_delete"
+    assert c.get("/api/state").json()["setup"] is True

@@ -407,6 +407,15 @@ class Vault:
         """비밀 값을 풀 수 있나(화면 세션 또는 실행기 키 파일)."""
         return self.unlocked or self.runner_ready
 
+    def reload(self) -> None:
+        """데이터 파일이 바뀐 뒤(복원 · 삭제): 화면 세션 · 데이터 키를 지우고 실행기 키를 새 파일로 다시 풀어요."""
+        with self._lock:
+            self._sessions.clear()
+            self._confirms.clear()
+            self._clear_key()
+            self._runner_key = None
+            self.load_runner()
+
     def forget_keyfile(self) -> None:
         """앱 데이터 삭제 때: 감싼 키와 메모리의 실행기 키를 지운다(키 파일은 다른 앱 데이터에 쓰일 수 있어 둔다)."""
         with self._lock:
