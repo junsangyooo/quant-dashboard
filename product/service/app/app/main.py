@@ -49,6 +49,7 @@ from .market import INDEX, KST, BarSource, Market, MarketDataError, TossSource, 
 from .paper import Paper
 from .publicip import IpFetch, PublicIpError, public_ip
 from .toss import Transport
+from .telegram import Telegram, TelegramError
 from .transport import Transports, build_transports
 from . import vault as vault_mod
 from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
@@ -106,6 +107,7 @@ def create_app(
     *,
     bars_source: BarSource | None = None,
     toss_transport: Callable[[], Transport] | None = None,
+    telegram_transport: Transport | None = None,
     ip_fetch: IpFetch | None = None,
     transports: Transports | None = None,
     scrypt_n: int | None = None,
@@ -141,9 +143,28 @@ def create_app(
     allowed_origins = {f"http://{h}" for h in allowed_hosts}
     # Tailscale serve가 https로 받아 127.0.0.1로 넘겨요: 등록한 ts.net 이름만(T-51 · SPEC 10 main)
     names = ts_names if ts_names is not None else ts_names_from(os.environ.get("QUANT_TS_NAME"))
-    for name in ts_names_from(",".join(names)):
+    ts_ok = ts_names_from(",".join(names))
+    for name in ts_ok:
         allowed_hosts |= {name, f"{name}:443"}
         allowed_origins.add(f"https://{name}")
+
+    # 텔레그램(T-52): 전송은 기본 가짜. `/멈춤`은 새 매수 멈춤을 켜기만 해요(끄는 길은 앱 화면 · 비밀번호).
+    def pause_new_buys(source: str) -> bool:
+        if db.get_meta("live.new_buys_paused") == "1":
+            return False
+        db.set_meta("live.new_buys_paused", "1")
+        db.set_meta("live.new_buys_paused_by", source)
+        return True
+
+    def tg_status() -> dict[str, Any]:
+        todos = db.one("SELECT COUNT(*) AS n FROM todos WHERE status='open'")
+        label = "새 매수 멈춤" if db.get_meta("live.new_buys_paused") == "1" else "운용 전"
+        return {"label": label, "todos": int(todos["n"]) if todos else 0}
+
+    telegram = Telegram(
+        db, vault, telegram_transport or transports.telegram, now=now, status=tg_status, pause=pause_new_buys,
+        link=lambda: f"https://{ts_ok[0]}" if ts_ok else None,
+    )
     csrf_key = secrets.token_bytes(32)  # 프로세스마다 새로(세션도 메모리에만 있어요)
 
     def csrf_for(session: str) -> str:
@@ -167,6 +188,7 @@ def create_app(
     app.state.connections = conns
     app.state.market = market
     app.state.paper = paper
+    app.state.telegram = telegram
 
     # ── 바깥 문 ────────────────────────────────────────────────────────────
 
@@ -187,7 +209,7 @@ def create_app(
             if request.method not in SAFE_METHODS:
                 sent = request.headers.get(CSRF_HEADER) or ""
                 if not session or not hmac.compare_digest(sent, csrf_for(session)):
-                    return _err("요청 확인 값이 맞지 않아요 · 화면을 새로 고쳐 주세요", 403, csrf=True)
+                    return _err("요청 확인 값이 맞지 않아요 · 화면을 다시 열어 주세요", 403, csrf=True)
         response = await call_next(request)
         if path.startswith("/api/"):
             response.headers["cache-control"] = "no-store"
@@ -209,6 +231,10 @@ def create_app(
         if exc.kind == "graph":
             return _err(exc.message, 400, kind="graph", title=ct.BAD_LINKS, detail=exc.detail)
         return _err(exc.message, 400, kind=exc.kind)
+
+    @app.exception_handler(TelegramError)
+    async def on_telegram(_: Request, exc: TelegramError) -> JSONResponse:
+        return _err(exc.message, exc.status, kind=exc.kind)
 
     @app.exception_handler(VaultError)
     async def on_vault(_: Request, exc: VaultError) -> JSONResponse:
@@ -404,6 +430,37 @@ def create_app(
         need_confirm(request, "dart_key_delete")
         conns.delete_dart()
         return conns.view()
+
+    # ── 설정 › 알림 · 텔레그램(V2-08 · V2-52) ─────────────────────────────
+
+    @app.get("/api/telegram")
+    def telegram_view() -> dict[str, Any]:
+        return telegram.view()
+
+    @app.put("/api/telegram")
+    async def telegram_save(request: Request) -> dict[str, Any]:
+        if telegram.view()["saved"]:
+            need_confirm(request, "telegram_key_change")  # 토큰 변경은 비밀번호(V2-52)
+        b = await _body(request)
+        return await asyncio.to_thread(telegram.save_token, str(b.get("token") or ""))
+
+    @app.delete("/api/telegram")
+    def telegram_delete(request: Request) -> dict[str, Any]:
+        need_confirm(request, "telegram_key_delete")
+        return telegram.delete()
+
+    @app.post("/api/telegram/find-chat")
+    async def telegram_find_chat() -> dict[str, Any]:
+        return await asyncio.to_thread(telegram.find_chat)
+
+    @app.post("/api/telegram/test")
+    async def telegram_test() -> dict[str, Any]:
+        return await asyncio.to_thread(telegram.test_send)
+
+    @app.put("/api/telegram/events")
+    async def telegram_events(request: Request) -> dict[str, Any]:
+        b = await _body(request)
+        return telegram.set_event(str(b.get("key") or ""), b.get("on") is True)
 
     # ── 전략 ────────────────────────────────────────────────────────────────
 
@@ -917,6 +974,7 @@ def create_app(
                     first = False
                     await asyncio.to_thread(paper2.tick)
                 await asyncio.to_thread(sched.run_due)
+                await asyncio.to_thread(telegram.poll)  # `/상태` · `/멈춤`(등록 대화방만)
             except Exception as exc:  # 루프는 멈추지 않는다
                 log.error("auto tick failed: %s", type(exc).__name__)
             await asyncio.sleep(30)

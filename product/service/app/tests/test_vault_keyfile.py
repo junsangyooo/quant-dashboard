@@ -20,6 +20,8 @@ from app.market import KST, MarketDataError
 from app.vault import MONEY_ACTIONS, Vault, VaultError
 from tests.conftest import CsrfClient, PASSWORD, confirm, make_bars, setup_owner
 from tests.test_paper_v2 import body, save
+from tests.fake_telegram import TOKEN as TG_TOKEN
+from tests.fake_telegram import FakeTelegram
 from tests.fake_toss import ACCOUNT_NO, CLIENT_ID, CLIENT_SECRET, FakeTossServer
 
 NOW = datetime(2026, 11, 2, 21, 0, tzinfo=KST)
@@ -32,10 +34,10 @@ def toss_server() -> FakeTossServer:
     return s
 
 
-def boot(data: Path, server: FakeTossServer, keyfile: Path | bool = True) -> TestClient:
+def boot(data: Path, server: FakeTossServer, keyfile: Path | bool = True, **kw: Any) -> TestClient:
     """앱 프로세스 하나를 켠 것처럼: 같은 데이터 폴더 · 같은 키 파일로 새로 만들어요."""
     app = create_app(data, toss_transport=lambda: server, scrypt_n=2**12, scheduler=False,
-                     now=lambda: NOW, keyfile=keyfile)
+                     now=lambda: NOW, keyfile=keyfile, **kw)
     c = CsrfClient(app, base_url="http://testserver")
     c.app_ref = app  # type: ignore[attr-defined]
     return c
@@ -234,6 +236,9 @@ NOT_MONEY: dict[tuple[str, str], str] = {
     ("POST", "/api/v2/paper/start"): "모의투자(가상 돈 · R-V5)",
     ("POST", "/api/v2/paper/{rid}/stop"): "모의투자(가상 돈)",
     ("POST", "/api/v2/paper/check"): "모의투자 확인",
+    ("POST", "/api/telegram/find-chat"): "대화방 찾기(조회)",
+    ("POST", "/api/telegram/test"): "시험 보내기",
+    ("PUT", "/api/telegram/events"): "알림 스위치(끌 수 없는 것은 잠김)",
 }
 
 # 비밀번호(1회용 토큰)를 받는 길 → 일. 처음 키 넣기는 로그인만(바꾸기 · 삭제가 비밀번호 · SPEC 7-4).
@@ -242,6 +247,8 @@ MONEY_ROUTES: dict[tuple[str, str], str] = {
     ("DELETE", "/api/connect/toss"): "toss_key_delete",
     ("PUT", "/api/connect/dart"): "dart_key_change",
     ("DELETE", "/api/connect/dart"): "dart_key_delete",
+    ("PUT", "/api/telegram"): "telegram_key_change",
+    ("DELETE", "/api/telegram"): "telegram_key_delete",
 }
 
 # SPEC 7-4 목록 가운데 아직 길이 없는 일과 그 길을 만드는 항목(길이 생기면 MONEY_ROUTES로 옮겨요).
@@ -250,7 +257,7 @@ NOT_BUILT: dict[str, str] = {
     "live_resume_buys": "T-62", "live_end": "T-63", "live_sell_all_end": "T-63",
     "todo_match_account": "T-70", "todo_corp_action": "T-70", "todo_big_order": "T-70",
     "toss_key_view": "T-55", "dart_key_view": "T-55",
-    "telegram_key_view": "T-52", "telegram_key_change": "T-52", "telegram_key_delete": "T-52",
+    "telegram_key_view": "T-55",
     "restore": "T-53", "install_place": "T-55", "data_delete": "T-53", "unknown_order_record": "T-70",
 }
 
@@ -280,11 +287,12 @@ def test_every_changing_route_is_classified(tmp_path: Path) -> None:
 @pytest.mark.parametrize(("method", "path"), list(MONEY_ROUTES))
 def test_money_routes_need_password(tmp_path: Path, method: str, path: str) -> None:
     server = toss_server()
-    c = boot(tmp_path / "data", server)
+    c = boot(tmp_path / "data", server, telegram_transport=FakeTelegram())
     setup_owner(c)
     c.put("/api/connect/toss", json={"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET})
     c.put("/api/connect/dart", json={"key": "fake-dart-key-0000"})
-    body = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "key": "fake-dart-key-1111"}
+    assert c.put("/api/telegram", json={"token": TG_TOKEN}).status_code == 200
+    body = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "key": "fake-dart-key-1111", "token": TG_TOKEN}
     send = (lambda h=None: c.request(method, path, json=body, headers=h or {}))
     action = MONEY_ROUTES[(method, path)]
     r = send()
