@@ -25,9 +25,9 @@
 - [x] **T-01 금지어 시험 늘리기** — `tests/test_copytext.py` · `web/tests/words.test.ts`에 `GLOSSARY.md` 5절 금지어와 SPEC 8-1 없앨 문구를 넣어요. 빌드 결과(`web/dist`)도 검사.
   - 다 됐다: 목록 · 예외 꼴이 GLOSSARY와 같음. 지금 MVP 문구에서 걸리는 건수를 결과 줄에(0이 아니어도 돼요 · T-71에서 0).
   - 결과: 목록은 `app/tests/words_rules.py`가 GLOSSARY 5절 표(40낱말 · 예외 꼴 · 칩 '예시' · 머리 칩 '모의투자')와 SPEC 8-1 왼쪽 열(37문구 · '…'로 끊긴 문구는 조각마다 · 예시 날짜 · 요일은 아무 값)을 직접 읽어 만들고, 화면 시험은 그 결과 `web/tests/forbiddenWords.json`을 읽어요(`test_forbidden_list_is_the_glossary`가 JSON = 문서인지 확인). 검사는 예외 꼴을 지운 뒤 세요. 지금 MVP 건수: 서버 글 3건(`test_copytext.py`) · 화면 코드 41건(문자열 + JSX 글 · 칩 '예시' 2 · 머리 칩 1) · 빌드 결과 `web/dist` 38건(`words.test.ts`). 시험은 이 건수를 넘으면 실패(T-71에서 0으로). pytest 413 passed · npm typecheck · lint · test 209 passed. 가정: v1 낱말 목록 `web/tests/oldWords.ts`는 v2가 쓰는 '새 매수 · 멈춤 · 잠김'을 막아서 GLOSSARY 5절 목록으로 바꾸고 지웠어요(OPEN-QUESTIONS 4절).
-- [ ] **T-02 v1 엔진 고정 · 회귀 입력** — 첫 단계로 지금 `app/engine.py`와 그것이 쓰는 v1 코드(그래프 컴파일 · 조건 정의)를 **`app/engine_v1.py`(필요하면 `app/v1/`)로 그대로 복사해 고정**해요(시험에서만 써요 · 고치지 않아요). 그다음 `tests/regression` 사례(일곱 칸 본문 백테스트 252건 · 모의투자 10건) + v1 예시 4개 + 무작위 그래프 생성기를 v1 엔진으로 돌린 거래 목록을 파일로 고정해요.
+- [x] **T-02 v1 엔진 고정 · 회귀 입력** — 첫 단계로 지금 `app/engine.py`와 그것이 쓰는 v1 코드(그래프 컴파일 · 조건 정의)를 **`app/engine_v1.py`(필요하면 `app/v1/`)로 그대로 복사해 고정**해요(시험에서만 써요 · 고치지 않아요). 그다음 `tests/regression` 사례(일곱 칸 본문 백테스트 252건 · 모의투자 10건) + v1 예시 4개 + 무작위 그래프 생성기를 v1 엔진으로 돌린 거래 목록을 파일로 고정해요.
   - 다 됐다: `engine_v1`로 돌린 결과가 지금 `tests/fixtures/regression_baseline.json`과 같음 · 무작위 그래프는 씨앗 값으로 다시 만들 수 있음.
-  - 결과:
+  - 결과: `app/engine.py` · `graph.py` · `pieces.py` · `strategy.py`를 `app/v1/`로 글자 그대로 복사(SHA-256 고정 시험)하고 `app/engine_v1.py`(입구 `run_v1`)를 더했어요 · 앱 코드는 v1을 쓰지 않음 시험. `tests/test_engine_v1.py`: engine_v1 결과가 `regression_baseline.json` 252건 + 야후 1건과 같음(첫 3거래 · 건수 · digest · 마지막 자산). `tests/regression/v1_inputs.py`(옛 예시 4개 · 씨앗으로 만드는 무작위 그래프 60개 · 조건 충족 29 / 순위 교체 17 / 목표 비중 14)와 `make_v1_trades.py`로 v1 거래 목록을 `tests/fixtures/v1_trades.json`(백테스트 252 · 모의투자 10 · 예시 4 · 무작위 60 = 24,598거래 · 2.2MB)에 고정 · 파일이 기준과 같음 · 예시 · 무작위를 다시 돌려도 같음 · 같은 씨앗 = 같은 그래프 시험. pytest 736 passed. 가정: 모의투자 10건은 v1 모의투자(`app/paper.py` + v1 엔진) 결과를 파일로만 고정(T-40에서 paper가 바뀌어도 파일이 기준) · 예시 4개의 대형주 10종목에는 회귀 가짜 일봉을 붙였어요.
 
 ## 1. 데이터 (SPEC 11-1 순서 1~4)
 
