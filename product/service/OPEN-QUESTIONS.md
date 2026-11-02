@@ -51,4 +51,4 @@
 
 | # | 날짜 | 무엇 | 지금 가정 | 답 |
 |---|---|---|---|---|
-| | | | | |
+| Q-N1 | 2026-11-02 | GLOSSARY 5절 끝은 `web/tests/oldWords.ts`(v1 낱말 목록)를 늘리라고 하는데, 그 목록은 v2가 쓰는 '새 매수 · 멈춤 · 잠김'을 금지해요 | 화면 시험은 GLOSSARY 5절 + SPEC 8-1 목록(`web/tests/forbiddenWords.json`)만 쓰고 `oldWords.ts`는 지웠어요(T-01). GLOSSARY 4절 옛 말은 문구를 지을 때 따르는 규칙으로만 둬요 | |

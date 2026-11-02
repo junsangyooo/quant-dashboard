@@ -1,0 +1,489 @@
+{
+ "words": [
+  {
+   "word": "고쳐",
+   "pattern": "고쳐",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "고칠",
+   "pattern": "고칠",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "지워",
+   "pattern": "지워",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "지웠",
+   "pattern": "지웠",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "넣어요",
+   "pattern": "넣어요",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "넣은 값",
+   "pattern": "넣은\\ 값",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "넣기",
+   "pattern": "넣기",
+   "except": [
+    "붙여 넣기"
+   ],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "돌아요",
+   "pattern": "돌아요",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "한 줄",
+   "pattern": "한\\ 줄",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "갈래",
+   "pattern": "갈래",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "노드",
+   "pattern": "노드",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "템플릿",
+   "pattern": "템플릿",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "끄는 중",
+   "pattern": "끄는\\ 중",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "까닭",
+   "pattern": "까닭",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "전략 코드",
+   "pattern": "전략\\ 코드",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "저절로",
+   "pattern": "저절로",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "포트",
+   "pattern": "포트",
+   "except": [
+    "리포트",
+    "서포트"
+   ],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "(가져옴)",
+   "pattern": "\\(가져옴\\)",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "(내 전략)",
+   "pattern": "\\(내\\ 전략\\)",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "거르기",
+   "pattern": "거르기",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "배정",
+   "pattern": "배정",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "블록",
+   "pattern": "블록",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "시험",
+   "pattern": "시험",
+   "except": [
+    "시험 보내기"
+   ],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "테스트",
+   "pattern": "테스트",
+   "except": [
+    "백테스트"
+   ],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "전략 바꾸기",
+   "pattern": "전략\\ 바꾸기",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "칸",
+   "pattern": "칸",
+   "except": [
+    "빈칸",
+    "숫자 칸",
+    "입력 칸"
+   ],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "조각",
+   "pattern": "조각",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "실행기",
+   "pattern": "실행기",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "증권사에 걸",
+   "pattern": "증권사에\\ 걸",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "판단",
+   "pattern": "판단",
+   "except": [
+    "투자 판단"
+   ],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "내 서버",
+   "pattern": "내\\ 서버",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "내 앱 열기",
+   "pattern": "내\\ 앱\\ 열기",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "사용권",
+   "pattern": "사용권",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "설치 없이 체험",
+   "pattern": "설치\\ 없이\\ 체험",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "이 앱은 실전 주문을 내지 않아요",
+   "pattern": "이\\ 앱은\\ 실전\\ 주문을\\ 내지\\ 않아요",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "숫자를 채워 둔",
+   "pattern": "숫자를\\ 채워\\ 둔",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "예시 전략 4개",
+   "pattern": "예시\\ 전략\\ 4개",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "숫자를 채워 둔 예시예요 · 눌러서 보고 바로 백테스트할 수 있어요",
+   "pattern": "숫자를\\ 채워\\ 둔\\ 예시예요\\ ·\\ 눌러서\\ 보고\\ 바로\\ 백테스트할\\ 수\\ 있어요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "빈 캔버스에서 만들거나, 예시에서 시작하거나, 복사한 전략을 붙여 넣어요",
+   "pattern": "빈\\ 캔버스에서\\ 만들거나,\\ 예시에서\\ 시작하거나,\\ 복사한\\ 전략을\\ 붙여\\ 넣어요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "숫자를 채워 둔 예시를 복사해요 · 바꿔서 써 보세요",
+   "pattern": "숫자를\\ 채워\\ 둔\\ 예시를\\ 복사해요\\ ·\\ 바꿔서\\ 써\\ 보세요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "예시에서 시작",
+   "pattern": "예시에서\\ 시작",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "예시는 보기만 해요",
+   "pattern": "예시는\\ 보기만\\ 해요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "이 예시로 새 전략",
+   "pattern": "이\\ 예시로\\ 새\\ 전략",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "1 · API 키 연결 (선택)",
+   "pattern": "1\\ ·\\ API\\ 키\\ 연결\\ \\(선택\\)",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "연결했어요 · 보유 평가에 토스 현재가를 써요",
+   "pattern": "연결했어요\\ ·\\ 보유\\ 평가에\\ 토스\\ 현재가를\\ 써요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "4 · 모의투자 시작",
+   "pattern": "4\\ ·\\ 모의투자\\ 시작",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "실전 주문은 내지 않아요",
+   "pattern": "실전\\ 주문은\\ 내지\\ 않아요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "모의투자 자산 · 시작 전",
+   "pattern": "모의투자\\ 자산\\ ·\\ 시작\\ 전",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "모의투자를 시작하면 여기에 자산이 보여요",
+   "pattern": "모의투자를\\ 시작하면\\ 여기에\\ 자산이\\ 보여요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "첫 확인 뒤 자산 그래프가 그려져요",
+   "pattern": "첫\\ 확인\\ 뒤\\ 자산\\ 그래프가\\ 그려져요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "10/29 16:30 기준",
+   "pattern": "\\d{1,2}/\\d{1,2}\\ 16:30\\ 기준",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "평일 16:30 자동 확인",
+   "pattern": "평일\\ 16:30\\ 자동\\ 확인",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "다음 확인 때 이어서 채워요",
+   "pattern": "다음\\ 확인\\ 때\\ 이어서\\ 채워요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "시작 금액을 정하면 평일 16:30에 자동으로 확인해요",
+   "pattern": "시작\\ 금액을\\ 정하면\\ 평일\\ 16:30에\\ 자동으로\\ 확인해요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "10/29(목) 16:30 확인 · 10/30(금) 시가에 모의 체결해요",
+   "pattern": "\\d{1,2}/\\d{1,2}\\([월화수목금토일]\\)\\ 16:30\\ 확인\\ ·\\ \\d{1,2}/\\d{1,2}\\([월화수목금토일]\\)\\ 시가에\\ 모의\\ 체결해요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "모의 체결 최근 5건",
+   "pattern": "모의\\ 체결\\ 최근\\ 5건",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "지금 신호 확인",
+   "pattern": "지금\\ 신호\\ 확인",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "조회만 했어요 · 주문은 내지 않아요",
+   "pattern": "조회만\\ 했어요\\ ·\\ 주문은\\ 내지\\ 않아요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "야후 금융 일봉 · 배당 미반영 · 분할만 반영",
+   "pattern": "야후\\ 금융\\ 일봉\\ ·\\ 배당\\ 미반영\\ ·\\ 분할만\\ 반영",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "2000년부터 볼 수 있어요",
+   "pattern": "2000년부터\\ 볼\\ 수\\ 있어요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "상장폐지 종목 미포함",
+   "pattern": "상장폐지\\ 종목\\ 미포함",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "이 버전으로 모의투자 시작",
+   "pattern": "이\\ 버전으로\\ 모의투자\\ 시작",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "평일 16:30에 자동으로 확인하고",
+   "pattern": "평일\\ 16:30에\\ 자동으로\\ 확인하고",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "다른 모의투자 실행 중",
+   "pattern": "다른\\ 모의투자\\ 실행\\ 중",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "데이터 삭제 · 앱을 끄고 mvp/data 폴더를 삭제해요",
+   "pattern": "데이터\\ 삭제\\ ·\\ 앱을\\ 끄고\\ mvp/data\\ 폴더를\\ 삭제해요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "버전 0.1 · 이 컴퓨터(127.0.0.1)에서만 열려요",
+   "pattern": "버전\\ 0\\.1\\ ·\\ 이\\ 컴퓨터\\(127\\.0\\.0\\.1\\)에서만\\ 열려요",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "사용 조건 · 개인 사용 · 10/29 동의",
+   "pattern": "사용\\ 조건\\ ·\\ 개인\\ 사용\\ ·\\ \\d{1,2}/\\d{1,2}\\ 동의",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "모의투자 기록이 있는 전략은 삭제할 수 없어요",
+   "pattern": "모의투자\\ 기록이\\ 있는\\ 전략은\\ 삭제할\\ 수\\ 없어요",
+   "except": [
+    "실전 운용이나 모의투자 기록이 있는 전략은 삭제할 수 없어요"
+   ],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "안 삼",
+   "pattern": "안\\ 삼",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "증권사에 걸어 두기",
+   "pattern": "증권사에\\ 걸어\\ 두기",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "배정 금액",
+   "pattern": "배정\\ 금액",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "MVP-xx",
+   "pattern": "MVP\\-\\d+",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "CV-x",
+   "pattern": "CV\\-\\d+",
+   "except": [],
+   "source": "SPEC 8-1"
+  },
+  {
+   "word": "우리 수량",
+   "pattern": "우리\\ 수량",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "장부",
+   "pattern": "장부",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "clientOrderId",
+   "pattern": "clientOrderId",
+   "except": [],
+   "source": "GLOSSARY 5"
+  },
+  {
+   "word": "OPG",
+   "pattern": "OPG",
+   "except": [],
+   "source": "GLOSSARY 5"
+  }
+ ],
+ "chips": [
+  "예시"
+ ],
+ "headerChips": [
+  "모의투자"
+ ]
+}
