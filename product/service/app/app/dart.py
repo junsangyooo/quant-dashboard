@@ -222,7 +222,7 @@ class Progress:
 
     @property
     def pct(self) -> int:
-        return 100 if self.total == 0 else int(self.done * 100 / self.total)
+        return 0 if self.total == 0 else int(self.done * 100 / self.total)
 
 
 class DartStore:

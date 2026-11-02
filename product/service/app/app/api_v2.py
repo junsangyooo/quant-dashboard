@@ -123,7 +123,7 @@ def stored_body(row: Any) -> dict[str, Any]:
 
 def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str], str],
                 now: Callable[[], str], running: Callable[[int], dict[str, Any] | None],
-                used: Callable[[int], bool] | None = None) -> APIRouter:
+                used: Callable[[int], bool] | None = None, backtester: Any = None) -> APIRouter:
     r = APIRouter(prefix="/api/v2")
 
     async def body_of(request: Request) -> dict[str, Any]:
@@ -223,6 +223,46 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
             db.run("DELETE FROM versions WHERE strategy_id=?", (sid,))
             db.run("DELETE FROM strategies WHERE id=?", (sid,))
         return {"ok": True}
+
+    @r.get("/versions/{vid}/backtest")
+    def backtest_input(vid: int) -> dict[str, Any]:
+        v = db.one("SELECT * FROM versions WHERE id=?", (vid,))
+        if v is None:
+            raise ApiError("그 버전이 없어요", 404)
+        body = stored_body(v)
+        s_ = db.one("SELECT name FROM strategies WHERE id=?", (v["strategy_id"],))
+        from .backtest_v2 import CHIPS, JUDGE_LINE, default_range
+
+        return {"version": version_view(v), "strategy_id": v["strategy_id"], "name": s_["name"] if s_ else "",
+                "range": default_range(body, datetime.now(KST).date()), "chips": CHIPS, "judge_line": JUDGE_LINE}
+
+    @r.post("/backtest")
+    async def backtest(request: Request) -> dict[str, Any]:
+        import asyncio
+
+        data = await body_of(request)
+        try:
+            vid = int(data.get("version_id"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise ApiError("전략 버전을 골라 주세요") from None
+        v = db.one("SELECT * FROM versions WHERE id=?", (vid,))
+        if v is None:
+            raise ApiError("그 버전이 없어요", 404)
+        body = stored_body(v)
+        try:
+            start = datetime.strptime(str(data.get("start")), "%Y-%m-%d").date()
+            end = datetime.strptime(str(data.get("end")), "%Y-%m-%d").date()
+            cash = float(data.get("cash"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise ApiError("기간과 시작 금액 형식이 맞지 않아요") from None
+        if backtester is None:
+            raise ApiError("백테스트를 할 수 없어요", 503)
+        res = await asyncio.to_thread(backtester, body, start, end, cash)
+        db.run("INSERT INTO backtest_runs(version_id, ran_at, start_d, end_d, cash) VALUES(?,?,?,?,?)",
+               (vid, now(), start.isoformat(), end.isoformat(), cash))
+        res["ran_day"] = md_day(res["ran_at"])
+        res["ran_hm"] = hm(res["ran_at"])
+        return res
 
     @r.get("/catalog")
     def catalog() -> dict[str, Any]:

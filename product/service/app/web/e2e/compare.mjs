@@ -58,6 +58,58 @@ function blocks(opts = {}) {
     },
   ];
 
+  STATES.backtest = [
+    {
+      name: 'V2-26 입력',
+      frame: 'V2-26__입력__1440__311-94832.png',
+      path: '/strategies/ID/backtest',
+      body: (r) => ({
+        ...blocks({ filterRows: [r('turnover', 'gte', 1)] }),
+        graph: {
+          ...blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph,
+          blocks: blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph.blocks.map((b) =>
+            b.id === 'u'
+              ? {
+                  ...b,
+                  rows: [
+                    r('manual_list', 'pick', ['005930', '000660', '373220', '005380', '035420']),
+                  ],
+                }
+              : b,
+          ),
+        },
+      }),
+      go: async () => undefined,
+    },
+    {
+      name: 'V2-26 결과',
+      frame: 'V2-26__결과__1440__311-95007.png',
+      path: '/strategies/ID/backtest',
+      body: (r) => ({
+        ...blocks({ filterRows: [r('turnover', 'gte', 1)] }),
+        graph: {
+          ...blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph,
+          blocks: blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph.blocks.map((b) =>
+            b.id === 'u'
+              ? {
+                  ...b,
+                  rows: [
+                    r('manual_list', 'pick', ['005930', '000660', '373220', '005380', '035420']),
+                  ],
+                }
+              : b,
+          ),
+        },
+      }),
+      go: async (p) => {
+        await p.locator('input[type=date]').first().fill('2021-06-01');
+        await p.locator('input[type=date]').nth(1).fill('2025-09-30');
+        await p.getByRole('button', { name: '백테스트 실행' }).click();
+        await p.waitForSelector('text=거래 목록', { timeout: 30000 });
+      },
+    },
+  ];
+
   const row = (item, op, value, extra = {}) => ({
     item,
     op,
@@ -274,6 +326,58 @@ STATES.strategies = [
   },
 ];
 
+STATES.backtest = [
+  {
+    name: 'V2-26 입력',
+    frame: 'V2-26__입력__1440__311-94832.png',
+    path: '/strategies/ID/backtest',
+    body: (r) => ({
+      ...blocks({ filterRows: [r('turnover', 'gte', 1)] }),
+      graph: {
+        ...blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph,
+        blocks: blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph.blocks.map((b) =>
+          b.id === 'u'
+            ? {
+                ...b,
+                rows: [
+                  r('manual_list', 'pick', ['005930', '000660', '373220', '005380', '035420']),
+                ],
+              }
+            : b,
+        ),
+      },
+    }),
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-26 결과',
+    frame: 'V2-26__결과__1440__311-95007.png',
+    path: '/strategies/ID/backtest',
+    body: (r) => ({
+      ...blocks({ filterRows: [r('turnover', 'gte', 1)] }),
+      graph: {
+        ...blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph,
+        blocks: blocks({ filterRows: [r('turnover', 'gte', 1)] }).graph.blocks.map((b) =>
+          b.id === 'u'
+            ? {
+                ...b,
+                rows: [
+                  r('manual_list', 'pick', ['005930', '000660', '373220', '005380', '035420']),
+                ],
+              }
+            : b,
+        ),
+      },
+    }),
+    go: async (p) => {
+      await p.locator('input[type=date]').first().fill('2021-06-01');
+      await p.locator('input[type=date]').nth(1).fill('2025-09-30');
+      await p.getByRole('button', { name: '백테스트 실행' }).click();
+      await p.waitForSelector('text=거래 목록', { timeout: 30000 });
+    },
+  },
+];
+
 const row = (item, op, value, extra = {}) => ({
   item,
   op,
@@ -307,7 +411,7 @@ for (const [k, st] of STATES[screen].entries()) {
   await page.waitForTimeout(400);
   const slug = st.name.replace(/[^\w가-힣()-]+/g, '_');
   const shot = join(outDir, `${slug}__app.png`);
-  await page.screenshot({ path: shot });
+  await page.screenshot({ path: shot, fullPage: screen !== 'editor' });
   const text = await page.locator('main').innerText();
   writeFileSync(join(outDir, `${slug}__text.txt`), text);
   await sideBySide(

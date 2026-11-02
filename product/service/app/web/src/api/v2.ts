@@ -255,3 +255,61 @@ export const copyText = (id: number) =>
   api.get<{ text: string }>(`/api/v2/strategies/${String(id)}/copytext`);
 export const deleteStrategy = (id: number) =>
   api.delete<{ ok: boolean }>(`/api/v2/strategies/${String(id)}`);
+
+// ── 백테스트(T-32) ────────────────────────────────────────────────────────────
+
+export interface BacktestInput {
+  version: VersionView;
+  strategy_id: number;
+  name: string;
+  range: { start: string; end: string; first: string; reason: string };
+  chips: string[];
+  judge_line: string;
+}
+
+export interface BacktestTrade {
+  d: string;
+  sym: string;
+  name: string;
+  side: 'buy' | 'sell';
+  qty: number;
+  price: number;
+  pnl: number | null;
+}
+
+export interface BacktestV2Result {
+  start: string;
+  end: string;
+  final: number;
+  total: number | null;
+  cagr: number | null;
+  mdd: number | null;
+  win_rate: number | null;
+  costs: number;
+  trade_count: number;
+  recent: BacktestTrade[];
+  curve: [string, number][];
+  bench_curve: [string, number][];
+  bench_total: number | null;
+  live_note: string;
+  live_counts: { no_buy: number; no_sell: number };
+  survivor_line: string;
+  wide_universe: boolean;
+  wide_title: string;
+  ran_day: string;
+  ran_hm: string;
+}
+
+export const useBacktestInput = (vid: number | null) =>
+  useQuery({
+    queryKey: ['v2', 'backtest-input', vid],
+    queryFn: () => api.get<BacktestInput>(`/api/v2/versions/${String(vid)}/backtest`),
+    enabled: vid !== null,
+  });
+
+export const runBacktestV2 = (b: {
+  version_id: number;
+  start: string;
+  end: string;
+  cash: number;
+}) => api.post<BacktestV2Result>('/api/v2/backtest', b);

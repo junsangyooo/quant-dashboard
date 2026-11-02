@@ -32,9 +32,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import APP_VERSION_TEXT
 from . import strategy as st
 from . import copytext as ct
+from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
+from .dart import DartStore
 from .connect import Connections
 from .db import DB, body_format
+from .engine import BacktestError as BacktestErrorV2
 from .engine_mvp import BacktestError, run_backtest, universe_of, warmup_calendar_days
 from .market import INDEX, KST, BarSource, Market, MarketDataError, TossSource, now_kst
 from .paper import Paper
@@ -183,6 +186,10 @@ def create_app(
 
     @app.exception_handler(BacktestError)
     async def on_bt(_: Request, exc: BacktestError) -> JSONResponse:
+        return _err(exc.message, 400)
+
+    @app.exception_handler(BacktestErrorV2)
+    async def on_bt2(_: Request, exc: BacktestErrorV2) -> JSONResponse:
         return _err(exc.message, 400)
 
     @app.exception_handler(RequestValidationError)
@@ -752,6 +759,15 @@ def create_app(
             return _err("화면 파일이 없어요 · start.sh로 다시 켜 주세요", 503)
         return FileResponse(index, headers={"cache-control": "no-store"})
 
+    dart_store = DartStore(db)
+
+    def _backtest_v2(body: dict[str, Any], start: date, end: date, cash: float) -> dict[str, Any]:
+        info = {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")}
+        return bt2.run(body, market=market, db=db, dart=dart_store,
+                       has_dart=bool(conns.view()["dart"]["saved"]),
+                       toss_ready=conns.client() is not None or bars_source is not None,
+                       start=start, end=end, cash=cash, info=info, names=st.stock_name)
+
     def _running_v2(sid: int) -> dict[str, Any] | None:
         running = _running_version()
         return {"kind": "paper", "version_no": running[1]} if running and running[0] == sid else None
@@ -762,6 +778,7 @@ def create_app(
         used=lambda sid: db.one(
             "SELECT r.id FROM paper_runs r JOIN versions v ON v.id=r.version_id WHERE v.strategy_id=? "
             "UNION SELECT id FROM runs WHERE strategy_id=? LIMIT 1", (sid, sid)) is not None,
+        backtester=_backtest_v2,
     ))
 
     @app.get("/{path:path}")

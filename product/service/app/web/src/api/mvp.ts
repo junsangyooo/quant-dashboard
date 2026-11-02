@@ -604,12 +604,3 @@ export function usePost<TBody, TOut>(path: string | ((b: TBody) => string), meth
     onSuccess: () => void refresh(),
   });
 }
-
-/** MVP 백테스트 화면이 쓰던 예시 읽기(T-32에서 화면과 함께 지워요 · 서버 예시는 T-31에서 지웠어요). */
-export const useExample = (id: string, enabled = true) =>
-  useQuery({
-    queryKey: keys.example(id),
-    queryFn: () => api.get<ExampleView>(`/api/examples/${encodeURIComponent(id)}`),
-    staleTime: Infinity,
-    enabled,
-  });

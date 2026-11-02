@@ -8,7 +8,7 @@ import { HomeScreen } from './screens/Home/HomeScreen';
 import { PlanScreen } from './screens/Plan/PlanScreen';
 import { HistoryScreen } from './screens/History/HistoryScreen';
 import { BlockEditorScreen } from './screens/BlockEditor/BlockEditorScreen';
-import { BacktestScreen } from './screens/Backtest/BacktestScreen';
+import { BacktestV2Screen } from './screens/BacktestV2/BacktestV2Screen';
 import {
   PasteScreen,
   StrategiesListScreen,
@@ -75,7 +75,7 @@ export const routes: RouteObject[] = [
       },
       {
         path: 'strategies/:id/backtest',
-        element: <BacktestScreen />,
+        element: <BacktestV2Screen />,
         handle: handle({ page: 'backtest', kind: 'sub', tab: 'strategies' }),
       },
       {
