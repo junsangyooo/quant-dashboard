@@ -227,7 +227,7 @@ def test_import_api_rejects_bad_links(app_client) -> None:  # type: ignore[no-un
 from tests import words_rules as wr  # noqa: E402
 
 # 지금 MVP 서버 글에서 걸리는 건수(T-01에서 센 값). 늘어나면 실패하고, T-71에서 0으로 내려요.
-SERVER_HITS_LIMIT = 3
+SERVER_HITS_LIMIT = 0
 
 
 def _server_hits() -> list[str]:

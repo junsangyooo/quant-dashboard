@@ -45,7 +45,7 @@ export const settingsCopy = {
       '연결 확인은 조회만 해요 · 액세스 토큰 받기 → 계좌 → 삼성전자 현재가 · 같은 키를 쓰는 다른 프로그램은 이때 연결이 끊겨요',
     afterChange: '저장한 뒤 연결 확인을 다시 눌러요',
     price: '삼성전자 현재가',
-    readOnly: '조회만 했어요 · 주문은 내지 않아요',
+    readOnly: '연결 확인은 조회만 해요',
     steps: { done: '됨', failed: '안 됨', waiting: '대기', running: '확인 중' },
     stepNames: { token: '액세스 토큰 받기', account: '계좌 찾기', price: '삼성전자 현재가' },
     cause: '원인',

@@ -970,7 +970,7 @@ def create_app(
             (sid,),
         )
         if used:
-            raise VaultError("모의투자 기록이 있는 전략은 삭제할 수 없어요")
+            raise VaultError("실전 운용이나 모의투자 기록이 있는 전략은 삭제할 수 없어요")
         with db.tx():
             db.run("DELETE FROM versions WHERE strategy_id=?", (sid,))
             db.run("DELETE FROM strategies WHERE id=?", (sid,))
@@ -1015,7 +1015,7 @@ def create_app(
         if start >= end:
             raise VaultError("시작 날짜가 끝 날짜보다 앞이어야 해요")
         if start < date(2000, 1, 1):
-            raise VaultError("2000년부터 볼 수 있어요")
+            raise VaultError("시작 날짜는 2000년 1월 이후로 정해요")
         try:
             cash = float(b.get("cash"))  # type: ignore[arg-type]
         except (TypeError, ValueError):
