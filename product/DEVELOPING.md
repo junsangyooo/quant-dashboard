@@ -7,7 +7,7 @@
 | 자리 | 무엇 | 손대도 되나 |
 |---|---|---|
 | `product/service/` | quant 서비스(고객이 설치해 자기 토스 계좌로 실전 운용하는 앱)의 기획 · 규칙 · 그림 · 코드 | 예 · 여기서 일해요 |
-| `product/service/app/` | 지금 코드 = **MVP v1(모의투자 전용 · 캔버스 v1)**. v2는 아직 코드가 아니에요 | 예 · v2로 바꿔 가요 |
+| `product/service/app/` | 지금 코드 = **v2 개발 중**(엔진 · 데이터 · 실전 흐름은 가짜 토스로 끝, 화면 일부 진행 중 · `service/TASKS.md` 결과 줄). 옛 MVP v1 엔진은 시험용으로 `app/engine_v1.py`에 고정 | 예 · v2로 바꿔 가요 |
 | `product/lab/` | lab(공개 실험 사이트) 기획 · 그림. 코드 없음 | 기획 문서만 |
 | `product/history/` | MVP v1 경과 · 지운 결정 보드 그림 | 읽기만 |
 | 레포 뿌리의 `autotrade/` · `web/` 등 | **운영 중인 다른 앱(quant-dashboard)**. 실제 계좌로 돌고 있어요 | **손대지 않아요.** 부품 · 토큰 · 글꼴을 참고로 읽는 것만 |
@@ -66,6 +66,7 @@ MVP_TOSS_OFFLINE=1 ./start.sh         # 토스 · 공인 IP 서비스에 나가�
 1. `service/TASKS.md`를 **위에서부터** 해요.
 2. 항목 하나가 끝나면 체크(`- [x]`)하고, 그 항목의 '결과' 줄에 **'다 됐다' 기준을 어떻게 확인했는지와 시험 결과를 한 줄로** 적어요.
 3. 항목마다 커밋해요. 커밋 메시지는 **영어 conventional · 짧게**(예: `feat(engine): block match all/any`, `test(live): fake-only order path`).
+   - 커밋 작성자는 `Junsang Yoo <70479629+junsangyooo@users.noreply.github.com>`로 해요. 공개 레포라서 커밋 메시지에 꼬리 줄(trailer · `Co-authored-by:` 같은 줄)을 넣지 않아요.
 4. 화면을 만들면 그림(`design/frames/`)과 **나란히 비교한 결과**(찍은 화면 경로나 비교 표)를 남겨요.
 5. 모르는 것은 `service/OPEN-QUESTIONS.md` 4절에 적고 **가정으로 진행**해요. 가정은 TASKS 결과 줄에도 적어요.
 6. SPEC을 바꿔야 할 것 같으면 바꾸지 말고 OPEN-QUESTIONS에 적어요(SPEC은 사람이 정해요).

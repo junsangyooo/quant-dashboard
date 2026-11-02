@@ -7,7 +7,8 @@
 - 프레임 이름 꼴: 'V2-xx · 화면 이름 · 상태 · 폭'. 그림 파일 이름 꼴: `<화면번호>__<상태>__<폭>__<노드id>.png`
 - 폭: 1440은 모든 화면, 390은 SPEC 7절 머리의 주요 화면만. 나머지 390은 개발이 반응형으로 맞춰요. 편집기는 1024 이상에서만 편집해요.
 - 그림은 정답의 3순위예요(SPEC > ENGINE-RULES > 그림 > 지금 코드). 그림 속 숫자 · 종목 · 날짜는 예시예요(SPEC 부록 B).
-- 그림은 2026-11-02에 Figma에서 다시 내보낸 최종본이에요(1440은 1배 · 390은 2배). **그림은 제품 주인이 갱신해요.** 3MB가 넘는 그림은 없어요.
+- 그림은 2026-11-02에 Figma에서 다시 내보낸 최종본이에요(1440은 1배 · 390은 2배). 같은 날 UX 평가 반영으로 고친 그림이 들어가요(아래 'UX 평가 반영' 표 · SPEC 부록 D). **그림은 제품 주인이 갱신해요.** 3MB가 넘는 그림은 없어요.
+- 그림 수(UX 반영 뒤): 1440 206장 · 390 96장(새 프레임 포함) + 흐름 지도 1장.
 - Figma 파일을 열 수 없어도 `frames/`의 그림이 정답이에요.
 
 ## 최종 내보내기에서 바뀐 것 (2026-11-02)
@@ -21,9 +22,32 @@
 | V2-02 복구 코드 | '이전' 단추 없음 | [기본](frames/V2-02__기본__1440__331-171544.png) |
 | V2-14 할 일 상세 | 권리 변동 1장 추가 | [1440](frames/V2-14__열림-권리_변동__1440__345-431475.png) · [390](frames/V2-14__열림-권리_변동__390__345-431677.png) |
 
+## UX 평가 반영에서 새로 생긴 프레임 (2026-11-02)
+
+처음 쓰는 사람 기준 독립 검토의 지적으로 고친 그림이에요. 바꾼 프레임은 아래 프레임 표의 같은 이름 그대로이고, 새로 생긴 것은 이 표예요(화면 1440 12장 · 390 6장 + 부품 1). 그림 파일 이름은 프레임 표를 따라요.
+
+| 프레임 | 폭 | 노드 | 무엇 |
+|---|---|---|---|
+| V2-04 비밀번호 다시 만들기 · 복구 코드 없음 | 1440 · 390 | [354:440321](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440321) · [354:440398](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440398) | '복구 코드도 없어요 ›' 뒤 · 설치한 컴퓨터에서 `quant reset-password` |
+| V2-07 토스 연결 · 이어서 하기 | 1440 | [354:436114](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-436114) | 마법사를 다시 열면 '5단계 토스 연결부터 이어서 해요' |
+| V2-14 할 일 상세 · 결과 모르는 주문 · 접수만 고름 | 1440 · 390 | [354:450610](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-450610) · [354:450872](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-450872) | 단추 '09:05에 다시 찾기' · 비밀번호 줄 숨김 |
+| V2-14 할 일 상세 · 결과 모르는 주문 · 다시 찾는 중 | 1440 · 390 | [356:453354](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=356-453354) · [356:453626](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=356-453626) | '접수만 돼 있어요를 골랐어요 · 09:05에 토스 주문 내역을 다시 찾아요 · 못 찾으면 15:30까지 10분마다 다시 찾아요' · 보조 '다른 답 고르기' |
+| V2-23 편집기 · 손절이 약해져요 확인 창 | 1440 | [354:434636](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-434636) | ⑥ 매도를 '모두 맞으면'으로 변경하기 전 · 흐름 ② 곁가지 |
+| V2-23 편집기 · 매매 방식 고르기 | 1440 | [354:436262](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-436262) | 위 '매매 방식 ▾' 메뉴 |
+| V2-23 편집기 · 매매 방식이 바뀌어요 확인 창 | 1440 | [354:437940](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-437940) | 조건 충족 시 매매 → 순위 교체 |
+| V2-23 편집기 · 종목 선정 줄 편집 | 1440 | [354:445458](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-445458) | 신호 강도 풀이 |
+| V2-23 편집기 · 매매 방식이 바뀌어요 · 목표 비중 | 1440 | [354:448939](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-448939) | ⑥ 매도가 있는 전략에서 목표 비중을 고를 때 |
+| V2-23 편집기 · 목표 비중 · 매도 문제 | 1440 | [354:451672](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-451672) | 목표 비중으로 '변경'한 뒤 ⑥ 매도 문제 |
+| V2-30 실전 운용 시작 · 기본 · 모두 통과 | 390 | [354:444855](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-444855) | 휴대폰에서도 시작 |
+| V2-31 운용 설정 · 보기 | 390 | [354:447028](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-447028) | 휴대폰에서도 설정 보기 |
+| V2-50 설정 · 연결 문제 있음 | 1440 · 390 | [354:440618](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440618) · [354:440709](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440709) | 토스 줄 빨강 '연결 끊김 · 11/3(화) 10:12부터' |
+| V2-51 연결 · 토스 운용 중 끊김 · DART 다 받음 | 1440 · 390 | [354:441525](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-441525) · [354:441714](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-441714) | 멈춘 시각 · '지금 지켜지는 것' · 할 일 |
+| V2-54 비밀번호 변경 · 바꿈 | 1440 | [354:443662](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-443662) | '비밀번호를 바꿨어요 · 다른 기기 1대를 로그아웃했어요' |
+| 부품 · 지금 지켜지는 것 | 부품 | [354:432640](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-432640) | V2-10 · V2-11 · V2-14 · V2-51이 같이 써요 |
+
 ## 섹션(화면) 목록
 
-화면마다 프레임과 그림 파일은 아래 '프레임 표'예요(섹션 35개 · 프레임 282장).
+화면마다 프레임과 그림 파일은 아래 '프레임 표'예요(섹션 35개 · 프레임 302장 = 1440 206 · 390 96).
 
 | 줄 | 섹션 |
 |---|---|
@@ -97,11 +121,19 @@
 | 3 | V2-23 · 편집기 · 저장한 뒤 · 버전 3 · 10/2 · 1440 | 버튼 · 백테스트 | V2-26 · 백테스트 · 입력 · 1440 |
 | 4 | V2-26 · 백테스트 · 입력 · 1440 | 버튼 · 백테스트 실행 | V2-26 · 백테스트 · 결과 · 1440 |
 
+**곁가지(UX 평가 반영 · 지도에만 그림 · 재생 흐름 ②는 위 그대로):** '⑥ 매도를 '모두 맞으면'으로 변경 · 확인 창' — 편집기 '실행 방식 · 고르기'에서 열려요.
+
+| 어디서 | 누르는 것 | 어디로 |
+|---|---|---|
+| V2-23 · 편집기 · 실행 방식 · 고르기 · 1440 | 토글(⑥ 머리 '모두 맞으면') | V2-23 · 편집기 · 손절이 약해져요 확인 창 · 1440([354:434636](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-434636)) |
+| V2-23 · 편집기 · 손절이 약해져요 확인 창 · 1440 | 버튼 · 변경 | V2-23 · 편집기 · 실행 방식 · 종가 확인으로 바뀜 · 1440 |
+| V2-23 · 편집기 · 손절이 약해져요 확인 창 · 1440 | 버튼 · 그대로 두기(주) | V2-23 · 편집기 · 실행 방식 · 고르기 · 1440 |
+
 ### ③ 실전 운용 시작 · 시작 [311:95007](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=311-95007) V2-26 · 백테스트 · 결과 · 1440
 
 | 순서 | 어디서 | 누르는 것 | 어디로 |
 |---|---|---|---|
-| 1 | V2-26 · 백테스트 · 결과 · 1440 | 저장된 버전으로 운용 준비 › | V2-30 · 실전 운용 시작 · 기본 · 모두 통과 · 1440 |
+| 1 | V2-26 · 백테스트 · 결과 · 1440 | 버튼 · 버전 3으로 실전 운용 준비 ›(보조 · 주 단추 없음) | V2-30 · 실전 운용 시작 · 기본 · 모두 통과 · 1440 |
 | 2 | V2-30 · 실전 운용 시작 · 기본 · 모두 통과 · 1440 | 비밀번호 입력하고 시작 | V2-30 · 실전 운용 시작 · 비밀번호 창 · 1440 |
 | 3 | V2-30 · 실전 운용 시작 · 비밀번호 창 · 1440 | 실전 운용 시작 | V2-10 · 자산 · 첫 확인 전 · 1440 |
 
@@ -121,7 +153,7 @@
 | 1 | V2-10 · 자산 · 운용 중 · 1440 | 멈추기 ›(재생 시작 전 단계 · 시작점은 시트) | V2-32 · 멈추기 시트 · 기본 · 1440 |
 | 2 | V2-32 · 멈추기 시트 · 기본 · 1440 | 새 매수 멈춤 카드 | V2-32 · 멈추기 시트 · 새 매수 멈춤 · 1440 |
 | 3 | V2-32 · 멈추기 시트 · 새 매수 멈춤 · 1440 | 새 매수 멈춤 | V2-10 · 자산 · 새 매수 멈춤 · 1440 |
-| 4 | V2-32 · 멈추기 시트 · 기본 · 1440 | 토스에서 멈추기 · 펼쳐요 | V2-32 · 멈추기 시트 · 토스에서 멈추기 펼침 · 1440 |
+| 4 | V2-32 · 멈추기 시트 · 기본 · 1440 | 토스에서 멈추기 · 펼쳐요 | V2-32 · 멈추기 시트 · 토스에서 멈추기 펼침 · 1440(맨 위 텔레그램 /멈춤 줄 + 1~4단계 · 3단계 '조건주문(손절)은 남겨 둬도 돼요') |
 
 ### ⑥ 모의투자 · 시작 [345:264645](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-264645) V2-25 · 전략 상세 · 실전 운용 중 · 1440
 
@@ -176,6 +208,7 @@
 | 주문 표 행 | [345:183012](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-183012) | 57 | 종류=매도 |
 | 할 일 행 v2 | [345:183499](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-183499) | 8 | 심각도=정보 |
 | 할 일 배너 | [345:183524](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-183524) | 12 | — |
+| 지금 지켜지는 것(UX 반영 새로) | [354:432640](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-432640) | — | — |
 | 비밀번호 확인 창 | [345:183687](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-183687) | 16 | — |
 | v2/꼬리 칩 | [345:177697](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-177697) | 2032 | 종류=지금 섹터 기준 |
 | v2/블록 토글 | [345:177714](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-177714) | 253 | 값=하나라도, 상태=열림 |
@@ -221,9 +254,11 @@
 | V2-03 로그인 | 잠금 | 390 | [303:87516](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=303-87516) | [V2-03__잠금__390__303-87516.png](frames/V2-03__잠금__390__303-87516.png) |
 | V2-04 비밀번호 다시 만들기 | 기본 | 1440 | [345:260567](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-260567) | [V2-04__기본__1440__345-260567.png](frames/V2-04__기본__1440__345-260567.png) |
 | V2-04 비밀번호 다시 만들기 | 복구 코드 맞지 않음 | 1440 | [345:365428](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-365428) | [V2-04__복구_코드_맞지_않음__1440__345-365428.png](frames/V2-04__복구_코드_맞지_않음__1440__345-365428.png) |
+| V2-04 비밀번호 다시 만들기 | 복구 코드 없음 | 1440 | [354:440321](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440321) | [V2-04__복구_코드_없음__1440__354-440321.png](frames/V2-04__복구_코드_없음__1440__354-440321.png) |
 | V2-04 비밀번호 다시 만들기 | 새 복구 코드 | 1440 | [345:260632](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-260632) | [V2-04__새_복구_코드__1440__345-260632.png](frames/V2-04__새_복구_코드__1440__345-260632.png) |
 | V2-04 비밀번호 다시 만들기 | 기본 | 390 | [303:87602](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=303-87602) | [V2-04__기본__390__303-87602.png](frames/V2-04__기본__390__303-87602.png) |
 | V2-04 비밀번호 다시 만들기 | 복구 코드 맞지 않음 | 390 | [345:365494](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-365494) | [V2-04__복구_코드_맞지_않음__390__345-365494.png](frames/V2-04__복구_코드_맞지_않음__390__345-365494.png) |
+| V2-04 비밀번호 다시 만들기 | 복구 코드 없음 | 390 | [354:440398](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440398) | [V2-04__복구_코드_없음__390__354-440398.png](frames/V2-04__복구_코드_없음__390__354-440398.png) |
 | V2-04 비밀번호 다시 만들기 | 새 복구 코드 | 390 | [303:87654](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=303-87654) | [V2-04__새_복구_코드__390__303-87654.png](frames/V2-04__새_복구_코드__390__303-87654.png) |
 | V2-05 설치 위치 | 고르기 전 | 1440 | [345:255899](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255899) | [V2-05__고르기_전__1440__345-255899.png](frames/V2-05__고르기_전__1440__345-255899.png) |
 | V2-05 설치 위치 | 고름 | 1440 | [345:255987](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255987) | [V2-05__고름__1440__345-255987.png](frames/V2-05__고름__1440__345-255987.png) |
@@ -235,6 +270,7 @@
 | V2-07 토스 연결 | 실패 · 키 | 1440 | [345:257137](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-257137) | [V2-07__실패-키__1440__345-257137.png](frames/V2-07__실패-키__1440__345-257137.png) |
 | V2-07 토스 연결 | 실패 · 허용 IP | 1440 | [345:257256](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-257256) | [V2-07__실패-허용_IP__1440__345-257256.png](frames/V2-07__실패-허용_IP__1440__345-257256.png) |
 | V2-07 토스 연결 | 연결됨 | 1440 | [345:257024](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-257024) | [V2-07__연결됨__1440__345-257024.png](frames/V2-07__연결됨__1440__345-257024.png) |
+| V2-07 토스 연결 | 이어서 하기 | 1440 | [354:436114](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-436114) | [V2-07__이어서_하기__1440__354-436114.png](frames/V2-07__이어서_하기__1440__354-436114.png) |
 | V2-07 토스 연결 | 입력함 · PC | 1440 | [345:256763](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-256763) | [V2-07__입력함-PC__1440__345-256763.png](frames/V2-07__입력함-PC__1440__345-256763.png) |
 | V2-07 토스 연결 | 키 없음 | 1440 | [345:256645](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-256645) | [V2-07__키_없음__1440__345-256645.png](frames/V2-07__키_없음__1440__345-256645.png) |
 | V2-07 토스 연결 | 확인 중 | 1440 | [345:256881](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-256881) | [V2-07__확인_중__1440__345-256881.png](frames/V2-07__확인_중__1440__345-256881.png) |
@@ -307,6 +343,8 @@
 | V2-14 할 일 상세 | 닫힘 | 1440 | [345:254788](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-254788) | [V2-14__닫힘__1440__345-254788.png](frames/V2-14__닫힘__1440__345-254788.png) |
 | V2-14 할 일 상세 | 열림 | 1440 | [345:254368](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-254368) | [V2-14__열림__1440__345-254368.png](frames/V2-14__열림__1440__345-254368.png) |
 | V2-14 할 일 상세 | 열림 · 결과 모르는 주문 | 1440 | [345:255212](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255212) | [V2-14__열림-결과_모르는_주문__1440__345-255212.png](frames/V2-14__열림-결과_모르는_주문__1440__345-255212.png) |
+| V2-14 할 일 상세 | 열림 · 결과 모르는 주문 · 다시 찾는 중 | 1440 | [356:453354](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=356-453354) | [V2-14__열림-결과_모르는_주문-다시_찾는_중__1440__356-453354.png](frames/V2-14__열림-결과_모르는_주문-다시_찾는_중__1440__356-453354.png) |
+| V2-14 할 일 상세 | 열림 · 결과 모르는 주문 · 접수만 고름 | 1440 | [354:450610](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-450610) | [V2-14__열림-결과_모르는_주문-접수만_고름__1440__354-450610.png](frames/V2-14__열림-결과_모르는_주문-접수만_고름__1440__354-450610.png) |
 | V2-14 할 일 상세 | 열림 · 계좌 불일치 | 1440 | [345:255456](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255456) | [V2-14__열림-계좌_불일치__1440__345-255456.png](frames/V2-14__열림-계좌_불일치__1440__345-255456.png) |
 | V2-14 할 일 상세 | 열림 · 권리 변동 | 1440 | [345:431475](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-431475) | [V2-14__열림-권리_변동__1440__345-431475.png](frames/V2-14__열림-권리_변동__1440__345-431475.png) |
 | V2-14 할 일 상세 | 오류 | 1440 | [345:254990](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-254990) | [V2-14__오류__1440__345-254990.png](frames/V2-14__오류__1440__345-254990.png) |
@@ -314,6 +352,8 @@
 | V2-14 할 일 상세 | 닫힘 | 390 | [345:254898](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-254898) | [V2-14__닫힘__390__345-254898.png](frames/V2-14__닫힘__390__345-254898.png) |
 | V2-14 할 일 상세 | 열림 | 390 | [345:254479](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-254479) | [V2-14__열림__390__345-254479.png](frames/V2-14__열림__390__345-254479.png) |
 | V2-14 할 일 상세 | 열림 · 결과 모르는 주문 | 390 | [345:255343](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255343) | [V2-14__열림-결과_모르는_주문__390__345-255343.png](frames/V2-14__열림-결과_모르는_주문__390__345-255343.png) |
+| V2-14 할 일 상세 | 열림 · 결과 모르는 주문 · 다시 찾는 중 | 390 | [356:453626](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=356-453626) | [V2-14__열림-결과_모르는_주문-다시_찾는_중__390__356-453626.png](frames/V2-14__열림-결과_모르는_주문-다시_찾는_중__390__356-453626.png) |
+| V2-14 할 일 상세 | 열림 · 결과 모르는 주문 · 접수만 고름 | 390 | [354:450872](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-450872) | [V2-14__열림-결과_모르는_주문-접수만_고름__390__354-450872.png](frames/V2-14__열림-결과_모르는_주문-접수만_고름__390__354-450872.png) |
 | V2-14 할 일 상세 | 열림 · 계좌 불일치 | 390 | [345:255562](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255562) | [V2-14__열림-계좌_불일치__390__345-255562.png](frames/V2-14__열림-계좌_불일치__390__345-255562.png) |
 | V2-14 할 일 상세 | 열림 · 권리 변동 | 390 | [345:431677](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-431677) | [V2-14__열림-권리_변동__390__345-431677.png](frames/V2-14__열림-권리_변동__390__345-431677.png) |
 | V2-14 할 일 상세 | 오류 | 390 | [345:255110](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-255110) | [V2-14__오류__390__345-255110.png](frames/V2-14__오류__390__345-255110.png) |
@@ -322,9 +362,9 @@
 | V2-20 전략 목록 | 전략 있음 | 1440 | [314:100364](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=314-100364) | [V2-20__전략_있음__1440__314-100364.png](frames/V2-20__전략_있음__1440__314-100364.png) |
 | V2-21 새 전략 시트 | 기본 | 1440 | [328:135486](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=328-135486) | [V2-21__기본__1440__328-135486.png](frames/V2-21__기본__1440__328-135486.png) |
 | V2-21 새 전략 시트 | 기본 | 390 | [328:135374](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=328-135374) | [V2-21__기본__390__328-135374.png](frames/V2-21__기본__390__328-135374.png) |
-| V2-22 붙여 넣기 | 모르는 조건 | 1440 | [345:259108](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-259108) | [V2-22__모르는_조건__1440__345-259108.png](frames/V2-22__모르는_조건__1440__345-259108.png) |
 | V2-22 붙여 넣기 | 붙여 넣기 | 1440 | [345:258918](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-258918) | [V2-22__붙여_넣기__1440__345-258918.png](frames/V2-22__붙여_넣기__1440__345-258918.png) |
 | V2-22 붙여 넣기 | 앱 버전이 낮음 | 1440 | [345:259042](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-259042) | [V2-22__앱_버전이_낮음__1440__345-259042.png](frames/V2-22__앱_버전이_낮음__1440__345-259042.png) |
+| V2-22 붙여 넣기 | 앱에서 못 쓰는 조건 | 1440 | [345:259108](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-259108) | [V2-22__앱에서_못_쓰는_조건__1440__345-259108.png](frames/V2-22__앱에서_못_쓰는_조건__1440__345-259108.png) |
 | V2-22 붙여 넣기 | 연결이 맞지 않아 거절 | 1440 | [331:150910](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=331-150910) | [V2-22__연결이_맞지_않아_거절__1440__331-150910.png](frames/V2-22__연결이_맞지_않아_거절__1440__331-150910.png) |
 | V2-22 붙여 넣기 | 형식 아님 | 1440 | [345:258976](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-258976) | [V2-22__형식_아님__1440__345-258976.png](frames/V2-22__형식_아님__1440__345-258976.png) |
 | V2-22 붙여 넣기 | 확인 | 1440 | [327:132753](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=327-132753) | [V2-22__확인__1440__327-132753.png](frames/V2-22__확인__1440__327-132753.png) |
@@ -344,7 +384,11 @@
 | V2-23 편집기 | 데이터 받는 중 | 1440 | [345:224505](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-224505) | [V2-23__데이터_받는_중__1440__345-224505.png](frames/V2-23__데이터_받는_중__1440__345-224505.png) |
 | V2-23 편집기 | 리밸런싱 방식 빈칸 | 1440 | [326:123215](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=326-123215) | [V2-23__리밸런싱_방식_빈칸__1440__326-123215.png](frames/V2-23__리밸런싱_방식_빈칸__1440__326-123215.png) |
 | V2-23 편집기 | 리밸런싱 방식에서 신호 줄을 고름 | 1440 | [331:147766](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=331-147766) | [V2-23__리밸런싱_방식에서_신호_줄을_고름__1440__331-147766.png](frames/V2-23__리밸런싱_방식에서_신호_줄을_고름__1440__331-147766.png) |
+| V2-23 편집기 | 매매 방식 고르기 | 1440 | [354:436262](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-436262) | [V2-23__매매_방식_고르기__1440__354-436262.png](frames/V2-23__매매_방식_고르기__1440__354-436262.png) |
+| V2-23 편집기 | 매매 방식이 바뀌어요 · 목표 비중 | 1440 | [354:448939](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-448939) | [V2-23__매매_방식이_바뀌어요-목표_비중__1440__354-448939.png](frames/V2-23__매매_방식이_바뀌어요-목표_비중__1440__354-448939.png) |
+| V2-23 편집기 | 매매 방식이 바뀌어요 확인 창 | 1440 | [354:437940](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-437940) | [V2-23__매매_방식이_바뀌어요_확인_창__1440__354-437940.png](frames/V2-23__매매_방식이_바뀌어요_확인_창__1440__354-437940.png) |
 | V2-23 편집기 | 머리 토글 바꿈 | 1440 | [345:214380](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-214380) | [V2-23__머리_토글_바꿈__1440__345-214380.png](frames/V2-23__머리_토글_바꿈__1440__345-214380.png) |
+| V2-23 편집기 | 목표 비중 · 매도 문제 | 1440 | [354:451672](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-451672) | [V2-23__목표_비중-매도_문제__1440__354-451672.png](frames/V2-23__목표_비중-매도_문제__1440__354-451672.png) |
 | V2-23 편집기 | 문장으로 보기 | 1440 | [345:186346](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-186346) | [V2-23__문장으로_보기__1440__345-186346.png](frames/V2-23__문장으로_보기__1440__345-186346.png) |
 | V2-23 편집기 | 문제 있음 · 문제 목록 펼침 | 1440 | [325:117895](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=325-117895) | [V2-23__문제_있음-문제_목록_펼침__1440__325-117895.png](frames/V2-23__문제_있음-문제_목록_펼침__1440__325-117895.png) |
 | V2-23 편집기 | 문제 있음 · 문제를 누른 뒤 | 1440 | [325:118490](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=325-118490) | [V2-23__문제_있음-문제를_누른_뒤__1440__325-118490.png](frames/V2-23__문제_있음-문제를_누른_뒤__1440__325-118490.png) |
@@ -355,6 +399,7 @@
 | V2-23 편집기 | 선 잇는 중 · 맞는 곳 | 1440 | [325:119551](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=325-119551) | [V2-23__선_잇는_중-맞는_곳__1440__325-119551.png](frames/V2-23__선_잇는_중-맞는_곳__1440__325-119551.png) |
 | V2-23 편집기 | 선 잇는 중 · 안 되는 곳 | 1440 | [326:122208](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=326-122208) | [V2-23__선_잇는_중-안_되는_곳__1440__326-122208.png](frames/V2-23__선_잇는_중-안_되는_곳__1440__326-122208.png) |
 | V2-23 편집기 | 선을 고름 | 1440 | [326:126110](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=326-126110) | [V2-23__선을_고름__1440__326-126110.png](frames/V2-23__선을_고름__1440__326-126110.png) |
+| V2-23 편집기 | 손절이 약해져요 확인 창 | 1440 | [354:434636](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-434636) | [V2-23__손절이_약해져요_확인_창__1440__354-434636.png](frames/V2-23__손절이_약해져요_확인_창__1440__354-434636.png) |
 | V2-23 편집기 | 실행 방식 · 고르기 | 1440 | [345:220695](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-220695) | [V2-23__실행_방식-고르기__1440__345-220695.png](frames/V2-23__실행_방식-고르기__1440__345-220695.png) |
 | V2-23 편집기 | 실행 방식 · 종가 확인으로 바뀜 | 1440 | [345:221951](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-221951) | [V2-23__실행_방식-종가_확인으로_바뀜__1440__345-221951.png](frames/V2-23__실행_방식-종가_확인으로_바뀜__1440__345-221951.png) |
 | V2-23 편집기 | 자동 정렬 결과 · 분기 있음 | 1440 | [331:143833](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=331-143833) | [V2-23__자동_정렬_결과-분기_있음__1440__331-143833.png](frames/V2-23__자동_정렬_결과-분기_있음__1440__331-143833.png) |
@@ -364,6 +409,7 @@
 | V2-23 편집기 | 조건 추가 메뉴 · 검색 | 1440 | [345:203739](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-203739) | [V2-23__조건_추가_메뉴-검색__1440__345-203739.png](frames/V2-23__조건_추가_메뉴-검색__1440__345-203739.png) |
 | V2-23 편집기 | 조건 추가 메뉴 · 분류 | 1440 | [345:201134](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-201134) | [V2-23__조건_추가_메뉴-분류__1440__345-201134.png](frames/V2-23__조건_추가_메뉴-분류__1440__345-201134.png) |
 | V2-23 편집기 | 조건 추가 메뉴 · 잠긴 분류 | 1440 | [345:202428](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-202428) | [V2-23__조건_추가_메뉴-잠긴_분류__1440__345-202428.png](frames/V2-23__조건_추가_메뉴-잠긴_분류__1440__345-202428.png) |
+| V2-23 편집기 | 종목 선정 줄 편집 | 1440 | [354:445458](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-445458) | [V2-23__종목_선정_줄_편집__1440__354-445458.png](frames/V2-23__종목_선정_줄_편집__1440__354-445458.png) |
 | V2-23 편집기 | 줄 삭제 뒤 | 1440 | [326:126602](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=326-126602) | [V2-23__줄_삭제_뒤__1440__326-126602.png](frames/V2-23__줄_삭제_뒤__1440__326-126602.png) |
 | V2-23 편집기 | 줄 편집 | 1440 | [326:122715](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=326-122715) | [V2-23__줄_편집__1440__326-122715.png](frames/V2-23__줄_편집__1440__326-122715.png) |
 | V2-24 좁은 창 | 보기만 | 390 | [329:136085](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=329-136085) | [V2-24__보기만__390__329-136085.png](frames/V2-24__보기만__390__329-136085.png) |
@@ -396,10 +442,12 @@
 | V2-30 실전 운용 시작 | 이미 운용 중 | 1440 | [345:261948](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-261948) | [V2-30__이미_운용_중__1440__345-261948.png](frames/V2-30__이미_운용_중__1440__345-261948.png) |
 | V2-30 실전 운용 시작 | 입력 중 | 1440 | [345:261128](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-261128) | [V2-30__입력_중__1440__345-261128.png](frames/V2-30__입력_중__1440__345-261128.png) |
 | V2-30 실전 운용 시작 | 확인 ✕ 있음 | 1440 | [345:259530](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-259530) | [V2-30__확인_✕_있음__1440__345-259530.png](frames/V2-30__확인_✕_있음__1440__345-259530.png) |
+| V2-30 실전 운용 시작 | 기본 · 모두 통과 | 390 | [354:444855](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-444855) | [V2-30__기본-모두_통과__390__354-444855.png](frames/V2-30__기본-모두_통과__390__354-444855.png) |
 | V2-31 운용 설정 | 다음 확인부터 적용 예약됨 | 1440 | [345:265744](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-265744) | [V2-31__다음_확인부터_적용_예약됨__1440__345-265744.png](frames/V2-31__다음_확인부터_적용_예약됨__1440__345-265744.png) |
 | V2-31 운용 설정 | 바꾸는 중 | 1440 | [345:265340](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-265340) | [V2-31__바꾸는_중__1440__345-265340.png](frames/V2-31__바꾸는_중__1440__345-265340.png) |
 | V2-31 운용 설정 | 보기 | 1440 | [345:265179](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-265179) | [V2-31__보기__1440__345-265179.png](frames/V2-31__보기__1440__345-265179.png) |
 | V2-31 운용 설정 | 비밀번호 창 | 1440 | [345:265742](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-265742) | [V2-31__비밀번호_창__1440__345-265742.png](frames/V2-31__비밀번호_창__1440__345-265742.png) |
+| V2-31 운용 설정 | 보기 | 390 | [354:447028](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-447028) | [V2-31__보기__390__354-447028.png](frames/V2-31__보기__390__354-447028.png) |
 | V2-32 멈추기 시트 | 기본 | 1440 | [345:271033](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-271033) | [V2-32__기본__1440__345-271033.png](frames/V2-32__기본__1440__345-271033.png) |
 | V2-32 멈추기 시트 | 새 매수 멈춤 | 1440 | [345:270079](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-270079) | [V2-32__새_매수_멈춤__1440__345-270079.png](frames/V2-32__새_매수_멈춤__1440__345-270079.png) |
 | V2-32 멈추기 시트 | 오류(취소 안 됨) | 1440 | [345:277130](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-277130) | [V2-32__오류(취소_안_됨)__1440__345-277130.png](frames/V2-32__오류%28취소_안_됨%29__1440__345-277130.png) |
@@ -438,7 +486,9 @@
 | V2-42 모의투자 시작 창 | 기본 | 390 | [310:94233](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=310-94233) | [V2-42__기본__390__310-94233.png](frames/V2-42__기본__390__310-94233.png) |
 | V2-42 모의투자 시작 창 | 이 전략은 이미 모의투자 중 | 390 | [310:94418](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=310-94418) | [V2-42__이_전략은_이미_모의투자_중__390__310-94418.png](frames/V2-42__이_전략은_이미_모의투자_중__390__310-94418.png) |
 | V2-50 설정 | 기본 | 1440 | [331:171688](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=331-171688) | [V2-50__기본__1440__331-171688.png](frames/V2-50__기본__1440__331-171688.png) |
+| V2-50 설정 | 연결 문제 있음 | 1440 | [354:440618](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440618) | [V2-50__연결_문제_있음__1440__354-440618.png](frames/V2-50__연결_문제_있음__1440__354-440618.png) |
 | V2-50 설정 | 기본 | 390 | [305:87696](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-87696) | [V2-50__기본__390__305-87696.png](frames/V2-50__기본__390__305-87696.png) |
+| V2-50 설정 | 연결 문제 있음 | 390 | [354:440709](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-440709) | [V2-50__연결_문제_있음__390__354-440709.png](frames/V2-50__연결_문제_있음__390__354-440709.png) |
 | V2-51 연결 | 토스 변경 · DART 다 받음 | 1440 | [313:97570](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=313-97570) | [V2-51__토스_변경-DART_다_받음__1440__313-97570.png](frames/V2-51__토스_변경-DART_다_받음__1440__313-97570.png) |
 | V2-51 연결 | 토스 삭제 확인 · DART 다 받음 | 1440 | [305:88451](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-88451) | [V2-51__토스_삭제_확인-DART_다_받음__1440__305-88451.png](frames/V2-51__토스_삭제_확인-DART_다_받음__1440__305-88451.png) |
 | V2-51 연결 | 토스 실패 · 응답 없음 · DART 없음 | 1440 | [305:89008](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-89008) | [V2-51__토스_실패-응답_없음-DART_없음__1440__305-89008.png](frames/V2-51__토스_실패-응답_없음-DART_없음__1440__305-89008.png) |
@@ -451,6 +501,7 @@
 | V2-51 연결 | 토스 연결됨 · DART 한도 넘음 | 1440 | [345:278188](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-278188) | [V2-51__토스_연결됨-DART_한도_넘음__1440__345-278188.png](frames/V2-51__토스_연결됨-DART_한도_넘음__1440__345-278188.png) |
 | V2-51 연결 | 토스 연결됨 · DART 확인 중 | 1440 | [345:277920](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-277920) | [V2-51__토스_연결됨-DART_확인_중__1440__345-277920.png](frames/V2-51__토스_연결됨-DART_확인_중__1440__345-277920.png) |
 | V2-51 연결 | 토스 운용 중 계좌번호 잠김 · DART 다 받음 | 1440 | [345:277784](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-277784) | [V2-51__토스_운용_중_계좌번호_잠김-DART_다_받음__1440__345-277784.png](frames/V2-51__토스_운용_중_계좌번호_잠김-DART_다_받음__1440__345-277784.png) |
+| V2-51 연결 | 토스 운용 중 끊김 · DART 다 받음 | 1440 | [354:441525](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-441525) | [V2-51__토스_운용_중_끊김-DART_다_받음__1440__354-441525.png](frames/V2-51__토스_운용_중_끊김-DART_다_받음__1440__354-441525.png) |
 | V2-51 연결 | 토스 운용 중 삭제 막힘 · DART 다 받음 | 1440 | [345:277637](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-277637) | [V2-51__토스_운용_중_삭제_막힘-DART_다_받음__1440__345-277637.png](frames/V2-51__토스_운용_중_삭제_막힘-DART_다_받음__1440__345-277637.png) |
 | V2-51 연결 | 토스 입력함 · DART 없음 | 1440 | [331:171802](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=331-171802) | [V2-51__토스_입력함-DART_없음__1440__331-171802.png](frames/V2-51__토스_입력함-DART_없음__1440__331-171802.png) |
 | V2-51 연결 | 토스 키 없음 · DART 없음 | 1440 | [305:88347](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-88347) | [V2-51__토스_키_없음-DART_없음__1440__305-88347.png](frames/V2-51__토스_키_없음-DART_없음__1440__305-88347.png) |
@@ -461,6 +512,7 @@
 | V2-51 연결 | 토스 실패 · 키 · DART 없음 | 390 | [305:88065](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-88065) | [V2-51__토스_실패-키-DART_없음__390__305-88065.png](frames/V2-51__토스_실패-키-DART_없음__390__305-88065.png) |
 | V2-51 연결 | 토스 실패 · 허용 IP · DART 없음 | 390 | [305:88159](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-88159) | [V2-51__토스_실패-허용_IP-DART_없음__390__305-88159.png](frames/V2-51__토스_실패-허용_IP-DART_없음__390__305-88159.png) |
 | V2-51 연결 | 토스 연결됨 · DART 다 받음 | 390 | [305:87980](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-87980) | [V2-51__토스_연결됨-DART_다_받음__390__305-87980.png](frames/V2-51__토스_연결됨-DART_다_받음__390__305-87980.png) |
+| V2-51 연결 | 토스 운용 중 끊김 · DART 다 받음 | 390 | [354:441714](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-441714) | [V2-51__토스_운용_중_끊김-DART_다_받음__390__354-441714.png](frames/V2-51__토스_운용_중_끊김-DART_다_받음__390__354-441714.png) |
 | V2-51 연결 | 토스 입력함 · DART 없음 | 390 | [305:87826](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-87826) | [V2-51__토스_입력함-DART_없음__390__305-87826.png](frames/V2-51__토스_입력함-DART_없음__390__305-87826.png) |
 | V2-51 연결 | 토스 키 없음 · DART 없음 | 390 | [305:87740](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-87740) | [V2-51__토스_키_없음-DART_없음__390__305-87740.png](frames/V2-51__토스_키_없음-DART_없음__390__305-87740.png) |
 | V2-51 연결 | 토스 확인 중 · DART 없음 | 390 | [305:87892](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=305-87892) | [V2-51__토스_확인_중-DART_없음__390__305-87892.png](frames/V2-51__토스_확인_중-DART_없음__390__305-87892.png) |
@@ -476,6 +528,7 @@
 | V2-53 데이터 | 삭제 확인 · 운용 전 | 1440 | [345:292783](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-292783) | [V2-53__삭제_확인-운용_전__1440__345-292783.png](frames/V2-53__삭제_확인-운용_전__1440__345-292783.png) |
 | V2-54 비밀번호 변경 | 기본 | 1440 | [345:292881](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-292881) | [V2-54__기본__1440__345-292881.png](frames/V2-54__기본__1440__345-292881.png) |
 | V2-54 비밀번호 변경 | 맞지 않음 | 1440 | [345:292945](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-292945) | [V2-54__맞지_않음__1440__345-292945.png](frames/V2-54__맞지_않음__1440__345-292945.png) |
+| V2-54 비밀번호 변경 | 바꿈 | 1440 | [354:443662](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=354-443662) | [V2-54__바꿈__1440__354-443662.png](frames/V2-54__바꿈__1440__354-443662.png) |
 | V2-54 비밀번호 변경 | 기본 | 390 | [313:96023](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=313-96023) | [V2-54__기본__390__313-96023.png](frames/V2-54__기본__390__313-96023.png) |
 | V2-55 사용 조건 · 앱 정보 | 앱 정보 · 기본 | 1440 | [345:293060](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-293060) | [V2-55__앱_정보-기본__1440__345-293060.png](frames/V2-55__앱_정보-기본__1440__345-293060.png) |
 | V2-56 접속 | PC에서 Tailscale 없음 | 1440 | [345:293350](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-293350) | [V2-56__PC에서_Tailscale_없음__1440__345-293350.png](frames/V2-56__PC에서_Tailscale_없음__1440__345-293350.png) |

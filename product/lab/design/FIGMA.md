@@ -2,7 +2,8 @@
 
 - 파일: [quant.jsyoo.dev](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev) · 페이지 'lab': [343:172871](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=343-172871) · 목차 섹션: [345:184153](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=345-184153)
 - 원본: 옛 탐색 페이지 섹션 [172:88338](https://www.figma.com/design/ygAxFnxi4jeiw4vMxS1Xbm/quant.jsyoo.dev?node-id=172-88338)의 SCR-H-LAB* 11장(그대로 둠). 'lab' 페이지는 그것을 복제해 v2와 맞게 바꾼 것이에요(`../SPEC.md` 4절).
-- 화면 9개 · 프레임 11장 + 목차 1장(모두 1440). 지도 json: [lab_map.json](lab_map.json) (`export` = 이 폴더 기준 그림 경로)
+- 화면 9개 · 프레임 11장 + 목차 1장 = 12장(모두 1440). 지도 json: [lab_map.json](lab_map.json) (`export` = 이 폴더 기준 그림 경로)
+- UX 평가 반영(2026-11-02): 프레임 수는 그대로이고, 11장 모두 그 자리에서 고쳤어요(쓸모 한 줄 · 세 걸음 · '앱에서 쓸 수 있는 것만' 기본 켬 · 구간 정의 하나로 · '전략 복사' · 바닥글 사업자 줄 없앰). 무엇을 왜 바꿨는지는 [`../SPEC.md`](../SPEC.md) 6절이에요. 목차 그림도 다시 찍어요.
 - 목차 그림은 목차 프레임(345:184154 · 폭 2900)을 2026-11-02에 내보낸 것이에요.
 - 크기: 3MB가 넘는 그림은 없어요.
 - 그림은 2026-11-02에 Figma에서 다시 내보낸 최종본이에요. **그림은 제품 주인이 갱신해요.**
