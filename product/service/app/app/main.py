@@ -32,7 +32,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import APP_VERSION_TEXT
 from . import strategy as st
 from .connect import Connections
-from .db import DB
+from .db import DB, body_format
 from .engine import BacktestError, run_backtest, universe_of, warmup_calendar_days
 from .market import INDEX, KST, BarSource, Market, MarketDataError, TossSource, now_kst
 from .paper import Paper
@@ -359,9 +359,10 @@ def create_app(
         with db.tx():
             row = db.one("SELECT COALESCE(MAX(no),0)+1 AS n FROM versions WHERE strategy_id=?", (sid,))
             no = int(row["n"])
+            text = json.dumps(body, ensure_ascii=False)
             vid = db.run(
-                "INSERT INTO versions(strategy_id,no,body,problems,created_at) VALUES(?,?,?,?,?)",
-                (sid, no, json.dumps(body, ensure_ascii=False), len(problems), _now()),
+                "INSERT INTO versions(strategy_id,no,body,problems,created_at,format) VALUES(?,?,?,?,?,?)",
+                (sid, no, text, len(problems), _now(), body_format(text)),
             )
             db.run(
                 "UPDATE strategies SET name=?, template=? WHERE id=?",

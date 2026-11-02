@@ -207,30 +207,7 @@ def _xml_status(raw: bytes) -> None:
 
 # ── 저장 · 큐 ────────────────────────────────────────────────────────────────
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS dart_corp(stock_code TEXT PRIMARY KEY, corp_code TEXT NOT NULL, name TEXT);
-CREATE TABLE IF NOT EXISTS dart_jobs(
-  id INTEGER PRIMARY KEY, phase INTEGER NOT NULL, kind TEXT NOT NULL, arg TEXT NOT NULL,
-  done INTEGER NOT NULL DEFAULT 0, UNIQUE(kind, arg)
-);
-CREATE TABLE IF NOT EXISTS dart_quota(day TEXT PRIMARY KEY, used INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS dart_fin(
-  stock_code TEXT NOT NULL, year INTEGER NOT NULL, reprt TEXT NOT NULL, fs_div TEXT NOT NULL,
-  account TEXT NOT NULL, amount REAL, add_amount REAL, rcept_no TEXT NOT NULL, rcept_dt TEXT NOT NULL,
-  PRIMARY KEY(stock_code, year, reprt, fs_div, account)
-);
-CREATE TABLE IF NOT EXISTS dart_disc(
-  rcept_no TEXT PRIMARY KEY, stock_code TEXT NOT NULL, rcept_dt TEXT NOT NULL, report_nm TEXT NOT NULL, kind TEXT
-);
-CREATE TABLE IF NOT EXISTS dart_shares(
-  stock_code TEXT NOT NULL, year INTEGER NOT NULL, reprt TEXT NOT NULL, shares REAL, treasury REAL,
-  rcept_no TEXT NOT NULL, rcept_dt TEXT NOT NULL, PRIMARY KEY(stock_code, year, reprt)
-);
-CREATE TABLE IF NOT EXISTS dart_div(
-  stock_code TEXT NOT NULL, year INTEGER NOT NULL, dps REAL, rcept_no TEXT NOT NULL, rcept_dt TEXT NOT NULL,
-  PRIMARY KEY(stock_code, year)
-);
-"""
+# 표는 db.py SCHEMA_V2(dart_corp · dart_jobs · dart_quota · dart_fin · dart_disc · dart_shares · dart_div)
 
 PHASE_CORP, PHASE_FIN, PHASE_LIST, PHASE_SLOW = 1, 2, 3, 4
 
@@ -253,8 +230,6 @@ class DartStore:
         self.db = db
         self.today = today or (lambda: datetime.now(KST).date())
         self.daily_limit = daily_limit
-        with db.lock:
-            db.conn.executescript(SCHEMA)
 
     # 하루 한도 ─────────────────────────────────────────────────────────
 

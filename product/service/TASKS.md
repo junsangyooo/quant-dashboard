@@ -40,9 +40,9 @@
 - [x] **T-12 새 `app/dart.py`** — corpCode · fnlttMultiAcnt(연결 우선) · list.json · 주식 총수(사업 · 반기, 약 4일 큐) · 배당 · 주요사항. 접수일 다음 거래일 규칙(R-J9), 하루 20,000건 큐. **가짜 응답은 `vendor/dart-samples/`의 꼴.**
   - 다 됐다: 가짜 DART로 첫 받기 · 이어 받기 · 한도 넘음('내일 이어서 받아요') · 키 오류 · 자료 없음 시험.
   - 결과: `app/dart.py` = `DartClient`(corpCode zip · fnlttMultiAcnt 100개씩 · list.json 쪽 넘김 · stockTotqySttus · alotMatter, 상태 000 / 013 자료 없음 = 빈 목록 / 010·011·012·901 키 오류 / 020 한도) + `DartStore`(큐 `dart_jobs`: 회사 → 재무 2015년~ 4보고서 → 공시 목록 → 주식 총수(반기 · 사업) · 배당, 하루 사용 수 `dart_quota` 20,000건 · 넘기 전에 멈춤, 공시 보고서명 → 종류 15가지, 재무는 연결 우선, 재무 · 공시는 접수일 다음 거래일부터 `financial_rows` · `disclosures_on`). `tests/test_dart.py` 10건: 견본(`vendor/dart-samples`) 행을 복사해 값만 바꾼 가짜 DART로 첫 받기(123일 · 요청 125건) · 이어 받기(멈춘 데서 이어 · 같은 요청 수 · 재무 · 공시 뒤 '가치 조건 … 약 4일 뒤부터' 글) · 한도 넘음(앱 한도 · DART 020 둘 다 '하루 20,000건을 넘었어요 · 내일 이어서 받아요' → 다음 날 이어서 끝) · 키 오류 · 자료 없음(013 = 빈 값) · 끊김 · 11/2 접수 → 11/3부터 · 금요일 접수 → 월요일부터. pytest 784 passed. 가정: 배당 행은 '주당 현금배당금' + 보통주로 찾아요(행 이름 확인 전 · Q-T5) · 주식 수는 '보통주' 행의 `istc_totqy`.
-- [ ] **T-13 `app/db.py`** — 일봉 · 재무 · 공시 · 수급 · 섹터 캐시, 블록 전략, 운용 · 주문(회차) · 체결 · 할 일 · 알림 표, 이 앱이 산 수량 · 운용 현금 · 기업 행동 기록. 옛 데이터 옮기기.
+- [x] **T-13 `app/db.py`** — 일봉 · 재무 · 공시 · 수급 · 섹터 캐시, 블록 전략, 운용 · 주문(회차) · 체결 · 할 일 · 알림 표, 이 앱이 산 수량 · 운용 현금 · 기업 행동 기록. 옛 데이터 옮기기.
   - 다 됐다: v1 데이터 파일을 열어 v2 구조로 옮기는 시험(전략 · 버전 · 모의투자 기록 유지).
-  - 결과:
+  - 결과: `app/db.py`에 구조 버전(`PRAGMA user_version` = 2)과 v2 표 23개를 더했어요: 캐시(`stock_info` · `stock_warnings` · `sectors` · `sector_members` · `investor` · DART 7표), 실전 운용(`runs` · `run_versions`), 운용 현금 장부(`run_cash`), 이 앱이 산 수량(`positions`), `run_equity`, 주문(`orders` · 회차 `round` · `client_order_id` 하나뿐), 체결(`fills`), 조건주문(`cond_orders`), 할 일(`todos`), 알림(`alerts` · 실전 / 모의), 기업 행동(`corp_actions`). `versions.format`(slots · graph · blocks)으로 블록 전략과 옛 본문을 가르고, `bar_meta.yahoo` → `source`. 옛 파일은 `app.db.v1-backup`으로 복사한 뒤 한 묶음으로 옮겨요. `tests/test_db.py` 5건: v1 MVP 앱을 API로 돌려 만든 `tests/fixtures/v1_app.db`(계정 · 지어낸 토스 키 · 전략 2 · 버전 3 · 모의투자 22거래일 · 체결 7)를 열어 v2로 옮긴 뒤 옛 표 9개의 모든 행이 같음 · 백업 있음 · 다시 열면 그대로 · 같은 비밀번호로 로그인 · 전략 목록 · 키 그대로 · 새 버전 저장, 일곱 칸 본문은 'slots'로 표시. pytest 789 passed.
 
 ## 2. 모델 · 엔진 (순서 5~7) — 끝에 변환 일치 문턱
 

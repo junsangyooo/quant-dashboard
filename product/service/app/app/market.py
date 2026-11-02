@@ -231,8 +231,8 @@ class Market:
                 from_d = min(from_d, old["from_d"])
                 to_d = max(to_d, old["to_d"])
         self.db.run(
-            "INSERT INTO bar_meta(symbol,yahoo,from_d,to_d,fetched_at) VALUES(?,?,?,?,?) "
-            "ON CONFLICT(symbol) DO UPDATE SET yahoo=excluded.yahoo, from_d=excluded.from_d,"
+            "INSERT INTO bar_meta(symbol,source,from_d,to_d,fetched_at) VALUES(?,?,?,?,?) "
+            "ON CONFLICT(symbol) DO UPDATE SET source=excluded.source, from_d=excluded.from_d,"
             "to_d=excluded.to_d, fetched_at=excluded.fetched_at",
             (symbol, "toss", from_d, to_d, self.clock()),
         )
