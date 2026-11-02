@@ -691,3 +691,20 @@ def test_forty_orders_sells_first_then_buy_rank() -> None:
     assert [p["side"] for p in out].count("sell") == 10
     assert [p["sym"] for p in out if p["side"] == "buy"] == [f"B{i}" for i in range(30)]
     assert {s["why"] for s in eng.skipped} == {"매수 안 함 · 하루 주문 40건"} and len(eng.skipped) == 5
+
+
+def test_screen_view(tmp_path: Path) -> None:
+    w = World(tmp_path)
+    rid = running(w, body(sell=[R("stop_loss", value=7, exec_="intraday")]))
+    sc = w.live.screen()
+    assert sc["running"] and sc["strategy"]["version_no"] == 1 and sc["account"]["cash"] == 100_000_000
+    row = sc["plan_rows"][0]
+    assert row["side"] == "buy" and row["cap"] == 11_000 and row["max"] == row["qty"] * 11_000
+    morning(w, date(2026, 11, 3))
+    o = w.orders()[0]
+    w.server.fill(o["toss_order_id"], str(o["qty"]), "10000")
+    w.clock.at(date(2026, 11, 3), 9, 1)
+    w.live.after_open(rid)
+    sc = w.live.screen()
+    assert sc["recent"][0]["side"] == "buy" and sc["holdings"][0]["sym"] == SYM
+    assert sc["watch"][0]["levels"][0]["item"] == "stop_loss" and sc["history"][0]["status"] == "체결"

@@ -494,6 +494,38 @@ def create_app(
     def live_view() -> dict[str, Any]:
         return live.view()
 
+    @app.get("/api/live/screen")
+    async def live_screen() -> dict[str, Any]:
+        return await asyncio.to_thread(live.screen)
+
+    @app.get("/api/live/preview")
+    def live_preview(version_id: int) -> dict[str, Any]:
+        """V2-30 ① 확인할 것: 토스 연결 · 백테스트 함 · 다른 운용 없음 · 텔레그램 · 설치 위치 · 손절 없음(R-X10)."""
+        from . import blocks as bkm
+
+        v = db.one("SELECT v.*, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id WHERE v.id=?",
+                   (version_id,))
+        if v is None:
+            raise LiveError("그 버전이 없어요", 404)
+        body = json.loads(v["body"])
+        from .copytext import read_body
+
+        g = read_body(body)["graph"]
+        stop = any(r["item"] in ("stop_loss", "trailing_stop") and bkm.exec_of(g, b["id"], i) in ("intraday", "broker")
+                   for b in g["blocks"] if b["stage"] == "sell" for i, r in enumerate(b["rows"]))
+        view = conns.view()["toss"]
+        tg = telegram.view()
+        checks = [
+            {"key": "toss", "ok": bool(view["saved"] and (view.get("last_check") or {}).get("ok"))},
+            {"key": "account", "ok": bool(view.get("account_tail")), "tail": view.get("account_tail")},
+            {"key": "backtest", "ok": db.one("SELECT 1 FROM backtest_runs WHERE version_id=?", (version_id,)) is not None},
+            {"key": "single", "ok": live.run() is None},
+            {"key": "telegram", "ok": bool(tg["saved"] and tg["chat"])},
+            {"key": "place", "ok": bool(db.get_meta("access.place")), "place": db.get_meta("access.place")},
+        ]
+        return {"name": v["name"], "version_no": v["no"], "checks": checks, "has_stop": stop,
+                "ok": all(c["ok"] for c in checks)}
+
     @app.post("/api/live/start")
     async def live_start(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_start")

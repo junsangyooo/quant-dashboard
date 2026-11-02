@@ -573,6 +573,60 @@ STATES.settings = [
   },
 ];
 
+// 실전 화면(T-64): 서버를 `tests.e2e_server <폴더> <포트> live`로 켜면 운용 중 상태가 들어 있어요
+STATES.live = [
+  {
+    name: 'V2-10 운용 중',
+    frame: 'V2-10__운용_중__1440__331-166011.png',
+    path: '/',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-11 계획 있음',
+    frame: 'V2-11__계획_있음__1440__314-98796.png',
+    path: '/plan',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-12 거래 있음',
+    frame: 'V2-12__거래_있음__1440__314-99712.png',
+    path: '/history',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-14 열림-결과 모르는 주문',
+    frame: 'V2-14__열림-결과_모르는_주문__1440__345-255212.png',
+    path: '/todos',
+    go: async (p) => p.getByText('결과 모르는 주문 [현대차]').click(),
+  },
+  {
+    name: 'V2-30 확인 ✕ 있음',
+    frame: 'V2-30__확인_✕_있음__1440__345-259530.png',
+    path: '/live/start?version=1',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-32 멈추기',
+    frame: 'V2-10__운용_중__1440__331-166011.png',
+    path: '/',
+    go: async (p) => p.getByRole('button', { name: '멈추기 ›' }).click(),
+  },
+  {
+    name: 'V2-10 운용 중 390',
+    frame: 'V2-10__운용_중__390__331-166343.png',
+    path: '/',
+    width: 390,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-11 계획 있음 390',
+    frame: 'V2-11__계획_있음__390__306-89580.png',
+    path: '/plan',
+    width: 390,
+    go: async () => undefined,
+  },
+];
+
 const row = (item, op, value, extra = {}) => ({
   item,
   op,

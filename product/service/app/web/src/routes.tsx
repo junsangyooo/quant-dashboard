@@ -18,9 +18,13 @@ import {
 } from './screens/Settings/SettingsV2';
 import { LoginScreen } from './screens/Auth/LoginScreen';
 import { RecoverScreen } from './screens/Auth/RecoverScreen';
-import { HomeScreen } from './screens/Home/HomeScreen';
-import { PlanScreen } from './screens/Plan/PlanScreen';
-import { HistoryScreen } from './screens/History/HistoryScreen';
+import {
+  LiveHistoryScreen,
+  LiveHomeScreen,
+  LivePlanScreen,
+  LiveStartScreen,
+  TodosScreen,
+} from './screens/Live/LiveScreens';
 import { BlockEditorScreen } from './screens/BlockEditor/BlockEditorScreen';
 import { BacktestV2Screen } from './screens/BacktestV2/BacktestV2Screen';
 import {
@@ -61,17 +65,17 @@ export const routes: RouteObject[] = [
       },
       {
         index: true,
-        element: <HomeScreen />,
+        element: <LiveHomeScreen />,
         handle: handle({ page: 'home', kind: 'tab', tab: 'home' }),
       },
       {
         path: 'plan',
-        element: <PlanScreen />,
+        element: <LivePlanScreen />,
         handle: handle({ page: 'plan', kind: 'tab', tab: 'plan' }),
       },
       {
         path: 'history',
-        element: <HistoryScreen />,
+        element: <LiveHistoryScreen />,
         handle: handle({ page: 'history', kind: 'tab', tab: 'history' }),
       },
       {
@@ -103,6 +107,16 @@ export const routes: RouteObject[] = [
         path: 'strategies/:id/backtest',
         element: <BacktestV2Screen />,
         handle: handle({ page: 'backtest', kind: 'sub', tab: 'strategies' }),
+      },
+      {
+        path: 'todos',
+        element: <TodosScreen />,
+        handle: handle({ page: 'todos', kind: 'sub' }),
+      },
+      {
+        path: 'live/start',
+        element: <LiveStartScreen />,
+        handle: handle({ page: 'liveStart', kind: 'sub', tab: 'strategies' }),
       },
       {
         path: 'paper',

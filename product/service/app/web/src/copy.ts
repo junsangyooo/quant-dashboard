@@ -47,6 +47,8 @@ export const copy = {
     backtest: '백테스트',
     import: '복사한 전략 붙여 넣기',
     paper: '모의투자',
+    todos: '할 일 · 알림',
+    liveStart: '실전 운용 시작',
     paperRun: '모의투자 상세',
     paperStart: '모의투자 시작',
     settings: '설정',

@@ -1074,6 +1074,80 @@ class Live:
             "last_check": self.meta(rid, "last_check"),
         }
 
+    def screen(self) -> dict[str, Any]:
+        """화면(V2-10 자산 · V2-11 계획 · V2-12 기록 · V2-13 할 일)이 한 번에 받는 값. 토스가 안 되면 저장한 값만."""
+        from .datamgmt import history_rows
+
+        base = self.view()
+        names = {k: v.get("name") or k for k, v in self.info().items()}
+        account: dict[str, Any] | None = None
+        prices: dict[str, float] = {}
+        c = self.client()
+        if c is not None:
+            try:
+                hs = c.holdings()
+                cash = float(c.buying_power())
+                prices = {h.symbol: float(h.last_price) for h in hs}
+                account = {"total": cash + sum(float(h.qty) * float(h.last_price) for h in hs), "cash": cash,
+                           "holdings": [{"sym": h.symbol, "name": h.name, "qty": int(h.qty), "avg": float(h.avg_price),
+                                         "price": float(h.last_price)} for h in hs]}
+            except (TossError, TransportError):
+                account = None
+        base["account"] = account
+        base["names"] = names
+        alerts = [dict(a) for a in self.db.all("SELECT id,at,live,kind,title,read FROM alerts ORDER BY id DESC LIMIT 50")]
+        base["alerts"] = alerts
+        if not base["running"]:
+            last = self.db.one("SELECT * FROM runs ORDER BY id DESC LIMIT 1")
+            base["last_run"] = dict(last) if last else None
+            return base
+        rid = int(base["id"])
+        r = self.run(rid)
+        v = self.db.one("SELECT v.no, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id WHERE v.id=?",
+                        (r["version_id"],))
+        base["strategy"] = {"name": v["name"] if v else "", "version_no": int(v["no"]) if v else 0}
+        pos = []
+        value = 0.0
+        for sym, p in base["positions"].items():
+            price = prices.get(sym) or float(p["avg"])
+            value += int(p["qty"]) * price
+            pos.append({"sym": sym, "name": names.get(sym, sym), "qty": int(p["qty"]), "avg": float(p["avg"]),
+                        "price": price, "value": int(p["qty"]) * price, "pnl": int(p["qty"]) * (price - float(p["avg"])),
+                        "entry_d": p.get("entry_d")})
+        base["holdings"] = pos
+        base["eval"] = value
+        base["equity"] = value + float(base["cash"] or 0)
+        base["curve"] = [(x["d"], x["equity"]) for x in self.db.all(
+            "SELECT d, equity FROM run_equity WHERE run_id=? ORDER BY d", (rid,))]
+        plans = []
+        for pl in (base.get("next") or {}).get("plans", []):
+            row = {"sym": pl["sym"], "name": names.get(pl["sym"], pl["sym"]), "side": pl["side"],
+                   "reason": pl.get("reason") or [], "close": pl.get("close"), "kind": pl.get("kind")}
+            if pl["side"] == "buy" and pl.get("close"):
+                cap = buy_cap(float(pl["close"]))
+                qty = int(float(pl["value"]) // cap)
+                row |= {"cap": cap, "qty": qty, "max": qty * cap, "est": qty * float(pl["close"])}
+            else:
+                row |= {"qty": int(pl.get("qty") or 0)}
+            plans.append(row)
+        base["plan_rows"] = plans
+        hist = [h for h in history_rows(self.db, rid)]
+        base["history"] = list(reversed(hist))
+        fills = self.db.all("SELECT o.d, o.symbol, o.side, f.qty, f.price FROM fills f JOIN orders o ON o.id=f.order_id "
+                            "WHERE o.run_id=? ORDER BY f.id DESC LIMIT 5", (rid,))
+        base["recent"] = [{"d": f["d"], "sym": f["symbol"], "name": names.get(f["symbol"], f["symbol"]),
+                           "side": f["side"], "qty": int(f["qty"]), "price": float(f["price"])} for f in fills]
+        base["realized"] = sum(h["pnl"] or 0 for h in hist)
+        base["trades"] = len([h for h in hist if h["status"] in ("체결", "일부 체결")])
+        base["orders_n"] = len(hist)
+        try:
+            eng = self.engine(r, self.now().astimezone(KST).date())
+            base["watch"] = [{"sym": sym, "name": names.get(sym, sym), "levels": self.watch_levels(eng, sym),
+                              "price": prices.get(sym)} for sym in base["positions"]]
+        except Exception:
+            base["watch"] = []
+        return base
+
     def check_account_change(self, account_no: str | None) -> None:
         """운용 중 계좌번호 변경 거절(R-L10)."""
         r = self.run()

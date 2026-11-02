@@ -66,3 +66,16 @@
     display: flex;
   }
 }
+
+/* 머리 상태 칩(실전 운용이 있을 때만 · T-64) */
+.liveChip {
+  --live-chip-bg: var(--color-neutral-3);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-full);
+  background: var(--live-chip-bg);
+  color: var(--status-success);
+}
+
+.liveBad {
+  color: var(--status-error);
+}

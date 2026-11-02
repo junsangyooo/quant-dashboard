@@ -1,0 +1,175 @@
+/* 실전 화면(그림 V2-10 ~ V2-14 · V2-30 · V2-32). 토큰만 써요. */
+
+.runCard {
+  --card-line: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-24);
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-lg);
+}
+
+.big {
+  font-size: var(--font-size-32);
+  line-height: var(--font-line-40);
+  font-weight: var(--font-weight-bold);
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.chip {
+  --chip-bg: var(--color-neutral-3);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-full);
+  background: var(--chip-bg);
+}
+
+.chipOk {
+  color: var(--status-success);
+}
+
+.chipBad {
+  color: var(--status-error);
+}
+
+.chipDark {
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+
+.gain {
+  color: var(--pnl-gain);
+}
+
+.loss {
+  color: var(--pnl-loss);
+}
+
+.warnDot {
+  color: var(--status-warning);
+}
+
+.dot {
+  margin-right: var(--space-8);
+}
+
+.kv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+}
+
+.grid4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row,
+.planRow,
+.histRow {
+  display: grid;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.row {
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+}
+
+.planRow {
+  grid-template-columns: 1fr 1fr;
+}
+
+.histRow {
+  grid-template-columns: 1fr 1fr;
+}
+
+.side {
+  display: inline-flex;
+  padding: 0 var(--space-8);
+  border: 1px solid currentcolor;
+  border-radius: var(--radius-full);
+}
+
+.buy {
+  color: var(--pnl-gain);
+}
+
+.sell {
+  color: var(--pnl-loss);
+}
+
+.filter {
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--bg-default);
+  cursor: pointer;
+}
+
+.filterOn {
+  border-color: var(--accent-default);
+  background: var(--accent-default);
+  color: var(--text-inverse);
+}
+
+.todo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.todoHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (min-width: 900px) {
+  .grid4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .planRow {
+    grid-template-columns: 3fr 1fr 1fr 1fr 1fr 1fr;
+  }
+
+  .histRow {
+    grid-template-columns: 1fr 2fr 1fr 1fr 1fr 1fr 3fr;
+  }
+}
