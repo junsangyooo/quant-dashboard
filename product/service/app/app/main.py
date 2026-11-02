@@ -5,8 +5,8 @@ uvicorn --factory app.main:create_app
 환경 값(모두 선택):
 - MVP_DATA_DIR: 데이터 폴더(기본 mvp/data)
 - MVP_PORT: 포트(기본 8765, Host 검사에 쓴다)
-- MVP_TOSS_OFFLINE=1: 토스에 나가지 않는다(연결 확인은 '응답 없음'으로 끝난다).
-  공인 IP 보기도 바깥에 나가지 않는다.
+- QUANT_LIVE_TRANSPORT=1: 실제 전송을 켜는 두 열쇠 가운데 하나. 설치기 설정 파일도 있어야
+  열린다(transport.py). 없으면 토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 모두 가짜다.
 
 화면은 web/dist(npm run build 결과)를 '/'에서 내준다.
 """
@@ -34,10 +34,11 @@ from . import strategy as st
 from .connect import Connections
 from .db import DB
 from .engine import BacktestError, run_backtest, universe_of, warmup_calendar_days
-from .market import INDEX, KST, BarSource, Market, MarketDataError, YahooSource, now_kst
+from .market import INDEX, KST, BarSource, Market, MarketDataError, now_kst
 from .paper import Paper
-from .publicip import IpFetch, PublicIpError, offline_fetch, public_ip, urllib_fetch
-from .toss import Transport, offline_transport, urllib_transport
+from .publicip import IpFetch, PublicIpError, public_ip
+from .toss import Transport
+from .transport import OfflineBars, Transports, build_transports
 from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -78,6 +79,7 @@ def create_app(
     bars_source: BarSource | None = None,
     toss_transport: Callable[[], Transport] | None = None,
     ip_fetch: IpFetch | None = None,
+    transports: Transports | None = None,
     scrypt_n: int | None = None,
     scheduler: bool = True,
     port: int | None = None,
@@ -87,14 +89,16 @@ def create_app(
     port = port or int(os.environ.get("MVP_PORT") or 8765)
     db = DB(data / "app.db")
     vault = Vault(db, scrypt_n=scrypt_n or SCRYPT_N)
+    # 전송은 기본 가짜(T-00). 실제 전송은 transport.build_transports의 두 열쇠가 다 있을 때만.
+    if transports is None:
+        transports = build_transports(cache_dir=str(data / "bars-cache"))
     if toss_transport is None:
-        offline = os.environ.get("MVP_TOSS_OFFLINE") == "1"
-        toss_transport = (lambda: offline_transport) if offline else (lambda: urllib_transport)
+        toss_transport = transports.toss_factory()
     if ip_fetch is None:
-        ip_fetch = offline_fetch if os.environ.get("MVP_TOSS_OFFLINE") == "1" else urllib_fetch
+        ip_fetch = transports.ip_fetch
     dist = Path(os.environ.get("MVP_WEB_DIST") or DIST)
     conns = Connections(db, vault, toss_transport)
-    market = Market(db, bars_source or YahooSource(cache_dir=str(data / "yfinance-cache")))
+    market = Market(db, bars_source or transports.bars or OfflineBars())
     paper = Paper(db, market, conns, now=now)
 
     allowed_hosts = {
@@ -117,6 +121,7 @@ def create_app(
 
     app = FastAPI(title="quant-mvp", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.db = db
+    app.state.transports = transports
     app.state.vault = vault
     app.state.connections = conns
     app.state.market = market

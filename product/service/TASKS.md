@@ -19,9 +19,9 @@
 
 ## 0. 준비 (안전 먼저)
 
-- [ ] **T-00 기본 가짜 전송 · 안전 시험** — 토스 · DART · 텔레그램 전송 객체를 **기본 가짜**로 바꾸고, 실제 전송은 `QUANT_LIVE_TRANSPORT=1` **과** 설치기가 쓰는 설정 파일(실제 전송 켬)이 둘 다 있을 때만 열리게 해요. `tests/test_no_orders.py`를 '주문은 가짜 전송에서만'으로 바꿔요.
+- [x] **T-00 기본 가짜 전송 · 안전 시험** — 토스 · DART · 텔레그램 전송 객체를 **기본 가짜**로 바꾸고, 실제 전송은 `QUANT_LIVE_TRANSPORT=1` **과** 설치기가 쓰는 설정 파일(실제 전송 켬)이 둘 다 있을 때만 열리게 해요. `tests/test_no_orders.py`를 '주문은 가짜 전송에서만'으로 바꿔요.
   - 다 됐다: ① 아무 설정 없이 켠 앱 · 시험에서 실제 전송 객체가 만들어지지 않는 시험 ② 환경 변수만 · 설정 파일만 있을 때도 가짜인 시험 ③ 시험 전체에서 바깥 소켓 0개 시험 ④ 일부러 실제 전송을 부르는 코드를 넣으면 시험이 실패하는 것을 한 번 보임.
-  - 결과:
+  - 결과: 실제 전송은 `app/transport.py`의 `build_transports`에서만 두 열쇠(`QUANT_LIVE_TRANSPORT=1` + `/etc/quant-service/live-transport.json` 또는 `~/.config/quant-service/live-transport.json`의 `{"live_transport": true}`)가 다 있을 때 만들고, 그 밖은 가짜(`FakeTransport` · `FakeFetch` · `OfflineBars`). `tests/test_no_orders.py`로 ① 설정 없이 켠 앱의 토스 · DART · 텔레그램 · 공인 IP · 시세가 모두 가짜 · 기본 전송으로 보낸 주문 요청은 가짜에만 적힘 ② 환경 변수만 · 파일만 · 값 틀림 · 깨진 파일 8가지 모두 가짜 ③ `conftest.py`가 시험 전체의 바깥 connect · getaddrinfo 시도를 세어 0이 아니면 시험 전체 실패 ④ `app/paper.py`에 `urllib.request.urlopen(.../orders)`를 일부러 넣고 돌려 `test_real_transport_only_in_gate` 등 2건 실패를 확인한 뒤 되돌림(같은 확인을 시험 2개로 남김: 소스 검사 · 심은 시험 파일을 pytest로 돌려 실패). pytest 404 passed · npm typecheck · lint · test 215 passed(Node 22로 실행). 가정: 기본 가짜 토스는 '응답 없음'으로 끝나요(꼴 있는 가짜 응답은 T-10) · 야후 시세 출처는 T-11 전까지 실제 전송일 때만 만들어요.
 - [ ] **T-01 금지어 시험 늘리기** — `tests/test_copytext.py` · `web/tests/words.test.ts`에 `GLOSSARY.md` 5절 금지어와 SPEC 8-1 없앨 문구를 넣어요. 빌드 결과(`web/dist`)도 검사.
   - 다 됐다: 목록 · 예외 꼴이 GLOSSARY와 같음. 지금 MVP 문구에서 걸리는 건수를 결과 줄에(0이 아니어도 돼요 · T-71에서 0).
   - 결과:

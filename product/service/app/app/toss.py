@@ -3,7 +3,7 @@
 출처: 이 레포의 autotrade/broker/toss_api.py (2026-10-29 기준)에서
 조회에 필요한 부분만 옮겨 고쳤다. 가져오기(import)는 하지 않는다.
 
-옮긴 것: 전송 주입(HttpRequest/HttpResponse/urllib_transport), 오류 읽기(error_of · link_state),
+옮긴 것: 전송 주입(HttpRequest/HttpResponse · 실제 전송은 transport.py의 문에서만), 오류 읽기(error_of · link_state),
 토큰 받기, 계좌 찾기, GET 요청 하나(call), 현재가(prices), 보유(holdings), 매수 가능 금액(buying_power).
 바꾼 것:
 - 토큰은 파일에 쓰지 않고 이 객체의 메모리에만 둔다(앱을 끄면 사라진다).
@@ -14,66 +14,20 @@
 
 from __future__ import annotations
 
-import http.client
 import json
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .transport import FakeTransport, HttpRequest, HttpResponse, Transport, TransportError
+
+__all__ = ["HttpRequest", "HttpResponse", "Transport", "TransportError"]
+
 BASE = "https://openapi.tossinvest.com"
-REQUEST_TIMEOUT_S = 20.0
 REFRESH_MARGIN_S = 600.0
-
-
-@dataclass(frozen=True)
-class HttpRequest:
-    method: str
-    url: str
-    headers: Mapping[str, str]
-    body: bytes | None = None
-
-
-@dataclass(frozen=True)
-class HttpResponse:
-    status: int
-    headers: Mapping[str, str]
-    body: bytes
-
-
-Transport = Callable[[HttpRequest], HttpResponse]
-
-
-class TransportError(Exception):
-    """응답 없음: 연결 실패나 시간 초과."""
-
-
-def urllib_transport(request: HttpRequest, timeout: float = REQUEST_TIMEOUT_S) -> HttpResponse:
-    req = urllib.request.Request(
-        request.url, data=request.body, headers=dict(request.headers), method=request.method
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            headers = {k.lower(): v for k, v in resp.headers.items()}
-            return HttpResponse(int(resp.status), headers, resp.read())
-    except urllib.error.HTTPError as exc:
-        headers = {k.lower(): v for k, v in (exc.headers or {}).items()}
-        try:
-            body = exc.read()
-        except (OSError, http.client.HTTPException):
-            body = b""
-        return HttpResponse(int(exc.code), headers, body)
-    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
-        raise TransportError(type(exc).__name__) from None
-
-
-def offline_transport(request: HttpRequest) -> HttpResponse:
-    """MVP_TOSS_OFFLINE=1일 때: 네트워크에 나가지 않고 '응답 없음'으로 끝난다."""
-    raise TransportError("offline")
 
 
 class TossError(Exception):
@@ -167,12 +121,12 @@ class TossClient:
         self,
         credentials: TossCredentials,
         *,
-        transport: Transport = urllib_transport,
+        transport: Transport | None = None,
         wall_clock: Callable[[], float] = time.time,
         base: str = BASE,
     ) -> None:
         self.credentials = credentials
-        self.transport = transport
+        self.transport: Transport = transport if transport is not None else FakeTransport("toss")
         self.wall_clock = wall_clock
         self.base = base
         self._token: str | None = None

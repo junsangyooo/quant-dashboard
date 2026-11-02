@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import urllib.parse
 from datetime import date, datetime, timedelta
@@ -17,18 +18,70 @@ from app.market import KST
 from app.toss import HttpRequest, HttpResponse, TransportError
 
 
+# ── 바깥 소켓 0개 (T-00 ③) ─────────────────────────────────────────────────
+# 시험 전체에서 바깥(유닉스 소켓 · 루프백이 아닌 곳)으로 이으려 한 시도를 모두 적어 두고,
+# 시험이 끝날 때 0이 아니면 실패로 끝내요(코드가 예외를 삼켜도 잡혀요).
+
+OUTBOUND_ATTEMPTS: list[str] = []
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+def _outbound(where: str, address: Any) -> None:
+    OUTBOUND_ATTEMPTS.append(f"{where}: {address!r}")
+    raise RuntimeError(f"network blocked in tests: {address!r}")
+
+
+def _is_local(address: Any) -> bool:
+    return isinstance(address, tuple) and bool(address) and str(address[0]) in _LOOPBACK
+
+
+_original_connect = socket.socket.connect
+_original_connect_ex = socket.socket.connect_ex
+_original_getaddrinfo = socket.getaddrinfo
+
+
+def _guard_connect(self: socket.socket, address: Any) -> Any:
+    if self.family == socket.AF_UNIX or _is_local(address):
+        return _original_connect(self, address)
+    return _outbound("connect", address)
+
+
+def _guard_connect_ex(self: socket.socket, address: Any) -> Any:
+    if self.family == socket.AF_UNIX or _is_local(address):
+        return _original_connect_ex(self, address)
+    return _outbound("connect_ex", address)
+
+
+def _guard_getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
+    if host is None or str(host) in _LOOPBACK:
+        return _original_getaddrinfo(host, *args, **kwargs)
+    return _outbound("getaddrinfo", host)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    socket.socket.connect = _guard_connect  # type: ignore[method-assign]
+    socket.socket.connect_ex = _guard_connect_ex  # type: ignore[method-assign]
+    socket.getaddrinfo = _guard_getaddrinfo  # type: ignore[assignment]
+    # 실제 전송의 두 열쇠가 개발 컴퓨터에 있어도 시험은 늘 가짜(T-00 ②)
+    os.environ.pop("QUANT_LIVE_TRANSPORT", None)
+    import app.transport as transport
+
+    transport.LIVE_CONFIG_PATHS = ()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    if OUTBOUND_ATTEMPTS:
+        print("\n바깥으로 나가려 한 시도:", *OUTBOUND_ATTEMPTS, sep="\n  ")
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """시험 안에서는 바깥 네트워크에 절대 나가지 않는다."""
-
-    def refuse(self: socket.socket, address: Any) -> None:
-        if self.family == socket.AF_UNIX:
-            return original(self, address)
-        raise RuntimeError(f"network blocked in tests: {address!r}")
-
-    original = socket.socket.connect
-    monkeypatch.setattr(socket.socket, "connect", refuse)
-    monkeypatch.setattr(socket, "create_connection", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("network blocked")))
+    """시험 안에서는 바깥 네트워크에 절대 나가지 않는다(위 감시에 더해 create_connection도 막아요)."""
+    monkeypatch.setattr(
+        socket, "create_connection", lambda address, *a, **k: _outbound("create_connection", address)
+    )
+    monkeypatch.delenv("QUANT_LIVE_TRANSPORT", raising=False)
 
 
 # ── 가짜 토스 ────────────────────────────────────────────────────────────────
