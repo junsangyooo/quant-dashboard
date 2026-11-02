@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS paper_judgements(
 # 이 앱이 산 수량 · 운용 현금 · 기업 행동 기록.
 SCHEMA_V2 = """
 -- 컴퓨터 키 파일로 감싼 데이터 키(T-50 · SPEC 10 vault). 키 파일 자체는 데이터 폴더 밖에 있어요.
+-- 실전 운용 엔진 상태(T-60 · live.py): 현금 · 보유 · 다음 시가 계획 · 막힌 종목 · 직접 관리 종목
+CREATE TABLE IF NOT EXISTS live_state(run_id INTEGER PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT);
 CREATE TABLE IF NOT EXISTS owner_keyfile(id INTEGER PRIMARY KEY CHECK (id = 1), wrap BLOB NOT NULL, at TEXT);
 CREATE TABLE IF NOT EXISTS stock_info(
   symbol TEXT PRIMARY KEY, name TEXT, market TEXT, security_type TEXT, common INTEGER,

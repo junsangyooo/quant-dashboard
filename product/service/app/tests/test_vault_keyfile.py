@@ -239,11 +239,26 @@ NOT_MONEY: dict[tuple[str, str], str] = {
     ("POST", "/api/telegram/find-chat"): "대화방 찾기(조회)",
     ("POST", "/api/telegram/test"): "시험 보내기",
     ("PUT", "/api/telegram/events"): "알림 스위치(끌 수 없는 것은 잠김)",
+    ("POST", "/api/live/pause"): "새 매수 멈춤(로그인만 · SPEC 7-4 · 멈추는 쪽만)",
 }
 # 앱 데이터 삭제 · 복원은 비밀번호(아래 시험이 따로 확인: 몸통이 백업 파일이어야 해서)
 GUARDED_ELSEWHERE: dict[tuple[str, str], str] = {
     ("POST", "/api/data/restore"): "restore",
     ("DELETE", "/api/data"): "data_delete",
+}
+# 실전 운용 · 할 일 해결(T-60 ~ T-63): 손잡이가 맨 먼저 비밀번호를 받아요(아래 시험)
+LIVE_ROUTES: dict[tuple[str, str], str] = {
+    ("POST", "/api/live/start"): "live_start",
+    ("PUT", "/api/live/amount"): "live_amount",
+    ("PUT", "/api/live/limits"): "live_limits",
+    ("PUT", "/api/live/strategy"): "live_strategy",
+    ("POST", "/api/live/resume"): "live_resume_buys",
+    ("POST", "/api/live/end"): "live_end",
+    ("POST", "/api/live/sell-all"): "live_sell_all_end",
+    ("POST", "/api/todos/{tid}/match"): "todo_match_account",
+    ("POST", "/api/todos/{tid}/corp"): "todo_corp_action",
+    ("POST", "/api/todos/{tid}/big-order"): "todo_big_order",
+    ("POST", "/api/todos/{tid}/unknown"): "unknown_order_record",
 }
 
 # 비밀번호(1회용 토큰)를 받는 길 → 일. 처음 키 넣기는 로그인만(바꾸기 · 삭제가 비밀번호 · SPEC 7-4).
@@ -259,12 +274,8 @@ MONEY_ROUTES: dict[tuple[str, str], str] = {
 
 # SPEC 7-4 목록 가운데 아직 길이 없는 일과 그 길을 만드는 항목(길이 생기면 MONEY_ROUTES로 옮겨요).
 NOT_BUILT: dict[str, str] = {
-    "live_start": "T-60", "live_amount": "T-63", "live_limits": "T-63", "live_strategy": "T-63",
-    "live_resume_buys": "T-62", "live_end": "T-63", "live_sell_all_end": "T-63",
-    "todo_match_account": "T-70", "todo_corp_action": "T-70", "todo_big_order": "T-70",
-    "toss_key_view": "T-55", "dart_key_view": "T-55",
-    "telegram_key_view": "T-55",
-    "unknown_order_record": "T-70",
+    # 키 '보기': 키 전체를 보여 주는 길이 아예 없어요(화면은 끝 4자리만) → 길 0
+    "toss_key_view": "없음", "dart_key_view": "없음", "telegram_key_view": "없음",
 }
 
 
@@ -283,11 +294,12 @@ def _routes(routes: list[Any]) -> list[tuple[str, str]]:
 def test_every_changing_route_is_classified(tmp_path: Path) -> None:
     app = create_app(tmp_path / "data", scheduler=False, keyfile=False)
     found = set(_routes(app.routes))
-    unknown = found - set(NOT_MONEY) - set(MONEY_ROUTES) - set(GUARDED_ELSEWHERE)
+    unknown = found - set(NOT_MONEY) - set(MONEY_ROUTES) - set(GUARDED_ELSEWHERE) - set(LIVE_ROUTES)
     assert not unknown, f"분류 안 된 바꾸는 길: {sorted(unknown)}"
     assert set(MONEY_ROUTES) <= found
     # SPEC 7-4 목록 전부가 길(비밀번호) 또는 아직 없음으로 적혀 있어요
-    assert set(MONEY_ROUTES.values()) | set(GUARDED_ELSEWHERE.values()) | set(NOT_BUILT) == set(MONEY_ACTIONS)
+    assert (set(MONEY_ROUTES.values()) | set(GUARDED_ELSEWHERE.values()) | set(LIVE_ROUTES.values())
+            | set(NOT_BUILT)) == set(MONEY_ACTIONS)
 
 
 @pytest.mark.parametrize(("method", "path"), list(MONEY_ROUTES))
@@ -333,3 +345,12 @@ def test_data_routes_need_password(tmp_path: Path) -> None:
     r = c.delete("/api/data")
     assert r.status_code == 403 and r.json()["action"] == "data_delete"
     assert c.get("/api/state").json()["setup"] is True
+
+
+@pytest.mark.parametrize(("method", "path"), list(LIVE_ROUTES))
+def test_live_routes_need_password(tmp_path: Path, method: str, path: str) -> None:
+    c = boot(tmp_path / "data", toss_server())
+    setup_owner(c)
+    r = c.request(method, path.replace("{tid}", "1"), json={"version_id": 1, "amount": 1})
+    assert r.status_code == 403 and r.json()["need_confirm"] is True
+    assert r.json()["action"] == LIVE_ROUTES[(method, path)]

@@ -271,7 +271,7 @@ def test_scheduler_retries_failed_job(tmp_path: Path) -> None:
 
 def test_app_scheduler_has_paper_check(tmp_path: Path) -> None:
     app = make(tmp_path)
-    assert [j.name for j in app.state.scheduler.jobs] == ["paper_check"]
+    assert [j.name for j in app.state.scheduler.jobs] == ["paper_check", "live_check"]
 
 
 # ── 설치 위치 · Tailscale 상태(V2-05 · V2-06 · V2-56) ───────────────────────

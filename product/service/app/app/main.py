@@ -40,6 +40,8 @@ from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
 from . import datamgmt as dm
 from . import updates
+from .live import Live, LiveError
+from .live import tick as live_tick
 from .schedule import Scheduler
 from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
@@ -151,16 +153,21 @@ def create_app(
         allowed_origins.add(f"https://{name}")
 
     # 텔레그램(T-52): 전송은 기본 가짜. `/멈춤`은 새 매수 멈춤을 켜기만 해요(끄는 길은 앱 화면 · 비밀번호).
+    def latest_dps(sym: str) -> float | None:
+        row = db.one("SELECT dps FROM dart_div WHERE stock_code=? ORDER BY rcept_dt DESC LIMIT 1", (sym,))
+        return float(row["dps"]) if row and row["dps"] else None
+
+    # 실전 운용(T-60 ~ T-63): 전송은 conns.client(기본 가짜 · 두 열쇠 · T-00)
+    live = Live(db, market, conns.client, now=now, notify=lambda event, text: telegram.notify(event, text),
+                info=lambda: {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")}, dps=latest_dps)
+
     def pause_new_buys(source: str) -> bool:
-        if db.get_meta("live.new_buys_paused") == "1":
-            return False
-        db.set_meta("live.new_buys_paused", "1")
-        db.set_meta("live.new_buys_paused_by", source)
-        return True
+        return live.pause_new_buys(source)
 
     def tg_status() -> dict[str, Any]:
         todos = db.one("SELECT COUNT(*) AS n FROM todos WHERE status='open'")
-        label = "새 매수 멈춤" if db.get_meta("live.new_buys_paused") == "1" else "운용 전"
+        label = ("새 매수 멈춤" if db.get_meta("live.new_buys_paused") == "1"
+                 else "운용 중" if live.run() is not None else "운용 전")
         return {"label": label, "todos": int(todos["n"]) if todos else 0}
 
     telegram = Telegram(
@@ -191,6 +198,7 @@ def create_app(
     app.state.market = market
     app.state.paper = paper
     app.state.telegram = telegram
+    app.state.live = live
 
     # ── 바깥 문 ────────────────────────────────────────────────────────────
 
@@ -236,6 +244,10 @@ def create_app(
 
     @app.exception_handler(dm.DataError)
     async def on_data(_: Request, exc: dm.DataError) -> JSONResponse:
+        return _err(exc.message, exc.status)
+
+    @app.exception_handler(LiveError)
+    async def on_live(_: Request, exc: LiveError) -> JSONResponse:
         return _err(exc.message, exc.status)
 
     @app.exception_handler(TelegramError)
@@ -408,6 +420,7 @@ def create_app(
         if conns.view()["toss"]["saved"]:
             need_confirm(request, "toss_key_change")  # 처음 넣기는 로그인만, 바꾸기는 비밀번호
         b = await _body(request)
+        live.check_account_change(str(b.get("account_no") or "") or None)  # 운용 중 계좌번호 변경 거절(R-L10)
         conns.save_toss(
             str(b.get("client_id") or ""),
             str(b.get("client_secret") or ""),
@@ -468,6 +481,106 @@ def create_app(
             need_confirm(request, "install_place")  # 처음 고르기는 로그인만, 변경은 비밀번호(SPEC 7-4)
         db.set_meta("access.place", place)
         return access_view()
+
+    # ── 실전 운용(T-60 ~ T-63 · SPEC 7-2 · 7-4) ────────────────────────────
+
+    def _rid() -> int:
+        r = live.run()
+        if r is None:
+            raise LiveError("실전 운용 중이 아니에요", 409)
+        return int(r["id"])
+
+    @app.get("/api/live")
+    def live_view() -> dict[str, Any]:
+        return live.view()
+
+    @app.post("/api/live/start")
+    async def live_start(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_start")
+        b = await _body(request)
+        try:
+            vid, amount = int(b.get("version_id")), float(b.get("amount"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise LiveError("버전과 운용 금액을 정해 주세요") from None
+        await asyncio.to_thread(live.start, vid, amount)
+        return live.view()
+
+    @app.post("/api/live/pause")
+    def live_pause() -> dict[str, Any]:
+        live.pause_new_buys("app")  # 로그인만(SPEC 7-4)
+        return live.view()
+
+    @app.post("/api/live/resume")
+    def live_resume(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_resume_buys")
+        live.resume_new_buys()
+        return live.view()
+
+    @app.post("/api/live/end")
+    def live_end(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_end")
+        live.end(_rid())
+        return live.view()
+
+    @app.post("/api/live/sell-all")
+    def live_sell_all(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_sell_all_end")
+        return {"orders": live.sell_all_and_end(_rid()), **live.view()}
+
+    @app.put("/api/live/amount")
+    async def live_amount(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_amount")
+        b = await _body(request)
+        live.set_amount(_rid(), float(b.get("amount") or 0))
+        return live.view()
+
+    @app.put("/api/live/limits")
+    async def live_limits(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_limits")
+        b = await _body(request)
+        live.set_limits(_rid(), b)
+        return live.view()
+
+    @app.put("/api/live/strategy")
+    async def live_strategy(request: Request) -> dict[str, Any]:
+        need_confirm(request, "live_strategy")
+        b = await _body(request)
+        from_d = live.change_strategy(_rid(), int(b.get("version_id") or 0))
+        return {"from": from_d, **live.view()}
+
+    @app.post("/api/todos/{tid}/unknown")
+    async def todo_unknown(tid: int, request: Request) -> dict[str, Any]:
+        need_confirm(request, "unknown_order_record")
+        b = await _body(request)
+        t = db.one("SELECT data FROM todos WHERE id=? AND kind='unknown'", (tid,))
+        if t is None:
+            raise LiveError("그 할 일이 없어요", 404)
+        live.resolve_unknown(_rid(), int(json.loads(t["data"])["order"]), filled_qty=int(b.get("filled_qty") or 0),
+                             price=float(b.get("price") or 0))
+        return live.view()
+
+    @app.post("/api/todos/{tid}/corp")
+    def todo_corp(tid: int, request: Request) -> dict[str, Any]:
+        need_confirm(request, "todo_corp_action")
+        t = db.one("SELECT symbol FROM todos WHERE id=? AND kind='corp'", (tid,))
+        if t is None:
+            raise LiveError("그 할 일이 없어요", 404)
+        live.apply_corp(_rid(), t["symbol"])
+        return live.view()
+
+    @app.post("/api/todos/{tid}/match")
+    def todo_match(tid: int, request: Request) -> dict[str, Any]:
+        need_confirm(request, "todo_match_account")
+        t = db.one("SELECT symbol FROM todos WHERE id=? AND kind='mismatch'", (tid,))
+        if t is None:
+            raise LiveError("그 할 일이 없어요", 404)
+        live.match_account(_rid(), t["symbol"])
+        return live.view()
+
+    @app.post("/api/todos/{tid}/big-order")
+    def todo_big(tid: int, request: Request) -> dict[str, Any]:
+        need_confirm(request, "todo_big_order")
+        return {"order": live.send_big(_rid(), tid), **live.view()}
 
     # ── 설정 › 데이터(V2-53 · T-53) ───────────────────────────────────────
 
@@ -1048,6 +1161,13 @@ def create_app(
     # 스케줄러(T-51): 거래일 · 장 시작은 토스 market-calendar로. 실전 일(08:30 점검 · 08:35 주문)은 T-6x에서 더해요.
     sched = Scheduler(db, market.calendar, now)
     sched.add("paper_check", 20, 10, paper2.tick)  # 모의투자 v2: 거래일 20:10 확인(T-40)
+
+    def live_check() -> None:
+        r = live.run()
+        if r is not None:
+            live.check(int(r["id"]))  # 실패하면 스케줄러가 10분 뒤 다시(R-L4)
+
+    sched.add("live_check", 20, 10, live_check)
     app.state.scheduler = sched
 
     async def _auto_loop() -> None:
@@ -1062,6 +1182,7 @@ def create_app(
                     await asyncio.to_thread(paper2.tick)
                     updates.announce(data, db, lambda text: telegram.notify("info", text))
                 await asyncio.to_thread(sched.run_due)
+                await asyncio.to_thread(live_tick, live)  # 08:30 점검 · 08:35 주문 · 장중 감시(R-O1)
                 await asyncio.to_thread(telegram.poll)  # `/상태` · `/멈춤`(등록 대화방만)
             except Exception as exc:  # 루프는 멈추지 않는다
                 log.error("auto tick failed: %s", type(exc).__name__)
