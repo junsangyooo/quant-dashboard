@@ -7,12 +7,13 @@ import { RecoverScreen } from './screens/Auth/RecoverScreen';
 import { HomeScreen } from './screens/Home/HomeScreen';
 import { PlanScreen } from './screens/Plan/PlanScreen';
 import { HistoryScreen } from './screens/History/HistoryScreen';
-import { StrategiesScreen } from './screens/Strategies/StrategiesScreen';
-import { StrategyScreen } from './screens/Strategies/StrategyScreen';
 import { BlockEditorScreen } from './screens/BlockEditor/BlockEditorScreen';
 import { BacktestScreen } from './screens/Backtest/BacktestScreen';
-import { ImportScreen } from './screens/Strategies/ImportScreen';
-import { ExampleScreen } from './screens/Strategies/ExampleScreen';
+import {
+  PasteScreen,
+  StrategiesListScreen,
+  StrategyDetailScreen,
+} from './screens/StrategiesV2/StrategiesV2';
 import { SettingsScreen } from './screens/Settings/SettingsScreen';
 import { ConnectScreen } from './screens/Settings/ConnectScreen';
 import { PasswordScreen } from './screens/Settings/PasswordScreen';
@@ -49,12 +50,12 @@ export const routes: RouteObject[] = [
       },
       {
         path: 'strategies',
-        element: <StrategiesScreen />,
+        element: <StrategiesListScreen />,
         handle: handle({ page: 'strategies', kind: 'tab', tab: 'strategies' }),
       },
       {
         path: 'strategies/import',
-        element: <ImportScreen />,
+        element: <PasteScreen />,
         handle: handle({ page: 'import', kind: 'sub', tab: 'strategies' }),
       },
       {
@@ -63,18 +64,8 @@ export const routes: RouteObject[] = [
         handle: handle({ page: 'editor', kind: 'tab', tab: 'strategies' }),
       },
       {
-        path: 'examples/:eid',
-        element: <ExampleScreen />,
-        handle: handle({ page: 'example', kind: 'sub', tab: 'strategies' }),
-      },
-      {
-        path: 'examples/:eid/backtest',
-        element: <BacktestScreen />,
-        handle: handle({ page: 'backtest', kind: 'sub', tab: 'strategies' }),
-      },
-      {
         path: 'strategies/:id',
-        element: <StrategyScreen />,
+        element: <StrategyDetailScreen />,
         handle: handle({ page: 'strategy', kind: 'sub', tab: 'strategies' }),
       },
       {

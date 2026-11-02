@@ -66,3 +66,54 @@ def test_old_body_reads_as_v3(app_client) -> None:  # type: ignore[no-untyped-de
     got = app_client.get(f"/api/v2/strategies/{sid}").json()
     assert [b["stage"] for b in got["body"]["graph"]["blocks"]][:2] == ["universe", "select"]
     assert got["body"]["converted"] == "v1"
+
+
+EXAMPLE = (__import__("pathlib").Path(__file__).resolve().parents[2] / "examples" / "copy-v3-example.txt")
+
+
+def test_list_detail_and_versions(app_client) -> None:  # type: ignore[no-untyped-def]
+    setup_owner(app_client)
+    sid = app_client.post("/api/v2/strategies", json={"body": _body()}).json()["id"]
+    app_client.post(f"/api/v2/strategies/{sid}/versions", json={"body": _body()})
+    lst = app_client.get("/api/v2/strategies").json()["strategies"]
+    assert [(s["name"], s["mode_name"], s["problems"], s["version"]["no"]) for s in lst] == [
+        ("대형주 돌파", "조건 충족 시 매매", 0, 2)]
+    d = app_client.get(f"/api/v2/strategies/{sid}").json()
+    assert [v["no"] for v in d["versions"]] == [2, 1] and d["versions"][0]["backtested"] is False
+    assert d["block_lines"]["x"] == ["손절 −7% · 장중 감시", "최대 보유 20거래일 · 종가 확인"]
+    assert d["block_lines"]["b"] == ["다음 날 시가 매수", "판 뒤 다시 사지 않는 기간 1거래일"]
+    assert d["deletable"] is True
+
+
+def test_paste_preview_and_accept(app_client) -> None:  # type: ignore[no-untyped-def]
+    setup_owner(app_client)
+    text = EXAMPLE.read_text(encoding="utf-8")
+    p = app_client.post("/api/v2/import/preview", json={"text": text}).json()
+    assert (p["name"], p["stages"], p["entry"], p["sell"], p["rows"]) == ("대형주 돌파", 7, 1, 1, 9)
+    assert p["blank_kinds"] == ["숫자", "기간"] and p["notes"] == [
+        "실험실 결과는 이 앱의 백테스트와 다를 수 있어요 · 숫자는 직접 정해요"]
+    cards = {c["stage"]: c["lines"] for c in p["cards"]}
+    assert cards["signal"] == ["n일 최고가 상향 돌파"] or cards["signal"][0].startswith("n일 최고가")
+    assert cards["buy"] == ["다음 날 시가 매수", "판 뒤 다시 사지 않는 기간 1거래일"]
+    assert p["others"] == ["universe", "select", "weight"]
+    r = app_client.post("/api/v2/import/accept", json={"text": text}).json()
+    got = app_client.get(f"/api/v2/strategies/{r['id']}").json()
+    assert got["name"] == "대형주 돌파" and got["version"]["no"] == 1
+    # 같은 글 다시 → 이름 뒤에 (2)
+    assert app_client.post("/api/v2/import/accept", json={"text": text}).json()["name"] == "대형주 돌파 (2)"
+    bad = app_client.post("/api/v2/import/preview", json={"text": "그냥 글"})
+    assert bad.status_code == 400 and bad.json()["error"] == "복사한 전략 글이 아니에요"
+    newer = app_client.post("/api/v2/import/preview", json={"text": text.replace("app>=1.0", "app>=2.0", 1)})
+    assert newer.json()["error"] == "앱을 새 버전으로 바꿔야 가져올 수 있어요"
+
+
+def test_file_export_import_and_delete(app_client) -> None:  # type: ignore[no-untyped-def]
+    setup_owner(app_client)
+    sid = app_client.post("/api/v2/strategies", json={"body": _body()}).json()["id"]
+    f = app_client.get(f"/api/v2/strategies/{sid}/file").json()
+    assert f["name"] == "대형주 돌파.json" and '"value": 50' in f["text"]
+    r = app_client.post("/api/v2/import/file", json={"text": f["text"]}).json()
+    again = app_client.get(f"/api/v2/strategies/{r['id']}").json()
+    assert again["body"]["graph"] == app_client.get(f"/api/v2/strategies/{sid}").json()["body"]["graph"]
+    assert app_client.delete(f"/api/v2/strategies/{r['id']}").json() == {"ok": True}
+    assert app_client.get(f"/api/v2/strategies/{r['id']}").status_code == 404

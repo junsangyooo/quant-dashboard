@@ -289,7 +289,7 @@ def test_R_M6_single_row_equals_v1_value() -> None:
     eng.judge_rows.rebalance = True
     ok, strength, reasons, _ = eng._entry("111111", days(2)[-1], {})
     assert ok and strength == pytest.approx(10300 / 10000 - 1)
-    assert reasons == ["② 2일 이동평균선 상향 돌파"]
+    assert reasons == ["② 이동평균선(2일) 상향 돌파"]
 
 
 def test_R_M7_no_value_sorts_last() -> None:

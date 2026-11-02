@@ -187,3 +187,71 @@ export function useSaveStrategy() {
     },
   });
 }
+
+// ── 목록 · 상세 · 가져오기(T-31) ─────────────────────────────────────────────
+
+export interface VersionView {
+  id: number;
+  no: number;
+  problems: number;
+  created_at: string;
+  saved_day: string;
+  saved_hm: string;
+  backtested: boolean;
+  backtested_hm: string;
+}
+
+export interface StrategyCard {
+  id: number;
+  name: string;
+  mode_name: string;
+  problems: number;
+  version: VersionView;
+  running: { kind: string; version_no: number } | null;
+}
+
+export interface StrategyDetail extends Omit<StrategyV2, 'version' | 'versions'> {
+  version: VersionView;
+  versions: VersionView[];
+  deletable: boolean;
+  block_lines: Record<string, string[]>;
+}
+
+export interface ImportPreview {
+  body: Body;
+  notes: string[];
+  name: string;
+  stages: number;
+  entry: number;
+  sell: number;
+  rows: number;
+  blanks: number;
+  blank_kinds: string[];
+  cards: { id: string; stage: StageId; match: Match; lines: string[] }[];
+  others: StageId[];
+}
+
+export const useStrategyList = () =>
+  useQuery({
+    queryKey: ['strategies', 'v2'],
+    queryFn: () => api.get<{ strategies: StrategyCard[] }>('/api/v2/strategies'),
+  });
+
+export const useStrategyDetail = (id: number) =>
+  useQuery({
+    queryKey: v2keys.strategy(id),
+    queryFn: () => api.get<StrategyDetail>(`/api/v2/strategies/${String(id)}`),
+  });
+
+export const previewImport = (text: string) =>
+  api.post<ImportPreview>('/api/v2/import/preview', { text });
+export const acceptImport = (text: string) =>
+  api.post<{ id: number; name: string }>('/api/v2/import/accept', { text });
+export const importFile = (text: string) =>
+  api.post<{ id: number; name: string }>('/api/v2/import/file', { text });
+export const exportFile = (id: number) =>
+  api.get<{ name: string; text: string }>(`/api/v2/strategies/${String(id)}/file`);
+export const copyText = (id: number) =>
+  api.get<{ text: string }>(`/api/v2/strategies/${String(id)}/copytext`);
+export const deleteStrategy = (id: number) =>
+  api.delete<{ ok: boolean }>(`/api/v2/strategies/${String(id)}`);

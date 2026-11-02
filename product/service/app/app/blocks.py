@@ -158,14 +158,40 @@ def row_text(row: dict[str, Any]) -> str:
     if item.id == "manual_list":
         return f"{name} {len(v)}종목" if v else f"{name} [빈칸]"
     if item.id in ("ma", "ema"):
-        return f"{_with_unit(n, '일')} {name} {OP_NAME[op]}"
+        return f"{name}({_with_unit(n, '일')}) {OP_NAME[op]}"
     if op in NO_VALUE_OPS:
         return f"{name} {OP_NAME[op]}"
     if op == "between":
         return f"{name} {_with_unit(v, _unit(item, op))} ~ {_with_unit(row.get('value2'), _unit(item, op))}"
+    if item.id == "top_n":
+        p = row.get("params") or {}
+        by = p.get("by") or "strength"
+        by_name = "신호 강도" if by == "strength" else short_name(CATALOG[by])
+        order = "높은 순" if p.get("order", "desc") == "desc" else "낮은 순"
+        return f"{by_name} {order} 상위 {_with_unit(v, '종목')}"
+    if item.id == "next_open":
+        return "다음 날 시가 매수"
     if op == "fixed":
         return name if v is None and item.value is None else f"{name} {_with_unit(v, _unit(item, op))}"
     return f"{name} {_with_unit(v, _unit(item, op))} {OP_NAME[op]}"
+
+
+def block_lines(graph: dict[str, Any], block: dict[str, Any]) -> list[str]:
+    """화면 카드 줄(그림 V2-22 · V2-24 · V2-25): '손절 −7% · 장중 감시' · 'PER 15배 이하 · 주식 수 근사'."""
+    out: list[str] = []
+    for i, row in enumerate(block["rows"]):
+        item = CATALOG[row["item"]]
+        text = row_text(row)
+        ex = exec_of(graph, block["id"], i) if row.get("exec") else None
+        if ex:
+            text += f" · {EXEC_NAME[ex]}"
+        tails = [c.split(" · ")[0] for c in item.chips if c != "어제까지"]
+        if tails:
+            text += " · " + " · ".join(tails)
+        out.append(text)
+        if item.id == "next_open":
+            out.append(f"판 뒤 다시 사지 않는 기간 {_with_unit(row.get('value'), '거래일')}")
+    return out
 
 
 # ── 모양 · 만들기 ────────────────────────────────────────────────────────────

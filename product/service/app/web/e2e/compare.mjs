@@ -15,6 +15,49 @@ const FRAMES = resolve(import.meta.dirname, '../../../design/frames');
 const PASSWORD = 'correct horse 9';
 
 function blocks(opts = {}) {
+  STATES.strategies = [
+    {
+      name: 'V2-20 전략 있음',
+      frame: 'V2-20__전략_있음__1440__314-100364.png',
+      path: '/strategies',
+      go: async () => undefined,
+    },
+    {
+      name: 'V2-21 새 전략 시트',
+      frame: 'V2-21__기본__1440__328-135486.png',
+      path: '/strategies',
+      go: async (p) => p.getByRole('button', { name: '새 전략' }).click(),
+    },
+    {
+      name: 'V2-22 확인',
+      frame: 'V2-22__확인__1440__327-132753.png',
+      path: '/strategies/import',
+      go: async (p) => {
+        const text = readFileSync(
+          resolve(import.meta.dirname, '../../../examples/copy-v3-example.txt'),
+          'utf8',
+        );
+        await p.getByRole('textbox').fill(text);
+        await p.waitForTimeout(500);
+      },
+    },
+    {
+      name: 'V2-22 형식 아님',
+      frame: 'V2-22__형식_아님__1440__345-258976.png',
+      path: '/strategies/import',
+      go: async (p) => {
+        await p.getByRole('textbox').fill('quant-strategy/3 app>=1.0 아무 글');
+        await p.waitForTimeout(500);
+      },
+    },
+    {
+      name: 'V2-25 운용 전',
+      frame: 'V2-25__운용_전__1440__327-132945.png',
+      path: '/strategies/ID',
+      go: async () => undefined,
+    },
+  ];
+
   const row = (item, op, value, extra = {}) => ({
     item,
     op,
@@ -188,6 +231,49 @@ const STATES = {
   ],
 };
 
+STATES.strategies = [
+  {
+    name: 'V2-20 전략 있음',
+    frame: 'V2-20__전략_있음__1440__314-100364.png',
+    path: '/strategies',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-21 새 전략 시트',
+    frame: 'V2-21__기본__1440__328-135486.png',
+    path: '/strategies',
+    go: async (p) => p.getByRole('button', { name: '새 전략' }).click(),
+  },
+  {
+    name: 'V2-22 확인',
+    frame: 'V2-22__확인__1440__327-132753.png',
+    path: '/strategies/import',
+    go: async (p) => {
+      const text = readFileSync(
+        resolve(import.meta.dirname, '../../../examples/copy-v3-example.txt'),
+        'utf8',
+      );
+      await p.getByRole('textbox').fill(text);
+      await p.waitForTimeout(500);
+    },
+  },
+  {
+    name: 'V2-22 형식 아님',
+    frame: 'V2-22__형식_아님__1440__345-258976.png',
+    path: '/strategies/import',
+    go: async (p) => {
+      await p.getByRole('textbox').fill('quant-strategy/3 app>=1.0 아무 글');
+      await p.waitForTimeout(500);
+    },
+  },
+  {
+    name: 'V2-25 운용 전',
+    frame: 'V2-25__운용_전__1440__327-132945.png',
+    path: '/strategies/ID',
+    go: async () => undefined,
+  },
+];
+
 const row = (item, op, value, extra = {}) => ({
   item,
   op,
@@ -214,8 +300,8 @@ for (const [k, st] of STATES[screen].entries()) {
       data: { body: st.body(row) },
     });
   const page = await ctx.newPage();
-  await page.goto(`${base}${st.path ?? `/strategies/${id}/edit`}`);
-  await page.waitForSelector('[data-block]');
+  await page.goto(`${base}${(st.path ?? `/strategies/${id}/edit`).replace('ID', String(id))}`);
+  await page.waitForSelector(screen === 'editor' ? '[data-block]' : 'main h1');
   await page.waitForTimeout(400);
   await st.go(page);
   await page.waitForTimeout(400);
@@ -228,7 +314,7 @@ for (const [k, st] of STATES[screen].entries()) {
     browser,
     shot,
     st.frame,
-    join(outDir, `V2-23__${slug}__1440__compare.jpg`),
+    join(outDir, `${screen === 'editor' ? 'V2-23__' : ''}${slug}__1440__compare.jpg`),
     1440 / 2,
   );
   report.push({ name: st.name, frame: st.frame });
@@ -236,7 +322,7 @@ for (const [k, st] of STATES[screen].entries()) {
   // 다음 상태는 새 데이터 폴더가 필요해요: 서버를 상태마다 새로 켜는 대신 이름이 겹치지 않게 그냥 이어서 만들어요
 }
 // 390: 좁은 창(보기만)
-if (only === 'all' || only === 'narrow') {
+if (screen === 'editor' && (only === 'all' || only === 'narrow')) {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,

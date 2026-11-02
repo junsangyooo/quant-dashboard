@@ -2,7 +2,7 @@
 import clsx from 'clsx';
 import { useNavigate } from 'react-router';
 import { Flag } from 'lucide-react';
-import { useExamples, useHome, type HomeResponse } from '../../api/mvp';
+import { useHome, type HomeResponse } from '../../api/mvp';
 import { Button, LinkButton } from '../../components/Buttons';
 import { Card } from '../../components/Card';
 import { InfoChip } from '../../components/Chips';
@@ -25,7 +25,6 @@ import { useDocumentTitle } from '../../shell/page';
 import { josa } from '../../graph/rules';
 import { AssetChart } from '../Paper/AssetChart';
 import { fillDay, PlanSummaryRows } from '../Paper/PlanRows';
-import { ExampleCards, StartSteps } from '../Start/StartParts';
 import { LoadError } from '../LoadError';
 import { Cell, CompositionCard, Contribution, HoldingsCard, RecentCard } from './HomeParts';
 import styles from './Home.module.css';
@@ -270,20 +269,13 @@ function EndedView({ h }: { h: Idle }) {
   );
 }
 
-function BeforeView({ h }: { h: Idle }) {
-  const examples = useExamples().data?.examples ?? [];
+function BeforeView() {
   return (
     <Page width="split">
       <div className={styles.before}>
         <div className={clsx('stack-tight', styles.beforeHead)}>
           <p className="t-caption c-muted">{t.label}</p>
           <h1 className={clsx(styles.display, styles.muted)}>{t.before}</h1>
-        </div>
-        <div className={styles.beforeSide}>
-          <StartSteps steps={h.steps} layout="column" />
-        </div>
-        <div className={styles.beforeMain}>
-          <ExampleCards examples={examples} columns={2} />
         </div>
         <div className={styles.emptyBand}>
           <span className="t-caption">{t.emptyChart}</span>
@@ -301,5 +293,5 @@ export function HomeScreen() {
   if (!h) return null;
   if (h.running) return <RunningView h={h} />;
   if (h.last_run) return <EndedView h={h} />;
-  return <BeforeView h={h} />;
+  return <BeforeView />;
 }

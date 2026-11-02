@@ -416,16 +416,6 @@ def create_app(
     def catalog() -> dict[str, Any]:
         return st.catalog()
 
-    @app.get("/api/examples")
-    def examples() -> dict[str, Any]:
-        return {"examples": [st.example_view(e["id"]) for e in st.EXAMPLES]}
-
-    @app.get("/api/examples/{eid}")
-    def example(eid: str) -> dict[str, Any]:
-        if eid not in st.EXAMPLE_BY_ID:
-            raise VaultError("그 예시가 없어요", 404)
-        return st.example_view(eid)
-
     @app.get("/api/strategies")
     def strategies() -> dict[str, Any]:
         out = []
@@ -769,6 +759,9 @@ def create_app(
     app.include_router(make_router(
         db, dart=lambda: bool(conns.view()["dart"]["saved"]), unique_name=lambda n: _unique_name(n)[0],
         now=_now, running=_running_v2,
+        used=lambda sid: db.one(
+            "SELECT r.id FROM paper_runs r JOIN versions v ON v.id=r.version_id WHERE v.strategy_id=? "
+            "UNION SELECT id FROM runs WHERE strategy_id=? LIMIT 1", (sid, sid)) is not None,
     ))
 
     @app.get("/{path:path}")

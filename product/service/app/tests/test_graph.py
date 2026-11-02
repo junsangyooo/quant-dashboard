@@ -219,29 +219,10 @@ def test_versions_via_api(app_client) -> None:  # type: ignore[no-untyped-def]
     assert lst["steps"]["strategies"] == 1
 
 
-def test_examples_read_only_and_backtest_not_saved(app_client, fake_bars) -> None:  # type: ignore[no-untyped-def]
-    from tests.conftest import make_bars, wave
-
-    for k, sym in enumerate(st.BIG10[2:]):
-        fake_bars.data[sym] = make_bars(wave(400, 50000 + 9000 * k, 4000, 25 + 3 * k, 0.0008))
+def test_no_bundled_examples(app_client) -> None:  # type: ignore[no-untyped-def]
+    """T-31 · SPEC 8-1 · DEC-NO-BUNDLED: 앱에 예시 전략이 없어요."""
     setup_owner(app_client)
-    ex = app_client.get("/api/examples").json()["examples"]
-    assert [e["name"] for e in ex] == ["대형주 돌파", "돌파 둘 중 하나", "대형주 동일 비중", "추세 상위 교체"]
-    assert [(e["summary"]["nodes"], e["summary"]["entry"], e["summary"]["sell"]) for e in ex] == [
-        (9, 1, 3), (9, 2, 2), (4, 1, 0), (7, 1, 1)]
-    assert [e["summary"]["mode_name"] for e in ex] == [
-        "조건 충족 시 매매", "조건 충족 시 매매", "목표 비중 리밸런싱", "순위 교체 리밸런싱"]
-    assert all(e["analysis"]["problems"] == [] for e in ex)
-    r = app_client.post("/api/backtest", json={"example": "either", "start": "2024-03-01", "end": "2025-05-30",
-                                               "cash": 10_000_000})
-    assert r.status_code == 200, r.text
-    res = r.json()
-    assert res["version"] is None and res["example"]["name"] == "돌파 둘 중 하나"
-    # 결과는 남지 않는다: 전략도 버전도 생기지 않고, 시작하기 '백테스트' 단계도 그대로
-    lst = app_client.get("/api/strategies").json()
-    assert lst["strategies"] == [] and lst["steps"]["backtested"] is False
-    assert app_client.post("/api/backtest", json={"example": "nope"}).status_code == 404
-
+    assert app_client.get("/api/examples").status_code == 404
 
 def test_particle_after_name_tail() -> None:
     from app.pieces import josa

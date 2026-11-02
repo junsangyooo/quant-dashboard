@@ -147,6 +147,9 @@ CREATE TABLE IF NOT EXISTS alerts(
   id INTEGER PRIMARY KEY, at TEXT NOT NULL, live INTEGER NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
   body TEXT, read INTEGER NOT NULL DEFAULT 0, telegram TEXT
 );
+CREATE TABLE IF NOT EXISTS backtest_runs(
+  id INTEGER PRIMARY KEY, version_id INTEGER NOT NULL, ran_at TEXT NOT NULL, start_d TEXT, end_d TEXT, cash REAL
+);
 CREATE TABLE IF NOT EXISTS corp_actions(
   id INTEGER PRIMARY KEY, run_id INTEGER, symbol TEXT NOT NULL, kind TEXT NOT NULL, ratio REAL,
   detected_at TEXT NOT NULL, applied_at TEXT, data TEXT
