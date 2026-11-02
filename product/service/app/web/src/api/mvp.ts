@@ -453,7 +453,7 @@ export type HomeResponse =
       plans: PlanDetail[];
       last: Judgement | null;
       first: FirstSchedule | null;
-      price_as_of: { kind: 'toss'; at: string } | { kind: 'yahoo'; d: string };
+      price_as_of: { kind: 'toss'; at: string } | { kind: 'close'; d: string };
       recent: RecentTrade[];
       trades_count: number;
       auto: AutoInfo;

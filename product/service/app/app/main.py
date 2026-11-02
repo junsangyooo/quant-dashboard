@@ -34,11 +34,11 @@ from . import strategy as st
 from .connect import Connections
 from .db import DB
 from .engine import BacktestError, run_backtest, universe_of, warmup_calendar_days
-from .market import INDEX, KST, BarSource, Market, MarketDataError, now_kst
+from .market import INDEX, KST, BarSource, Market, MarketDataError, TossSource, now_kst
 from .paper import Paper
 from .publicip import IpFetch, PublicIpError, public_ip
 from .toss import Transport
-from .transport import OfflineBars, Transports, build_transports
+from .transport import Transports, build_transports
 from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -91,14 +91,14 @@ def create_app(
     vault = Vault(db, scrypt_n=scrypt_n or SCRYPT_N)
     # 전송은 기본 가짜(T-00). 실제 전송은 transport.build_transports의 두 열쇠가 다 있을 때만.
     if transports is None:
-        transports = build_transports(cache_dir=str(data / "bars-cache"))
+        transports = build_transports()
     if toss_transport is None:
         toss_transport = transports.toss_factory()
     if ip_fetch is None:
         ip_fetch = transports.ip_fetch
     dist = Path(os.environ.get("MVP_WEB_DIST") or DIST)
     conns = Connections(db, vault, toss_transport)
-    market = Market(db, bars_source or transports.bars or OfflineBars())
+    market = Market(db, bars_source or TossSource(conns.client))
     paper = Paper(db, market, conns, now=now)
 
     allowed_hosts = {
@@ -277,7 +277,7 @@ def create_app(
     @app.post("/api/logout")
     def logout(request: Request) -> Response:
         # 잠그기 = 앱 전체 잠금: 모든 세션을 끝내고 데이터 키를 메모리에서 지운다.
-        # 자동 확인은 데이터 키 없이 계속 돈다(일봉은 야후에서 받는다).
+        # 자동 확인은 데이터 키가 풀려 있을 때 토스에서 일봉을 받는다.
         vault.lock_now()
         conns.drop()
         resp = JSONResponse({"ok": True})
@@ -676,7 +676,7 @@ def create_app(
             result["version"] = None
             result["example"] = {"id": example, "name": st.EXAMPLE_BY_ID[str(example)]["name"]}
         result["costs_rule"] = "수수료 0.015% · 매도 세금 0.18% 반영"
-        result["data_source"] = "야후 금융 일봉(수정주가 아님 · 배당 미반영 · 분할만 반영) · 상장폐지 종목 미포함"
+        result["data_source"] = "토스 일봉(수정주가)"
         result["ran_at"] = _now()
         result["bench_name"] = "코스피" if bench else None
         return result

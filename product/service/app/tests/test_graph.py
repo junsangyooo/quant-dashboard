@@ -223,7 +223,7 @@ def test_examples_read_only_and_backtest_not_saved(app_client, fake_bars) -> Non
     from tests.conftest import make_bars, wave
 
     for k, sym in enumerate(st.BIG10[2:]):
-        fake_bars.data[f"{sym}.KS"] = make_bars(wave(400, 50000 + 9000 * k, 4000, 25 + 3 * k, 0.0008))
+        fake_bars.data[sym] = make_bars(wave(400, 50000 + 9000 * k, 4000, 25 + 3 * k, 0.0008))
     setup_owner(app_client)
     ex = app_client.get("/api/examples").json()["examples"]
     assert [e["name"] for e in ex] == ["대형주 돌파", "돌파 둘 중 하나", "대형주 동일 비중", "추세 상위 교체"]

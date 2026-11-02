@@ -59,7 +59,7 @@ export const homeCopy = {
   priceToday: (price: string, pctText: string) => `${price} · 오늘 ${pctText}`,
   avgNote: '평균 단가는 매수 수수료를 포함한 값이에요',
   tossPrice: '토스 현재가 기준',
-  yahooPrice: '야후 금융 종가 기준',
+  closePrice: '마지막 종가 기준',
   emptyTitle: '보유 종목이 없어요',
   emptyFirst: (when: string) => `첫 확인 ${when} 뒤 신호가 나오면 다음 거래일 시가에 모의 체결돼요`,
   emptySoldSame: (n: number, reasonWithParticle: string, d: string) =>

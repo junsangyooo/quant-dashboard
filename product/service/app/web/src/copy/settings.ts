@@ -92,7 +92,7 @@ export const settingsCopy = {
     ownKey: '이 앱 전용 키를 따로 받아요 · 같은 키를 다른 프로그램과 같이 쓰면 그쪽 연결이 끊겨요',
     deleteTitle: 'API 키를 삭제할까요?',
     deleteBody:
-      '이 앱에 저장한 Client ID · Client Secret · 계좌번호를 삭제해요 · 보유 평가는 야후 금융 종가로 바뀌어요',
+      '이 앱에 저장한 Client ID · Client Secret · 계좌번호를 삭제해요 · 보유 평가는 마지막 종가로 바뀌어요',
     deleteNote: '토스 쪽 키는 토스증권 WTS에서 따로 삭제해요',
     locked: '잠금 · 비밀번호를 입력하면 다시 실행돼요',
   },

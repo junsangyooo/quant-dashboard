@@ -1,6 +1,6 @@
 """바깥으로 나가는 전송의 문 하나(TASKS T-00 · DEVELOPING 3절).
 
-토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 **기본이 가짜**예요. 실제 전송 객체는
+토스(시세 · 계좌 · 주문) · DART · 텔레그램 · 공인 IP 전송은 **기본이 가짜**예요. 실제 전송 객체는
 아래 두 가지가 **둘 다** 있을 때만, 이 파일 안에서만 만들어요.
 
 1. 환경 변수 `QUANT_LIVE_TRANSPORT=1`
@@ -149,7 +149,6 @@ class Transports:
     telegram: Transport
     ip_fetch: Callable[[str], bytes]
     is_live: bool = False
-    bars: Any = None  # 시세 출처(실제 전송일 때만 바깥 출처 · T-11에서 토스로 바뀌어요)
 
     def toss_factory(self) -> Callable[[], Transport]:
         return lambda: self.toss
@@ -168,35 +167,18 @@ def fake_transports() -> Transports:
 def build_transports(
     env: Mapping[str, str] | None = None,
     config_paths: Iterable[Path] | None = None,
-    *,
-    cache_dir: str | None = None,
 ) -> Transports:
     if not live_enabled(env, config_paths):
         return fake_transports()
-    from .market import YahooSource  # 실제 전송일 때만 만들어요(T-11에서 토스 출처로 바뀌어요)
-
     return Transports(
         toss=_urllib_transport,
         dart=_urllib_transport,
         telegram=_urllib_transport,
         ip_fetch=_urllib_fetch,
         is_live=True,
-        bars=YahooSource(cache_dir=cache_dir),
     )
 
 
 def is_fake(transport: object) -> bool:
     return isinstance(transport, FakeTransport | FakeFetch)
 
-
-class OfflineBars:
-    """가짜 전송일 때의 시세 출처: 나가지 않고 '받지 못함'으로 끝나요."""
-
-    is_live = False
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str, str]] = []
-
-    def daily(self, yahoo_symbol: str, start: Any, end: Any) -> list[dict[str, Any]]:
-        self.calls.append((yahoo_symbol, str(start), str(end)))
-        raise OSError("fake-transport")

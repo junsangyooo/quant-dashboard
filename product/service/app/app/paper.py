@@ -3,7 +3,7 @@
 - 시작: 마지막 일봉으로 확인해 계획을 만든다(체결 없음).
 - 신호 확인: 지난 확인 뒤로 새 일봉이 생긴 날마다 '시가 체결 → 종가 평가 → 종가 확인'.
   새 일봉이 없으면 아무것도 바꾸지 않는다.
-- 평가: 토스가 연결돼 있으면 토스 현재가, 아니면 야후 마지막 종가.
+- 평가: 토스가 연결돼 있으면 토스 현재가, 아니면 마지막 종가.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any
 from .connect import Connections
 from .db import DB
 from .engine import Engine, Series, universe_of, warmup_calendar_days
-from .market import KST, Market, complete_until, now_kst
+from .market import KST, Market, now_kst
 from .strategy import SLOT_LABEL, reason_rows, stock_name
 from .vault import VaultError
 
@@ -28,6 +28,14 @@ MAX_CASH = 10_000_000_000
 OPEN_AT = time(9, 0)
 BAR_FINAL = time(15, 50)  # market.BAR_FINAL_AT
 AUTO_CHECK = "16:30"
+
+
+def complete_until(now: datetime) -> date:
+    """v1 모의투자 시각(15:50 뒤 그날 일봉). T-40(모의투자 v2 · 20:10)에서 market.complete_until로 바꿔요."""
+    local = now.astimezone(KST)
+    if local.time() >= BAR_FINAL:
+        return local.date()
+    return local.date() - timedelta(days=1)
 
 
 def next_weekday(d: date) -> date:
@@ -54,7 +62,7 @@ def first_schedule(now: datetime, last: date) -> dict[str, Any]:
     - 평일 09:00~15:50에 시작했고 오늘 일봉이 아직 없으면: 시작 때는 계획을 만들지 않고
       오늘 일봉으로 첫 확인(16:30 자동 확인, 또는 15:50 뒤 지금 신호 확인) → 다음 거래일 시가.
     - 그 밖(09:00 전 · 15:50 뒤 · 주말, 그리고 마지막 일봉 뒤로 빠진 평일이 있을 때 —
-      휴장이나 야후 지연): 받은 마지막 일봉으로 바로 확인 → 시작 시각 뒤 첫 시가.
+      휴장이나 일봉 지연): 받은 마지막 일봉으로 바로 확인 → 시작 시각 뒤 첫 시가.
     """
     local = now.astimezone(KST)
     today = local.date()
@@ -213,7 +221,7 @@ class Paper:
             sched = self.first_of(int(run["id"])) or {}
             fill_from = str(sched.get("fill_d") or "")
             if not days and not sched.get("check_now", True) and self._last_judgement(int(run["id"])) is None:
-                # 첫 확인을 기다렸는데 그날 일봉이 끝내 없다(휴장 · 야후 지연): 받은 마지막 일봉으로
+                # 첫 확인을 기다렸는데 그날 일봉이 끝내 없다(휴장 · 일봉 지연): 받은 마지막 일봉으로
                 # 지금 확인하고, 체결은 지금 뒤 첫 시가로 미룬다.
                 if complete_until(self.now()) >= date.fromisoformat(str(sched.get("check_d"))):
                     return self._late_first_check(run, eng, last_date, how)
@@ -514,7 +522,7 @@ class Paper:
                     "SELECT d, c FROM bars WHERE symbol=? ORDER BY d DESC LIMIT 1", (sym,)
                 )
                 price = float(bar["c"]) if bar else p["avg"]
-                src = "야후 종가"
+                src = "종가"
                 if bar:
                     price_dates.append(str(bar["d"]))
                     price_d = str(bar["d"])
@@ -558,7 +566,7 @@ class Paper:
         price_as_of: dict[str, Any] = (
             {"kind": "toss", "at": self._stamp()}
             if live
-            else {"kind": "yahoo", "d": max(price_dates) if price_dates else run["last_date"]}
+            else {"kind": "close", "d": max(price_dates) if price_dates else run["last_date"]}
         )
         day_known = [h for h in holdings if h["day_pnl"] is not None]
         prev_value = sum(float(h["prev_close"]) * h["qty"] for h in day_known)

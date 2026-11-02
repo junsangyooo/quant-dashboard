@@ -1,32 +1,37 @@
-"""일봉: 야후 금융(yfinance)에서 받아 SQLite에 담아 둔다.
+"""일봉 · 장 달력: 토스에서 받아 SQLite에 담아 둬요(TASKS T-11 · SPEC 11-1 순서 2 · ENGINE-RULES R-O1).
 
-참고: 이 레포의 autotrade/market/sources.py YahooBarSource.
-한국 종목은 '.KS'로 먼저 받고, 비면 '.KQ'로 받는다. 코스피 지수는 '^KS11'.
-auto_adjust=False: 체결 가격은 실제 시가 · 종가 그대로(분할만 야후가 맞춰 준다).
+- 출처: 토스 candles(수정주가 · `adjusted=true`)와 지수 캔들(`KOSPI` · `KOSDAQ`). 야후는 쓰지 않아요.
+- 확정: 그날 일봉은 **20:00 뒤**에 확정으로 봐요(20:10 확인이 써요). 그 전에는 앞 거래일까지만 써요.
+- 장 시간: 토스 market-calendar(KR)로 그날 열리는지 · 정규장 시작이 몇 시인지 알아요. 정규장이
+  09:00보다 늦게 열리는 날(수능일 · 새해 첫 거래일)은 08:30 점검 · 08:35 주문도 같은 만큼 늦춰요(R-O1).
+  달력을 받지 못하면 평일 = 거래일로 보고 시각은 그대로예요.
 """
 
 from __future__ import annotations
 
-import importlib
+import json
 import logging
-import os
 import time
-import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Protocol
 
 from .db import DB
+from .toss import MarketCalendar, MarketDay, TossApiError, TossClient, TossError
 
 KST = timezone(timedelta(hours=9))
-INDEX = "^KS11"
-# 장 마감(15:30) 뒤 야후가 그날 일봉을 굳히는 때. 이전이면 오늘 일봉은 아직 덜 된 것으로 본다.
-BAR_FINAL_AT = (15, 50)
+INDEX = "KOSPI"
+INDEXES = ("KOSPI", "KOSDAQ")
+# 그날 일봉을 확정으로 보는 시각(20:10 확인 바로 앞)
+BAR_FINAL_AT = (20, 0)
 REFRESH_S = 30 * 60
+BASE_OPEN = (9, 0)  # 평소 정규장 시작. 늦게 여는 날은 차이만큼 점검 · 주문을 옮겨요
+log = logging.getLogger("quant-market")
 
 
 class MarketDataError(Exception):
-    """kind: network(받지 못함) · symbol(그 코드로는 일봉이 없음)."""
+    """kind: network(받지 못함) · symbol(그 코드로는 일봉이 없음) · toss(토스 연결 필요)."""
 
     def __init__(
         self, message: str = "시세를 받지 못했어요", kind: str = "network", symbols: list[str] | None = None
@@ -37,82 +42,140 @@ class MarketDataError(Exception):
         self.symbols = symbols or []
 
 
-# 바깥 라이브러리의 경고 · 오류 글은 server.log에 쓰지 않는다(접속 주소와 상태 코드만 남긴다)
-for _name in ("yfinance", "peewee", "urllib3"):
-    logging.getLogger(_name).setLevel(logging.CRITICAL)
-    logging.getLogger(_name).propagate = False
+class SymbolNotFound(Exception):
+    pass
 
 
 class BarSource(Protocol):
-    def daily(self, yahoo_symbol: str, start: date, end: date) -> list[dict[str, Any]]: ...
+    def daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]: ...
 
 
-class YahooSource:
-    def __init__(self, yf_module: Any | None = None, cache_dir: str | None = None) -> None:
-        self._yf = yf_module
-        self._cache_dir = cache_dir
+class TossSource:
+    """토스 일봉. 종목은 6자리 코드, 지수는 'KOSPI' · 'KOSDAQ'."""
 
-    def _module(self) -> Any:
-        if self._yf is None:
-            yf = importlib.import_module("yfinance")
-            if self._cache_dir:
-                # 야후 캐시(시간대 · 쿠키)도 데이터 폴더 안에 둔다
-                os.makedirs(self._cache_dir, exist_ok=True)
-                yf.set_tz_cache_location(self._cache_dir)
-            self._yf = yf
-        return self._yf
+    def __init__(self, client: Callable[[], TossClient | None]) -> None:
+        self.client = client
 
-    def daily(self, yahoo_symbol: str, start: date, end: date) -> list[dict[str, Any]]:
-        ticker = self._module().Ticker(yahoo_symbol)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            frame = ticker.history(
-                start=start.isoformat(),
-                end=(end + timedelta(days=1)).isoformat(),
-                interval="1d",
-                auto_adjust=False,
-                actions=False,
-            )
-        if frame is None or len(frame) == 0:
-            return []
-        out = []
-        for idx, row in frame.iterrows():
-            close = _f(row.get("Close"))
-            if close is None or close <= 0:
-                continue
-            out.append(
-                {
-                    "d": idx.date().isoformat(),
-                    "o": _f(row.get("Open")) or close,
-                    "h": _f(row.get("High")) or close,
-                    "l": _f(row.get("Low")) or close,
-                    "c": close,
-                    "v": _f(row.get("Volume")) or 0.0,
-                }
-            )
-        return out
+    def _need(self) -> TossClient:
+        c = self.client()
+        if c is None:
+            raise MarketDataError("토스 연결이 필요해요 · 시세와 계좌를 토스에서 받아요", "toss")
+        return c
 
+    def daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
+        client = self._need()
+        try:
+            return client.daily_bars(symbol, start, end, index=symbol in INDEXES)
+        except TossApiError as exc:
+            if exc.status == 404 or exc.code in ("stock-not-found", "unsupported-symbol"):
+                raise SymbolNotFound(symbol) from None
+            raise
 
-def _f(value: Any) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    if out != out:  # NaN
-        return None
-    return out
+    def calendar(self, on: date) -> MarketCalendar:
+        return self._need().market_calendar(on)
 
 
 def now_kst() -> datetime:
     return datetime.now(KST)
 
 
-def complete_until(now: datetime) -> date:
-    """판단에 쓸 수 있는 마지막 일봉 날짜(오늘 일봉은 장 마감 뒤에만)."""
+# ── 장 달력 ──────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class DayHours:
+    d: date
+    open: bool
+    start: datetime | None  # 정규장 시작(KST)
+    known: bool  # 토스 달력으로 안 값인가(False면 평일 규칙으로 짐작)
+
+    @property
+    def shift(self) -> timedelta:
+        """평소 09:00보다 얼마나 늦게 여는가(R-O1)."""
+        if not self.start:
+            return timedelta(0)
+        base = datetime.combine(self.d, datetime.min.time(), KST).replace(hour=BASE_OPEN[0], minute=BASE_OPEN[1])
+        return max(timedelta(0), self.start.astimezone(KST) - base)
+
+    def at(self, hh: int, mm: int) -> datetime:
+        """평소 hh:mm인 일정을 그날 장 시작에 맞춰 옮긴 시각(08:30 점검 · 08:35 주문)."""
+        return datetime.combine(self.d, datetime.min.time(), KST).replace(hour=hh, minute=mm) + self.shift
+
+
+class Calendar:
+    """토스 market-calendar(KR)를 날짜마다 담아 두고 거래일 · 장 시작을 알려줘요."""
+
+    def __init__(self, db: DB, fetch: Callable[[date], MarketCalendar] | None) -> None:
+        self.db = db
+        self.fetch = fetch
+
+    def _store(self, md: MarketDay) -> None:
+        start = md.regular.start.isoformat() if md.regular else None
+        self.db.set_meta(f"cal.{md.d.isoformat()}", json.dumps({"open": md.open, "start": start}))
+
+    def _load(self, d: date) -> DayHours | None:
+        raw = self.db.get_meta(f"cal.{d.isoformat()}")
+        if not raw:
+            return None
+        data = json.loads(raw)
+        start = datetime.fromisoformat(data["start"]) if data.get("start") else None
+        return DayHours(d, bool(data["open"]), start, True)
+
+    def day(self, d: date) -> DayHours:
+        got = self._load(d)
+        if got:
+            return got
+        if self.fetch is not None:
+            try:
+                cal = self.fetch(d)
+            except (TossError, MarketDataError) as exc:
+                log.info("market calendar: %s", type(exc).__name__)
+            else:
+                for md in (cal.today, cal.previous, cal.next):
+                    self._store(md)
+                got = self._load(d)
+                if got:
+                    return got
+        weekday = d.weekday() < 5
+        start = datetime.combine(d, datetime.min.time(), KST).replace(hour=BASE_OPEN[0]) if weekday else None
+        return DayHours(d, weekday, start, False)
+
+    def is_open(self, d: date) -> bool:
+        return self.day(d).open
+
+    def prev_open(self, d: date) -> date:
+        d -= timedelta(days=1)
+        for _ in range(30):
+            if self.is_open(d):
+                return d
+            d -= timedelta(days=1)
+        return d
+
+    def next_open(self, d: date) -> date:
+        d += timedelta(days=1)
+        for _ in range(30):
+            if self.is_open(d):
+                return d
+            d += timedelta(days=1)
+        return d
+
+
+def complete_until(now: datetime, calendar: Calendar | None = None) -> date:
+    """확인에 쓸 수 있는 마지막 일봉 날짜: 거래일 20:00 뒤면 그날, 아니면 앞 거래일."""
     local = now.astimezone(KST)
-    if (local.hour, local.minute) >= BAR_FINAL_AT:
-        return local.date()
-    return local.date() - timedelta(days=1)
+    today = local.date()
+    is_open = calendar.is_open if calendar else (lambda d: d.weekday() < 5)
+    if is_open(today) and (local.hour, local.minute) >= BAR_FINAL_AT:
+        return today
+    d = today - timedelta(days=1)
+    for _ in range(30):
+        if is_open(d):
+            return d
+        d -= timedelta(days=1)
+    return d
+
+
+# ── 일봉 캐시 ────────────────────────────────────────────────────────────────
 
 
 class Market:
@@ -122,10 +185,12 @@ class Market:
         source: BarSource,
         *,
         clock: Callable[[], float] = time.time,
+        calendar: Calendar | None = None,
     ) -> None:
         self.db = db
         self.source = source
         self.clock = clock
+        self.calendar = calendar or Calendar(db, getattr(source, "calendar", None))
 
     def _covered(self, symbol: str, start: date, end: date) -> bool:
         """요청한 범위를 이미 받았는가. 끝이 최근(7일 안)이면 30분이 지나면 다시 받는다."""
@@ -139,22 +204,16 @@ class Market:
         return (self.clock() - float(row["fetched_at"] or 0)) < REFRESH_S
 
     def _fetch(self, symbol: str, start: date, end: date) -> None:
-        if symbol.startswith("^"):
-            candidates = [symbol]
-        else:
-            row = self.db.one("SELECT yahoo FROM bar_meta WHERE symbol=?", (symbol,))
-            known = row["yahoo"] if row and row["yahoo"] else None
-            candidates = [known] if known else [f"{symbol}.KS", f"{symbol}.KQ"]
-        bars: list[dict[str, Any]] = []
-        used = None
-        for ysym in candidates:
-            try:
-                bars = self.source.daily(ysym, start, end)
-            except Exception:  # yfinance는 네트워크 오류를 여러 모양으로 던진다
-                bars = []
-            if bars:
-                used = ysym
-                break
+        try:
+            bars = self.source.daily(symbol, start, end)
+        except SymbolNotFound:
+            raise MarketDataError(
+                f"일봉이 없는 종목 코드가 있어요 · {symbol} · 종목 코드를 확인해 주세요", "symbol", [symbol]
+            ) from None
+        except MarketDataError:
+            raise
+        except Exception:  # 전송 오류는 여러 모양으로 와요(응답 없음 · 응답 이상 · 한도)
+            bars = []
         if not bars:
             raise MarketDataError(f"시세를 받지 못했어요 · {symbol}", "network", [symbol])
         self.db.many(
@@ -175,7 +234,7 @@ class Market:
             "INSERT INTO bar_meta(symbol,yahoo,from_d,to_d,fetched_at) VALUES(?,?,?,?,?) "
             "ON CONFLICT(symbol) DO UPDATE SET yahoo=excluded.yahoo, from_d=excluded.from_d,"
             "to_d=excluded.to_d, fetched_at=excluded.fetched_at",
-            (symbol, used, from_d, to_d, self.clock()),
+            (symbol, "toss", from_d, to_d, self.clock()),
         )
 
     def bars(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
@@ -190,28 +249,20 @@ class Market:
     def many(self, symbols: list[str], start: date, end: date) -> dict[str, list[dict[str, Any]]]:
         out: dict[str, list[dict[str, Any]]] = {}
         failed: list[str] = []
+        unknown: list[str] = []
         for s in symbols:
             try:
                 out[s] = self.bars(s, start, end)
-            except MarketDataError:
-                failed.append(s)
-        if failed:
-            raise self._why_failed(failed, end)
-        return out
-
-    def _why_failed(self, failed: list[str], end: date) -> MarketDataError:
-        """일봉이 없는 종목 코드인지, 받지 못한 것인지 가른다.
-
-        야후는 없는 코드와 끊긴 네트워크를 똑같이 '빈 응답'으로 돌려준다. 그래서 늘 있는 코스피 지수를
-        한 번 받아 본다: 지수는 받히면 코드 문제, 지수도 안 받히면 네트워크 문제.
-        """
-        try:
-            probe = self.source.daily(INDEX, end - timedelta(days=14), end)
-        except Exception:  # 네트워크 오류는 여러 모양으로 온다
-            probe = []
-        if probe:
-            codes = ", ".join(failed)
-            return MarketDataError(
-                f"일봉이 없는 종목 코드가 있어요 · {codes} · 종목 코드를 확인해 주세요", "symbol", failed
+            except MarketDataError as exc:
+                if exc.kind == "toss":
+                    raise
+                (unknown if exc.kind == "symbol" else failed).append(s)
+        if unknown:
+            codes = ", ".join(unknown)
+            return_err = MarketDataError(
+                f"일봉이 없는 종목 코드가 있어요 · {codes} · 종목 코드를 확인해 주세요", "symbol", unknown
             )
-        return MarketDataError(f"시세를 받지 못했어요 · {', '.join(failed)}", "network", failed)
+            raise return_err
+        if failed:
+            raise MarketDataError(f"시세를 받지 못했어요 · {', '.join(failed)}", "network", failed)
+        return out

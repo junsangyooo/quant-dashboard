@@ -211,7 +211,7 @@ def test_paper_judge_then_fill_next_open(tmp_path: Path) -> None:
     start = date(2025, 3, 3)
     all_bars = make_bars(CLOSES, start=start, opens=OPENS)
     days = [b["d"] for b in all_bars]
-    src = FakeBars({"111111.KS": all_bars[:5]})
+    src = FakeBars({"111111": all_bars[:5]})
     now = Now(datetime.fromisoformat(days[4] + "T17:00:00").replace(tzinfo=KST))
     db, paper = _paper(tmp_path, src, now)
     vid = _version(db, event_body())
@@ -226,7 +226,7 @@ def test_paper_judge_then_fill_next_open(tmp_path: Path) -> None:
     assert same["new_days"] == 0 and "새 일봉이 아직 없어요" in same["message"]
 
     # 다음 날 장 마감 뒤: 그날 시가 12에 모의 체결
-    src.data["111111.KS"] = all_bars[:6]
+    src.data["111111"] = all_bars[:6]
     now.t = datetime.fromisoformat(days[5] + "T17:00:00").replace(tzinfo=KST)
     paper._clock["t"] += 3600  # type: ignore[attr-defined]
     res = paper.judge()
@@ -243,7 +243,7 @@ def test_paper_judge_then_fill_next_open(tmp_path: Path) -> None:
     assert [c[0] for c in home["curve"]] == [days[4], days[5]]
 
     # 이틀 뒤(이틀치 일봉이 한꺼번에): 6일째 종가로 익절 판단 → 7일째 시가 14 매도
-    src.data["111111.KS"] = all_bars
+    src.data["111111"] = all_bars
     now.t = datetime.fromisoformat(days[7] + "T17:00:00").replace(tzinfo=KST)
     paper._clock["t"] += 3600  # type: ignore[attr-defined]
     res = paper.judge()
@@ -265,7 +265,7 @@ def test_paper_ignores_unfinished_today_bar(tmp_path: Path) -> None:
     start = date(2025, 3, 3)
     all_bars = make_bars(CLOSES, start=start, opens=OPENS)
     days = [b["d"] for b in all_bars]
-    src = FakeBars({"111111.KS": all_bars[:5]})
+    src = FakeBars({"111111": all_bars[:5]})
     # 5번째 날 오전 11시: 그날 일봉은 아직 덜 됐으니 4번째 날까지로 판단
     now = Now(datetime.fromisoformat(days[4] + "T11:00:00").replace(tzinfo=KST))
     db, paper = _paper(tmp_path, src, now)

@@ -165,7 +165,7 @@ function RunningView({ h }: { h: Running }) {
   const firstLine = h.first
     ? `${formatMonthDayWeekday(h.first.check_d)} ${h.first.check_time}`
     : '';
-  const priceNote = h.price_as_of.kind === 'toss' ? t.tossPrice : t.yahooPrice;
+  const priceNote = h.price_as_of.kind === 'toss' ? t.tossPrice : t.closePrice;
   return (
     <Page width="split">
       <div className={styles.row1}>

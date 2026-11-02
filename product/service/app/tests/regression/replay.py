@@ -16,7 +16,7 @@ from app.vault import Vault
 
 class _Bars:
     def __init__(self, data: dict[str, list[dict[str, Any]]]) -> None:
-        self.data = {f"{s}.KS": rows for s, rows in data.items()}
+        self.data = dict(data)
 
     def daily(self, ysym: str, start, end):  # type: ignore[no-untyped-def]
         rows = self.data.get(ysym, [])

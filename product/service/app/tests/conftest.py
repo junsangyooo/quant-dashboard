@@ -160,18 +160,22 @@ def make_bars(closes: list[float], start: date = date(2024, 1, 1), opens: list[f
 
 
 class FakeBars:
-    """yahoo 기호 -> 일봉 목록. 받은 요청을 적어 둔다."""
+    """종목 코드(지수는 KOSPI) -> 일봉 목록. 받은 요청을 적어 둔다."""
 
     def __init__(self, data: dict[str, list[dict[str, Any]]] | None = None) -> None:
         self.data = data or {}
         self.calls: list[tuple[str, str, str]] = []
         self.down = False
 
-    def daily(self, yahoo_symbol: str, start: date, end: date) -> list[dict[str, Any]]:
-        self.calls.append((yahoo_symbol, start.isoformat(), end.isoformat()))
+    def daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
+        self.calls.append((symbol, start.isoformat(), end.isoformat()))
         if self.down:
             raise OSError("no network")
-        rows = self.data.get(yahoo_symbol, [])
+        if symbol not in self.data:  # 토스는 없는 코드에 404를 줘요(TossSource → SymbolNotFound)
+            from app.market import SymbolNotFound
+
+            raise SymbolNotFound(symbol)
+        rows = self.data[symbol]
         return [dict(b) for b in rows if start.isoformat() <= b["d"] <= end.isoformat()]
 
 
@@ -213,9 +217,9 @@ def fake_bars() -> FakeBars:
     k = wave(400, 2500, 100, 50, 0.0002)
     return FakeBars(
         {
-            "005930.KS": make_bars(a),
-            "000660.KS": make_bars(b),
-            "^KS11": make_bars(k, volume=0),
+            "005930": make_bars(a),
+            "000660": make_bars(b),
+            "KOSPI": make_bars(k, volume=0),
         }
     )
 

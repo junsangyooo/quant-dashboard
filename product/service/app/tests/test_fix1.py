@@ -22,7 +22,7 @@ CLOSES = [10, 10, 10, 9, 13, 13, 15, 15]
 
 def _bars_until(last: str) -> FakeBars:
     allb = make_bars(wave(400, 1000, 100, 20), start=date(2024, 1, 1))
-    return FakeBars({"111111.KS": [b for b in allb if b["d"] <= last]})
+    return FakeBars({"111111": [b for b in allb if b["d"] <= last]})
 
 
 def kst(text: str) -> datetime:
@@ -71,7 +71,7 @@ def test_start_intraday_makes_no_plan_and_first_fill_is_after_start(tmp_path: Pa
     assert paper.preview(_vid(paper))["fill_d"] == "2025-06-04"  # 창과 서버가 같은 값
     assert paper.plan()["last"] is None  # 아직 확인 전
     # 그날 16:30 뒤 첫 확인: 6/3 시가에는 아무것도 체결되지 않는다
-    paper.market.source.data["111111.KS"] = _bars_until("2025-06-03").data["111111.KS"]
+    paper.market.source.data["111111"] = _bars_until("2025-06-03").data["111111"]
     clock.t = kst("2025-06-03T16:40:00")
     paper._clock["t"] += 3600  # type: ignore[attr-defined]
     out = paper.judge("auto")
@@ -169,7 +169,7 @@ def test_target_sell_reasons_are_split() -> None:
 
 def _gap_bars(last: str, missing: set[str]) -> FakeBars:
     allb = make_bars(wave(400, 1000, 100, 20), start=date(2024, 1, 1))
-    return FakeBars({"111111.KS": [b for b in allb if b["d"] <= last and b["d"] not in missing]})
+    return FakeBars({"111111": [b for b in allb if b["d"] <= last and b["d"] not in missing]})
 
 
 def _start_gap(tmp_path: Path, now: str, last: str, missing: set[str]):  # type: ignore[no-untyped-def]
@@ -187,7 +187,7 @@ def _start_gap(tmp_path: Path, now: str, last: str, missing: set[str]):  # type:
 
 
 def _advance(paper, clock, now: str, last: str, missing: set[str]):  # type: ignore[no-untyped-def]
-    paper.market.source.data["111111.KS"] = _gap_bars(last, missing).data["111111.KS"]
+    paper.market.source.data["111111"] = _gap_bars(last, missing).data["111111"]
     clock.t = kst(now)
     paper._clock["t"] += 3600
     # 캐시는 '최근 7일' 판단에 실제 오늘을 쓴다: 시험 날짜(2025)에서는 받아 둔 범위를 지워 다시 받게 한다

@@ -1,6 +1,6 @@
 """회귀 기준 만들기(한 번만 · 그래프 엔진으로 바꾸기 전의 엔진으로 돌렸다, 2026-10-30).
 
-    cd mvp && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m tests.regression.make_baseline [--yahoo]
+    cd mvp && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m tests.regression.make_baseline
 
 --yahoo: 야후에서 005930 · 000660 일봉을 받아 tests/fixtures/yahoo_bars.json에 담고 기준도 만든다.
 """
@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
@@ -45,27 +44,11 @@ def main() -> None:
             r = paper_replay(body, bars, 150, 270, Path(tmp) / f"p{i}")
             out["papers"].append({"case": i, "template": body["template"], "trades": len(r["trades"]),
                                   "digest": digest(r["trades"]), "final": repr(r["final"])})
-    if "--yahoo" in sys.argv:
-        from app.db import DB
-        from app.market import Market, YahooSource
-
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[2] / ".build4") as tmp:
-            m = Market(DB(Path(tmp) / "y.db"), YahooSource(cache_dir=str(Path(tmp) / "yc")))
-            start = date.fromisoformat(YAHOO["start"])
-            end = date.fromisoformat(YAHOO["end"])
-            from app.engine import warmup_calendar_days
-            warm = start - timedelta(days=warmup_calendar_days(yahoo_body()))
-            bars_y = m.many(YAHOO["symbols"], warm, end)
-        (FIX / "yahoo_bars.json").write_text(json.dumps(bars_y, ensure_ascii=False))
-        res = run_backtest(yahoo_body(), bars_y, None, YAHOO["start"], YAHOO["end"], YAHOO["cash"])
-        out["yahoo"] = {"trades": len(res["trades"]), "digest": digest(res["trades"]), "final": repr(float(res["final"])),
-                        "total": res["total"], "cagr": res["cagr"], "mdd": res["mdd"], "win_rate": res["win_rate"],
-                        "costs": res["costs"], "buys": res["buys"], "sells": res["sells"],
-                        "start": res["start"], "end": res["end"]}
-    else:
-        old = json.loads((FIX / "regression_baseline.json").read_text()) if (FIX / "regression_baseline.json").exists() else {}
-        if "yahoo" in old:
-            out["yahoo"] = old["yahoo"]
+    # 야후 실제 일봉(yahoo_bars.json)과 그 기준은 2026-10-30에 받아 고정했어요. 앱은 이제 야후를 쓰지 않아서
+    # 다시 받지 않고 그대로 이어 써요(T-11 · OPEN-QUESTIONS Q-L7).
+    old = json.loads((FIX / "regression_baseline.json").read_text()) if (FIX / "regression_baseline.json").exists() else {}
+    if "yahoo" in old:
+        out["yahoo"] = old["yahoo"]
     (FIX / "regression_baseline.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
     print(len(out["backtests"]), "backtests,", len(out["papers"]), "papers,", "yahoo" in out)
 

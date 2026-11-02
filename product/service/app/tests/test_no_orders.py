@@ -33,8 +33,6 @@ GATE = ROOT / "app" / "transport.py"
 # 바깥으로 나가는 수단. transport.py 밖의 앱 코드에서는 0건이어야 해요.
 NETWORK_MODULES = {"urllib.request", "http.client", "socket", "ssl", "requests", "httpx", "aiohttp"}
 NETWORK_CALLS = re.compile(r"urlopen|create_connection|_urllib_transport|_urllib_fetch")
-# T-11 전까지 남는 시세 출처(야후). 만드는 곳은 transport.build_transports뿐이에요.
-YAHOO_UNTIL_T11 = {"market.py"}
 
 
 def _imports(tree: ast.AST) -> set[str]:
@@ -58,7 +56,7 @@ def network_hits(paths: list[Path]) -> list[str]:
         mods = _imports(ast.parse(text))
         for mod in sorted(mods & NETWORK_MODULES):
             hits.append(f"{path.name}: import {mod}")
-        if path.name not in YAHOO_UNTIL_T11 and ("yfinance" in mods or "yfinance" in text):
+        if "yfinance" in mods or "yfinance" in text:
             hits.append(f"{path.name}: yfinance")
         for m in NETWORK_CALLS.finditer(text):
             hits.append(f"{path.name}:{text[: m.start()].count(chr(10)) + 1}: {m.group()}")
@@ -76,8 +74,7 @@ def test_app_without_settings_has_only_fake_transports(tmp_path: Path) -> None:
     assert t.is_live is False
     for name in ("toss", "dart", "telegram", "ip_fetch"):
         assert tp.is_fake(getattr(t, name)), name
-    assert t.bars is None
-    assert type(app.state.market.source).__name__ == "OfflineBars"
+    assert type(app.state.market.source).__name__ == "TossSource"  # 시세도 토스 전송(가짜)으로만
     # 앱이 쓰는 토스 전송도 가짜
     assert tp.is_fake(app.state.connections.transport_factory())
 
@@ -142,7 +139,7 @@ def test_broken_config_file_is_fake(tmp_path: Path) -> None:
 
 def test_both_keys_build_real_objects_without_sending(tmp_path: Path) -> None:
     """두 열쇠가 다 있으면 실제 전송 객체가 생겨요(만들기만 하고 부르지 않아요)."""
-    t = build_transports({"QUANT_LIVE_TRANSPORT": "1"}, [_config(tmp_path, True)], cache_dir=str(tmp_path / "yc"))
+    t = build_transports({"QUANT_LIVE_TRANSPORT": "1"}, [_config(tmp_path, True)])
     assert t.is_live is True
     assert not any(tp.is_fake(x) for x in (t.toss, t.dart, t.telegram, t.ip_fetch))
 
@@ -184,6 +181,14 @@ def test_sources_exist() -> None:
 
 def test_real_transport_only_in_gate() -> None:
     assert network_hits(APP_SOURCES) == []
+
+
+def test_no_yahoo_dependency() -> None:
+    """T-11: 야후(yfinance)는 requirements와 앱 코드에서 0(회귀 시험 자료는 그대로 · Q-L7)."""
+    for req in ROOT.glob("requirements*.txt"):
+        assert "yfinance" not in req.read_text(encoding="utf-8"), req.name
+    for path in [*APP_SOURCES, ROOT / "start.sh"]:
+        assert "yfinance" not in path.read_text(encoding="utf-8").lower(), path.name
 
 
 def test_gate_builds_real_objects_only_behind_live_check() -> None:
