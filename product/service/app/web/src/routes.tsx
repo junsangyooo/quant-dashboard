@@ -9,7 +9,7 @@ import { PlanScreen } from './screens/Plan/PlanScreen';
 import { HistoryScreen } from './screens/History/HistoryScreen';
 import { StrategiesScreen } from './screens/Strategies/StrategiesScreen';
 import { StrategyScreen } from './screens/Strategies/StrategyScreen';
-import { EditorScreen } from './screens/Editor/EditorScreen';
+import { BlockEditorScreen } from './screens/BlockEditor/BlockEditorScreen';
 import { BacktestScreen } from './screens/Backtest/BacktestScreen';
 import { ImportScreen } from './screens/Strategies/ImportScreen';
 import { ExampleScreen } from './screens/Strategies/ExampleScreen';
@@ -59,7 +59,7 @@ export const routes: RouteObject[] = [
       },
       {
         path: 'strategies/new',
-        element: <EditorScreen />,
+        element: <BlockEditorScreen />,
         handle: handle({ page: 'editor', kind: 'tab', tab: 'strategies' }),
       },
       {
@@ -79,7 +79,7 @@ export const routes: RouteObject[] = [
       },
       {
         path: 'strategies/:id/edit',
-        element: <EditorScreen />,
+        element: <BlockEditorScreen />,
         handle: handle({ page: 'editor', kind: 'tab', tab: 'strategies' }),
       },
       {

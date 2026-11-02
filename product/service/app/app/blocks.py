@@ -20,6 +20,7 @@ from typing import Any
 
 from .catalog import (
     CATALOG,
+    CHOICE_NAMES,
     CIRCLE,
     EXEC_NAME,
     EXECS,
@@ -149,6 +150,13 @@ def row_text(row: dict[str, Any]) -> str:
     op = row["op"]
     name = short_name(item)
     n = (row.get("params") or {}).get("n")
+    if op == "exclude" and item.id != "sector":
+        return item.name
+    if item.choices and op == "pick":
+        picked = v if isinstance(v, list) else ([v] if v else [])
+        return " · ".join(CHOICE_NAMES.get(str(c), str(c)) for c in picked) or f"{name} [빈칸]"
+    if item.id == "manual_list":
+        return f"{name} {len(v)}종목" if v else f"{name} [빈칸]"
     if item.id in ("ma", "ema"):
         return f"{_with_unit(n, '일')} {name} {OP_NAME[op]}"
     if op in NO_VALUE_OPS:
@@ -665,7 +673,7 @@ def _row_problems(block: dict[str, Any], i: int, row: dict[str, Any], dart: bool
     v = row.get("value")
     if item.id == "manual_list":
         if not v:
-            mk("blank", "종목 직접 지정 값이 비어 있어요", f"{where} · 한국 종목 6자리 코드를 입력해요")
+            mk("blank", "종목 직접 지정 값이 비어 있어요", f"{where} · 1~30종목")
         else:
             bad = [s for s in v if not SYMBOL_RE.match(str(s))]
             if bad:
@@ -676,13 +684,21 @@ def _row_problems(block: dict[str, Any], i: int, row: dict[str, Any], dart: bool
         if not v:
             mk("blank", f"{short_name(item)} 값이 비어 있어요", f"{where} · 값을 골라요")
     elif row["op"] not in NO_VALUE_OPS and value_num(item, row["op"]) is not None:
-        found = _value_problem(item, row["op"], v)
+        label = None
+        if item.id == "top_n":  # ④는 정렬 항목 이름으로(그림 V2-23 빈 캔버스: '신호 강도 값이 비어 있어요')
+            by = (row.get("params") or {}).get("by") or "strength"
+            label = "신호 강도" if by == "strength" else short_name(CATALOG[by])
+        found = _value_problem(item, row["op"], v, label=label)
         if found:
             kind, text = found
             num = value_num(item, row["op"])
             assert num is not None
-            detail = (f"{where} · {josa(short_name(item), '은/는')} {josa(_range_text(item, num), '로/으로')} 입력해요"
-                      if kind == "blank" else f"{where} · 지금 {_with_unit(v, num.unit)}")
+            if kind == "blank" and item.id == "top_n":
+                detail = f"{where} · {_range_text(item, num)}"
+            elif kind == "blank":
+                detail = f"{where} · {josa(short_name(item), '은/는')} {josa(_range_text(item, num), '로/으로')} 입력해요"
+            else:
+                detail = f"{where} · 지금 {_with_unit(v, num.unit)}"
             mk(kind, text, detail)
         if row["op"] == "between":
             v2 = row.get("value2")
@@ -756,7 +772,7 @@ def analyze(graph: dict[str, Any], *, dart: bool = True) -> dict[str, Any]:
     if mode in ("event", "rank") and select is None:
         required("select", f"{MODES[mode]}에는 종목 선정 단계가 있어야 해요")
     if mode == "event" and not sells:
-        required("sell", f"{MODES['event']}에는 매도 경로가 하나 이상 있어야 해요")
+        problems.append(_problem("required", "매도 경로가 없어요", "⑥ 매도를 ⑤ 매수 뒤에 이어요", "", None, "sell"))
 
     # R-P6 진입 경로에 신호 없음(조건 충족 시 매매 · 순위 교체는 ④ 정렬이 신호 강도일 때만)
     sort_by = ((select or {}).get("rows") or [{}])[0].get("params", {}).get("by") if select else None
@@ -764,9 +780,8 @@ def analyze(graph: dict[str, Any], *, dart: bool = True) -> dict[str, Any]:
     if need_signal:
         for k, p in enumerate(entry, 1):
             if p["complete"] and not any(by[i]["stage"] == "signal" for i in p["blocks"]):
-                problems.append(_problem("no_signal",
-                                         f"진입 경로 {k}에 신호가 없어요 · 신호 없이 연결하면 매일 모든 종목이 매수 후보가 돼요",
-                                         stage_label("signal"), "", None, "signal"))
+                problems.append(_problem("no_signal", f"진입 경로 {k}에 신호가 없어요",
+                                         "신호 없이 연결하면 매일 모든 종목이 매수 후보가 돼요", "", None, "signal"))
 
     # R-P8 방식에 못 쓰는 단계
     if mode == "target":
@@ -840,19 +855,26 @@ def analyze(graph: dict[str, Any], *, dart: bool = True) -> dict[str, Any]:
     blanks = sum(1 for p in problems if p["kind"] == "blank")
     return {"mode": mode, "mode_name": MODES.get(mode or "", ""), "entry": entry, "sell": sells,
             "weight": w["id"] if w else None, "problems": problems, "warnings": warnings,
-            "summary": summary_line(len(problems), blanks, len(warnings)), "has_stop": has_stop(graph)}
+            "summary": summary_line(len(problems) - blanks, blanks, len(warnings),
+                                    missing=[k for k in ("signal", "sell") if any(
+                                        p["kind"] in ("no_signal", "required") and p["stage"] == k
+                                        for p in problems)]),
+            "has_stop": has_stop(graph)}
 
 
-def summary_line(problems: int, blanks: int, warnings: int) -> dict[str, str]:
-    """편집기 머리 글(그림 V2-23): '문제 2 · 빈칸 1' / '백테스트를 할 수 없어요 · 경고 1'."""
-    if problems == 0:
-        title = "문제 없음 · 모두 채웠어요"
-        line = "저장하면 백테스트할 수 있어요"
-        if warnings:
-            line += f" · 경고 {warnings}"
-        return {"title": title, "line": line}
-    title = f"문제 {problems}" + (f" · 빈칸 {blanks}" if blanks else "")
-    line = "백테스트를 할 수 없어요" + (f" · 경고 {warnings}" if warnings else "")
+def summary_line(problems: int, blanks: int, warnings: int, missing: list[str] | None = None) -> dict[str, str]:
+    """편집기 머리 글(그림 V2-23): '문제 2 · 빈칸 1'(빈칸은 따로 셈) / '백테스트를 할 수 없어요 · 경고 1' /
+    '② 신호와 ⑥ 매도를 더해요'(빠진 단계가 있을 때)."""
+    if problems == 0 and blanks == 0:
+        line = "저장하면 백테스트할 수 있어요" + (f" · 경고 {warnings}" if warnings else "")
+        return {"title": "문제 없음 · 모두 채웠어요", "line": line}
+    title = " · ".join(x for x in (f"문제 {problems}" if problems else "", f"빈칸 {blanks}" if blanks else "") if x)
+    if missing:
+        names = [stage_label(m) for m in missing]
+        line = (f"{josa(names[0], '과/와')} {names[1]}" if len(names) == 2 else names[0]) + \
+            ("를 더해요" if not _has_batchim(STAGE_NAME[missing[-1]]) else "을 더해요")
+    else:
+        line = "백테스트를 할 수 없어요" + (f" · 경고 {warnings}" if warnings else "")
     return {"title": title, "line": line}
 
 

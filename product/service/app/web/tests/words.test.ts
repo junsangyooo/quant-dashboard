@@ -10,8 +10,8 @@ const src = join(root, 'src');
 const dist = join(root, 'dist');
 
 // Today's MVP hits (T-01). The test fails if a change adds more; T-71 sets these to 0.
-const SRC_HITS_LIMIT = 41;
-const DIST_HITS_LIMIT = 38;
+const SRC_HITS_LIMIT = 38;
+const DIST_HITS_LIMIT = 36;
 
 function walk(dir: string, exts: string[]): string[] {
   const out: string[] = [];

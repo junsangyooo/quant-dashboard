@@ -31,6 +31,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import APP_VERSION_TEXT
 from . import strategy as st
+from . import copytext as ct
+from .api_v2 import ApiError, make_router
 from .connect import Connections
 from .db import DB, body_format
 from .engine_mvp import BacktestError, run_backtest, universe_of, warmup_calendar_days
@@ -152,6 +154,16 @@ def create_app(
             "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         )
         return response
+
+    @app.exception_handler(ApiError)
+    async def on_api(_: Request, exc: ApiError) -> JSONResponse:
+        return _err(exc.message, exc.status, **exc.extra)
+
+    @app.exception_handler(ct.FormatError)
+    async def on_format_v3(_: Request, exc: ct.FormatError) -> JSONResponse:
+        if exc.kind == "graph":
+            return _err(exc.message, 400, kind="graph", title=ct.BAD_LINKS, detail=exc.detail)
+        return _err(exc.message, 400, kind=exc.kind)
 
     @app.exception_handler(VaultError)
     async def on_vault(_: Request, exc: VaultError) -> JSONResponse:
@@ -749,6 +761,15 @@ def create_app(
         if not index.is_file():
             return _err("화면 파일이 없어요 · start.sh로 다시 켜 주세요", 503)
         return FileResponse(index, headers={"cache-control": "no-store"})
+
+    def _running_v2(sid: int) -> dict[str, Any] | None:
+        running = _running_version()
+        return {"kind": "paper", "version_no": running[1]} if running and running[0] == sid else None
+
+    app.include_router(make_router(
+        db, dart=lambda: bool(conns.view()["dart"]["saved"]), unique_name=lambda n: _unique_name(n)[0],
+        now=_now, running=_running_v2,
+    ))
 
     @app.get("/{path:path}")
     def web(path: str) -> Response:

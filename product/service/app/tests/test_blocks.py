@@ -207,6 +207,15 @@ def test_no_problems_for_full_strategy() -> None:
     assert a["summary"] == {"title": "문제 없음 · 모두 채웠어요", "line": "저장하면 백테스트할 수 있어요"}
 
 
+def test_figure_problem_header() -> None:
+    """그림 V2-23 문제 목록 펼침: 같은 날 맞을 수 없는 조건 + 범위 밖 = 문제 2, PER 빈칸 = 빈칸 1."""
+    g = big_breakout()
+    g["blocks"][2]["rows"] = [R("turnover", "gte", 200_000), R("per", "lte", None)]
+    g["blocks"][5] = B("x", "sell", [R("stop_loss", value=7), R("take_profit", value=15)], match="all")
+    a = bk.analyze(g)
+    assert a["summary"] == {"title": "문제 2 · 빈칸 1", "line": "백테스트를 할 수 없어요 · 경고 1"}
+
+
 def test_R_P1_blank_and_range() -> None:
     g = big_breakout()
     g["blocks"][2]["rows"] = [R("per", "lte", 1200), R("per", "lte", None), R("turnover", "gte", 200_000)]
@@ -262,7 +271,8 @@ def test_R_P6_no_signal() -> None:
     g["blocks"] = [b for b in g["blocks"] if b["id"] != "s"]
     g["edges"] = [e for e in g["edges"] if "s" not in (e["from"], e["to"])] + [{"from": "u", "to": "f"}]
     ps = bk.analyze(g)["problems"]
-    assert [p["title"] for p in ps] == ["진입 경로 1에 신호가 없어요 · 신호 없이 연결하면 매일 모든 종목이 매수 후보가 돼요"]
+    assert [(p["title"], p["detail"]) for p in ps] == [
+        ("진입 경로 1에 신호가 없어요", "신호 없이 연결하면 매일 모든 종목이 매수 후보가 돼요")]
     # 순위 교체 + 'PER 낮은 순' + 신호 없음 → 문제 아님
     next(b for b in g["blocks"] if b["id"] == "k")["rows"] = [R("top_n", value=10, by="per", order="asc")]
     g["blocks"] = [b for b in g["blocks"] if b["stage"] != "sell"]
@@ -278,13 +288,12 @@ def test_R_P7_required() -> None:
     g["blocks"] = [b for b in g["blocks"] if b["stage"] != "sell"]
     g["edges"] = [e for e in g["edges"] if e["to"] != "x"]
     ps = bk.analyze(g)["problems"]
-    assert [p["title"] for p in ps] == ["필요한 조건 · 조건 충족 시 매매에는 매도 경로가 하나 이상 있어야 해요"]
+    assert [(p["title"], p["detail"]) for p in ps] == [("매도 경로가 없어요", "⑥ 매도를 ⑤ 매수 뒤에 이어요")]
     empty = G([])
     titles = [p["title"] for p in bk.analyze(empty)["problems"]]
     assert titles == ["필요한 조건 · 유니버스 단계가 있어야 해요", "필요한 조건 · 매수 단계가 있어야 해요",
                       "필요한 조건 · 동일 비중 조건이 있어야 해요",
-                      "필요한 조건 · 조건 충족 시 매매에는 종목 선정 단계가 있어야 해요",
-                      "필요한 조건 · 조건 충족 시 매매에는 매도 경로가 하나 이상 있어야 해요"]
+                      "필요한 조건 · 조건 충족 시 매매에는 종목 선정 단계가 있어야 해요", "매도 경로가 없어요"]
 
 
 def test_R_P8_target_has_no_sell() -> None:
@@ -329,6 +338,20 @@ def test_R_P12_loading_is_not_a_problem() -> None:
 
 def test_problem_header_lines() -> None:
     assert bk.summary_line(2, 1, 1) == {"title": "문제 2 · 빈칸 1", "line": "백테스트를 할 수 없어요 · 경고 1"}
+
+
+def test_new_strategy_canvas_matches_figure() -> None:
+    """그림 V2-23 빈 캔버스: ① 종목 직접 지정 · ④ 신호 강도 · ⑤ · ⑦만 있는 새 전략."""
+    g = G([B("u", "universe", [R("manual_list")]), B("k", "select", [R("top_n")]), B("b", "buy"), B("w", "weight")],
+          ("u", "k"), ("k", "b"), ("w", "b"))
+    a = bk.analyze(g)
+    assert [(p["title"], p["detail"]) for p in a["problems"]] == [
+        ("종목 직접 지정 값이 비어 있어요", "① 유니버스 · 1~30종목"),
+        ("신호 강도 값이 비어 있어요", "④ 종목 선정 · 1~30종목"),
+        ("매도 경로가 없어요", "⑥ 매도를 ⑤ 매수 뒤에 이어요"),
+        ("진입 경로 1에 신호가 없어요", "신호 없이 연결하면 매일 모든 종목이 매수 후보가 돼요"),
+    ]
+    assert a["summary"] == {"title": "문제 2 · 빈칸 2", "line": "② 신호와 ⑥ 매도를 더해요"}
 
 
 # ── 실행 방식 자리 규칙 (R-X2) · 손절 없음 (R-X10) ──────────────────────────
