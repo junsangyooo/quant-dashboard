@@ -46,9 +46,9 @@
 
 ## 2. 모델 · 엔진 (순서 5~7) — 끝에 변환 일치 문턱
 
-- [ ] **T-20 `app/pieces.py` → `catalog.py`** — `DATA-CATALOG.md` 1절(= SPEC 4-9)과 `ENGINE-RULES.md` 11-3 항목 id 사전 전부(id · 이름 · 비교 · 범위 · 단위 · 출처 · 백테스트 여부 · 블록 · 잠금 이유 · 시작 가능 날짜 · 강도 식).
+- [x] **T-20 `app/pieces.py` → `catalog.py`** — `DATA-CATALOG.md` 1절(= SPEC 4-9)과 `ENGINE-RULES.md` 11-3 항목 id 사전 전부(id · 이름 · 비교 · 범위 · 단위 · 출처 · 백테스트 여부 · 블록 · 잠금 이유 · 시작 가능 날짜 · 강도 식).
   - 다 됐다: 사전 표와 코드가 같은지 보는 시험(항목 수 · id · op · 블록 열).
-  - 결과:
+  - 결과: `app/catalog.py`에 53항목(id · 이름 · 분류 · op · params(숫자 범위 · 고르기 값 · 비우는지) · 값 / 순위 범위 · 단위 · 출처 · 백테스트(예 / 일부만 / 아니오) · 블록 단계 · ④ 정렬 · DART 잠금 · 시작 가능 날짜(DART 재무 2016-04-01 · 공시 2015-01-02) · R-M3 강도 식 이름 · ⑥ 실행 방식 · 꼬리 칩 · v1 별칭)과 화면용 `describe()`. `tests/test_catalog.py` 111건: ENGINE-RULES 11-3 표와 DATA-CATALOG 1절 표를 문서에서 읽어 항목 수(53) · 순서 · id · op · params 키 · 블록 · ④ 정렬 · 강도 열 · 별칭, DATA-CATALOG 글자 열 8개가 코드와 같음, SPEC 4-9 = DATA-CATALOG 1절, v1 조건 15개 별칭 전부, 잠금 13항목, 단계별 목록(R-G4). pytest 900 passed. 가정: `pieces.py`(v1 조건 15개)는 v1 그래프 · 엔진이 아직 쓰고 있어 T-21~T-23에서 v2로 바꿀 때 지워요 · 순위 값 범위가 문서에 없는 항목(PER 하위 n% 등)은 1~100으로 뒀어요.
 - [ ] **T-21 `app/graph.py` · `app/strategy.py` 블록 모델** — 블록 · 줄 · 토글(R-G1~G12), 문제 목록(R-P1~P12), 실행 방식 자리 규칙(R-X2 · 다이아몬드 포함), 매매 방식(R-M1), 문장으로 보기.
   - 다 됐다: ENGINE-RULES 1 · 2절 시험 예 전부.
   - 결과:
