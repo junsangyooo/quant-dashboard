@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests.conftest import FakeToss, setup_owner
+from tests.conftest import FakeToss, confirm, setup_owner
 
 
 def _save(client, secret: str = FakeToss.SECRET, account: str | None = None) -> None:  # type: ignore[no-untyped-def]
@@ -80,6 +80,6 @@ def test_check_needs_keys(app_client) -> None:  # type: ignore[no-untyped-def]
 def test_delete_keys(app_client) -> None:  # type: ignore[no-untyped-def]
     setup_owner(app_client)
     _save(app_client)
-    r = app_client.delete("/api/connect/toss")
+    r = app_client.delete("/api/connect/toss", headers=confirm(app_client, "toss_key_delete"))
     assert r.json()["toss"]["saved"] is False
     assert r.json()["toss"]["secret_tail"] is None

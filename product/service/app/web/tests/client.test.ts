@@ -36,4 +36,31 @@ describe('api client', () => {
     configureClient({ fetch: vi.fn(() => Promise.reject(new TypeError('failed'))) });
     await expect(api.get('/api/home')).rejects.toBeInstanceOf(NetworkError);
   });
+
+  it('asks for the password again on 403 need_confirm and resends once with the token', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error: 'x', need_confirm: true, action: 'toss_key_delete', title: 't' }),
+          { status: 403 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const onConfirmRequired = vi.fn(() => Promise.resolve('one-time'));
+    configureClient({ fetch, onConfirmRequired });
+    await expect(api.delete('/api/connect/toss')).resolves.toEqual({ ok: true });
+    expect(onConfirmRequired).toHaveBeenCalledWith({ action: 'toss_key_delete', title: 't' });
+    const init = (fetch.mock.calls[1] as unknown as [string, RequestInit])[1];
+    expect((init.headers as Record<string, string>)['X-Confirm-Token']).toBe('one-time');
+  });
+
+  it('a cancelled password ask keeps the 403', async () => {
+    configureClient({
+      fetch: answer(403, { error: 'x', need_confirm: true, action: 'a' }),
+      onConfirmRequired: () => Promise.resolve(null),
+    });
+    const e = (await api.delete('/api/connect/toss').catch((x: unknown) => x)) as ApiError;
+    expect(e.status).toBe(403);
+  });
 });

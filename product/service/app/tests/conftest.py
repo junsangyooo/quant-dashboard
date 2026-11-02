@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import tempfile
 import urllib.parse
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,20 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.market import KST
 from app.toss import HttpRequest, HttpResponse, TransportError
+
+
+# ── 컴퓨터 키 파일은 시험 임시 폴더에만(T-50) ──────────────────────────────
+
+
+# basetemp가 레포 안(tests/.tmp)이라 키 파일만은 운영체제 임시 폴더에 둬요(레포 안 키 파일은 앱이 거절해요).
+
+
+@pytest.fixture(autouse=True)
+def keyfile_path(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    with tempfile.TemporaryDirectory(prefix="quant-test-kf-") as d:
+        path = Path(d) / "keyfile"
+        monkeypatch.setattr("app.vault.KEYFILE_PATH", path)
+        yield path
 
 
 # ── 바깥 소켓 0개 (T-00 ③) ─────────────────────────────────────────────────
@@ -253,3 +268,10 @@ def setup_owner(client: TestClient) -> str:
     )
     assert r.status_code == 200, r.text
     return r.json()["recovery_code"]
+
+
+def confirm(client: TestClient, action: str, password: str = PASSWORD) -> dict[str, str]:
+    """비밀번호 다시 받기(V2-33) → 1회용 토큰 머리글."""
+    r = client.post("/api/confirm", json={"password": password, "action": action})
+    assert r.status_code == 200, r.text
+    return {"x-confirm-token": r.json()["token"]}

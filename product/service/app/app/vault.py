@@ -3,7 +3,10 @@
 - 무작위 데이터 키(32바이트) 하나가 비밀 값들을 AES-GCM으로 잠근다.
 - 데이터 키는 두 번 감싸 둔다: 비밀번호에서 scrypt로 만든 키로 한 번, 복구 코드에서 만든 키로 한 번.
   비밀번호 확인은 따로 해시를 두지 않고, 감싼 데이터 키가 풀리는지로 한다.
-- 풀린 데이터 키는 로그인 세션이 하나라도 살아 있는 동안만 메모리에 있다. 앱을 다시 켜면 잠긴다.
+- 풀린 데이터 키는 로그인 세션이 하나라도 살아 있는 동안만 메모리에 있다. 앱을 다시 켜면 화면은 잠긴다.
+- 세 번째 감싸기: 컴퓨터 키 파일(T-50 · SPEC 10). 키 파일은 레포와 데이터 폴더 밖 고정 경로에 권한 600으로 두고,
+  실행기(자동 확인 · 주문)는 그 키로 데이터 키를 풀어 재부팅 뒤에도 로그인 없이 돈다. 화면 입장은 늘 비밀번호.
+- 돈이 움직이는 일(SPEC 7-4 목록)은 비밀번호를 다시 받아 짧은 1회용 토큰을 내준다. 틀린 횟수는 로그인과 같이 센다.
 - 비밀 값은 어떤 반환 값 · 예외 글 · 로그에도 넣지 않는다. 바깥에는 끝 4자리만 나간다.
 """
 
@@ -17,6 +20,7 @@ import time
 import unicodedata
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -38,6 +42,39 @@ RC_LEN = 16
 
 AAD_PW = b"wrap:password"
 AAD_RC = b"wrap:recovery"
+AAD_KF = b"wrap:keyfile"
+
+# 컴퓨터 키 파일의 고정 경로(레포 · 데이터 폴더 밖). 시험은 conftest가 시험 임시 폴더로 바꿔요.
+DEFAULT_KEYFILE_PATH = Path.home() / ".config" / "quant-service" / "keyfile"
+KEYFILE_PATH = DEFAULT_KEYFILE_PATH
+CONFIRM_S = 120  # 1회용 토큰이 사는 시간
+
+# SPEC 7-4 '비밀번호를 받는 일' 전부. 값은 확인 창(V2-33) 제목.
+MONEY_ACTIONS: dict[str, str] = {
+    "live_start": "실전 운용 시작",
+    "live_amount": "운용 금액 변경",
+    "live_limits": "한도 변경",
+    "live_strategy": "전략 변경",
+    "live_resume_buys": "새 매수 다시 켜기",
+    "live_end": "운용 끝내기",
+    "live_sell_all_end": "전부 팔고 끝내기",
+    "todo_match_account": "계좌에 맞추기",
+    "todo_corp_action": "권리 변동 맞추기",
+    "todo_big_order": "큰 주문 보내기",
+    "toss_key_view": "토스 키 보기",
+    "toss_key_change": "토스 키 변경",
+    "toss_key_delete": "토스 키 삭제",
+    "dart_key_view": "DART 키 보기",
+    "dart_key_change": "DART 키 변경",
+    "dart_key_delete": "DART 키 삭제",
+    "telegram_key_view": "텔레그램 키 보기",
+    "telegram_key_change": "텔레그램 키 변경",
+    "telegram_key_delete": "텔레그램 키 삭제",
+    "restore": "복원",
+    "install_place": "설치 위치 변경",
+    "data_delete": "앱 데이터 삭제",
+    "unknown_order_record": "결과 모르는 주문 기록",
+}
 
 
 class VaultError(Exception):
@@ -108,6 +145,8 @@ class Vault:
         *,
         scrypt_n: int = SCRYPT_N,
         clock: Callable[[], float] = time.time,
+        keyfile: Path | str | None = None,
+        forbidden_dirs: tuple[Path | str, ...] = (),
     ) -> None:
         self.db = db
         self.scrypt_n = scrypt_n
@@ -119,6 +158,14 @@ class Vault:
         self.opened_since_start = False
         # 데이터 키를 지울 때 함께 부를 것들(토스 연결 객체 버리기 등). 잠그기 · 만료 · 마지막 세션 끝 모두.
         self.on_key_cleared: list[Callable[[], None]] = []
+        self.keyfile = Path(keyfile) if keyfile is not None else None
+        if self.keyfile is not None:
+            for d in forbidden_dirs:
+                if self.keyfile.resolve().is_relative_to(Path(d).resolve()):
+                    raise ValueError("키 파일은 레포와 데이터 폴더 밖에 있어야 해요")
+        self._runner_key: bytes | None = None  # 키 파일로 푼 데이터 키(실행기 몫 · 잠그기로 지워지지 않음)
+        self._confirms: dict[str, tuple[str, float]] = {}  # sha256(토큰) -> (일, 끝나는 때)
+        self.load_runner()
 
     # ── 상태 ───────────────────────────────────────────────────────────────
 
@@ -164,6 +211,7 @@ class Vault:
                 (self.scrypt_n, pw_salt, pw_wrap, rc_salt, rc_wrap, _now_iso(), _now_iso()),
             )
             self._key = data_key
+            self._attach_keyfile(data_key)
             return self._new_session(), format_recovery_code(code)
 
     # ── 입장 ────────────────────────────────────────────────────────────────
@@ -211,6 +259,7 @@ class Vault:
                 raise  # _fail은 늘 예외를 던진다
             self.db.run("UPDATE owner SET fails=0, locked_until=0 WHERE id=1")
             self._key = data_key
+            self._attach_keyfile(data_key)
             return self._new_session()
 
     def recover(self, code: str, password: str, password2: str) -> tuple[str, str]:
@@ -249,6 +298,7 @@ class Vault:
             )
             self._sessions.clear()  # 예전 비밀번호로 연 세션은 모두 닫는다
             self._key = data_key
+            self._attach_keyfile(data_key)
             return self._new_session(), format_recovery_code(new_code)
 
     def change_password(self, current: str, password: str, password2: str) -> None:
@@ -280,6 +330,122 @@ class Vault:
                 (pw_salt, seal(derive_key(pw_new, pw_salt, self.scrypt_n), data_key, AAD_PW)),
             )
             self._key = data_key
+            self._attach_keyfile(data_key)
+
+    # ── 컴퓨터 키 파일 ─────────────────────────────────────────────────────
+
+    def _machine_key(self, create: bool) -> bytes | None:
+        """키 파일의 32바이트. 다른 사용자가 읽을 수 있는 권한이면 쓰지 않는다."""
+        path = self.keyfile
+        if path is None:
+            return None
+        if not path.exists():
+            if not create:
+                return None
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                os.write(fd, os.urandom(32).hex().encode())
+            finally:
+                os.close(fd)
+        if path.stat().st_mode & 0o077:
+            return None
+        raw = path.read_text().strip()
+        try:
+            key = bytes.fromhex(raw)
+        except ValueError:
+            return None
+        return key if len(key) == 32 else None
+
+    def _attach_keyfile(self, data_key: bytes) -> None:
+        """비밀번호로 연 김에 키 파일 감싸기를 맞춰 둔다(없거나 키 파일이 바뀌었으면 새로 감싼다)."""
+        try:
+            mk = self._machine_key(create=True)
+        except OSError:
+            return
+        if mk is None:
+            return
+        row = self.db.one("SELECT wrap FROM owner_keyfile WHERE id=1")
+        if row is not None:
+            try:
+                if unseal(mk, bytes(row["wrap"]), AAD_KF) == data_key:
+                    self._runner_key = data_key
+                    return
+            except (InvalidTag, ValueError):
+                pass
+        self.db.run(
+            "INSERT INTO owner_keyfile(id,wrap,at) VALUES(1,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET wrap=excluded.wrap, at=excluded.at",
+            (seal(mk, data_key, AAD_KF), _now_iso()),
+        )
+        self._runner_key = data_key
+
+    def load_runner(self) -> bool:
+        """앱이 켜질 때: 키 파일로 데이터 키를 푼다(로그인 없이). 화면은 여전히 잠겨 있다."""
+        with self._lock:
+            if not self.is_setup():
+                return False
+            row = self.db.one("SELECT wrap FROM owner_keyfile WHERE id=1")
+            try:
+                mk = self._machine_key(create=False)
+            except OSError:
+                mk = None
+            if row is None or mk is None:
+                return False
+            try:
+                self._runner_key = unseal(mk, bytes(row["wrap"]), AAD_KF)
+            except (InvalidTag, ValueError):
+                self._runner_key = None
+            return self._runner_key is not None
+
+    @property
+    def runner_ready(self) -> bool:
+        return self._runner_key is not None
+
+    @property
+    def can_read(self) -> bool:
+        """비밀 값을 풀 수 있나(화면 세션 또는 실행기 키 파일)."""
+        return self.unlocked or self.runner_ready
+
+    def forget_keyfile(self) -> None:
+        """앱 데이터 삭제 때: 감싼 키와 메모리의 실행기 키를 지운다(키 파일은 다른 앱 데이터에 쓰일 수 있어 둔다)."""
+        with self._lock:
+            self.db.run("DELETE FROM owner_keyfile")
+            self._runner_key = None
+
+    # ── 비밀번호 다시 받기(돈이 움직이는 일) ────────────────────────────────
+
+    def confirm(self, password: str, action: str) -> str:
+        """비밀번호가 맞으면 그 일 하나에만 쓰는 짧은 1회용 토큰. 틀린 횟수 · 잠금은 로그인과 같이 센다."""
+        if action not in MONEY_ACTIONS:
+            raise VaultError("없는 일이에요", 400)
+        with self._lock:
+            row = self._owner()
+            self._check_lock()
+            try:
+                key = derive_key(normalize_password(password), bytes(row["pw_salt"]), int(row["scrypt_n"]))
+                unseal(key, bytes(row["pw_wrap"]), AAD_PW)
+            except (InvalidTag, ValueError):
+                self._fail()
+                raise
+            self.db.run("UPDATE owner SET fails=0, locked_until=0 WHERE id=1")
+            now = self.clock()
+            for h, (_, until) in list(self._confirms.items()):
+                if until <= now:
+                    del self._confirms[h]
+            token = secrets.token_urlsafe(24)
+            self._confirms[self._hash(token)] = (action, now + CONFIRM_S)
+            return token
+
+    def use_confirm(self, token: str | None, action: str) -> None:
+        """토큰을 한 번 쓴다. 없거나 다른 일 · 지난 토큰이면 비밀번호 창을 띄우라는 403."""
+        with self._lock:
+            got = self._confirms.pop(self._hash(token), None) if token else None
+            if got is None or got[0] != action or got[1] <= self.clock():
+                raise VaultError(
+                    "비밀번호를 다시 입력해 주세요", 403, need_confirm=True, action=action,
+                    title=MONEY_ACTIONS.get(action, ""),
+                )
 
     # ── 세션 ────────────────────────────────────────────────────────────────
 
@@ -331,9 +497,10 @@ class Vault:
 
     def _need_key(self) -> bytes:
         self._purge()
-        if self._key is None:
+        key = self._key or self._runner_key
+        if key is None:
             raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
-        return self._key
+        return key
 
     def put_secret(self, name: str, value: str) -> None:
         with self._lock:

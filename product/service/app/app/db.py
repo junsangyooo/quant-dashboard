@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS paper_judgements(
 # v2에서 더한 표(SPEC 11-1 · TASKS T-13). 캐시 · 블록 전략 · 실전 운용 · 주문(회차) · 체결 · 할 일 · 알림 ·
 # 이 앱이 산 수량 · 운용 현금 · 기업 행동 기록.
 SCHEMA_V2 = """
+-- 컴퓨터 키 파일로 감싼 데이터 키(T-50 · SPEC 10 vault). 키 파일 자체는 데이터 폴더 밖에 있어요.
+CREATE TABLE IF NOT EXISTS owner_keyfile(id INTEGER PRIMARY KEY CHECK (id = 1), wrap BLOB NOT NULL, at TEXT);
 CREATE TABLE IF NOT EXISTS stock_info(
   symbol TEXT PRIMARY KEY, name TEXT, market TEXT, security_type TEXT, common INTEGER,
   list_date TEXT, delist_date TEXT, shares REAL, leverage REAL, liquidation INTEGER, suspended INTEGER,

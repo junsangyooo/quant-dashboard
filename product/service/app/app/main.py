@@ -45,11 +45,14 @@ from .paper import Paper
 from .publicip import IpFetch, PublicIpError, public_ip
 from .toss import Transport
 from .transport import Transports, build_transports
+from . import vault as vault_mod
 from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
 
 ROOT = Path(__file__).resolve().parent.parent
+REPO = ROOT.parent.parent.parent  # 레포 뿌리(product/service/app → 레포)
 DIST = ROOT / "web" / "dist"
 COOKIE = "qm_session"
+CONFIRM_HEADER = "x-confirm-token"  # 비밀번호 다시 받기로 받은 1회용 토큰
 AUTO_AT = (16, 30)
 log = logging.getLogger("quant-mvp")
 
@@ -90,11 +93,14 @@ def create_app(
     scheduler: bool = True,
     port: int | None = None,
     now: Callable[[], datetime] = now_kst,
+    keyfile: Path | str | None | bool = True,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("MVP_DATA_DIR") or ROOT / "data")
     port = port or int(os.environ.get("MVP_PORT") or 8765)
     db = DB(data / "app.db")
-    vault = Vault(db, scrypt_n=scrypt_n or SCRYPT_N)
+    # 컴퓨터 키 파일(T-50): 기본은 고정 경로(vault.KEYFILE_PATH), False면 안 써요. 레포 · 데이터 폴더 안은 거절.
+    kf = vault_mod.KEYFILE_PATH if keyfile is True else (None if keyfile is False else keyfile)
+    vault = Vault(db, scrypt_n=scrypt_n or SCRYPT_N, keyfile=kf, forbidden_dirs=(data, REPO))
     # 전송은 기본 가짜(T-00). 실제 전송은 transport.build_transports의 두 열쇠가 다 있을 때만.
     if transports is None:
         transports = build_transports()
@@ -310,8 +316,24 @@ def create_app(
     def connect_view() -> dict[str, Any]:
         return conns.view()
 
+    # ── 비밀번호 다시 받기(SPEC 7-4 · V2-33) ─────────────────────────────
+
+    @app.post("/api/confirm")
+    async def confirm(request: Request) -> dict[str, Any]:
+        b = await _body(request)
+        action = str(b.get("action") or "")
+        token = await asyncio.to_thread(vault.confirm, str(b.get("password") or ""), action)
+        return {"token": token, "expires_in": vault_mod.CONFIRM_S}
+
+    def need_confirm(request: Request, action: str) -> None:
+        vault.use_confirm(request.headers.get(CONFIRM_HEADER), action)
+
+    app.state.need_confirm = need_confirm
+
     @app.put("/api/connect/toss")
     async def toss_save(request: Request) -> dict[str, Any]:
+        if conns.view()["toss"]["saved"]:
+            need_confirm(request, "toss_key_change")  # 처음 넣기는 로그인만, 바꾸기는 비밀번호
         b = await _body(request)
         conns.save_toss(
             str(b.get("client_id") or ""),
@@ -321,7 +343,8 @@ def create_app(
         return conns.view()
 
     @app.delete("/api/connect/toss")
-    def toss_delete() -> dict[str, Any]:
+    def toss_delete(request: Request) -> dict[str, Any]:
+        need_confirm(request, "toss_key_delete")
         conns.delete_toss()
         return conns.view()
 
@@ -331,12 +354,15 @@ def create_app(
 
     @app.put("/api/connect/dart")
     async def dart_save(request: Request) -> dict[str, Any]:
+        if conns.view()["dart"]["saved"]:
+            need_confirm(request, "dart_key_change")
         b = await _body(request)
         conns.save_dart(str(b.get("key") or ""))
         return conns.view()
 
     @app.delete("/api/connect/dart")
-    def dart_delete() -> dict[str, Any]:
+    def dart_delete(request: Request) -> dict[str, Any]:
+        need_confirm(request, "dart_key_delete")
         conns.delete_dart()
         return conns.view()
 

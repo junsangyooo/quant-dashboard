@@ -8,6 +8,7 @@ import { copy } from '../copy';
 import { Header } from '../components/Header';
 import { BottomTabs } from '../components/Nav';
 import { Box } from '../components/Box';
+import { ConfirmHost } from '../components/ConfirmHost';
 import { isPageHandle, type PageHandle } from './page';
 import styles from './AppShell.module.css';
 
@@ -65,6 +66,7 @@ export function AppShell() {
         ) : null}
       </main>
       {signedIn && page.kind === 'tab' ? <BottomTabs current={page.tab ?? null} /> : null}
+      {signedIn ? <ConfirmHost /> : null}
       <ScrollRestoration />
     </div>
   );

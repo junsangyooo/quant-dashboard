@@ -13,7 +13,7 @@ from app.main import create_app
 from app.market import KST
 from app.paper import first_schedule
 from tests.helpers import legacy, new_strategy
-from tests.conftest import PASSWORD, FakeBars, FakeIp, FakeToss, make_bars, setup_owner, wave
+from tests.conftest import PASSWORD, confirm, FakeBars, FakeIp, FakeToss, make_bars, setup_owner, wave
 from tests.test_engine_paper import Now, _paper, _version, event_body
 
 # 2025-06-02(월) … 일봉은 2024-01-01(월)부터 평일마다
@@ -257,11 +257,12 @@ def test_lock_drops_the_toss_client(app_client, fake_toss: FakeToss) -> None:  #
     app_client.post("/api/login", json={"password": PASSWORD})
     app_client.post("/api/connect/toss/check")
     c2 = conns._client
-    app_client.put("/api/connect/toss", json={"client_id": FakeToss.CLIENT_ID, "client_secret": FakeToss.SECRET})
+    app_client.put("/api/connect/toss", json={"client_id": FakeToss.CLIENT_ID, "client_secret": FakeToss.SECRET},
+                   headers=confirm(app_client, "toss_key_change"))
     assert conns._client is None and c2._token is None
     app_client.post("/api/connect/toss/check")
     c3 = conns._client
-    app_client.delete("/api/connect/toss")
+    app_client.delete("/api/connect/toss", headers=confirm(app_client, "toss_key_delete"))
     assert conns._client is None and c3._token is None
 
 

@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+import tempfile
 from datetime import date
 
 import uvicorn
@@ -25,5 +27,7 @@ def bars() -> FakeBars:
 
 if __name__ == "__main__":
     folder, port = sys.argv[1], int(sys.argv[2])
-    app = create_app(folder, bars_source=bars(), scheduler=False, port=port)
+    # 키 파일은 시험 임시 폴더에만(데이터 폴더 밖 · T-50)
+    app = create_app(folder, bars_source=bars(), scheduler=False, port=port,
+                     keyfile=Path(tempfile.mkdtemp(prefix="quant-e2e-kf-")) / "keyfile")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

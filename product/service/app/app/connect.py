@@ -175,8 +175,8 @@ class Connections:
 
     def client(self) -> TossClient | None:
         """저장된 키로 만든 클라이언트(키가 같으면 다시 쓴다: 토큰을 덜 받는다)."""
-        if not self.vault.unlocked:
-            self.drop()  # 잠긴 뒤에는 토큰도 남기지 않는다
+        if not self.vault.can_read:
+            self.drop()  # 잠긴 뒤에는 토큰도 남기지 않는다(키 파일이 있으면 실행기는 계속 열 수 있어요)
             return None
         cid = self.vault.get_secret(TOSS_ID)
         sec = self.vault.get_secret(TOSS_SECRET)
@@ -195,7 +195,7 @@ class Connections:
     def check(self) -> dict[str, Any]:
         client = self.client()
         if client is None:
-            if not self.vault.unlocked:
+            if not self.vault.can_read:
                 raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
             raise VaultError("API 키를 먼저 저장해 주세요")
         step = "token"

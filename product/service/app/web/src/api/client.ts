@@ -3,6 +3,9 @@
 // - 401 with `need_login` (no session, expired, or the app was restarted) sends the user to
 //   /login. A wrong password is also 401 but without `need_login`; it stays with its form.
 // - A request that gets no response at all is a NetworkError.
+// - 403 with `need_confirm` (SPEC 7-4: a change that moves money or touches keys) asks for the
+//   password again (V2-33). The host returns a one-time token and the request is sent once more
+//   with it; if the user cancels, the 403 stands.
 
 export interface ApiErrorBody {
   error: string;
@@ -13,7 +16,16 @@ export interface ApiErrorBody {
   problems?: unknown[];
   title?: string;
   detail?: string;
+  need_confirm?: boolean;
+  action?: string;
 }
+
+export interface ConfirmAsk {
+  action: string;
+  title: string;
+}
+
+export const CONFIRM_HEADER = 'X-Confirm-Token';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -44,6 +56,8 @@ interface ClientConfig {
   fetch: typeof fetch;
   /** Called when the server says the session is gone. */
   onLoginRequired: () => void;
+  /** Asks for the password again; resolves to a one-time token, or null when cancelled. */
+  onConfirmRequired: (ask: ConfirmAsk) => Promise<string | null>;
 }
 
 const defaults: ClientConfig = {
@@ -51,6 +65,7 @@ const defaults: ClientConfig = {
   onLoginRequired: () => {
     window.location.assign('/login');
   },
+  onConfirmRequired: () => Promise.resolve(null),
 };
 
 const config: ClientConfig = { ...defaults };
@@ -85,11 +100,16 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
 export async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
-  options: { query?: Record<string, QueryValue> | undefined; body?: unknown } = {},
+  options: {
+    query?: Record<string, QueryValue> | undefined;
+    body?: unknown;
+    confirmToken?: string | undefined;
+  } = {},
 ): Promise<T> {
-  const { query, body } = options;
+  const { query, body, confirmToken } = options;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined || method === 'POST') headers['Content-Type'] = 'application/json';
+  if (confirmToken) headers[CONFIRM_HEADER] = confirmToken;
 
   let res: Response;
   try {
@@ -115,6 +135,13 @@ export async function request<T>(
   if (!res.ok) {
     const errorBody = isErrorBody(data) ? data : null;
     if (res.status === 401 && errorBody?.need_login) config.onLoginRequired();
+    if (res.status === 403 && errorBody?.need_confirm && !confirmToken) {
+      const token = await config.onConfirmRequired({
+        action: errorBody.action ?? '',
+        title: errorBody.title ?? '',
+      });
+      if (token) return request<T>(method, path, { query, body, confirmToken: token });
+    }
     throw new ApiError(res.status, errorBody);
   }
   return data as T;
