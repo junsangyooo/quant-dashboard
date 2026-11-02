@@ -52,3 +52,4 @@
 | # | 날짜 | 무엇 | 지금 가정 | 답 |
 |---|---|---|---|---|
 | Q-N1 | 2026-11-02 | GLOSSARY 5절 끝은 `web/tests/oldWords.ts`(v1 낱말 목록)를 늘리라고 하는데, 그 목록은 v2가 쓰는 '새 매수 · 멈춤 · 잠김'을 금지해요 | 화면 시험은 GLOSSARY 5절 + SPEC 8-1 목록(`web/tests/forbiddenWords.json`)만 쓰고 `oldWords.ts`는 지웠어요(T-01). GLOSSARY 4절 옛 말은 문구를 지을 때 따르는 규칙으로만 둬요 | |
+| Q-N2 | 2026-11-02 | 토스 요청 한도 그룹(19개)마다 초당 몇 건인지 명세에 숫자가 없어요(응답 헤더 `X-RateLimit-Limit`로만 알려 줘요) | 처음엔 그룹마다 초당 5건, 응답 헤더를 받으면 그 값으로 바꿔요(`app/toss.py` `DEFAULT_RATE`) · 429는 `Retry-After`만큼 쉬고 두 번까지 다시 | |

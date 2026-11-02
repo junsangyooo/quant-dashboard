@@ -31,9 +31,9 @@
 
 ## 1. 데이터 (SPEC 11-1 순서 1~4)
 
-- [ ] **T-10 `app/toss.py` 1.2.28** — 요청 한도 그룹, candles(`before` · `adjusted`), stocks/all, warnings, sectors, investor-trading, market-indicators, market-calendar, buying-power, sellable-quantity, commissions, 응답 꼴 · 이상값 검사(R-O14). 주문 · 조건주문 · 내역 함수는 만들되 가짜 전송으로만 시험. **가짜 응답은 `vendor/toss-openapi-1.2.28.json`의 꼴(필드 이름 · 형)을 따라요.**
+- [x] **T-10 `app/toss.py` 1.2.28** — 요청 한도 그룹, candles(`before` · `adjusted`), stocks/all, warnings, sectors, investor-trading, market-indicators, market-calendar, buying-power, sellable-quantity, commissions, 응답 꼴 · 이상값 검사(R-O14). 주문 · 조건주문 · 내역 함수는 만들되 가짜 전송으로만 시험. **가짜 응답은 `vendor/toss-openapi-1.2.28.json`의 꼴(필드 이름 · 형)을 따라요.**
   - 다 됐다: 엔드포인트마다 가짜 응답 시험(명세의 응답 스키마로 가짜 응답을 검사). 응답 필드가 빠지면 '응답 이상'으로 끝나는 시험.
-  - 결과:
+  - 결과: `app/toss.py`를 1.2.28로 다시 썼어요(요청 한도 그룹 19개 · 그룹마다 토큰 통 · `X-RateLimit-*` 반영 · 429면 `Retry-After` 쉬고 두 번 다시, candles `before` · `adjusted` · `daily_bars` 쪽 넘기기, 지수 캔들 · 지수 현재가, stocks/all · stocks · warnings · sectors · sector stocks · investor-trading · market-calendar · buying-power · sellable-quantity · commissions · holdings, 주문 생성 · 조회 · 목록 · 정정 · 취소, 조건주문 생성 · 목록 · 조회 · 정정 · 취소). 성공 응답 꼴이 다르면 `TossShapeError`(연결 확인 '토스 응답 이상이에요'), 종목 값 이상(가격 0 · 없음 · 전일 대비 ±30% 넘음)은 `anomalies`. 시험 `tests/test_toss.py` 31건: 가짜 서버 `tests/fake_toss.py`가 받은 요청 · 내보낸 응답을 명세로 검사(`tests/openapi_check.py` · 명세 SHA-256 확인)해 어긋남 0, 명세의 42개 메서드가 모두 설명의 그룹과 같음, 필드 빠짐 · 형 틀림 15가지가 모두 '응답 이상', 주문 · 조건주문은 가짜 서버로만(전송을 안 준 클라이언트의 주문은 가짜 전송에서 끝남). pytest 767 passed. 가정: 그룹별 한도 숫자는 명세에 없어 처음 초당 5건으로 보내고 응답 헤더 값으로 바꿔요(OPEN-QUESTIONS Q-N2).
 - [ ] **T-11 `app/market.py` → TossSource** — YahooSource 삭제, 20:00 뒤 확정, 코스피 비교도 토스 지수, 장 시간은 market-calendar(R-O1).
   - 다 됐다: 야후 의존(`yfinance`)이 requirements와 앱 코드에서 0(회귀 시험 자료는 그대로 · OPEN-QUESTIONS Q-L7). 개장 지연일 · 휴장일 시험.
   - 결과:
