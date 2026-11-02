@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
 from . import blocks as bk
+from .catalog import CATALOG
 from .copytext import read_body
 from .db import DB
 from .engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
@@ -29,6 +31,7 @@ from .rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor, tick_size
 from .toss import TossApiError, TossClient, TossError, TossShapeError, TossUnreachableError
 from .transport import TransportError
 
+DART_ITEMS = {i for i, it in CATALOG.items() if it.lock == "dart"}
 RUNNING = "running"
 ENDED = "ended"
 CHECK_AT = time(20, 10)
@@ -43,18 +46,33 @@ LOOKUPS = 3  # R-O12: 2분 동안 3번
 
 # 할 일 제목(SPEC 5-5 · 화면 · 텔레그램은 [종목] 뺌)
 TODO = {
-    "unknown": ("red", "결과 모르는 주문 [{name}]"),
-    "mismatch": ("red", "계좌 불일치 [{name}]"),
-    "corp": ("red", "권리 변동 [{name}]"),
-    "huge": ("yellow", "큰 주문 보내기 [{name}]"),
-    "too_big": ("yellow", "주문 크기 한도를 넘었어요 [{name}]"),
-    "sell_fail2": ("red", "매도가 이틀 실패했어요 [{name}]"),
-    "precheck": ("red", "장 시작 전 점검 실패"),
-    "missed_open": ("yellow", "시가 주문을 놓쳤어요"),
-    "unknown_order_no": ("red", "모르는 주문 번호가 있어요"),
-    "cash_cut": ("info", "운용 현금을 계좌 현금에 맞췄어요"),
-    "shape": ("red", "응답 이상 · 주문 멈춤"),
+    # 빨강
+    "precheck": ("red", "장 시작 전 점검 실패 · {why}"),
+    "toss_down": ("red", "토스 연결이 끊겼어요"),
+    "other_user": ("red", "다른 곳에서 같은 키를 쓰고 있어요"),
     "check_fail": ("red", "오늘 확인 실패"),
+    "unknown": ("red", "결과 모르는 주문 · [{name}]"),
+    "mismatch": ("red", "계좌 불일치 · [{name}]"),
+    "corp": ("red", "권리 변동 · [{name}]"),
+    "shape": ("red", "토스 응답이 예상과 달라요"),
+    "sell_fail2": ("red", "안 팔린 종목 · [{name}]"),
+    "unknown_order_no": ("red", "모르는 주문 번호가 있어요"),
+    # 노랑
+    "missed_open": ("yellow", "시가 주문을 놓쳤어요 · 앱이 꺼져 있었어요"),
+    "loss_limit": ("yellow", "하루 손실 한도 · 내일 새 매수 멈춤"),
+    "huge": ("yellow", "큰 주문 확인 · [{name}] [{amount}]"),
+    "too_big": ("yellow", "큰 주문 확인 · [{name}] [{amount}]"),
+    "cond_fail": ("yellow", "조건주문 다시 걸기 실패 · [{name}]"),
+    "dart_error": ("yellow", "DART 연결 오류"),
+    "cash_cut": ("yellow", "운용 현금이 줄었어요(출금)"),
+}
+# SPEC 5-6 '막히는 범위'
+SCOPE = {
+    "precheck": "그날 주문 0", "toss_down": "실전 주문 전부 0 · 장중 감시도 멈춤", "other_user": "실전 주문 전부 0",
+    "check_fail": "다음 거래일 새 매수 0", "unknown": "그 종목 새 주문 0", "mismatch": "그 종목 0",
+    "corp": "그 종목 0", "shape": "실전 주문 전부 0 · 장중 감시도 멈춤", "missed_open": "그날 매수 0",
+    "loss_limit": "다음 거래일 매수 0", "huge": "그 주문", "too_big": "그 주문",
+    "dart_error": "재무 조건이 든 전략의 새 매수 0",
 }
 
 
@@ -155,14 +173,15 @@ class Live:
             return int(open_["id"])
         sev, title = TODO[kind]
         name = self.info().get(symbol or "", {}).get("name") or symbol or ""
+        d = data or {}
+        amount = f"{round(float(d['qty']) * float(d['cap'])):,}원" if "qty" in d and "cap" in d else ""
+        text = title.format(name=name, why=body or "원인 모름", amount=amount)
         tid = self.db.run("INSERT INTO todos(run_id,kind,severity,symbol,title,body,data,status,created_at) "
                           "VALUES(?,?,?,?,?,?,?, 'open', ?)",
-                          (rid, kind, sev, symbol, title.format(name=name), body,
-                           json.dumps(data or {}, ensure_ascii=False), _iso(self.now())))
-        if sev == "red":
-            self.notify("todo_red", f"{title.split(' [')[0]} · 앱에서 보기")
-        elif sev == "yellow":
-            self.notify("todo_yellow", f"{title.split(' [')[0]} · 앱에서 보기")
+                          (rid, kind, sev, symbol, text, SCOPE.get(kind, body),
+                           json.dumps(d, ensure_ascii=False), _iso(self.now())))
+        plain = re.sub(r"\s*·?\s*\[[^\]]*\]", "", text).strip()  # 텔레그램은 [종목] · [금액]을 빼요
+        self.notify("todo_red" if sev == "red" else "todo_yellow", f"{plain} · 앱에서 보기")
         return tid
 
     # ── 엔진 ────────────────────────────────────────────────────────────────
@@ -187,7 +206,7 @@ class Live:
                 bars[sym] = [*(bars.get(sym) or []), b]
         data = MarketData(series={s: Series(b) for s, b in bars.items() if b}, info=info, live=True)
         st = self.state(int(r["id"]))
-        eng_state = {k: st[k] for k in ("cash", "pos", "plans", "day_no", "sold", "loss_block_d", "unsettled")
+        eng_state = {k: st[k] for k in ("cash", "pos", "plans", "day_no", "sold", "loss_block_d", "unsettled", "last_equity")
                      if k in st}
         cal = sorted({d for s in data.series.values() for d in s.d})
         settings = json.loads(r["settings"] or "{}")
@@ -278,7 +297,13 @@ class Live:
         if self.paused:  # 새 매수 멈춤
             plans = [p for p in plans if p["side"] == "sell"]
         for_d = self.market.calendar.next_open(upto).isoformat()
-        st.update({k: eng.state[k] for k in ("day_no", "sold", "loss_block_d") if k in eng.state})
+        if eng.state.get("loss_block_d") == upto.isoformat():
+            self.todo(rid, "loss_limit")
+        if self.db.get_meta("dart.error") and any(
+                r_["item"] in DART_ITEMS for b_ in eng.c.graph["blocks"] for r_ in b_["rows"]):
+            plans = [p for p in plans if p["side"] == "sell"]  # DART 연결 오류: 재무 조건 전략 새 매수 0
+            self.todo(rid, "dart_error")
+        st.update({k: eng.state[k] for k in ("day_no", "sold", "loss_block_d", "last_equity") if k in eng.state})
         st["plans"] = []
         st["next"] = {"judged": upto.isoformat(), "for_d": for_d, "plans": plans}
         self.save(rid, st)
@@ -295,25 +320,45 @@ class Live:
     def precheck(self, rid: int) -> bool:
         st = self.state(rid)
         nxt = st.get("next") or {}
+        why = ""
         try:
             c = self._need()
+            why = "토큰"
             c.token(force=True)
+            why = "계좌"
             c.account(force=True)
+            why = "잔고"
             c.buying_power()
+            why = "미체결"
             opened, _ = c.orders("OPEN")
             mine = {o["toss_order_id"] for o in self.db.all("SELECT toss_order_id FROM orders WHERE run_id=?", (rid,))}
             strange = [o for o in opened if o.order_id not in mine]
             ok = True
             if strange and any(o.symbol in {p["sym"] for p in nxt.get("plans", [])} for o in strange):
                 ok = False
+        except TossApiError as exc:
+            ok = False
+            if exc.status == 403:
+                why = "허용 IP"
+            if why in ("토큰", "허용 IP"):  # 매도 주문도 못 내요 → 장중 감시도 멈춤(조건주문만)
+                self.set_meta(rid, "watch_off", self.now().astimezone(KST).date().isoformat())
+            if exc.status == 401 and why != "토큰":
+                self.todo(rid, "other_user")
         except (TossError, LiveError, TransportError):
             ok = False
+            if why == "토큰":
+                self.set_meta(rid, "watch_off", self.now().astimezone(KST).date().isoformat())
+                self.todo(rid, "toss_down")
+        if ok:
+            self.set_meta(rid, "watch_off", None)
+            self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE kind IN ('precheck','toss_down') "
+                        "AND status='open'", (_iso(self.now()),))
         self.set_meta(rid, "precheck", json.dumps({"at": _iso(self.now()), "ok": ok}))
         n = len(nxt.get("plans", []))
         self.notify("precheck", f"장 시작 전 점검 · {'통과' if ok else '실패'} · "
                     + (f"08:35 주문 {n}건" if ok else "오늘 주문 멈춤 · 앱에서 보기"))
         if not ok:
-            self.todo(rid, "precheck")
+            self.todo(rid, "precheck", body=why)
         return ok
 
     # ── 08:35 시가 주문(R-O3 · R-O5 · R-O8 · R-O9 · R-O10 · R-X7) ─────────
@@ -346,7 +391,11 @@ class Live:
         cash = float(st["cash"])
         for p in sells:
             out.append(self._open_sell(rid, st, c, p, holdings, today))
+        check_failed = bool(self.meta(rid, "check_failed"))
         for p in buys:
+            if check_failed:  # 오늘 확인 실패: 다음 거래일 새 매수 0(R-L4)
+                out.append({"sym": p["sym"], "skip": "오늘 확인 실패"})
+                continue
             if self.paused:
                 out.append({"sym": p["sym"], "skip": "새 매수 멈춤"})
                 continue
@@ -638,8 +687,8 @@ class Live:
 
     def intraday_tick(self, rid: int) -> list[dict[str, Any]]:
         """장중 1분마다: 현재가가 장중 감시 줄에 닿으면 장중 매도 길. 응답 이상 종목은 0, 꼴이 다르면 전체 멈춤."""
-        if self.halted:
-            return []
+        if self.halted or self.meta(rid, "watch_off") == self.now().astimezone(KST).date().isoformat():
+            return []  # 응답 이상 · 토큰 · 허용 IP 실패: 장중 감시 멈춤(조건주문만 동작)
         r = self.run(rid)
         st = self.state(rid)
         held = [s for s in st["pos"] if s not in st["blocked"]]
@@ -766,8 +815,12 @@ class Live:
                 legs.append({"side": "SELL", "trigger": int(take_t), "price": int(take_t)})
             kind = "OCO" if len(legs) == 2 else "SINGLE"
             expire = today + timedelta(days=364)
-            cid = c.create_conditional_order(symbol=sym, kind=kind, quantity=int(p["qty"]), expire=expire,
-                                             first=legs[0], second=legs[1] if len(legs) > 1 else None)
+            try:
+                cid = c.create_conditional_order(symbol=sym, kind=kind, quantity=int(p["qty"]), expire=expire,
+                                                 first=legs[0], second=legs[1] if len(legs) > 1 else None)
+            except (TossError, TransportError):
+                self.todo(rid, "cond_fail", sym)
+                continue
             self.db.run("INSERT INTO cond_orders(run_id,symbol,toss_cond_id,kind,qty,stop_trigger,take_trigger,expire,"
                         "status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
                         (rid, sym, cid, kind, int(p["qty"]), stop_t, take_t, expire.isoformat(), "watching",
@@ -1059,7 +1112,7 @@ class Live:
 
     def view(self) -> dict[str, Any]:
         r = self.run()
-        todos = [dict(t) for t in self.db.all("SELECT id,kind,severity,symbol,title,created_at FROM todos "
+        todos = [dict(t) for t in self.db.all("SELECT id,kind,severity,symbol,title,body,created_at FROM todos "
                                                "WHERE status='open' ORDER BY id DESC")]
         if r is None:
             return {"running": False, "paused": self.paused, "halted": self.halted, "todos": todos}

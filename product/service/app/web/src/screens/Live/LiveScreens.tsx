@@ -615,6 +615,7 @@ function TodoRow({ d, open, onToggle }: { d: LiveTodo; open: boolean; onToggle: 
       </button>
       {open ? (
         <div className="stack-inline">
+          {d.body ? <p className="t-caption c-muted">{d.body}</p> : null}
           {d.kind === 'mismatch' ? (
             <Button
               onClick={() => {

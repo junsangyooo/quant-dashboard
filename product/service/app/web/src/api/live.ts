@@ -8,6 +8,7 @@ export interface LiveTodo {
   severity: 'red' | 'yellow' | 'info';
   symbol: string | null;
   title: string;
+  body: string | null;
   created_at: string;
 }
 
