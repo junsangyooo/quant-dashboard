@@ -33,7 +33,7 @@ from . import APP_VERSION_TEXT
 from . import strategy as st
 from .connect import Connections
 from .db import DB, body_format
-from .engine import BacktestError, run_backtest, universe_of, warmup_calendar_days
+from .engine_mvp import BacktestError, run_backtest, universe_of, warmup_calendar_days
 from .market import INDEX, KST, BarSource, Market, MarketDataError, TossSource, now_kst
 from .paper import Paper
 from .publicip import IpFetch, PublicIpError, public_ip

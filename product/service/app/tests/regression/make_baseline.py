@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from app import strategy as st
-from app.engine import run_backtest
+from app.engine_mvp import run_backtest
 from tests.regression.cases import SEEDS, YAHOO, bar_set, bodies, digest, trade_key, yahoo_body
 from tests.regression.replay import paper_replay
 

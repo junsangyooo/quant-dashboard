@@ -7,7 +7,7 @@ import random
 
 import pytest
 
-from app.engine import FEE, Engine, Series, run_backtest
+from app.engine_mvp import FEE, Engine, Series, run_backtest
 from tests.conftest import make_bars
 
 CASH = 1_000_000.0

@@ -16,7 +16,7 @@ from typing import Any
 
 from .connect import Connections
 from .db import DB
-from .engine import Engine, Series, universe_of, warmup_calendar_days
+from .engine_mvp import Engine, Series, universe_of, warmup_calendar_days
 from .market import KST, Market, now_kst
 from .strategy import SLOT_LABEL, reason_rows, stock_name
 from .vault import VaultError

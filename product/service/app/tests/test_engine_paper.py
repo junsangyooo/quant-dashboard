@@ -11,7 +11,7 @@ import pytest
 from app import strategy as st
 from app.connect import Connections
 from app.db import DB
-from app.engine import FEE, SELL_TAX, Engine, Series, metrics, run_backtest
+from app.engine_mvp import FEE, SELL_TAX, Engine, Series, metrics, run_backtest
 from app.market import KST, Market
 from app.paper import Paper
 from app.vault import Vault
