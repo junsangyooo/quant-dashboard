@@ -31,6 +31,7 @@ export const copy = {
     plan: '계획',
     history: '기록',
     strategies: '전략',
+    paper: '모의투자',
   },
 
   pages: {
@@ -46,6 +47,9 @@ export const copy = {
     editor: '전략 편집',
     backtest: '백테스트',
     import: '복사한 전략 붙여 넣기',
+    paper: '모의투자',
+    paperRun: '모의투자 상세',
+    paperStart: '모의투자 시작',
     settings: '설정',
     connect: '연결',
     password: '비밀번호 변경',

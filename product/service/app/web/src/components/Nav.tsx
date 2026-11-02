@@ -2,7 +2,7 @@
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { History, Target, Wallet, Workflow, type LucideIcon } from 'lucide-react';
+import { FlaskConical, History, Target, Wallet, Workflow, type LucideIcon } from 'lucide-react';
 import { copy } from '../copy';
 import styles from './Nav.module.css';
 
@@ -19,6 +19,7 @@ export const TABS: readonly TabDef[] = [
   { key: 'plan', to: '/plan', icon: Target },
   { key: 'history', to: '/history', icon: History },
   { key: 'strategies', to: '/strategies', icon: Workflow },
+  { key: 'paper', to: '/paper', icon: FlaskConical },
 ];
 
 export interface NavItemProps {

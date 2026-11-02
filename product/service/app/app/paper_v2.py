@@ -30,11 +30,15 @@ MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
 CHECK_AT = time(20, 10)
 RUNNING, ENDED = "v2-running", "v2-ended"
 ALREADY = "이 전략은 이미 모의투자 중이에요"
-DIFF_LINES = [
-    "체결은 다음 거래일 일봉 시가로 셈해요 · 실전은 시가 단일가 주문이라 체결 가격이 다를 수 있어요",
-    "장중 감시 · 조건주문 손절은 그날 고가 · 저가로 셈해요",
-    "앱이 꺼져 있던 날은 다음 확인에서 이어서 채워요 · 실전은 지난 날 주문을 내지 않아요",
-]
+DIFF_LINE = ("실전과 다른 점 · 체결은 일봉 시가로 계산해요(실제로는 호가에 따라 달라요) · 앱이 꺼진 날도 이어서 "
+             "채워요 · 장중 손절은 고가 · 저가로 계산해요")
+START_LINE = "평일 20:10에 확인하고 다음 거래일 시가로 모의 체결해요 · 실제 돈은 움직이지 않아요"
+LIMITS_LINE = "한도 · 기본값 · 하루 손실 −3% · 종목당 40% · 주문 크기 2,000만 원"
+DAYS = "월화수목금토일"
+
+
+def md(d: date) -> str:
+    return f"{d.month}/{d.day}({DAYS[d.weekday()]})"
 
 
 class PaperError(Exception):
@@ -194,8 +198,45 @@ class PaperV2:
             "total": total, "return": total / float(r["cash0"]) - 1,
             "holdings": [{"sym": s, **p} for s, p in state["pos"].items()],
             "plans": state["plans"], "trades": trades, "curve": curve, "last_date": r["last_date"],
-            "started_at": r["started_at"], "ended_at": r["ended_at"], "diff_lines": DIFF_LINES,
+            "started_at": r["started_at"], "ended_at": r["ended_at"], "diff_line": DIFF_LINE,
+            "first_check": self.first_times(datetime.fromisoformat(r["started_at"]))["line"]
+            if not trades and len(curve) <= 1 else "",
+            "bench_return": self._bench(curve),
         }
+
+    def _bench(self, curve: list[tuple[str, float]]) -> float | None:
+        if len(curve) < 2:
+            return None
+        try:
+            ks = self.market.bars("KOSPI", date.fromisoformat(curve[0][0]), date.fromisoformat(curve[-1][0]))
+        except Exception:  # 지수를 못 받으면 '—'
+            return None
+        return ks[-1]["c"] / ks[0]["c"] - 1 if len(ks) >= 2 and ks[0]["c"] else None
+
+    def first_times(self, now: datetime | None = None) -> dict[str, str]:
+        """시작 창(그림 V2-42): '첫 확인 11/3(화) 20:10 · 첫 모의 체결 11/4(수) 시가'."""
+        now = now or self.now()
+        cal = self.market.calendar
+        local = now.astimezone(KST)
+        today = local.date()
+        if cal.is_open(today):
+            # 거래일: 20:10 전이면 그날 20:10, 뒤면 시작하자마자(그날 20:10 확인을 바로) · 체결은 다음 거래일
+            fill = cal.next_open(today)
+            return {"check": today.isoformat(), "fill": fill.isoformat(),
+                    "line": f"첫 확인 {md(today)} 20:10 · 첫 모의 체결 {md(fill)} 시가"}
+        # 휴장일: 시작하자마자 마지막 일봉으로 확인(R-L11과 같은 꼴) · 체결은 다음 거래일
+        fill = cal.next_open(today)
+        return {"check": today.isoformat(), "fill": fill.isoformat(),
+                "line": f"첫 확인 시작하면 바로 · 첫 모의 체결 {md(fill)} 시가"}
+
+    def preview(self, version_id: int) -> dict[str, Any]:
+        _, v = self._body(version_id)
+        s = self.db.one("SELECT name FROM strategies WHERE id=?", (v["strategy_id"],))
+        running = self.running_for(int(v["strategy_id"]))
+        ft = self.first_times()
+        return {"name": s["name"] if s else "", "version_no": v["no"], "limits": LIMITS_LINE, "line": START_LINE,
+                "already": ALREADY if running is not None else "", "running_id": running["id"] if running else None,
+                "check": ft["check"], "fill": ft["fill"], "first_line": ft["line"]}
 
     def list(self) -> list[dict[str, Any]]:
         rows = self.db.all("SELECT id FROM paper_runs WHERE status IN (?,?) ORDER BY id DESC", (RUNNING, ENDED))

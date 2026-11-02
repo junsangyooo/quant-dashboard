@@ -313,3 +313,68 @@ export const runBacktestV2 = (b: {
   end: string;
   cash: number;
 }) => api.post<BacktestV2Result>('/api/v2/backtest', b);
+
+// ── 모의투자(T-41) ────────────────────────────────────────────────────────────
+
+export interface PaperTrade {
+  d: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  qty: number;
+  price: number;
+  amount: number;
+  pnl: number | null;
+}
+
+export interface PaperRunV2 {
+  id: number;
+  status: 'running' | 'ended';
+  strategy_id: number | null;
+  name: string;
+  version_no: number | null;
+  cash0: number;
+  cash: number;
+  total: number;
+  return: number;
+  holdings: { sym: string; qty: number; avg: number }[];
+  plans: { sym: string; side: 'buy' | 'sell'; value?: number; qty?: number; reason: string[] }[];
+  trades: PaperTrade[];
+  curve: [string, number][];
+  last_date: string | null;
+  started_at: string;
+  ended_at: string | null;
+  diff_line: string;
+  first_check: string;
+  bench_return: number | null;
+}
+
+export interface PaperPreview {
+  name: string;
+  version_no: number;
+  limits: string;
+  line: string;
+  already: string;
+  running_id: number | null;
+  check: string;
+  fill: string;
+  first_line: string;
+}
+
+export const usePaperRuns = () =>
+  useQuery({
+    queryKey: ['v2', 'paper'],
+    queryFn: () => api.get<{ runs: PaperRunV2[] }>('/api/v2/paper'),
+  });
+export const usePaperRun = (id: number) =>
+  useQuery({
+    queryKey: ['v2', 'paper', id],
+    queryFn: () => api.get<PaperRunV2>(`/api/v2/paper/${String(id)}`),
+  });
+export const usePaperPreview = (vid: number) =>
+  useQuery({
+    queryKey: ['v2', 'paper-preview', vid],
+    queryFn: () => api.get<PaperPreview>('/api/v2/paper/preview', { version_id: vid }),
+  });
+export const startPaper = (version_id: number, cash: number) =>
+  api.post<PaperRunV2>('/api/v2/paper/start', { version_id, cash });
+export const stopPaper = (id: number) => api.post<PaperRunV2>(`/api/v2/paper/${String(id)}/stop`);

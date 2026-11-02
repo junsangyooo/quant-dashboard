@@ -195,5 +195,18 @@ def test_paper_api(app_client) -> None:  # type: ignore[no-untyped-def]
     assert again.status_code == 409 and again.json()["error"] == "이 전략은 이미 모의투자 중이에요"
     assert app_client.get(f"/api/v2/strategies/{sid}").json()["running"]["kind"] == "paper"
     rid = r.json()["id"]
-    assert app_client.get(f"/api/v2/paper/{rid}").json()["diff_lines"]
+    assert app_client.get(f"/api/v2/paper/{rid}").json()["diff_line"].startswith("실전과 다른 점 · ")
+    pv = app_client.get(f"/api/v2/paper/preview?version_id={vid}").json()
+    assert pv["already"] == "이 전략은 이미 모의투자 중이에요"
+    assert pv["limits"] == "한도 · 기본값 · 하루 손실 −3% · 종목당 40% · 주문 크기 2,000만 원"
     assert app_client.post(f"/api/v2/paper/{rid}/stop").json()["status"] == "ended"
+
+
+def test_first_times_line(tmp_path: Path) -> None:
+    now = Now(datetime(2026, 11, 2, 21, 0, tzinfo=KST))  # 월요일 21:00 → 바로 확인 · 화요일 시가
+    _, paper, _ = setup(tmp_path, {"111111": flat(5)}, now)
+    assert paper.first_times()["line"] == "첫 확인 11/2(월) 20:10 · 첫 모의 체결 11/3(화) 시가"
+    now.at("2026-11-03", 15, 0)  # 화요일 장중 → 그날 20:10
+    assert paper.first_times()["line"] == "첫 확인 11/3(화) 20:10 · 첫 모의 체결 11/4(수) 시가"
+    now.at("2026-11-07", 12, 0)  # 토요일 → 시작하자마자 금요일 일봉으로 확인 · 월요일 시가
+    assert paper.first_times()["line"] == "첫 확인 시작하면 바로 · 첫 모의 체결 11/9(월) 시가"

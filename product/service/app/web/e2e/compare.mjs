@@ -110,6 +110,45 @@ function blocks(opts = {}) {
     },
   ];
 
+  // 모의투자 탭: prep이 새 버전을 만들고(필요하면 모의투자를 시작하고) 열 경로를 돌려줘요
+  async function paperPrep(ctx, id, { run = true } = {}) {
+    const v = await (
+      await ctx.request.post(`${base}/api/v2/strategies/${id}/versions`, {
+        data: { body: blocks() },
+      })
+    ).json();
+    if (!run) return { vid: v.version_id };
+    const started = await (
+      await ctx.request.post(`${base}/api/v2/paper/start`, {
+        data: { version_id: v.version_id, cash: 10000000 },
+      })
+    ).json();
+    await ctx.request.post(`${base}/api/v2/paper/check`);
+    return { vid: v.version_id, rid: started.id ?? started.run_id };
+  }
+
+  STATES.paper = [
+    {
+      name: 'V2-40 있음',
+      frame: 'V2-40__있음__1440__345-292339.png',
+      prep: async (ctx, id) => (await paperPrep(ctx, id), '/paper'),
+      go: async () => undefined,
+    },
+    {
+      name: 'V2-41 모의투자 중',
+      frame: 'V2-41__모의투자_중__1440__345-292548.png',
+      prep: async (ctx, id) => `/paper/${(await paperPrep(ctx, id)).rid}`,
+      go: async () => undefined,
+    },
+    {
+      name: 'V2-42 기본',
+      frame: 'V2-42__기본__1440__331-172322.png',
+      prep: async (ctx, id) =>
+        `/paper/start?version=${(await paperPrep(ctx, id, { run: false })).vid}`,
+      go: async () => undefined,
+    },
+  ];
+
   const row = (item, op, value, extra = {}) => ({
     item,
     op,
@@ -378,6 +417,43 @@ STATES.backtest = [
   },
 ];
 
+// 모의투자 탭: prep이 새 버전을 만들고(필요하면 모의투자를 시작하고) 열 경로를 돌려줘요
+async function paperPrep(ctx, id, { run = true } = {}) {
+  const v = await (
+    await ctx.request.post(`${base}/api/v2/strategies/${id}/versions`, { data: { body: blocks() } })
+  ).json();
+  if (!run) return { vid: v.version_id };
+  const started = await (
+    await ctx.request.post(`${base}/api/v2/paper/start`, {
+      data: { version_id: v.version_id, cash: 10000000 },
+    })
+  ).json();
+  await ctx.request.post(`${base}/api/v2/paper/check`);
+  return { vid: v.version_id, rid: started.id ?? started.run_id };
+}
+
+STATES.paper = [
+  {
+    name: 'V2-40 있음',
+    frame: 'V2-40__있음__1440__345-292339.png',
+    prep: async (ctx, id) => (await paperPrep(ctx, id), '/paper'),
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-41 모의투자 중',
+    frame: 'V2-41__모의투자_중__1440__345-292548.png',
+    prep: async (ctx, id) => `/paper/${(await paperPrep(ctx, id)).rid}`,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-42 기본',
+    frame: 'V2-42__기본__1440__331-172322.png',
+    prep: async (ctx, id) =>
+      `/paper/start?version=${(await paperPrep(ctx, id, { run: false })).vid}`,
+    go: async () => undefined,
+  },
+];
+
 const row = (item, op, value, extra = {}) => ({
   item,
   op,
@@ -403,8 +479,9 @@ for (const [k, st] of STATES[screen].entries()) {
     await ctx.request.post(`${base}/api/v2/strategies/${id}/versions`, {
       data: { body: st.body(row) },
     });
+  const path = st.prep ? await st.prep(ctx, id) : st.path;
   const page = await ctx.newPage();
-  await page.goto(`${base}${(st.path ?? `/strategies/${id}/edit`).replace('ID', String(id))}`);
+  await page.goto(`${base}${(path ?? `/strategies/${id}/edit`).replace('ID', String(id))}`);
   await page.waitForSelector(screen === 'editor' ? '[data-block]' : 'main h1');
   await page.waitForTimeout(400);
   await st.go(page);

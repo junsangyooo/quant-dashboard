@@ -782,6 +782,10 @@ def create_app(
             raise VaultError("전략 버전을 골라 주세요") from None
         return await asyncio.to_thread(paper2.start, vid, b.get("cash"))
 
+    @app.get("/api/v2/paper/preview")
+    def paper2_preview(version_id: int) -> dict[str, Any]:
+        return paper2.preview(version_id)
+
     @app.get("/api/v2/paper/{rid}")
     def paper2_view(rid: int) -> dict[str, Any]:
         return paper2.view(rid)

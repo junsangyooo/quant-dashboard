@@ -14,6 +14,7 @@ import {
   StrategiesListScreen,
   StrategyDetailScreen,
 } from './screens/StrategiesV2/StrategiesV2';
+import { PaperDetailScreen, PaperListScreen, PaperStartScreen } from './screens/PaperV2/PaperV2';
 import { SettingsScreen } from './screens/Settings/SettingsScreen';
 import { ConnectScreen } from './screens/Settings/ConnectScreen';
 import { PasswordScreen } from './screens/Settings/PasswordScreen';
@@ -77,6 +78,21 @@ export const routes: RouteObject[] = [
         path: 'strategies/:id/backtest',
         element: <BacktestV2Screen />,
         handle: handle({ page: 'backtest', kind: 'sub', tab: 'strategies' }),
+      },
+      {
+        path: 'paper',
+        element: <PaperListScreen />,
+        handle: handle({ page: 'paper', kind: 'tab', tab: 'paper' }),
+      },
+      {
+        path: 'paper/start',
+        element: <PaperStartScreen />,
+        handle: handle({ page: 'paperStart', kind: 'sub', tab: 'paper' }),
+      },
+      {
+        path: 'paper/:id',
+        element: <PaperDetailScreen />,
+        handle: handle({ page: 'paperRun', kind: 'sub', tab: 'paper' }),
       },
       {
         path: 'settings',
