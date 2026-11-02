@@ -49,3 +49,8 @@
 .doneIcon {
   color: var(--status-success);
 }
+
+/* 사용 조건 '법률 확인 전 초안' 칩: 글 너비만큼 */
+.draftTag {
+  align-self: flex-start;
+}

@@ -2,8 +2,9 @@
 // 설정 rows (layout rule: one column, at most 560 wide).
 import { Card, KeyValue } from '../../components/Card';
 import { copy } from '../../copy';
-import { authCopy } from '../../copy/auth';
 import { settingsCopy } from '../../copy/settings';
+import { termsCopy } from '../../copy/terms';
+import { StatusTag } from '../../components/Tags';
 import { formatMonthDayWeekday } from '../../lib/format';
 import { BackLink, Page } from '../../shell/Layout';
 import { useDocumentTitle } from '../../shell/page';
@@ -18,13 +19,24 @@ export function TermsScreen() {
       <BackLink to="/settings">{settingsCopy.back}</BackLink>
       <h1 className="t-title">{settingsCopy.rows.terms}</h1>
       <Card>
-        <ul className={styles.terms}>
-          {authCopy.setup.terms.map((line) => (
-            <li key={line} className={`t-body ${styles.termItem}`}>
-              {line}
-            </li>
-          ))}
-        </ul>
+        <p className="stack-inline">
+          <StatusTag kind="plain" className={styles.draftTag}>
+            {termsCopy.draft}
+          </StatusTag>
+          <span className="t-caption c-muted">{termsCopy.draftLine}</span>
+        </p>
+        {termsCopy.sections.map((sec) => (
+          <section key={sec.title} className="stack-tight">
+            <h2 className="t-body-strong">{sec.title}</h2>
+            <ul className={styles.terms}>
+              {sec.lines.map((line) => (
+                <li key={line} className={`t-body ${styles.termItem}`}>
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
         {about?.terms_at ? (
           <p className="t-caption c-muted">
             {settingsCopy.terms.agreedAt(formatMonthDayWeekday(about.terms_at))}
