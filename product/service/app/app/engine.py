@@ -465,7 +465,9 @@ def reason_text(block: dict[str, Any], row: dict[str, Any], res: RowResult) -> s
 
 class Engine:
     def __init__(self, body: dict[str, Any], data: MarketData | dict[str, Series], cash: float,
-                 state: dict[str, Any] | None = None, calendar: list[str] | None = None) -> None:
+                 state: dict[str, Any] | None = None, calendar: list[str] | None = None,
+                 rules: Any = None) -> None:
+        self.rules = rules  # 실전 · 모의 규칙 층(rules.RuleLayer · R-V1). 백테스트는 None
         self.data = data if isinstance(data, MarketData) else MarketData(series=data)
         self.c = compile_body(body)
         self.judge_rows = Judge(self.data, self.c.mode in ("target", "rank"))
@@ -549,8 +551,18 @@ class Engine:
                     continue
                 if plan.get("kind") == "normal" and close and price < close * (1 - GAP_LIMIT):
                     self.live_counts["no_sell"] += 1
+                if self.rules is not None and close:
+                    why = self.rules.sell_block(plan.get("kind", "normal"), price, close)
+                    if why:
+                        self.skipped.append({**plan, "d": d, "why": why})
+                        continue
                 trades.append(self._sell(d, sym, qty, price, plan["reason"], plan["judged"], plan.get("kind", "normal")))
                 continue
+            if self.rules is not None and close:
+                why = self.rules.buy_block(price, close, float(plan["value"]))
+                if why:
+                    self.skipped.append({**plan, "d": d, "why": why})
+                    continue
             unit = price * (1 + FEE)
             settled = self.cash - float(self.state["unsettled"])
             budget_v1 = min(float(plan["value"]), self.cash)
@@ -720,6 +732,8 @@ class Engine:
     def _cap(self, value: float, equity: float) -> float:
         if self.c.max_pct is not None:
             value = min(value, equity * self.c.max_pct / 100)
+        if self.rules is not None:
+            value = self.rules.cap_target(value)  # 종목당 한도(R-O8)
         return value
 
     def _cooling(self, sym: str, d: str) -> bool:
@@ -839,9 +853,27 @@ class Engine:
                 elif diff >= close:
                     buy(sym, diff, ["리밸런싱" if held else "리밸런싱 · 동일 비중", *rows[sym][2]])
 
+        if self.rules is not None:
+            new = self._apply_day_limits(d, equity, new)
         self.state["day_no"] = int(self.state["day_no"]) + 1
         self.plans.extend(new)
         return new
+
+    def _apply_day_limits(self, d: str, equity: float, new: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """하루 손실 한도(다음 거래일 새 매수 0 · R-O8) · 하루 주문 40건(매도 먼저 · 매수는 순위 순 · R-O9)."""
+        prev = self.state.get("last_equity")
+        self.state["last_equity"] = equity
+        sells = [p for p in new if p["side"] == "sell"]
+        buys = [p for p in new if p["side"] == "buy"]
+        if self.rules.loss_blocked(prev, equity):
+            for p in buys:
+                self.skipped.append({**p, "d": d, "why": "매수 안 함 · 하루 손실 한도"})
+            self.state["loss_block_d"] = d
+            return sells
+        room = max(0, self.rules.daily_orders - len(sells))
+        for p in buys[room:]:
+            self.skipped.append({**p, "d": d, "why": "매수 안 함 · 하루 주문 40건"})
+        return sells + buys[:room]
 
 
 def _gt(a: float | None, b: float | None) -> bool:

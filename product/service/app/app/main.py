@@ -35,6 +35,7 @@ from . import copytext as ct
 from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
 from .dart import DartStore
+from .paper_v2 import PaperError, PaperV2
 from .connect import Connections
 from .db import DB, body_format
 from .engine import BacktestError as BacktestErrorV2
@@ -760,6 +761,38 @@ def create_app(
         return FileResponse(index, headers={"cache-control": "no-store"})
 
     dart_store = DartStore(db)
+    paper2 = PaperV2(db, market, now=now,
+                     info=lambda: {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")})
+    app.state.paper2 = paper2
+
+    @app.exception_handler(PaperError)
+    async def on_paper2(_: Request, exc: PaperError) -> JSONResponse:
+        return _err(exc.message, exc.status)
+
+    @app.get("/api/v2/paper")
+    def paper2_list() -> dict[str, Any]:
+        return {"runs": paper2.list()}
+
+    @app.post("/api/v2/paper/start")
+    async def paper2_start(request: Request) -> dict[str, Any]:
+        b = await _body(request)
+        try:
+            vid = int(b.get("version_id"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise VaultError("전략 버전을 골라 주세요") from None
+        return await asyncio.to_thread(paper2.start, vid, b.get("cash"))
+
+    @app.get("/api/v2/paper/{rid}")
+    def paper2_view(rid: int) -> dict[str, Any]:
+        return paper2.view(rid)
+
+    @app.post("/api/v2/paper/{rid}/stop")
+    def paper2_stop(rid: int) -> dict[str, Any]:
+        return paper2.stop(rid)
+
+    @app.post("/api/v2/paper/check")
+    async def paper2_check() -> dict[str, Any]:
+        return {"advanced": await asyncio.to_thread(paper2.tick)}
 
     def _backtest_v2(body: dict[str, Any], start: date, end: date, cash: float) -> dict[str, Any]:
         info = {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")}
@@ -769,6 +802,10 @@ def create_app(
                        start=start, end=end, cash=cash, info=info, names=st.stock_name)
 
     def _running_v2(sid: int) -> dict[str, Any] | None:
+        r2 = paper2.running_for(sid)
+        if r2 is not None:
+            no = db.one("SELECT no FROM versions WHERE id=?", (r2["version_id"],))
+            return {"kind": "paper", "version_no": int(no["no"]) if no else 0, "run_id": int(r2["id"])}
         running = _running_version()
         return {"kind": "paper", "version_no": running[1]} if running and running[0] == sid else None
 
@@ -801,6 +838,7 @@ def create_app(
                 # 세션이 만료됐으면 요청이 없어도 30초 안에 데이터 키와 연결 객체를 지운다
                 _ = vault.unlocked
                 await asyncio.to_thread(auto_tick)
+                await asyncio.to_thread(paper2.tick)  # 모의투자 v2: 거래일 20:10 확인(T-40)
             except Exception as exc:  # 루프는 멈추지 않는다
                 log.error("auto tick failed: %s", type(exc).__name__)
             await asyncio.sleep(30)
