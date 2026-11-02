@@ -82,7 +82,11 @@ def test_backup_delete_restore_roundtrip(tmp_path: Path) -> None:
     assert r.status_code == 200 and r.content.startswith(b"SQLite format 3\x00")
     assert r.headers["content-disposition"] == 'attachment; filename="quant-backup-20261102.db"'
     raw = r.content
-    assert FakeToss.SECRET.encode() not in raw  # 비밀 값은 백업 안에서도 잠겨 있어요
+    assert FakeToss.SECRET.encode() not in raw
+    (tmp_path / "b.db").write_bytes(raw)
+    con = sqlite3.connect(tmp_path / "b.db")
+    assert con.execute("SELECT COUNT(*) FROM secrets").fetchone()[0] == 0  # API 키는 들어 있지 않아요(V2-53)
+    con.close()
 
     # 삭제(비밀번호) → 처음 화면
     assert c.delete("/api/data").status_code == 403
@@ -103,12 +107,13 @@ def test_backup_delete_restore_roundtrip(tmp_path: Path) -> None:
     assert c.post("/api/login", json={"password": PASSWORD}).status_code == 200
 
     after = dm.snapshot(db)
-    for k in ("strategies", "versions", "runs", "orders", "fills", "paper_runs", "secrets"):
+    for k in ("strategies", "versions", "runs", "orders", "fills", "paper_runs"):
         assert after[k] == before[k], k
+    assert after["secrets"] == []
     # 복원은 새 매수 멈춤으로 시작(R-L10)
     assert db.get_meta("live.new_buys_paused") == "1" and db.get_meta("live.new_buys_paused_by") == "restore"
-    # 키는 그대로 풀려요
-    assert c.get("/api/connect").json()["toss"]["secret_tail"] == FakeToss.SECRET[-4:]
+    # API 키는 다시 입력해요
+    assert c.get("/api/connect").json()["toss"]["saved"] is False
 
 
 def test_delete_refused_while_live_running(tmp_path: Path) -> None:

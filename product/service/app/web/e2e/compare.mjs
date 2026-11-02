@@ -457,6 +457,122 @@ STATES.paper = [
   },
 ];
 
+// 처음 실행 · 로그인 · 설정(T-55)
+const fillSetup = async (p) => {
+  await p.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
+  await p.getByLabel('비밀번호 다시 입력').fill(PASSWORD);
+  await p.getByText('만 19세 이상이에요').click();
+  await p.getByText('사용 조건에 모두 동의해요').click();
+};
+const placeServer = async (ctx) => {
+  await ctx.request.put(`${base}/api/access/place`, { data: { place: 'server' } });
+};
+STATES.settings = [
+  {
+    name: 'V2-01 기본',
+    frame: 'V2-01__기본__1440__331-171447.png',
+    path: '/setup',
+    fresh: true,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-02 기본',
+    frame: 'V2-02__기본__1440__331-171544.png',
+    path: '/setup',
+    fresh: true,
+    go: async (p) => {
+      await fillSetup(p);
+      await p.getByRole('button', { name: '다음' }).click();
+      await p.waitForSelector('text=복구 코드 쓰는 곳');
+    },
+  },
+  {
+    name: 'V2-03 기본',
+    frame: 'V2-03__기본__1440__313-95664.png',
+    path: '/login',
+    loggedOut: true,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-05 고르기 전',
+    frame: 'V2-05__고르기_전__1440__345-255899.png',
+    path: '/setup/place',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-06 서버-안 보임',
+    frame: 'V2-06__서버-안_보임__1440__345-256183.png',
+    prep: async (ctx) => (await placeServer(ctx), '/setup/tailscale'),
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-08 토큰 없음',
+    frame: 'V2-08__토큰_없음__1440__345-257777.png',
+    path: '/setup/telegram',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-09 없음',
+    frame: 'V2-09__없음__1440__345-258336.png',
+    path: '/setup/dart',
+    noDart: true,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-50 기본',
+    frame: 'V2-50__기본__1440__331-171688.png',
+    prep: async (ctx) => (await placeServer(ctx), '/settings'),
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-52 연결 안 됨',
+    frame: 'V2-52__연결_안_됨__1440__345-291229.png',
+    path: '/settings/notify',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-53 기본',
+    frame: 'V2-53__기본__1440__345-292096.png',
+    path: '/settings/data',
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-55 앱 정보-기본',
+    frame: 'V2-55__앱_정보-기본__1440__345-293060.png',
+    prep: async (ctx) => (await placeServer(ctx), '/settings/about'),
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-56 Tailscale 안 보임',
+    frame: 'V2-56__Tailscale_안_보임__1440__345-293245.png',
+    prep: async (ctx) => (await placeServer(ctx), '/settings/access'),
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-01 기본 390',
+    frame: 'V2-01__기본__390__303-87237.png',
+    path: '/setup',
+    fresh: true,
+    width: 390,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-03 기본 390',
+    frame: 'V2-03__기본__390__303-87443.png',
+    path: '/login',
+    loggedOut: true,
+    width: 390,
+    go: async () => undefined,
+  },
+  {
+    name: 'V2-50 기본 390',
+    frame: 'V2-50__기본__390__305-87696.png',
+    prep: async (ctx) => (await placeServer(ctx), '/settings'),
+    width: 390,
+    go: async () => undefined,
+  },
+];
+
 const row = (item, op, value, extra = {}) => ({
   item,
   op,
@@ -473,11 +589,15 @@ const browser = await chromium.launch({
 const report = [];
 for (const [k, st] of STATES[screen].entries()) {
   if (only !== 'all' && only !== String(k)) continue;
+  const narrow = st.width === 390;
   const ctx = await browser.newContext({
-    viewport: { width: 1440, height: 1000 },
+    viewport: narrow ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+    deviceScaleFactor: narrow ? 2 : 1,
     locale: 'ko-KR',
   });
-  const id = await setup(ctx);
+  // fresh: 계정 없음(처음 실행) · loggedOut: 계정만 있고 로그인 전
+  const id = st.fresh ? 0 : await setup(ctx, { dart: !st.noDart });
+  if (st.loggedOut) await ctx.request.post(`${base}/api/logout`);
   if (st.body)
     await ctx.request.post(`${base}/api/v2/strategies/${id}/versions`, {
       data: { body: st.body(row) },
@@ -491,15 +611,18 @@ for (const [k, st] of STATES[screen].entries()) {
   await page.waitForTimeout(400);
   const slug = st.name.replace(/[^\w가-힣()-]+/g, '_');
   const shot = join(outDir, `${slug}__app.png`);
-  await page.screenshot({ path: shot, fullPage: screen !== 'editor' });
+  await page.screenshot({ path: shot, fullPage: screen !== 'editor' && !narrow });
   const text = await page.locator('main').innerText();
   writeFileSync(join(outDir, `${slug}__text.txt`), text);
   await sideBySide(
     browser,
     shot,
     st.frame,
-    join(outDir, `${screen === 'editor' ? 'V2-23__' : ''}${slug}__1440__compare.jpg`),
-    1440 / 2,
+    join(
+      outDir,
+      `${screen === 'editor' ? 'V2-23__' : ''}${slug}__${narrow ? '390' : '1440'}__compare.jpg`,
+    ),
+    narrow ? 390 : 1440 / 2,
   );
   report.push({ name: st.name, frame: st.frame });
   await ctx.close();

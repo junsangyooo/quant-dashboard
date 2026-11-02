@@ -1,7 +1,7 @@
 """데이터 관리(T-53 · SPEC 7-6 V2-53 · FEAT-BACKUP-EXPORT): 백업 파일 · 복원 · 앱 데이터 삭제 · 기록 CSV · 현황.
 
-- 백업 파일은 sqlite 한 장이에요. 비밀 값은 그 안에서도 데이터 키로 잠겨 있고, 데이터 키는 비밀번호 · 복구 코드 ·
-  키 파일로만 풀려요(다른 컴퓨터에서는 비밀번호로 들어오면 그 컴퓨터 키 파일로 다시 감싸요).
+- 백업 파일은 sqlite 한 장이에요(전략 · 기록 · 운용 · 설정 · 계정). API 키 · 텔레그램 연결은 빼요: 복원한 뒤 키를
+  다시 입력해요(V2-53). 키 파일 감싸기도 빼서, 복원 뒤 비밀번호로 들어오면 그 컴퓨터 키 파일로 다시 감싸요.
 - 복원은 '새 매수 멈춤'으로 시작해요(R-L10). 복원 · 삭제는 비밀번호(SPEC 7-4), 실전 운용 중 삭제는 거절.
 """
 
@@ -41,9 +41,19 @@ def live_running(db: DB) -> bool:
 
 
 def backup_bytes(db: DB) -> bytes:
+    """백업 파일: 전략 · 기록 · 설정. API 키(비밀 값)와 키 파일 감싸기는 빼요(V2-53 'API 키는 들어 있지 않아요')."""
     with tempfile.TemporaryDirectory(dir=db.path.parent) as d:
         dst = Path(d) / "b.db"
         db.backup_to(dst)
+        con = sqlite3.connect(dst)
+        try:
+            con.execute("DELETE FROM secrets")
+            con.execute("DELETE FROM owner_keyfile")
+            con.execute("DELETE FROM meta WHERE k LIKE 'tg.%' OR k LIKE 'sched.%'")
+            con.commit()
+            con.execute("VACUUM")
+        finally:
+            con.close()
         return dst.read_bytes()
 
 

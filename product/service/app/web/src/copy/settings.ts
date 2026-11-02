@@ -2,22 +2,6 @@
 
 export const settingsCopy = {
   title: '설정',
-  rows: {
-    connect: '연결',
-    connectNone: '연결 안 됨 · API 키를 등록하지 않았어요',
-    connectSaved: '토스 API 키 저장됨 · 아직 연결 확인 전',
-    connectOk: (when: string) => `토스 연결됨 · ${when} 확인`,
-    connectFail: (title: string) => `토스 연결 안 됨 · ${title}`,
-    password: '비밀번호 변경',
-    passwordLine: '지금 비밀번호로 새 비밀번호를 만들어요',
-    terms: '사용 조건',
-    termsLine: (d: string) => `개인 사용 · ${d} 동의`,
-    about: '앱 정보',
-    aboutLine: (v: string) => `버전 ${v} · 이 컴퓨터(127.0.0.1)에서만 열려요`,
-  },
-  dataDelete: '데이터 삭제 · 앱을 끄고 mvp/data 폴더를 삭제해요',
-  lock: '잠그기',
-  lockLine: '잠그면 비밀번호로 다시 로그인해요',
   back: '설정',
 
   password: {
@@ -29,19 +13,6 @@ export const settingsCopy = {
     mismatch: '두 비밀번호가 달라요 · 다시 입력해 주세요',
     submit: '비밀번호 변경',
     done: '비밀번호를 변경했어요 · 다음 로그인부터 새 비밀번호를 써요',
-  },
-
-  terms: {
-    agreedAt: (d: string) => `${d}에 동의했어요`,
-  },
-
-  about: {
-    version: '버전',
-    address: '주소',
-    data: '데이터',
-    dataPath: 'mvp/data',
-    orders: '주문',
-    ordersLine: '이 앱은 실전 주문을 내지 않아요 · 토스에는 조회만 보내요',
   },
 
   connect: {

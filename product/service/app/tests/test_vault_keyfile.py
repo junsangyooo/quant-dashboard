@@ -254,6 +254,7 @@ MONEY_ROUTES: dict[tuple[str, str], str] = {
     ("DELETE", "/api/connect/dart"): "dart_key_delete",
     ("PUT", "/api/telegram"): "telegram_key_change",
     ("DELETE", "/api/telegram"): "telegram_key_delete",
+    ("PUT", "/api/access/place"): "install_place",
 }
 
 # SPEC 7-4 목록 가운데 아직 길이 없는 일과 그 길을 만드는 항목(길이 생기면 MONEY_ROUTES로 옮겨요).
@@ -263,7 +264,7 @@ NOT_BUILT: dict[str, str] = {
     "todo_match_account": "T-70", "todo_corp_action": "T-70", "todo_big_order": "T-70",
     "toss_key_view": "T-55", "dart_key_view": "T-55",
     "telegram_key_view": "T-55",
-    "install_place": "T-55", "unknown_order_record": "T-70",
+    "unknown_order_record": "T-70",
 }
 
 
@@ -297,7 +298,9 @@ def test_money_routes_need_password(tmp_path: Path, method: str, path: str) -> N
     c.put("/api/connect/toss", json={"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET})
     c.put("/api/connect/dart", json={"key": "fake-dart-key-0000"})
     assert c.put("/api/telegram", json={"token": TG_TOKEN}).status_code == 200
-    body = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "key": "fake-dart-key-1111", "token": TG_TOKEN}
+    assert c.put("/api/access/place", json={"place": "server"}).status_code == 200
+    body = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "key": "fake-dart-key-1111", "token": TG_TOKEN,
+            "place": "pc"}
     send = (lambda h=None: c.request(method, path, json=body, headers=h or {}))
     action = MONEY_ROUTES[(method, path)]
     r = send()

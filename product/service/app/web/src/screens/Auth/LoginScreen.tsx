@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Laptop } from 'lucide-react';
 import { api, isApiError } from '../../api/client';
 import { useAppState } from '../../api/mvp';
 import { Box } from '../../components/Box';
@@ -10,9 +9,9 @@ import { Button, LinkButton } from '../../components/Buttons';
 import { TextField } from '../../components/Field';
 import { copy } from '../../copy';
 import { authCopy } from '../../copy/auth';
+import { setupV2 } from '../../copy/setupV2';
 import { Page } from '../../shell/Layout';
 import { useDocumentTitle } from '../../shell/page';
-import styles from './Auth.module.css';
 
 /** Seconds left of a lock that ends at `until` (ms since epoch). */
 function useCountdown(until: number | null): number {
@@ -33,6 +32,7 @@ function useCountdown(until: number | null): number {
 export function LoginScreen() {
   useDocumentTitle(copy.pages.login);
   const t = authCopy.login;
+  const v2 = setupV2.login;
   const state = useAppState();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -74,14 +74,14 @@ export function LoginScreen() {
   const time = t.time(left);
   return (
     <Page width="login">
-      <p className={styles.wordmark}>{copy.wordmark}</p>
+      <h1 className="t-title">{copy.pages.login}</h1>
       {locked ? (
         <Box tone="error" icon="lock" title={t.lockedTitle(time)} strongTitle role="alert">
           {t.lockedBody}
         </Box>
       ) : restarted && triesLeft === null ? (
-        <Box tone="info" icon="lock" title={t.restartedTitle}>
-          {t.restartedBody}
+        <Box tone="info" icon="info" title={v2.restartedTitle}>
+          {v2.restartedBody}
         </Box>
       ) : null}
       <form
@@ -116,10 +116,7 @@ export function LoginScreen() {
       ) : (
         <LinkButton to="/recover">{t.forgot}</LinkButton>
       )}
-      <p className={`t-caption ${styles.local}`}>
-        <Laptop size={16} aria-hidden />
-        {copy.common.localOnly}
-      </p>
+      <p className="t-caption c-muted">{v2.onlyTailscale}</p>
     </Page>
   );
 }

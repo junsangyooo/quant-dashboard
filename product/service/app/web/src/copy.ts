@@ -24,7 +24,6 @@ export const copy = {
 
   /** Header: the MVP is paper-only, always. */
   mode: { paper: '모의투자' },
-  noLiveOrders: '이 앱은 실전 주문을 내지 않아요',
 
   nav: {
     home: '자산',

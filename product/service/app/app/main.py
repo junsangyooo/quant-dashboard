@@ -438,6 +438,36 @@ def create_app(
         conns.delete_dart()
         return conns.view()
 
+    # ── 설정 › 접속(V2-05 · V2-06 · V2-56) ────────────────────────────────
+
+    PLACES = {"server": "서버(클라우드 · 고정 IP)", "pc": "늘 켜 둔 PC"}
+
+    def access_view() -> dict[str, Any]:
+        place = db.get_meta("access.place")
+        return {
+            "place": place if place in PLACES else None,
+            "place_name": PLACES.get(place or ""),
+            # Tailscale: 설치기가 serve를 설정하고 이름을 넘겨 줬으면 연결됨(Q-N10)
+            "tailscale": {"ok": bool(ts_ok), "name": ts_ok[0] if ts_ok else None,
+                          "address": f"https://{ts_ok[0]}" if ts_ok else None},
+            "local": f"127.0.0.1:{port}",
+        }
+
+    @app.get("/api/access")
+    def access_get() -> dict[str, Any]:
+        return access_view()
+
+    @app.put("/api/access/place")
+    async def access_place(request: Request) -> dict[str, Any]:
+        b = await _body(request)
+        place = str(b.get("place") or "")
+        if place not in PLACES:
+            raise VaultError("서버 또는 PC를 골라 주세요")
+        if db.get_meta("access.place") and db.get_meta("access.place") != place:
+            need_confirm(request, "install_place")  # 처음 고르기는 로그인만, 변경은 비밀번호(SPEC 7-4)
+        db.set_meta("access.place", place)
+        return access_view()
+
     # ── 설정 › 데이터(V2-53 · T-53) ───────────────────────────────────────
 
     @app.get("/api/data")

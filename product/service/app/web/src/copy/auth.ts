@@ -45,9 +45,6 @@ export const authCopy = {
     lockedBody: '5분이 지나면 다시 입력할 수 있어요 · 복구 코드도 그때 입력할 수 있어요',
     lockedPlaceholder: (time: string) => `${time} 뒤에 입력할 수 있어요`,
     time: (s: number) => `${String(Math.floor(s / 60))}분 ${String(s % 60)}초`,
-    restartedTitle: '잠겨 있어요 · 비밀번호로 로그인해요',
-    restartedBody:
-      '앱을 다시 켰어요 · 로그인하면 API 키를 다시 쓸 수 있어요 · 자동 확인은 로그인 없이도 실행돼요',
   },
   recover: {
     back: '로그인',

@@ -272,3 +272,25 @@ def test_scheduler_retries_failed_job(tmp_path: Path) -> None:
 def test_app_scheduler_has_paper_check(tmp_path: Path) -> None:
     app = make(tmp_path)
     assert [j.name for j in app.state.scheduler.jobs] == ["paper_check"]
+
+
+# ── 설치 위치 · Tailscale 상태(V2-05 · V2-06 · V2-56) ───────────────────────
+
+
+def test_place_and_tailscale(tmp_path: Path) -> None:
+    from tests.conftest import confirm
+
+    c = CsrfClient(make(tmp_path, ts_names=[TS]))
+    setup_owner(c)
+    v = c.get("/api/access").json()
+    assert v["place"] is None and v["tailscale"] == {"ok": True, "name": TS, "address": f"https://{TS}"}
+    assert c.put("/api/access/place", json={"place": "laptop"}).status_code == 400
+    assert c.put("/api/access/place", json={"place": "server"}).json()["place_name"] == "서버(클라우드 · 고정 IP)"
+    assert c.put("/api/access/place", json={"place": "server"}).status_code == 200  # 같은 값
+    r = c.put("/api/access/place", json={"place": "pc"})
+    assert r.status_code == 403 and r.json()["action"] == "install_place"
+    r = c.put("/api/access/place", json={"place": "pc"}, headers=confirm(c, "install_place"))
+    assert r.json()["place"] == "pc"
+    c2 = CsrfClient(make(tmp_path / "b"))
+    setup_owner(c2)
+    assert c2.get("/api/access").json()["tailscale"]["ok"] is False

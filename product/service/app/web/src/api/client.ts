@@ -115,12 +115,15 @@ export async function request<T>(
   options: {
     query?: Record<string, QueryValue> | undefined;
     body?: unknown;
+    /** A file body sent as is (복원). */
+    raw?: ArrayBuffer | undefined;
     confirmToken?: string | undefined;
   } = {},
 ): Promise<T> {
-  const { query, body, confirmToken } = options;
+  const { query, body, raw, confirmToken } = options;
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined || method === 'POST') headers['Content-Type'] = 'application/json';
+  if (raw !== undefined) headers['Content-Type'] = 'application/octet-stream';
+  else if (body !== undefined || method === 'POST') headers['Content-Type'] = 'application/json';
   if (confirmToken) headers[CONFIRM_HEADER] = confirmToken;
   if (method !== 'GET') {
     const csrf = csrfToken();
@@ -133,7 +136,7 @@ export async function request<T>(
       method,
       credentials: 'same-origin',
       headers,
-      body: body === undefined ? (method === 'POST' ? '{}' : null) : JSON.stringify(body),
+      body: raw ?? (body === undefined ? (method === 'POST' ? '{}' : null) : JSON.stringify(body)),
     });
   } catch (error) {
     throw new NetworkError(error);
@@ -156,7 +159,7 @@ export async function request<T>(
         action: errorBody.action ?? '',
         title: errorBody.title ?? '',
       });
-      if (token) return request<T>(method, path, { query, body, confirmToken: token });
+      if (token) return request<T>(method, path, { query, body, raw, confirmToken: token });
     }
     throw new ApiError(res.status, errorBody);
   }
