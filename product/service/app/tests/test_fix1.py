@@ -13,7 +13,7 @@ from app.main import create_app
 from app.market import KST
 from app.paper import first_schedule
 from tests.helpers import legacy, new_strategy
-from tests.conftest import PASSWORD, confirm, FakeBars, FakeIp, FakeToss, make_bars, setup_owner, wave
+from tests.conftest import CsrfClient, PASSWORD, confirm, FakeBars, FakeIp, FakeToss, make_bars, setup_owner, wave
 from tests.test_engine_paper import Now, _paper, _version, event_body
 
 # 2025-06-02(월) … 일봉은 2024-01-01(월)부터 평일마다
@@ -107,7 +107,7 @@ def test_preview_api_matches_start(app_client) -> None:  # type: ignore[no-untyp
 def test_lock_ends_every_session_and_clears_the_key(tmp_path: Path, fake_toss: FakeToss, fake_bars: FakeBars, fake_ip: FakeIp) -> None:
     app = create_app(tmp_path / "d", bars_source=fake_bars, toss_transport=lambda: fake_toss, ip_fetch=fake_ip,
                      scrypt_n=2**12, scheduler=False, now=lambda: kst("2025-06-02T17:00:00"))
-    with TestClient(app) as a, TestClient(app) as b:
+    with CsrfClient(app) as a, CsrfClient(app) as b:
         setup_owner(a)
         assert b.post("/api/login", json={"password": PASSWORD}).status_code == 200
         assert a.get("/api/state").json()["unlocked"] is True
@@ -119,11 +119,11 @@ def test_lock_ends_every_session_and_clears_the_key(tmp_path: Path, fake_toss: F
 
 def test_restarted_flag_until_first_login(tmp_path: Path, fake_bars: FakeBars) -> None:
     data = tmp_path / "d"
-    with TestClient(create_app(data, bars_source=fake_bars, scrypt_n=2**12, scheduler=False)) as c:
+    with CsrfClient(create_app(data, bars_source=fake_bars, scrypt_n=2**12, scheduler=False)) as c:
         assert c.get("/api/state").json()["restarted"] is False  # 아직 계정 없음
         setup_owner(c)
         assert c.get("/api/state").json()["restarted"] is False
-    with TestClient(create_app(data, bars_source=fake_bars, scrypt_n=2**12, scheduler=False)) as c:
+    with CsrfClient(create_app(data, bars_source=fake_bars, scrypt_n=2**12, scheduler=False)) as c:
         assert c.get("/api/state").json()["restarted"] is True  # 다시 켠 뒤 첫 로그인 전
         c.post("/api/login", json={"password": PASSWORD})
         assert c.get("/api/state").json()["restarted"] is False
@@ -303,7 +303,7 @@ def test_fill_notice_knows_days_the_app_was_off(tmp_path: Path, fake_bars: FakeB
         fake_bars.data[k] = [b for b in full[k] if b["d"] <= "2025-06-02"]
     clock = {"t": kst("2025-06-02T17:00:00")}  # 월 17:00
     app = create_app(tmp_path / "d", bars_source=fake_bars, scrypt_n=2**12, scheduler=False, now=lambda: clock["t"])
-    with TestClient(app) as c:
+    with CsrfClient(app) as c:
         setup_owner(c)
         sid = new_strategy(c, "끔", "event")
         vid = c.post(f"/api/strategies/{sid}/versions", json={"body": _api_body()}).json()["version_id"]
@@ -328,7 +328,7 @@ def test_fill_notice_no_off_day_when_only_the_bar_was_late(tmp_path: Path, fake_
         fake_bars.data[k] = [b for b in full[k] if b["d"] <= "2025-06-02"]
     clock = {"t": kst("2025-06-02T17:00:00")}
     app = create_app(tmp_path / "d", bars_source=fake_bars, scrypt_n=2**12, scheduler=False, now=lambda: clock["t"])
-    with TestClient(app) as c:
+    with CsrfClient(app) as c:
         setup_owner(c)
         sid = new_strategy(c, "늦음", "event")
         vid = c.post(f"/api/strategies/{sid}/versions", json={"body": _api_body()}).json()["version_id"]

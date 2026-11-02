@@ -15,9 +15,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import hmac
 import json
 import logging
 import os
+import re
+import secrets
 import traceback
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
@@ -34,6 +38,7 @@ from . import strategy as st
 from . import copytext as ct
 from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
+from .schedule import Scheduler
 from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
 from .connect import Connections
@@ -52,6 +57,20 @@ ROOT = Path(__file__).resolve().parent.parent
 REPO = ROOT.parent.parent.parent  # 레포 뿌리(product/service/app → 레포)
 DIST = ROOT / "web" / "dist"
 COOKIE = "qm_session"
+CSRF_COOKIE = "qm_csrf"  # 화면 스크립트가 읽어 X-CSRF-Token 머리글로 되돌려 보내요(두 번 보내기)
+CSRF_HEADER = "x-csrf-token"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+TS_NAME = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.ts\.net$")
+
+
+def ts_names_from(text: str | None) -> list[str]:
+    """등록한 Tailscale 이름(설치기가 QUANT_TS_NAME으로 넘겨요 · 쉼표로 여럿). 꼴이 맞지 않으면 버려요."""
+    out = []
+    for part in (text or "").split(","):
+        name = part.strip().lower().rstrip(".")
+        if name and TS_NAME.match(name):
+            out.append(name)
+    return out
 CONFIRM_HEADER = "x-confirm-token"  # 비밀번호 다시 받기로 받은 1회용 토큰
 AUTO_AT = (16, 30)
 log = logging.getLogger("quant-mvp")
@@ -94,6 +113,7 @@ def create_app(
     port: int | None = None,
     now: Callable[[], datetime] = now_kst,
     keyfile: Path | str | None | bool = True,
+    ts_names: list[str] | None = None,
 ) -> FastAPI:
     data = Path(data_dir or os.environ.get("MVP_DATA_DIR") or ROOT / "data")
     port = port or int(os.environ.get("MVP_PORT") or 8765)
@@ -119,6 +139,15 @@ def create_app(
         "testserver",
     }
     allowed_origins = {f"http://{h}" for h in allowed_hosts}
+    # Tailscale serve가 https로 받아 127.0.0.1로 넘겨요: 등록한 ts.net 이름만(T-51 · SPEC 10 main)
+    names = ts_names if ts_names is not None else ts_names_from(os.environ.get("QUANT_TS_NAME"))
+    for name in ts_names_from(",".join(names)):
+        allowed_hosts |= {name, f"{name}:443"}
+        allowed_origins.add(f"https://{name}")
+    csrf_key = secrets.token_bytes(32)  # 프로세스마다 새로(세션도 메모리에만 있어요)
+
+    def csrf_for(session: str) -> str:
+        return hmac.new(csrf_key, session.encode(), hashlib.sha256).hexdigest()
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
@@ -151,8 +180,14 @@ def create_app(
             return _err("다른 사이트에서 온 요청은 받지 않아요", 403)
         path = request.url.path
         if path.startswith("/api/") and path not in PUBLIC_API:
-            if not vault.session_ok(request.cookies.get(COOKIE)):
+            session = request.cookies.get(COOKIE)
+            if not vault.session_ok(session):
                 return _err("다시 로그인해 주세요", 401, need_login=True)
+            # 바꾸는 요청은 CSRF 값이 세션과 맞아야 해요(쿠키는 SameSite=Strict · 두 겹)
+            if request.method not in SAFE_METHODS:
+                sent = request.headers.get(CSRF_HEADER) or ""
+                if not session or not hmac.compare_digest(sent, csrf_for(session)):
+                    return _err("요청 확인 값이 맞지 않아요 · 화면을 새로 고쳐 주세요", 403, csrf=True)
         response = await call_next(request)
         if path.startswith("/api/"):
             response.headers["cache-control"] = "no-store"
@@ -217,6 +252,9 @@ def create_app(
     def _set_cookie(resp: Response, token: str) -> None:
         resp.set_cookie(
             COOKIE, token, max_age=SESSION_S, httponly=True, samesite="strict", path="/"
+        )
+        resp.set_cookie(
+            CSRF_COOKIE, csrf_for(token), max_age=SESSION_S, httponly=False, samesite="strict", path="/"
         )
 
     # ── 처음 열기 · 로그인 ───────────────────────────────────────────────────
@@ -308,6 +346,7 @@ def create_app(
         conns.drop()
         resp = JSONResponse({"ok": True})
         resp.delete_cookie(COOKIE, path="/")
+        resp.delete_cookie(CSRF_COOKIE, path="/")
         return resp
 
     # ── 설정 › 연결 ────────────────────────────────────────────────────────
@@ -862,13 +901,22 @@ def create_app(
 
     # ── 평일 16:30 자동으로 한 번 ──────────────────────────────────────────
 
+    # 스케줄러(T-51): 거래일 · 장 시작은 토스 market-calendar로. 실전 일(08:30 점검 · 08:35 주문)은 T-6x에서 더해요.
+    sched = Scheduler(db, market.calendar, now)
+    sched.add("paper_check", 20, 10, paper2.tick)  # 모의투자 v2: 거래일 20:10 확인(T-40)
+    app.state.scheduler = sched
+
     async def _auto_loop() -> None:
+        first = True
         while True:
             try:
                 # 세션이 만료됐으면 요청이 없어도 30초 안에 데이터 키와 연결 객체를 지운다
                 _ = vault.unlocked
                 await asyncio.to_thread(auto_tick)
-                await asyncio.to_thread(paper2.tick)  # 모의투자 v2: 거래일 20:10 확인(T-40)
+                if first:  # 켜질 때 한 번: 꺼져 있던 날을 이어서 채워요(R-V4)
+                    first = False
+                    await asyncio.to_thread(paper2.tick)
+                await asyncio.to_thread(sched.run_due)
             except Exception as exc:  # 루프는 멈추지 않는다
                 log.error("auto tick failed: %s", type(exc).__name__)
             await asyncio.sleep(30)

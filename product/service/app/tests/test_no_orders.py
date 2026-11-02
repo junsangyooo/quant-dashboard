@@ -262,7 +262,9 @@ def test_planted_real_call_fails_a_test_run() -> None:
 
 def test_server_binds_localhost_only() -> None:
     text = (ROOT / "start.sh").read_text(encoding="utf-8")
+    # 켜기는 app.serve로(127.0.0.1 고정 · T-51). --host를 따로 주면 127.0.0.1만.
+    assert "-m app.serve" in text
     hosts = re.findall(r"--host\s+(\S+)", text)
-    assert hosts and set(hosts) == {"127.0.0.1"}
+    assert set(hosts) <= {"127.0.0.1"}
     assert "0.0.0.0" not in text
     assert "QUANT_LIVE_TRANSPORT" not in text  # 켜 볼 때도 가짜

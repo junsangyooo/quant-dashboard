@@ -3,6 +3,7 @@
 // - 401 with `need_login` (no session, expired, or the app was restarted) sends the user to
 //   /login. A wrong password is also 401 but without `need_login`; it stays with its form.
 // - A request that gets no response at all is a NetworkError.
+// - Every change (POST · PUT · DELETE) carries X-CSRF-Token from the `qm_csrf` cookie (T-51).
 // - 403 with `need_confirm` (SPEC 7-4: a change that moves money or touches keys) asks for the
 //   password again (V2-33). The host returns a one-time token and the request is sent once more
 //   with it; if the user cancels, the 403 stands.
@@ -26,6 +27,17 @@ export interface ConfirmAsk {
 }
 
 export const CONFIRM_HEADER = 'X-Confirm-Token';
+export const CSRF_HEADER = 'X-CSRF-Token';
+const CSRF_COOKIE = 'qm_csrf';
+
+/** The server's CSRF value for this session (cookie `qm_csrf`, SameSite=Strict); sent back on changes. */
+export function csrfToken(cookie: string = typeof document === 'undefined' ? '' : document.cookie) {
+  for (const part of cookie.split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === CSRF_COOKIE) return decodeURIComponent(v.join('='));
+  }
+  return '';
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -110,6 +122,10 @@ export async function request<T>(
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined || method === 'POST') headers['Content-Type'] = 'application/json';
   if (confirmToken) headers[CONFIRM_HEADER] = confirmToken;
+  if (method !== 'GET') {
+    const csrf = csrfToken();
+    if (csrf) headers[CSRF_HEADER] = csrf;
+  }
 
   let res: Response;
   try {

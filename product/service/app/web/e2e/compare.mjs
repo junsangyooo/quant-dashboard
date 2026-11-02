@@ -234,6 +234,9 @@ async function setup(ctx, { dart = true } = {}) {
     data: { password: PASSWORD, password2: PASSWORD, adult: true, terms: true },
   });
   await r.post(`${base}/api/login`, { data: { password: PASSWORD } });
+  // 바꾸는 요청은 CSRF 값을 머리글로 되돌려 보내요(T-51)
+  const csrf = (await ctx.cookies()).find((c) => c.name === 'qm_csrf');
+  if (csrf) await ctx.setExtraHTTPHeaders({ 'x-csrf-token': csrf.value });
   if (dart) await r.put(`${base}/api/connect/dart`, { data: { key: 'fake-dart-key-0000' } });
   const made = await (
     await r.post(`${base}/api/v2/strategies`, { data: { body: blocks() } })

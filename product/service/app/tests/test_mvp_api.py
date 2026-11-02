@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from tests.helpers import legacy, new_strategy
-from tests.conftest import PASSWORD, FakeBars, FakeIp, FakeToss, setup_owner
+from tests.conftest import CsrfClient, PASSWORD, FakeBars, FakeIp, FakeToss, setup_owner
 from tests.test_engine_paper import _api_body
 
 NEW_PW = "brand new pass 42"
@@ -86,7 +86,7 @@ def test_public_ip_needs_login(app_client, fake_ip: FakeIp) -> None:  # type: ig
 def test_offline_env_never_reaches_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MVP_TOSS_OFFLINE", "1")
     app = create_app(tmp_path / "d", bars_source=FakeBars(), scrypt_n=2**12, scheduler=False)
-    with TestClient(app) as c:
+    with CsrfClient(app) as c:
         setup_owner(c)
         r = c.post("/api/public-ip")
         assert r.status_code == 502
@@ -175,7 +175,7 @@ def test_serves_built_screens(tmp_path: Path, fake_bars: FakeBars, monkeypatch: 
     (tmp_path / "secret.txt").write_text("nope", encoding="utf-8")
     monkeypatch.setenv("MVP_WEB_DIST", str(dist))
     app = create_app(tmp_path / "d", bars_source=fake_bars, scrypt_n=2**12, scheduler=False)
-    with TestClient(app) as c:
+    with CsrfClient(app) as c:
         assert c.get("/").text.startswith("<!doctype html>")
         assert c.get("/plan").text.startswith("<!doctype html>")  # 화면 주소는 index.html
         r = c.get("/assets/app.js")

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.db import DB, SCHEMA_VERSION, body_format
 from app.main import create_app
-from tests.conftest import PASSWORD, FakeBars, FakeIp, FakeToss
+from tests.conftest import CsrfClient, PASSWORD, FakeBars, FakeIp, FakeToss
 
 FIX = Path(__file__).resolve().parent / "fixtures" / "v1_app.db"
 V2_TABLES = {
@@ -79,7 +79,7 @@ def test_v1_file_opens_in_the_app(tmp_path: Path) -> None:
     shutil.copy(FIX, data / "app.db")
     app = create_app(data, bars_source=FakeBars(), toss_transport=lambda: FakeToss(), ip_fetch=FakeIp(),
                      scrypt_n=2**12, scheduler=False)
-    with TestClient(app) as c:
+    with CsrfClient(app) as c:
         r = c.post("/api/login", json={"password": PASSWORD})
         assert r.status_code == 200, r.text
         names = sorted(s["name"] for s in c.get("/api/strategies").json()["strategies"])

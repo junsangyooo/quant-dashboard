@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { api, ApiError, configureClient, NetworkError } from '../src/api/client';
+import { api, ApiError, configureClient, csrfToken, NetworkError } from '../src/api/client';
 
 function answer(status: number, body: unknown) {
   return vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status })));
@@ -62,5 +62,19 @@ describe('api client', () => {
     });
     const e = (await api.delete('/api/connect/toss').catch((x: unknown) => x)) as ApiError;
     expect(e.status).toBe(403);
+  });
+
+  it('sends the CSRF cookie back on changes only', async () => {
+    document.cookie = 'qm_csrf=abc123; path=/';
+    const fetch = answer(200, { ok: true });
+    configureClient({ fetch });
+    await api.post('/api/x', {});
+    await api.get('/api/y');
+    const post = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const get = (fetch.mock.calls[1] as unknown as [string, RequestInit])[1];
+    expect((post.headers as Record<string, string>)['X-CSRF-Token']).toBe('abc123');
+    expect((get.headers as Record<string, string>)['X-CSRF-Token']).toBeUndefined();
+    expect(csrfToken('a=1; qm_csrf=zz')).toBe('zz');
+    document.cookie = 'qm_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
   });
 });

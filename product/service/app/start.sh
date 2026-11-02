@@ -39,8 +39,8 @@ mkdir -p "$DATA"
 chmod 700 "$DATA"
 export MVP_DATA_DIR="$DATA"
 touch "$DATA/server.log" && chmod 600 "$DATA/server.log"
-nohup .venv/bin/python -m uvicorn --factory app.main:create_app \
-  --host 127.0.0.1 --port "${PORT}" --no-server-header \
+# app.serve: 127.0.0.1에만 묶고 데이터 폴더의 app.lock으로 두 번째 실행을 막아요(T-51 · R-L5)
+nohup .venv/bin/python -m app.serve --port "${PORT}" --data "$DATA" \
   >> "$DATA/server.log" 2>&1 &
 echo $! > "$DATA/server.pid"
 

@@ -19,6 +19,22 @@ from app.market import KST
 from app.toss import HttpRequest, HttpResponse, TransportError
 
 
+# ── 화면처럼 CSRF 값을 되돌려 보내는 시험 클라이언트(T-51) ─────────────────
+
+
+class CsrfClient(TestClient):
+    """화면 스크립트처럼 qm_csrf 쿠키를 X-CSRF-Token 머리글로 붙여요. 빼고 보내기 시험은 TestClient를 그대로 써요."""
+
+    def request(self, method: str, url: Any, **kw: Any) -> Any:  # type: ignore[override]
+        if method.upper() not in ("GET", "HEAD", "OPTIONS"):
+            token = self.cookies.get("qm_csrf")
+            headers = dict(kw.pop("headers", None) or {})
+            if token and not any(k.lower() == "x-csrf-token" for k in headers):
+                headers["x-csrf-token"] = token
+            kw["headers"] = headers
+        return super().request(method, url, **kw)
+
+
 # ── 컴퓨터 키 파일은 시험 임시 폴더에만(T-50) ──────────────────────────────
 
 
@@ -253,7 +269,7 @@ def app_client(tmp_path: Path, fake_toss: FakeToss, fake_bars: FakeBars, fake_ip
         scheduler=False,
         now=lambda: FIXED_NOW,
     )
-    with TestClient(app) as client:
+    with CsrfClient(app) as client:
         client.app_ref = app  # type: ignore[attr-defined]
         yield client
 

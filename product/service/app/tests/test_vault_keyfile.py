@@ -18,7 +18,7 @@ from app.db import DB
 from app.main import create_app
 from app.market import KST, MarketDataError
 from app.vault import MONEY_ACTIONS, Vault, VaultError
-from tests.conftest import PASSWORD, confirm, make_bars, setup_owner
+from tests.conftest import CsrfClient, PASSWORD, confirm, make_bars, setup_owner
 from tests.test_paper_v2 import body, save
 from tests.fake_toss import ACCOUNT_NO, CLIENT_ID, CLIENT_SECRET, FakeTossServer
 
@@ -36,7 +36,7 @@ def boot(data: Path, server: FakeTossServer, keyfile: Path | bool = True) -> Tes
     """앱 프로세스 하나를 켠 것처럼: 같은 데이터 폴더 · 같은 키 파일로 새로 만들어요."""
     app = create_app(data, toss_transport=lambda: server, scrypt_n=2**12, scheduler=False,
                      now=lambda: NOW, keyfile=keyfile)
-    c = TestClient(app, base_url="http://testserver")
+    c = CsrfClient(app, base_url="http://testserver")
     c.app_ref = app  # type: ignore[attr-defined]
     return c
 
