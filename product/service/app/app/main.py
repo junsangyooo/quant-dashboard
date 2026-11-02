@@ -304,6 +304,7 @@ def create_app(
             "locked_for": vault.locked_for(),
             "restarted": vault.is_setup() and not vault.opened_since_start,
             "update_chip": updates.status(data)["chip"],  # 머리 칩 '업데이트 중'(5-10)
+            "auto": vault.runner_ready,  # 키 파일로 로그인 없이 운용 이어짐(T-50)
             "version": APP_VERSION_TEXT,
         }
 
