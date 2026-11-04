@@ -1,10 +1,14 @@
 """그림 비교용 서버(시험 전용): 가짜 전송 + 지어낸 일봉으로 켜요. 바깥으로 나가지 않아요.
 
     MVP_PORT=8799 .venv/bin/python -m tests.e2e_server <데이터 폴더> 8799
+
+키 파일(0600)은 `QUANT_E2E_KEYFILE_DIR`(띄우는 쪽이 주는 임시 HOME 아래 폴더 · 띄우는 쪽이 지움) 아래에, 없으면 운영체제
+임시 폴더에 새로 만들어 둬요(P1-02 ④ · `tests/baseline/screen_server.py`의 `QUANT_BASELINE_KEYFILE_DIR`와 같은 뜻).
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 import tempfile
@@ -73,9 +77,11 @@ def seed_live(db) -> None:  # type: ignore[no-untyped-def]
 
 if __name__ == "__main__":
     folder, port = sys.argv[1], int(sys.argv[2])
-    # 키 파일은 시험 임시 폴더에만(데이터 폴더 밖 · T-50)
-    app = create_app(folder, bars_source=bars(), scheduler=False, port=port,
-                     keyfile=Path(tempfile.mkdtemp(prefix="quant-e2e-kf-")) / "keyfile")
+    # 키 파일은 시험 임시 폴더에만(데이터 폴더 밖 · T-50) · 띄우는 쪽이 임시 HOME 아래 폴더를 주면 거기에(P1-02 ④)
+    given = os.environ.get("QUANT_E2E_KEYFILE_DIR")
+    kf_dir = Path(given) if given else Path(tempfile.mkdtemp(prefix="quant-e2e-kf-"))
+    kf_dir.mkdir(parents=True, exist_ok=True)
+    app = create_app(folder, bars_source=bars(), scheduler=False, port=port, keyfile=kf_dir / "keyfile")
     if len(sys.argv) > 3 and sys.argv[3] == "live":
         seed_live(app.state.db)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

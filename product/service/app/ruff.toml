@@ -1,0 +1,14 @@
+# ruff 0.17.3 설정(P1-02 ③). 대상: app/ · tests/ · scripts/. 1단계는 원래 있던 위반을 고치지 않고
+# `tests/allow/ruff.txt`(파일 × 규칙마다 수 · 까닭)에 적어 두고, `scripts/lint_allow.py ruff`가 그 수와 정확히 같은지 봐요
+# (늘면 실패 · 줄면 목록을 줄여요). 규칙 집합은 지금 코드가 거의 통과하는 것으로 시작하고 F821(정의 안 된 이름)은 반드시 켜요.
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv*", "web", "tests/.tmp", "data"]
+
+[lint]
+# E4(import 자리) · E7(문장) · E9(문법 오류) · F(pyflakes: F821 정의 안 된 이름 · F401 안 쓰는 import …) · B(bugbear: 흔한 실수).
+# 끈 것(까닭): E501(줄 길이)은 지금 코드가 120을 넘는 줄이 많아 1단계에서는 보지 않아요 · I(import 정렬) · UP(최신 문법)은
+# 동작과 무관한 모양 규칙이라 1단계(동작 변화 0 · 코드 손대지 않음)에서는 켜지 않아요.
+select = ["E4", "E7", "E9", "F", "B"]
+# 반드시 켜요(설정이 바뀌어도 F821은 빠지지 않게).
+extend-select = ["F821"]

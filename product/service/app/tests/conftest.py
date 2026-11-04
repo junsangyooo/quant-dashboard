@@ -1,9 +1,10 @@
-"""시험 공통: 네트워크 차단, 가짜 토스, 가짜 일봉, 앱 클라이언트."""
+"""시험 공통: 임시 HOME, 네트워크 차단, 가짜 토스, 가짜 일봉, 앱 클라이언트."""
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import tempfile
 import urllib.parse
@@ -14,9 +15,19 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from app.market import KST
-from app.toss import HttpRequest, HttpResponse, TransportError
+# ── 시험 중 HOME은 임시 폴더(P1-02 ④) ─────────────────────────────────────────
+# 앱은 import할 때 `Path.home()`으로 키 파일 · 실제 전송 설정 파일의 기본 경로를 정해요(`app/vault.py` · `app/transport.py`).
+# 그래서 앱을 import하기 **전에** HOME을 운영체제 임시 폴더로 바꿔 두어, 시험(과 시험이 띄우는 자식 프로세스 · 환경을 물려받음)이
+# 실제 `~/.config/quant-service/`를 만들거나 읽지 않게 해요. 레포 안(tests/.tmp)이 아닌 까닭: 레포 안 키 파일은 앱이 거절해요.
+REAL_HOME = os.environ.get("HOME", "")
+REAL_CONFIG_DIR = Path(REAL_HOME) / ".config" / "quant-service" if REAL_HOME else None
+REAL_CONFIG_EXISTED_AT_START = bool(REAL_CONFIG_DIR and REAL_CONFIG_DIR.exists())
+TEST_HOME = Path(tempfile.mkdtemp(prefix="quant-test-home-"))
+os.environ["HOME"] = str(TEST_HOME)
+
+from app.main import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요)
+from app.market import KST  # noqa: E402
+from app.toss import HttpRequest, HttpResponse, TransportError  # noqa: E402
 
 
 # ── 화면처럼 CSRF 값을 되돌려 보내는 시험 클라이언트(T-51) ─────────────────
@@ -104,6 +115,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     if OUTBOUND_ATTEMPTS:
         print("\n바깥으로 나가려 한 시도:", *OUTBOUND_ATTEMPTS, sep="\n  ")
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
+    shutil.rmtree(TEST_HOME, ignore_errors=True)  # 임시 HOME(키 파일이 남지 않게)
 
 
 @pytest.fixture(autouse=True)

@@ -1,0 +1,20 @@
+# ruff 허용 목록(P1-02 ③). 한 줄 = `파일 규칙 수  # 까닭`. `scripts/lint_allow.py ruff`가 지금 위반 수와 정확히 같은지 봐요
+# (늘면 실패 · 줄면 이 줄을 줄이거나 지워요). 1단계는 원래 있던 위반을 고치지 않아요(동작 변화 0 · 지울 파일은 P1-03이 지움).
+app/blocks.py F401 1  # 안 쓰는 import · v3 모듈은 1단계 예외(ARCHITECTURE 6절) · P1-05 뒤 정리
+app/copytext.py B905 1  # zip(strict=) 없음 · v3 모듈 · 동작 그대로 두고 P1-05 뒤 정리
+app/engine.py B905 1  # zip(strict=) 없음 · v3 엔진 · 동작 그대로
+app/graph.py B905 1  # 지울 모듈(P1-03)
+app/live.py E702 4  # 한 줄에 문장 둘(세미콜론) · P1-08 run/live.py로 옮길 때 정리
+app/toss.py B905 1  # zip(strict=) 없음 · P1-06 어댑터로 옮길 때 정리
+app/transport.py F401 1  # 안 쓰는 import · P1-06 어댑터로 옮길 때 정리
+app/v1/graph.py B905 1  # 지울 모듈(P1-03)
+tests/baseline/capture.py B904 1  # except 안 raise에 from 없음 · 기준선 도구(P1-01) · 메시지만 바꾸는 자리
+tests/baseline/screens.py B007 1  # 안 쓰는 루프 변수 · 기준선 도구(P1-01)
+tests/baseline/screens.py B904 1  # except 안 raise에 from 없음 · 기준선 도구(P1-01)
+tests/baseline/webcounts.py E741 1  # 이름 `l` · 기준선 도구(P1-01)
+tests/openapi_check.py B905 2  # zip(strict=) 없음 · 시험 도우미
+tests/regression/make_baseline.py F401 4  # 지울 도구(P1-03)
+tests/test_fix1.py F401 1  # 지울 시험(P1-03)
+tests/test_graph_engine.py B905 1  # 지울 시험(P1-03)
+tests/test_mvp_api.py F401 2  # 지울 시험(P1-03)
+tests/test_vault_keyfile.py E731 1  # 람다 대입 · 시험 준비 코드 · 단언 아님

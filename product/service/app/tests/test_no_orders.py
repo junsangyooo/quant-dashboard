@@ -5,6 +5,13 @@
 - 아무 설정 없이 켠 앱의 토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 모두 가짜예요.
 - 주문은 토스 전송을 지나가요. 기본 전송으로 주문을 보내면 가짜 전송에 적히고 바깥으로 0건이에요.
 - 시험 전체에서 바깥 소켓 시도는 0개예요(`conftest.py`가 세고, 0이 아니면 시험 전체가 실패해요).
+
+소스 검사의 범위(P1-02 ②): 앱 코드 `app/**/*.py`(하위 폴더까지 · 뒤 일감이 만들 `domain/` · `adapters/` · `store/` ·
+`run/` · `api/` · `services/` 포함). 금지 목록은 실제 전송 수단(`NETWORK_MODULES`)에 더해 AI 제공사 SDK(4단계 전에는 앱이
+AI를 부르지 않고, 붙일 때도 `transport.py` 한 문으로만 · DEVELOPING 3절) · `urllib3` · `websockets`(전송 수단) ·
+`subprocess`(앱이 다른 프로그램을 띄우지 않아요)예요. `tests/`와 `tests/baseline/` 도구는 대상이 아니에요: 시험 · 기준선
+도구는 pytest · npm · node · 서버를 자식 프로세스로 띄워야 해서 `subprocess`를 쓰고, 앱 코드가 아니라 전송 문을 지나지
+않아요(바깥 소켓은 conftest가 따로 0으로 막아요).
 """
 
 from __future__ import annotations
@@ -27,12 +34,23 @@ from app.transport import FakeTransport, HttpRequest, Transports, build_transpor
 from tests import conftest
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_SOURCES = sorted(ROOT.glob("app/*.py"))
+APP_SOURCES = sorted((ROOT / "app").rglob("*.py"))  # 하위 폴더까지(P1-02 ②)
 GATE = ROOT / "app" / "transport.py"
 
 # 바깥으로 나가는 수단. transport.py 밖의 앱 코드에서는 0건이어야 해요.
 NETWORK_MODULES = {"urllib.request", "http.client", "socket", "ssl", "requests", "httpx", "aiohttp"}
 NETWORK_CALLS = re.compile(r"urlopen|create_connection|_urllib_transport|_urllib_fetch")
+# 앱 코드 전체(transport.py 포함)에서 0건이어야 하는 것(P1-02 ②): AI 제공사 SDK(제품 기능인 금지 목록이라 이름을 적어요) ·
+# 전송 수단 둘 · 다른 프로그램 띄우기.
+AI_SDK_MODULES = {"anthropic", "openai", "google.generativeai", "google.genai", "mistralai", "cohere", "ollama",
+                  "litellm", "langchain", "langchain_openai", "langchain_anthropic", "vertexai", "boto3", "botocore",
+                  "groq", "together", "replicate", "huggingface_hub", "transformers"}
+FORBIDDEN_MODULES = AI_SDK_MODULES | {"urllib3", "websockets", "subprocess", "asyncio.subprocess"}
+
+
+def _label(path: Path) -> str:
+    """앱 안 파일은 `app/` 기준 상대 경로(하위 폴더가 보이게) · 밖(시험 임시 파일)은 이름만."""
+    return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT / "app") else path.name
 
 
 def _imports(tree: ast.AST) -> set[str]:
@@ -46,6 +64,11 @@ def _imports(tree: ast.AST) -> set[str]:
     return out
 
 
+def _forbidden_in(mods: set[str]) -> list[str]:
+    """금지 모듈과 그 하위 모듈(`openai.types` · `subprocess.run` 꼴)이 import됐는지."""
+    return sorted({f for f in FORBIDDEN_MODULES for m in mods if m == f or m.startswith(f + ".")})
+
+
 def network_hits(paths: list[Path]) -> list[str]:
     """transport.py 밖에서 실제 전송을 만드는 코드를 찾아요."""
     hits = []
@@ -55,13 +78,22 @@ def network_hits(paths: list[Path]) -> list[str]:
         text = path.read_text(encoding="utf-8")
         mods = _imports(ast.parse(text))
         for mod in sorted(mods & NETWORK_MODULES):
-            hits.append(f"{path.name}: import {mod}")
+            hits.append(f"{_label(path)}: import {mod}")
         if "yfinance" in mods or "yfinance" in text:
-            hits.append(f"{path.name}: yfinance")
+            hits.append(f"{_label(path)}: yfinance")
         for m in NETWORK_CALLS.finditer(text):
-            hits.append(f"{path.name}:{text[: m.start()].count(chr(10)) + 1}: {m.group()}")
+            hits.append(f"{_label(path)}:{text[: m.start()].count(chr(10)) + 1}: {m.group()}")
         if path.name != "main.py" and re.search(r"\bbuild_transports\s*\(", text):
-            hits.append(f"{path.name}: build_transports")
+            hits.append(f"{_label(path)}: build_transports")
+    return hits
+
+
+def forbidden_hits(paths: list[Path]) -> list[str]:
+    """앱 코드 전체(transport.py 포함)에서 AI 제공사 SDK · urllib3 · websockets · subprocess import를 찾아요(P1-02 ②)."""
+    hits = []
+    for path in paths:
+        mods = _imports(ast.parse(path.read_text(encoding="utf-8")))
+        hits += [f"{_label(path)}: import {mod}" for mod in _forbidden_in(mods)]
     return hits
 
 
@@ -179,8 +211,19 @@ def test_sources_exist() -> None:
     assert {"toss.py", "main.py", "transport.py", "publicip.py", "market.py"} <= names
 
 
+def test_sources_include_subfolders() -> None:
+    """검사 범위가 `app/` 하위 폴더까지예요(지금은 `app/v1/` · 뒤 일감의 `domain/` · `adapters/` 등도 저절로 들어와요)."""
+    assert ROOT / "app" / "v1" / "__init__.py" in APP_SOURCES
+    assert all(p.is_relative_to(ROOT / "app") for p in APP_SOURCES)
+
+
 def test_real_transport_only_in_gate() -> None:
     assert network_hits(APP_SOURCES) == []
+
+
+def test_no_ai_sdk_urllib3_websockets_subprocess_in_app() -> None:
+    """AI 제공사 SDK · urllib3 · websockets · subprocess는 앱 코드(transport.py 포함) 어디에도 0건(P1-02 ②)."""
+    assert forbidden_hits(APP_SOURCES) == []
 
 
 def test_no_yahoo_dependency() -> None:
@@ -221,6 +264,25 @@ def test_planted_real_call_is_caught_by_source_scan(tmp_path: Path) -> None:
     )
     hits = network_hits([*APP_SOURCES, planted])
     assert hits == ["planted.py: import urllib.request", "planted.py:4: urlopen"]
+
+
+def test_planted_sdk_in_subfolder_is_caught_by_source_scan(tmp_path: Path) -> None:
+    """하위 폴더(`adapters_tmp/x.py` 꼴)에 AI SDK · urllib3 · websockets · subprocess · 실제 전송을 넣으면 두 검사가 잡아요."""
+    sub = tmp_path / "app" / "adapters_tmp"
+    sub.mkdir(parents=True)
+    planted = sub / "x.py"
+    planted.write_text(
+        "import subprocess\nimport urllib3\nimport websockets\nfrom openai import OpenAI\n"
+        "import google.generativeai as genai\nimport anthropic\nimport urllib.request\n",
+        encoding="utf-8",
+    )
+    found = sorted((tmp_path / "app").rglob("*.py"))  # 실제 검사와 같은 방법(rglob)으로 하위 폴더가 보여요
+    assert found == [planted]
+    assert forbidden_hits(found) == [
+        "x.py: import anthropic", "x.py: import google.generativeai", "x.py: import openai",
+        "x.py: import subprocess", "x.py: import urllib3", "x.py: import websockets",
+    ]
+    assert network_hits(found) == ["x.py: import urllib.request"]
 
 
 def test_planted_real_call_fails_a_test_run() -> None:

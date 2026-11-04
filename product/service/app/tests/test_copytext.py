@@ -231,11 +231,12 @@ SERVER_HITS_LIMIT = 0
 
 
 def _server_hits() -> list[str]:
+    """서버 글 금지어: `app/**/*.py` 하위 폴더까지(P1-02 ② · 뒤 일감이 만들 `domain/` · `api/` 등도 저절로 들어와요)."""
     rules = wr.load_rules()
     out = []
-    for path in sorted((wr.APP / "app").glob("*.py")):
+    for path in sorted((wr.APP / "app").rglob("*.py")):
         for line, text in wr.server_strings(path):
-            out += [f"app/{path.name}:{line}: {h}" for h in wr.hits(text, rules)]
+            out += [f"{path.relative_to(wr.APP).as_posix()}:{line}: {h}" for h in wr.hits(text, rules)]
     return out
 
 

@@ -27,6 +27,7 @@ npm 검사 · 웹 숫자).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -34,6 +35,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -51,6 +53,36 @@ TIMING_FILE = "timing.json"
 def _dump(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+
+
+@contextlib.contextmanager
+def temp_home() -> Iterator[dict[str, str]]:
+    """자식 프로세스(pytest · npm · node · 서버)용 환경: HOME은 운영체제 임시 폴더(끝나면 지움 · P1-02 ④).
+
+    키 파일 · 실제 전송 설정 파일의 기본 자리가 `~/.config/quant-service/`라, 자식이 실제 홈을 만들거나 읽지 않게 해요.
+    npm · npx 캐시(`~/.npm`)만은 진짜 것을 가리켜요(jscpd 같은 npx 도구를 다시 내려받지 않게 · 키와 무관).
+    `run()`이 이 환경을 `os.environ`에 걸어 두어 그 안에서 띄우는 모든 자식이 물려받아요.
+    """
+    real_home = os.environ.get("HOME", "")
+    with tempfile.TemporaryDirectory(prefix="quant-baseline-home-") as d:
+        env = dict(os.environ, HOME=d)
+        npm_cache = Path(real_home) / ".npm" if real_home else None
+        if "npm_config_cache" not in env and npm_cache is not None and npm_cache.is_dir():
+            env["npm_config_cache"] = str(npm_cache)
+        yield env
+
+
+@contextlib.contextmanager
+def _children_use_temp_home() -> Iterator[None]:
+    saved = dict(os.environ)
+    with temp_home() as env:
+        os.environ.clear()
+        os.environ.update(env)
+        try:
+            yield
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)
 
 
 def run_pytest(api_out: Path, quiet: bool = False) -> dict[str, Any]:
@@ -191,6 +223,11 @@ def run_web(web_out: Path, timing: dict[str, Any], *, quiet: bool = False) -> No
 
 def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False, skip_web: bool = False,
         web_out: Path | None = None) -> dict[str, Any]:
+    with _children_use_temp_home():  # 자식(pytest · npm · node · 서버)의 HOME은 임시 폴더(P1-02 ④)
+        return _run(out, skip_pytest=skip_pytest, quiet=quiet, skip_web=skip_web, web_out=web_out)
+
+
+def _run(out: Path, *, skip_pytest: bool, quiet: bool, skip_web: bool, web_out: Path | None) -> dict[str, Any]:
     from tests.baseline import clock, counts, dayflow, engine_cases, mask, replay, screen_api
 
     web_out = web_out or web_out_for(out)
