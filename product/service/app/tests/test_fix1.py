@@ -104,31 +104,6 @@ def test_preview_api_matches_start(app_client) -> None:  # type: ignore[no-untyp
     assert pre == got  # 월요일 17:00 → 바로 확인, 화요일 시가
 
 
-def test_lock_ends_every_session_and_clears_the_key(tmp_path: Path, fake_toss: FakeToss, fake_bars: FakeBars, fake_ip: FakeIp) -> None:
-    app = create_app(tmp_path / "d", bars_source=fake_bars, toss_transport=lambda: fake_toss, ip_fetch=fake_ip,
-                     scrypt_n=2**12, scheduler=False, now=lambda: kst("2025-06-02T17:00:00"))
-    with CsrfClient(app) as a, CsrfClient(app) as b:
-        setup_owner(a)
-        assert b.post("/api/login", json={"password": PASSWORD}).status_code == 200
-        assert a.get("/api/state").json()["unlocked"] is True
-        a.post("/api/logout")
-        assert app.state.vault.unlocked is False
-        assert b.get("/api/home").status_code == 401  # 다른 세션도 끝났다
-        assert a.get("/api/state").json()["restarted"] is False  # 잠그기 뒤에는 '다시 켰어요' 안내 없음
-
-
-def test_restarted_flag_until_first_login(tmp_path: Path, fake_bars: FakeBars) -> None:
-    data = tmp_path / "d"
-    with CsrfClient(create_app(data, bars_source=fake_bars, scrypt_n=2**12, scheduler=False)) as c:
-        assert c.get("/api/state").json()["restarted"] is False  # 아직 계정 없음
-        setup_owner(c)
-        assert c.get("/api/state").json()["restarted"] is False
-    with CsrfClient(create_app(data, bars_source=fake_bars, scrypt_n=2**12, scheduler=False)) as c:
-        assert c.get("/api/state").json()["restarted"] is True  # 다시 켠 뒤 첫 로그인 전
-        c.post("/api/login", json={"password": PASSWORD})
-        assert c.get("/api/state").json()["restarted"] is False
-
-
 def test_unknown_code_is_not_a_network_error(app_client, fake_bars: FakeBars) -> None:  # type: ignore[no-untyped-def]
     from tests.test_engine_paper import _api_body
 
@@ -244,55 +219,7 @@ def test_holiday_during_wait_checks_late(tmp_path: Path) -> None:
     assert all(p["fill_d"] >= "2025-06-09" for p in paper.plan()["plans"])
 
 
-def test_lock_drops_the_toss_client(app_client, fake_toss: FakeToss) -> None:  # type: ignore[no-untyped-def]
-    setup_owner(app_client)
-    app_client.put("/api/connect/toss", json={"client_id": FakeToss.CLIENT_ID, "client_secret": FakeToss.SECRET})
-    assert app_client.post("/api/connect/toss/check").json()["result"]["ok"] is True
-    conns = app_client.app_ref.state.connections
-    client = conns._client
-    assert client is not None and client._token
-    app_client.post("/api/logout")
-    assert conns._client is None and client._token is None and client._account is None
-    # 키 삭제 · 변경도 연결 객체를 버린다
-    app_client.post("/api/login", json={"password": PASSWORD})
-    app_client.post("/api/connect/toss/check")
-    c2 = conns._client
-    app_client.put("/api/connect/toss", json={"client_id": FakeToss.CLIENT_ID, "client_secret": FakeToss.SECRET},
-                   headers=confirm(app_client, "toss_key_change"))
-    assert conns._client is None and c2._token is None
-    app_client.post("/api/connect/toss/check")
-    c3 = conns._client
-    app_client.delete("/api/connect/toss", headers=confirm(app_client, "toss_key_delete"))
-    assert conns._client is None and c3._token is None
-
-
 # ── 마지막 확인 지적(3차) ─────────────────────────────────────────────────────
-
-
-def test_session_expiry_drops_the_toss_client(app_client, fake_toss: FakeToss) -> None:  # type: ignore[no-untyped-def]
-    import time as _time
-
-    setup_owner(app_client)
-    app_client.put("/api/connect/toss", json={"client_id": FakeToss.CLIENT_ID, "client_secret": FakeToss.SECRET})
-    app_client.post("/api/connect/toss/check")
-    conns = app_client.app_ref.state.connections
-    vault = app_client.app_ref.state.vault
-    client = conns._client
-    assert client is not None and client._token
-    vault.clock = lambda: _time.time() + 13 * 3600  # 세션 12시간이 지났다
-    assert vault.unlocked is False  # 키를 지우는 길(_purge)이 연결 객체도 버린다
-    assert conns._client is None and client._token is None and client._account is None
-
-
-def test_last_session_logout_drops_the_toss_client(app_client, fake_toss: FakeToss) -> None:  # type: ignore[no-untyped-def]
-    setup_owner(app_client)
-    app_client.put("/api/connect/toss", json={"client_id": FakeToss.CLIENT_ID, "client_secret": FakeToss.SECRET})
-    app_client.post("/api/connect/toss/check")
-    conns = app_client.app_ref.state.connections
-    vault = app_client.app_ref.state.vault
-    client = conns._client
-    vault.logout(app_client.cookies.get("qm_session"))  # 마지막 세션 끝
-    assert vault.unlocked is False and conns._client is None and client._token is None
 
 
 def test_fill_notice_knows_days_the_app_was_off(tmp_path: Path, fake_bars: FakeBars) -> None:

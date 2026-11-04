@@ -3,7 +3,7 @@
 
     cd product/service/app && .venv/bin/python -m tests.baseline.docs_compare
 
-`tests/test_catalog.py` · `tests/test_copytext.py`를 가져와 문서 표만 얼린 판으로 바꿔 끼우고 시험 함수를 불러요.
+`tests/test_catalog.py` · `tests/test_words.py`(P1-03 전에는 `tests/test_copytext.py`)를 가져와 문서 표만 얼린 판으로 바꿔 끼우고 시험 함수를 불러요.
 결과는 보고(`tests/baseline/reports/P1-01a.md`)에만 적고, 쓸지는 제품 주인의 답에 달렸어요.
 """
 
@@ -49,10 +49,10 @@ def main() -> None:
     on_disk = json.loads(wr.JSON_PATH.read_text(encoding="utf-8"))
     lines.append(f"- 얼린 문서로 만든 규칙 == forbiddenWords.json: {rules == on_disk} "
                  f"(낱말 {len(rules['words'])} ↔ {len(on_disk['words'])})")
-    from tests import test_copytext as tcp
+    from tests import test_words as tw
 
     lines.append(_run("test_forbidden_list_is_the_glossary(얼린 GLOSSARY 5절 · SPEC 8-1)",
-                      tcp.test_forbidden_list_is_the_glossary))
+                      tw.test_forbidden_list_is_the_glossary))
     print("\n".join(lines))
 
 
