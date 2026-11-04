@@ -10,7 +10,7 @@
 - `dayflow.json`: 하루 흐름 5가지 날.
 - `counts.json`: 숫자(ARCHITECTURE 7절 셈 규칙).
 - `pytest.json`: pytest 통과 · 실패 수와 실패 목록(시간은 뺌).
-- `versions.txt`: `pip freeze --all` · `node -v` · `npm ls --depth=0`(경로는 지움).
+- `versions.txt`: `pip freeze --all` · `node -v` · `npm ls --depth=0 --unicode`(경로는 지움). Node 24가 아니면 까닭을 적고 실패해요.
 본체 밖(두 번 같을 수 없음 · 대조에서 뺌): `timing.json`(pytest · 백테스트 사례(326 재생 포함) · 화면 API p50 · p95).
 """
 
@@ -97,18 +97,30 @@ def versions_text() -> str:
 
     pip = sh([sys.executable, "-m", "pip", "freeze", "--all"])
     node = sh(["node", "-v"])
-    npm = sh(["npm", "ls", "--depth=0"], cwd=APP / "web")
+    npm = sh(["npm", "ls", "--depth=0", "--unicode"], cwd=APP / "web")  # 트리 꼴을 명시(로케일에 흔들리지 않게)
     npm_lines = []
     for line in npm.splitlines():
         if " /" in line and not line.startswith(("├", "└", "│")):  # "web@0.0.0 /abs/path" → 경로 지움
             line = line.split(" /", 1)[0]
         npm_lines.append(line.rstrip())
-    return "\n".join(["# pip freeze --all", pip, "", "# node -v", node, "", "# npm ls --depth=0 (web)", *npm_lines, ""])
+    return "\n".join(["# pip freeze --all", pip, "", "# node -v", node, "", "# npm ls --depth=0 --unicode (web)", *npm_lines, ""])
+
+
+def require_node_24() -> str:
+    """DEVELOPING 4절: Node 24가 아니면 `versions.txt`가 달라져 두 번 같음 · 대조가 깨져요. 까닭을 적고 실패해요."""
+    try:
+        v = subprocess.run(["node", "-v"], capture_output=True, text=True).stdout.strip()
+    except OSError as exc:
+        raise SystemExit(f"node가 없어요({type(exc).__name__}) · Node 24가 필요해요(`. /opt/session-env.sh` 뒤에 돌려요)")
+    if not v.startswith("v24."):
+        raise SystemExit(f"node 판이 {v or '(없음)'}이에요 · 기준선은 Node 24로 만들고 대조해요(`. /opt/session-env.sh` 뒤에)")
+    return v
 
 
 def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False) -> dict[str, Any]:
     from tests.baseline import clock, counts, dayflow, engine_cases, mask, replay, screen_api
 
+    require_node_24()
     clock.freeze_plain()
     out.mkdir(parents=True, exist_ok=True)
     timing: dict[str, Any] = {"captured_on": date.today().isoformat(), "note": "두 번 같을 수 없음 · 본체 대조에서 뺌 · "

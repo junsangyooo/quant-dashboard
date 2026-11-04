@@ -320,14 +320,22 @@
   }
  },
  "same_text": {
-  "count": 24,
-  "occurrences": 61,
+  "count": 41,
+  "occurrences": 131,
   "texts": [
    {
     "text": " · 종목 코드를 확인해 주세요",
     "where": [
      "app/market.py:211",
      "app/market.py:263"
+    ]
+   },
+   {
+    "text": " 값이 비어 있어요",
+    "where": [
+     "app/blocks.py:662",
+     "app/blocks.py:687",
+     "app/blocks.py:711"
     ]
    },
    {
@@ -364,10 +372,75 @@
     ]
    },
    {
+    "text": "③ · ④ 정렬",
+    "where": [
+     "app/catalog.py:186",
+     "app/catalog.py:251",
+     "app/catalog.py:255",
+     "app/catalog.py:258",
+     "app/catalog.py:267"
+    ]
+   },
+   {
+    "text": "③ ⑥ · ④ 정렬",
+    "where": [
+     "app/catalog.py:238",
+     "app/catalog.py:242",
+     "app/catalog.py:246"
+    ]
+   },
+   {
+    "text": "⑥ · 실행 3종",
+    "where": [
+     "app/catalog.py:303",
+     "app/catalog.py:306"
+    ]
+   },
+   {
     "text": "개까지 놓을 수 있어요",
     "where": [
      "app/blocks.py:238",
      "app/blocks.py:270"
+    ]
+   },
+   {
+    "text": "건 · 앱에서 보기",
+    "where": [
+     "app/live.py:620",
+     "app/live.py:622"
+    ]
+   },
+   {
+    "text": "그 버전이 없어요",
+    "where": [
+     "app/api_v2.py:231",
+     "app/api_v2.py:250",
+     "app/live.py:192",
+     "app/live.py:225",
+     "app/main.py:1001",
+     "app/main.py:509",
+     "app/main.py:894",
+     "app/paper_v2.py:76"
+    ]
+   },
+   {
+    "text": "그 전략이 없어요",
+    "where": [
+     "app/api_v2.py:211",
+     "app/api_v2.py:219",
+     "app/api_v2.py:281",
+     "app/api_v2.py:284",
+     "app/api_v2.py:306",
+     "app/api_v2.py:315",
+     "app/main.py:702"
+    ]
+   },
+   {
+    "text": "그 할 일이 없어요",
+    "where": [
+     "app/main.py:589",
+     "app/main.py:599",
+     "app/main.py:608"
     ]
    },
    {
@@ -392,6 +465,13 @@
     ]
    },
    {
+    "text": "실전 · 주문 실패 ",
+    "where": [
+     "app/live.py:622",
+     "app/telegram.py:84"
+    ]
+   },
+   {
     "text": "실전 운용이나 모의투자 기록이 있는 전략은 삭제할 수 없어요",
     "where": [
      "app/api_v2.py:48",
@@ -403,6 +483,13 @@
     "where": [
      "app/live.py:71",
      "app/live.py:73"
+    ]
+   },
+   {
+    "text": "오늘 확인 실패",
+    "where": [
+     "app/live.py:397",
+     "app/live.py:53"
     ]
    },
    {
@@ -434,6 +521,20 @@
     "where": [
      "app/blocks.py:328",
      "app/blocks.py:331"
+    ]
+   },
+   {
+    "text": "이상 · 이하 · 상위 n",
+    "where": [
+     "app/catalog.py:177",
+     "app/catalog.py:249"
+    ]
+   },
+   {
+    "text": "이상 · 이하 · 상위 n%",
+    "where": [
+     "app/catalog.py:254",
+     "app/catalog.py:266"
     ]
    },
    {
@@ -475,11 +576,58 @@
     ]
    },
    {
+    "text": "전부 팔고 끝내기",
+    "where": [
+     "app/live.py:1018",
+     "app/live.py:1021",
+     "app/vault.py:60"
+    ]
+   },
+   {
     "text": "조건 형식이 맞지 않아요",
     "where": [
      "app/blocks.py:292",
      "app/blocks.py:325",
      "app/blocks.py:334"
+    ]
+   },
+   {
+    "text": "큰 주문 확인 · [{name}] [{amount}]",
+    "where": [
+     "app/live.py:63",
+     "app/live.py:64"
+    ]
+   },
+   {
+    "text": "토스 candles",
+    "where": [
+     "app/catalog.py:148",
+     "app/catalog.py:150",
+     "app/catalog.py:155",
+     "app/catalog.py:160",
+     "app/catalog.py:162",
+     "app/catalog.py:166",
+     "app/catalog.py:170",
+     "app/catalog.py:173",
+     "app/catalog.py:181",
+     "app/catalog.py:186",
+     "app/catalog.py:190",
+     "app/catalog.py:192",
+     "app/catalog.py:197",
+     "app/catalog.py:201",
+     "app/catalog.py:204",
+     "app/catalog.py:211",
+     "app/catalog.py:218",
+     "app/catalog.py:223",
+     "app/catalog.py:226"
+    ]
+   },
+   {
+    "text": "토스 stocks",
+    "where": [
+     "app/catalog.py:122",
+     "app/catalog.py:125",
+     "app/catalog.py:128"
     ]
    },
    {
@@ -503,6 +651,13 @@
      "app/dart.py:242",
      "app/dart.py:306"
     ]
+   },
+   {
+    "text": "확인 끝 · 내일 주문 ",
+    "where": [
+     "app/live.py:315",
+     "app/telegram.py:76"
+    ]
    }
   ]
  },
@@ -511,7 +666,7 @@
    "app/api_v2.py": 21,
    "app/backtest_v2.py": 2,
    "app/dart.py": 19,
-   "app/datamgmt.py": 21,
+   "app/datamgmt.py": 19,
    "app/live.py": 83,
    "app/main.py": 35,
    "app/market.py": 5,
@@ -519,8 +674,8 @@
    "app/telegram.py": 4,
    "app/vault.py": 18
   },
-  "count_all": 252,
-  "count_outside_store": 226,
+  "count_all": 246,
+  "count_outside_store": 224,
   "hits": [
    {
     "kind": "sql",
@@ -784,7 +939,7 @@
     "kind": "sqlite3",
     "line": 48,
     "module": "app/datamgmt.py",
-    "text": "sqlite3.connect"
+    "text": "sqlite3.connect()"
    },
    {
     "kind": "sql",
@@ -808,13 +963,7 @@
     "kind": "sqlite3",
     "line": 67,
     "module": "app/datamgmt.py",
-    "text": "sqlite3.connect"
-   },
-   {
-    "kind": "sqlite3",
-    "line": 68,
-    "module": "app/datamgmt.py",
-    "text": "sqlite3.Error"
+    "text": "sqlite3.connect()"
    },
    {
     "kind": "sql",
@@ -839,12 +988,6 @@
     "line": 78,
     "module": "app/datamgmt.py",
     "text": "PRAGMA user_version"
-   },
-   {
-    "kind": "sqlite3",
-    "line": 80,
-    "module": "app/datamgmt.py",
-    "text": "sqlite3.DatabaseError"
    },
    {
     "kind": "sql",
@@ -910,13 +1053,7 @@
     "kind": "sqlite3",
     "line": 189,
     "module": "app/db.py",
-    "text": "sqlite3.connect"
-   },
-   {
-    "kind": "sqlite3",
-    "line": 190,
-    "module": "app/db.py",
-    "text": "sqlite3.Row"
+    "text": "sqlite3.connect()"
    },
    {
     "kind": "sql",
@@ -976,7 +1113,7 @@
     "kind": "sqlite3",
     "line": 229,
     "module": "app/db.py",
-    "text": "sqlite3.connect"
+    "text": "sqlite3.connect()"
    },
    {
     "kind": "sql",
@@ -998,21 +1135,9 @@
    },
    {
     "kind": "sqlite3",
-    "line": 252,
-    "module": "app/db.py",
-    "text": "sqlite3.Row"
-   },
-   {
-    "kind": "sqlite3",
-    "line": 256,
-    "module": "app/db.py",
-    "text": "sqlite3.Row"
-   },
-   {
-    "kind": "sqlite3",
     "line": 291,
     "module": "app/db.py",
-    "text": "sqlite3.connect"
+    "text": "sqlite3.connect()"
    },
    {
     "kind": "sql",
@@ -1024,13 +1149,7 @@
     "kind": "sqlite3",
     "line": 324,
     "module": "app/db.py",
-    "text": "sqlite3.connect"
-   },
-   {
-    "kind": "sqlite3",
-    "line": 325,
-    "module": "app/db.py",
-    "text": "sqlite3.Row"
+    "text": "sqlite3.connect()"
    },
    {
     "kind": "sql",
@@ -2049,19 +2168,20 @@
   "modules": 38,
   "modules_deleted": 11,
   "modules_kept": 27,
-  "same_text": 24,
-  "sql_outside_store": 226,
-  "time_literals": 14
+  "same_text": 41,
+  "sql_outside_store": 224,
+  "time_literals": 26
  },
  "time_literals": {
   "by_module": {
    "app/install.py": 5,
-   "app/live.py": 2,
-   "app/main.py": 1,
+   "app/live.py": 11,
+   "app/main.py": 2,
+   "app/market.py": 2,
    "app/paper_v2.py": 3,
    "app/telegram.py": 3
   },
-  "count": 14,
+  "count": 26,
   "hits": [
    {
     "kind": "time()",
@@ -2100,16 +2220,88 @@
     "text": "time(20, 10)"
    },
    {
+    "kind": "(h, m)",
+    "line": 38,
+    "module": "app/live.py",
+    "text": "PRECHECK_AT = (8, 30)"
+   },
+   {
+    "kind": "(h, m)",
+    "line": 39,
+    "module": "app/live.py",
+    "text": "ORDER_AT = (8, 35)"
+   },
+   {
+    "kind": "(h, m)",
+    "line": 40,
+    "module": "app/live.py",
+    "text": "LATE_OPEN = (8, 50)"
+   },
+   {
     "kind": "hh:mm",
     "line": 359,
     "module": "app/live.py",
     "text": "08:35"
    },
    {
+    "kind": ".at(h, m)",
+    "line": 1002,
+    "module": "app/live.py",
+    "text": ".at(15, 20)"
+   },
+   {
+    "kind": ".at(h, m)",
+    "line": 1002,
+    "module": "app/live.py",
+    "text": ".at(9, 0)"
+   },
+   {
+    "kind": ".at(h, m)",
+    "line": 1023,
+    "module": "app/live.py",
+    "text": ".at(8, 35)"
+   },
+   {
+    "kind": ".at(h, m)",
+    "line": 1236,
+    "module": "app/live.py",
+    "text": ".at(8, 20)"
+   },
+   {
+    "kind": ".at(h, m)",
+    "line": 1253,
+    "module": "app/live.py",
+    "text": ".at(15, 20)"
+   },
+   {
+    "kind": ".at(h, m)",
+    "line": 1253,
+    "module": "app/live.py",
+    "text": ".at(9, 1)"
+   },
+   {
+    "kind": "(h, m)",
+    "line": 80,
+    "module": "app/main.py",
+    "text": "AUTO_AT = (16, 30)"
+   },
+   {
     "kind": "hh:mm",
     "line": 1077,
     "module": "app/main.py",
     "text": "16:30"
+   },
+   {
+    "kind": "(h, m)",
+    "line": 27,
+    "module": "app/market.py",
+    "text": "BAR_FINAL_AT = (20, 0)"
+   },
+   {
+    "kind": "(h, m)",
+    "line": 29,
+    "module": "app/market.py",
+    "text": "BASE_OPEN = (9, 0)"
    },
    {
     "kind": "time()",

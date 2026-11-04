@@ -8,9 +8,13 @@
 - 층 어긋남: 모듈 맨 위 · 함수 안 import 모두(`app.*`만) · 허용 표 밖 간선 수 + 바깥 금지(domain ← fastapi · sqlite3,
   run · services ← fastapi).
 - 중복(파이썬): 맨 위 공개 함수(5줄 이상 · 이름 `main` 뺌)의 AST 본문 해시가 같은 묶음 · 모듈 사이 같은 이름.
-- SQL 위치: sqlite3 호출(`sqlite3.` 속성) · SQL 낱말로 시작하는 문자열 · `db.py`(저장 층 자리) 밖.
-- 시각 숫자: 독스트링을 뺀 문자열 속 `HH:MM` · 시각 생성자(`time(h, m)` · `.replace(hour=…)`).
-- 같은 글: 8자 이상 한글이 든 문자열(독스트링 · 주석 뺌)이 두 곳 이상에 있는 것(서버 쪽만 · 웹은 P1-01c).
+- SQL 위치: sqlite3 호출(`sqlite3.x(...)` 호출만 · `except sqlite3.Error` 같은 참조는 아님) · 대문자 SQL 낱말로
+  시작하는 문자열 · `db.py`(저장 층 자리) 밖.
+- 시각 숫자: 독스트링을 뺀 문자열 속 `HH:MM` · 시각 생성자 `time(h, m)` · `.replace(hour=…)` · `.at(h, m)`(상수 두 개) ·
+  모듈 맨 위 시각 상수 튜플 `NAME = (h, m)`(정수 두 개 · 0 ≤ h ≤ 23 · 0 ≤ m ≤ 59 · 이름에 VERSION이 들어가거나
+  `_V<숫자>`로 끝나는 판 번호 튜플 · 함수 안 · 풀어 대입은 뺌).
+- 같은 글: **길이 8자 이상이고 한글(가-힣)이 하나 이상 든 문자열**(독스트링 뺌)이 두 곳 이상에 있는 것(서버 쪽만 ·
+  웹은 P1-01c).
 """
 
 from __future__ import annotations
@@ -243,8 +247,11 @@ def sql_locations(store_modules: tuple[str, ...] = ("app/db.py",)) -> dict[str, 
         r = rel(p)
         tree = _parse(p)
         for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "sqlite3":
-                hits.append({"module": r, "line": node.lineno, "kind": "sqlite3", "text": f"sqlite3.{node.attr}"})
+            # sqlite3 '호출'만(`except sqlite3.Error` 같은 이름 참조는 아님)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and \
+                    isinstance(node.func.value, ast.Name) and node.func.value.id == "sqlite3":
+                hits.append({"module": r, "line": node.lineno, "kind": "sqlite3",
+                             "text": f"sqlite3.{node.func.attr}()"})
         for text, line in _strings(tree):
             head = text.lstrip()
             # 대문자 SQL 낱말 + 공백 + 이어지는 글(단계 이름 'select' · HTTP 메서드 'DELETE' 같은 낱말 하나는 아님)
@@ -260,6 +267,10 @@ def sql_locations(store_modules: tuple[str, ...] = ("app/db.py",)) -> dict[str, 
 
 
 # ── 시각 숫자 ────────────────────────────────────────────────────────────────
+
+
+def _is_clock(h: Any, m: Any) -> bool:
+    return isinstance(h, int) and isinstance(m, int) and 0 <= h <= 23 and 0 <= m <= 59
 
 
 def time_literals() -> dict[str, Any]:
@@ -284,6 +295,24 @@ def time_literals() -> dict[str, Any]:
                     hits.append({"module": r, "line": node.lineno, "kind": "replace(hour=)",
                                  "text": ", ".join(f"{k.arg}={getattr(k.value, 'value', '…')}" for k in node.keywords
                                                    if k.arg in ("hour", "minute"))})
+                # `day.at(h, m)`(DayHours.at · 장 시작에 맞춰 옮기는 시각) · 상수 두 개를 그대로 넘기는 호출
+                if isinstance(f, ast.Attribute) and f.attr == "at" and len(node.args) == 2 and \
+                        all(isinstance(a, ast.Constant) and isinstance(a.value, int) for a in node.args) and \
+                        _is_clock(node.args[0].value, node.args[1].value):  # type: ignore[attr-defined]
+                    hits.append({"module": r, "line": node.lineno, "kind": ".at(h, m)",
+                                 "text": f".at({node.args[0].value}, {node.args[1].value})"})  # type: ignore[attr-defined]
+        # 시각 상수 튜플 `NAME = (h, m)`: 모듈 맨 위 · 이름 하나에 대입 · 정수 두 개 · 0 ≤ h ≤ 23 · 0 ≤ m ≤ 59.
+        # 뺌: 이름에 VERSION이 들어가거나 `_V<숫자>`로 끝나는 판 번호 튜플(`APP_VERSION` · `APP_V2`) · 함수 안 ·
+        # 풀어 대입(`a, b = 1, 1`). P1-04가 같은 규칙을 써요.
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and \
+                    isinstance(node.value, ast.Tuple) and len(node.value.elts) == 2 and \
+                    all(isinstance(e, ast.Constant) and isinstance(e.value, int) and not isinstance(e.value, bool)
+                        for e in node.value.elts):
+                name = node.targets[0].id
+                h, m = (e.value for e in node.value.elts)  # type: ignore[attr-defined]
+                if _is_clock(h, m) and "VERSION" not in name.upper() and not re.search(r"_V\d+$", name.upper()):
+                    hits.append({"module": r, "line": node.lineno, "kind": "(h, m)", "text": f"{name} = ({h}, {m})"})
     hits.sort(key=lambda h: (h["module"], h["line"], h["text"]))
     by_module: dict[str, int] = defaultdict(int)
     for h in hits:
@@ -301,7 +330,8 @@ def same_text() -> dict[str, Any]:
             continue
         r = rel(p)
         for text, line in _strings(_parse(p)):
-            if len(text) >= 8 and len(HANGUL.findall(text)) >= 8:
+            # 규칙: 길이 8자 이상이고 한글(가-힣)이 하나 이상 든 문자열(숫자 · 기호가 섞인 화면 글도 들어가게)
+            if len(text) >= 8 and HANGUL.search(text):
                 where[text].append(f"{r}:{line}")
     dup = {t: sorted(set(v)) for t, v in where.items() if len(set(v)) > 1}
     return {"count": len(dup), "occurrences": sum(len(v) for v in dup.values()),

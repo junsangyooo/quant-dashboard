@@ -316,7 +316,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "locked": {
@@ -1485,7 +1485,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "ok": {
@@ -2787,7 +2787,7 @@
           },
           "key": {
            "types": [
-            "masked"
+            "string"
            ]
           },
           "label": {
@@ -3429,7 +3429,7 @@
           },
           "key": {
            "types": [
-            "masked"
+            "string"
            ]
           },
           "label": {
@@ -3642,7 +3642,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "locked": {
@@ -3716,7 +3716,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "state": {
@@ -3913,7 +3913,7 @@
            },
            "key": {
             "types": [
-             "masked"
+             "string"
             ]
            },
            "label": {
@@ -6497,7 +6497,7 @@
          "keys": {
           "key": {
            "types": [
-            "masked"
+            "string"
            ]
           },
           "name": {
@@ -8751,7 +8751,7 @@
         },
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "label": {
@@ -8997,7 +8997,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "locked": {
@@ -9105,7 +9105,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "locked": {
@@ -11416,7 +11416,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "locked": {
@@ -11580,7 +11580,7 @@
        "keys": {
         "key": {
          "types": [
-          "masked"
+          "string"
          ]
         },
         "locked": {

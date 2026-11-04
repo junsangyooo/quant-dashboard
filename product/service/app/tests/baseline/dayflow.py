@@ -7,7 +7,8 @@
 - 걸음마다 기록하는 것: 시각 · 스케줄러가 돈 일 · tick이 한 일 · 가짜 토스로 간 요청 · 텔레그램(가짜)로 간 글 ·
   DB 변화(orders · fills · todos · cond_orders · alerts · run_cash · run_equity · runs · live_state · meta).
   아무 일도 없는 걸음은 적지 않아요.
-- 5가지 날: 정상 날 · 08:30 점검 실패 뒤 08:40 회복 · 늦게 여는 날 · 08:55에 켬 · 장중에 다시 켬.
+- 6가지 날: 정상 날 · 08:30 점검 실패 뒤 08:40 회복 · 08:50까지 끝까지 실패(창의 끝 · `<=` 경계) · 늦게 여는 날 · 08:55에 켬 ·
+  장중에 다시 켬.
 - 일봉 캐시의 시계(`Market.clock`)도 모의 시각으로 바꿔 끼워 바깥 시계가 섞이지 않게 해요.
 """
 
@@ -32,10 +33,11 @@ from tests.test_live import SYM, World, body, running
 MON = date(2026, 11, 2)
 DAY = date(2026, 11, 3)  # 화요일
 STEP = timedelta(seconds=30)
-SCENARIOS = ("normal", "precheck_fail_recover", "late_open", "start_0855", "restart_intraday")
+SCENARIOS = ("normal", "precheck_fail_recover", "precheck_exhausted", "late_open", "start_0855", "restart_intraday")
 SCENARIO_LINES = {
     "normal": "정상 날 · 09:00 시가 체결 · 11:00 −8% 장중 손절 → 3분마다 넓힘 → 11:07 체결 · 20:10 확인",
     "precheck_fail_recover": "08:25 허용 IP 막힘 · 08:30 점검 실패 → 08:35 다시 실패 → 08:38 복구 → 08:40 통과 · 주문",
+    "precheck_exhausted": "08:25 허용 IP 막힘 · 08:30 ~ 08:50 점검 5번 모두 실패(창의 끝 · 그날 시가 주문 0) · 09:30 복구 · 장중 감시는 멈춘 채",
     "late_open": "장이 10:00에 여는 날 · 점검 · 주문 · 체결 대조가 1시간 밀림 · 12:00 장중 손절",
     "start_0855": "08:55에 켬 · 08:50이 지나 시가 주문을 놓침(할 일) · 09:01부터 장중",
     "restart_intraday": "09:30에 끔 · 12:00 −8% · 13:00에 다시 켬(새 Live · 새 스케줄러) → 바로 장중 손절",
@@ -217,6 +219,10 @@ def run_day(name: str, tmp: Path) -> dict[str, Any]:
         at(8, 25, 0, "08:25 허용 IP 막힘(08:20 대조 뒤)", lambda: setattr(s.w.server, "ip_allowed", False))
         at(8, 38, 0, "08:38 허용 IP 복구", lambda: setattr(s.w.server, "ip_allowed", True))
         at(9, 0, 0, "09:00 시가 매수 체결(10,000원)", lambda: s.fill_open("buy", "10000"))
+        at(15, 30, 0, "15:30 그날 일봉 확정", s.close_bar)
+    elif name == "precheck_exhausted":
+        at(8, 25, 0, "08:25 허용 IP 막힘(08:20 대조 뒤)", lambda: setattr(s.w.server, "ip_allowed", False))
+        at(9, 30, 0, "09:30 허용 IP 복구(창이 끝난 뒤 · 그날 주문 없음)", lambda: setattr(s.w.server, "ip_allowed", True))
         at(15, 30, 0, "15:30 그날 일봉 확정", s.close_bar)
     elif name == "late_open":
         at(10, 0, 0, "10:00 시가 매수 체결(10,000원)", lambda: s.fill_open("buy", "10000"))

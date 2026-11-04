@@ -64,10 +64,6 @@
   "why": "공인 IP"
  },
  {
-  "field": "key",
-  "why": "DART 키 · 비밀 값"
- },
- {
   "field": "last_check",
   "why": "마지막 확인 시각"
  },

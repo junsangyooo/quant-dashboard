@@ -36,8 +36,7 @@ MASKED: dict[str, str] = {
     "session": "세션 id",
     "cookie": "쿠키",
     "csrf": "CSRF 값",
-    "key": "DART 키 · 비밀 값",
-    "secret": "비밀 값",
+    "secret": "비밀 값",  # `key`는 가리지 않아요: 응답의 `key`는 모두 식별자(checks · steps · params · events)이고 DART 키는 `tail`로만 나와요
     "client_id": "토스 클라이언트 id",
     "client_secret": "토스 클라이언트 비밀",
     "account_no": "계좌번호",

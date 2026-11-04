@@ -224,6 +224,18 @@ def test_dayflow_precheck_fail_then_retry_then_recover(tmp_path: Path) -> None:
     assert todos == ["precheck"]
 
 
+def test_dayflow_precheck_exhausted_stops_at_the_window_end(tmp_path: Path) -> None:
+    """08:30 ~ 08:50 창(`<=` 경계): 5번 모두 실패 → 08:55부터는 점검하지 않음 · 그날 시가 주문 0 · 장중 감시 멈춤."""
+    from tests.baseline import dayflow
+
+    day = dayflow.run_day("precheck_exhausted", tmp_path / "exhausted")
+    s = day["summary"]
+    assert s["precheck_times"] == ["08:30:00", "08:35:00", "08:40:00", "08:45:00", "08:50:00"]
+    assert all(m["text"].startswith("장 시작 전 점검 · 실패") for m in s["precheck_messages"])
+    assert "open" not in s["tick_counts"]
+    assert not [o for ev in day["events"] for o in ev.get("db", {}).get("orders", {}).get("added", [])]
+
+
 def test_engine_cases_cover_notes_skips_and_paper_flow() -> None:
     from tests.baseline import engine_cases
 
