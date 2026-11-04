@@ -2,20 +2,21 @@
 
 1단계는 **동작을 바꾸지 않고** 구조만 바꿔요. 지키는 장치를 먼저 걸고, 옛 코드를 지우고, 층을 나누고, 같은 일을 하는 것을 한 곳으로 모아요. 왜 · 무엇을 위해서는 `PRODUCT.md`, 자리와 규칙은 `ARCHITECTURE.md`, 일하는 방식 · 안전은 `../DEVELOPING.md`예요. 지난 v2 할 일은 `../history/V2-TASKS.md`(기록 · 아래 '지난 할 일의 자리' 표).
 
-**지금 할 범위(2026-11-04 결정):** **P1-00 ~ P1-03만** 해요(시작 점검 · 기준선 · 안전 장치 · 옛 코드 지우기). 디자인과 상관없고 나중에 다시 할 일이 없는 것들이에요. P1-03이 끝나면 P1-14의 대조 · 보고 틀로 보고하고 PR 초안을 열고 멈춰요. P1-04부터는 하나로 합친 기획서(SPEC v5) · 디자인 시스템 v1 · 기술 설계가 나온 뒤 이 문서를 고쳐서 이어요.
+**지금 할 범위(2026-11-04 결정):** **P1-00 ~ P1-12와 P1-14**를 해요. P1-13(옛 화면 부품 합치기)은 하지 않아요. 3단계에서 새 디자인 시스템 부품으로 바뀌기 때문이에요. P1-12가 끝나면 P1-14로 대조 · 보고하고 PR 초안을 열어요. 그다음은 `ROADMAP.md`를 따라요. 일하는 방식(일감 · 검토 · 묶음 검토 · 단계 감사 · 진행 기록)은 `../DEVELOPING.md` 5절, 검토 기준은 `QUALITY.md`예요.
 
 ## 일하는 법
-- 위에서부터 순서대로 해요. 같은 파일을 두 항목이 동시에 고치지 않아요.
+- 위에서부터 순서대로, 하나씩 해요.
+- 코드 줄 번호는 `8b67df6` 기준이에요. 앞 항목이 그 파일을 바꾼 뒤에는 내용으로 찾아요.
 - 항목 하나가 끝나면 체크하고 '결과' 줄을 **아래 틀**로 채우고 커밋해요(영어 conventional · 짧게). 표가 필요하면 `tests/baseline/reports/P1-xx.md`에 두고 경로를 적어요.
   - 결과 줄 틀: `통과 n건 · 허용 목록 어긋남 n→m · 화면 차 최대 x% · API 모양 차 0 · 엔진 거래 차 0 · 하루 흐름 차 0 · 시간 +y% · 바꾼 시험 n개(목록 경로) · 가정: … · 보고: 경로`
-- 공통 기준(P1-02가 끝난 뒤부터): `scripts/check.sh`가 통과하고, 실제 토스 · DART · 텔레그램 · 증권사 · AI 제공사로 나가는 요청이 0건.
+- 공통 기준(P1-02가 끝난 뒤부터): `product/service/app/scripts/check.sh`가 통과하고, 실제 토스 · DART · 텔레그램 · 증권사 · AI 제공사로 나가는 요청이 0건.
 - **동작 변화 0의 뜻**: 화면 그림 · 화면 글 · API 경로와 응답 모양(키 · 타입) · 엔진 거래(사유 · 건너뜀 · 경고 글 포함) · 주문 흐름 · 하루 흐름 기록이 P1-01 기준선의 **'남는 것' 부분**과 같아요. 1단계에서는 API 응답을 바꾸지 않아요(번호로 보내기 · 서버 합계는 3단계).
-- **시험을 고칠 때**: 준비 코드(만들기 · 인자 · 가짜 끼우기 · 가져오는 경로)는 바꿔도 돼요. **단언 · 기대값 · 시험 자료 · 시험 수는 그대로**예요(P1-02 ① · P1-03에서 정한 예외만). 바꾼 시험은 목록으로 남겨요. 단언이나 기대값을 바꿔야 하면 멈추고 물어요.
-- **멈추고 물을 것**(OPEN-QUESTIONS 4절에 적고 그 항목을 멈춤): 단언 · 기대값을 바꿔야 함 · 지울 대상에 목록 밖 참조가 있음 · DB 구조 버전을 바꿔야 함 · 기준선과 다른데 까닭을 설명 못 함 · Playwright나 새 개발 도구(정확한 버전)를 받을 수 없음 · 바깥 약속(ARCHITECTURE 5절)을 바꿔야 함. 그 밖에 모르는 것은 가정으로 진행하고 결과 줄에 적어요.
-- 하지 않는 것: 새 전략 구조 v5 · 새 화면 · AI 기능(포트 포함) · 화면 글 고치기(지금 글 그대로) · `web/src/screens/BlockEditor/*` 손질(3단계에 새 편집기로 바뀜).
+- **시험을 고칠 때**: 준비 코드(만들기 · 인자 · 가짜 끼우기 · 가져오는 경로)는 바꿔도 돼요. **단언 · 기대값 · 시험 자료는 그대로이고, 있던 시험을 지우거나 합쳐 줄이지 않아요**(P1-02 ① · P1-03에서 정한 예외만 · 새 시험을 더하는 것은 괜찮아요). 바꾼 시험은 목록으로 남겨요. 단언이나 기대값을 바꿔야 하면 멈추고 물어요.
+- **멈추고 물을 것**(OPEN-QUESTIONS 4절에 적고 단계를 멈춘 뒤 보고): 단언 · 기대값을 바꿔야 함 · 지울 대상에 목록 밖 참조가 있음 · DB 구조 버전을 바꿔야 함 · 기준선과 다른데 까닭을 설명 못 함 · Playwright나 새 개발 도구(정확한 버전)를 받을 수 없음(브라우저는 받지 않음) · 화면 찍기 브라우저(`../DEVELOPING.md` 4절)가 열리지 않음 · 바깥 약속(ARCHITECTURE 5절)을 바꿔야 함. 그 밖에 모르는 것은 가정으로 진행하고 결과 줄에 적어요.
+- 하지 않는 것: 새 전략 구조 v5 · 새 화면 · AI 기능(포트 포함) · 화면 글 고치기(지금 글 그대로) · `web/src/screens/BlockEditor/*` 손질(3단계에 새 편집기로 바뀜) · 옛 화면 부품 합치기(P1-13 · 3단계).
 
 ## 0. 시작
-- [ ] **P1-00 시작 점검** — ① `origin/quant-service`에서 `service-v5` 브랜치를 만들어 push(안 되면 작업 환경이 정한 브랜치를 쓰고 PR 대상만 `quant-service`) ② `git config user.name "Junsang Yoo"` · `git config user.email "70479629+junsangyooo@users.noreply.github.com"` · 커밋하지 않는 로컬 `.git/hooks/commit-msg`(꼬리 줄 · 다른 작성자를 거절) ③ Python 3.12 · Node 24 확인 · 새 개발 도구를 **정확한 버전으로** 받을 수 있는지(ruff · mypy · jscpd · OpenAPI → TS 생성기 · Playwright 브라우저) · 안 되면 멈추고 물음 ④ Playwright로 화면 한 장을 찍어 봄 ⑤ 이 문서와 `PRODUCT.md` · `ARCHITECTURE.md` · `design/tokens-export.json` · `../history/V2-TASKS.md`가 브랜치에 있는지 ⑥ 깨끗하게 받은 상태의 `pytest` 결과(`tests/fixtures/v1_app.db`가 없어 실패하는 `test_db.py`의 3건은 P1-02 맨 앞에서 지움).
+- [ ] **P1-00 시작 점검** — ① `origin/quant-service`에서 `service-v5` 브랜치를 만들어 push(push는 이 브랜치로만 · 커밋할 때마다) ② `git config user.name "Junsang Yoo"` · `git config user.email "70479629+junsangyooo@users.noreply.github.com"` · git 훅(commit-msg: 꼬리 줄 · 다른 작성자 거절 · pre-push: `service-v5` 밖 push · 삭제 · 강제 push 거절): `git config --show-origin core.hooksPath`에 이미 훅이 걸려 있으면 그 훅이 거절하는 것을 한 번 보이고, 없으면 커밋하지 않는 로컬 `.git/hooks/commit-msg` · `pre-push`를 만듦 ③ Python 3.12 · Node 24 확인(`node -v`) · 화면 찍기 브라우저의 경로와 판(`../DEVELOPING.md` 4절)을 결과 줄에 · 새 개발 도구를 **정확한 버전으로** 받을 수 있는지(ruff · mypy · pip-audit · 해시 lock 도구 · jscpd · OpenAPI → TS 생성기 · Playwright npm 패키지 · 화면 찍기 브라우저는 내려받지 않고 `PW_CHROMIUM` 경로와 판을 적음) · 안 되면 멈추고 물음 ④ Playwright로 화면 한 장을 찍어 봄 ⑤ 이 문서와 `PRODUCT.md` · `ARCHITECTURE.md` · `QUALITY.md` · `ROADMAP.md` · `PROGRESS.md` · `design/tokens-export.json` · `../history/V2-TASKS.md`가 브랜치에 있는지 ⑥ 깨끗하게 받은 상태의 `pytest` 결과(`tests/fixtures/v1_app.db`가 없어 실패하는 `test_db.py`의 3건은 P1-02 맨 앞에서 지움).
   - 결과:
 - [ ] **P1-01 기준선** — 바꾸기 전 상태를 `tests/baseline/`에 남겨요(`.gitignore`에 걸리지 않게 · `data/` · `docs/` · `tmp/` · `static/` · `*.csv` · `*.log` · `*.db` 이름을 쓰지 않음). 기준선은 **'남는 것'과 '지울 것'으로 나눠** 기록해요(P1-03이 지우는 MVP 라우트 · MVP 엔진 · 지울 시험의 관측은 '지울 것').
   - 시계 고정: 서버 `now` · 직접 시계를 읽는 5곳(`api_v2.py:237` · `connect.py:79` · `vault.py:91` · `main.py:1267` · `backtest_v2.py:120`) · Playwright `page.clock`을 같은 고정 시각으로 · 복구 코드(`vault.py:109`)는 씨앗으로 고정.
@@ -27,11 +28,11 @@
   - 하루 흐름 기록 시험: 실전 tick과 스케줄러를 **30초 간격으로 하루 돌려** 일어난 일의 순서를 기록 — 정상 날 · 08:30 점검 실패 뒤 08:40 회복 · 늦게 여는 날 · 08:55에 켬 · 장중에 다시 켬.
   - `_auto_loop` 한 바퀴를 실제로 도는 시험 · 주문 기록 순서 시험(가짜 토스가 주문을 받는 순간 DB에 'sending' 행이 이미 있음).
   - 시간: pytest 전체 · 백테스트 사례 · 화면 API의 걸린 시간.
-  - 숫자: 줄 수 · 모듈 수 · 층 어긋남 · 중복 · SQL 위치 · 원시 토큰 · 같은 글 · 시각 숫자(ARCHITECTURE 7절 셈 규칙).
+  - 숫자: 줄 수 · 모듈 수 · 층 어긋남 · 중복 · SQL 위치 · 원시 토큰 · 같은 글 · 시각 숫자(ARCHITECTURE 7절 셈 규칙) · 설치된 판(`pip freeze --all` · `node -v` · `npm ls --depth=0`)을 `tests/baseline/`에.
   - 다 됐다: 기준선을 **두 번 만들어 같음** · 얼린 326개를 v3 엔진만으로 다시 돌려 차이 0 · 얼린 v1 기대값으로 4건이 통과.
   - 결과:
-- [ ] **P1-02 안전 장치(지우기 전)** — ① 맨 앞: `test_db.py`의 `v1_app.db` 시험 3건(49 · 76 · 106행)과 `db.py`의 `_migrate_v1` 지움(설치본이 없어 v1 자료가 없음 · 지난 T-80 해결 · 213행 자리는 '알 수 없는 구조 버전' 오류로) ② `test_no_orders.py` · `test_copytext.py`의 소스 검사를 하위 폴더까지 · 금지 목록에 AI 제공사 SDK · urllib3 · websockets · subprocess 더함 ③ ruff 설정(정의 안 된 이름 F821 포함) · mypy 설정 ④ 옛 경로 다시 내보내기 금지 시험 · '시험 중 키 파일은 임시 폴더' 시험 · 자식 프로세스는 HOME을 임시 폴더로 ⑤ 금고 흐름 화면 시험(돈이 움직이는 요청 403 → 비밀번호 → 토큰으로 다시 보냄) ⑥ `scripts/check.sh` · 커밋 위생 확인(ARCHITECTURE 7절 식).
-  - 다 됐다: 일부러 넣은 위반(하위 폴더의 실제 전송 · 정의 안 된 이름 · 다시 내보내기 · 다른 커밋 작성자)을 각각 잡는 것을 한 번씩 보임 · `check.sh` 통과.
+- [ ] **P1-02 안전 장치(지우기 전)** — ① 맨 앞: `test_db.py`의 `v1_app.db` 시험 3건(49 · 76 · 106행)과 `db.py`의 `_migrate_v1` 지움(설치본이 없어 v1 자료가 없음 · 지난 T-80 해결 · 213행 자리는 '알 수 없는 구조 버전' 오류로) ② `test_no_orders.py` · `test_copytext.py`의 소스 검사를 하위 폴더까지 · 금지 목록에 AI 제공사 SDK · urllib3 · websockets · subprocess 더함 ③ ruff 설정(정의 안 된 이름 F821 포함) · mypy 설정 ④ 옛 경로 다시 내보내기 금지 시험 · '시험 중 키 파일은 임시 폴더' 시험 · 자식 프로세스는 HOME을 임시 폴더로 ⑤ 금고 흐름 화면 시험(돈이 움직이는 요청 403 → 비밀번호 → 토큰으로 다시 보냄) ⑥ `product/service/app/scripts/check.sh`(어느 폴더에서 불러도 같게 돎 · Node 판이 24가 아니면 까닭을 적고 실패) · 커밋 위생 확인(ARCHITECTURE 7절 식) · 비밀 검사(QUALITY S11) ⑦ 의존성 고정(QUALITY S7): 파이썬은 기준선을 만들 때 설치된 판 그대로 해시까지 고정한 lock 파일 · 웹은 지금 `package-lock.json` · `check.sh`에 pip-audit · npm audit(1단계에서 나온 취약점은 판을 올리지 않고 허용 목록(까닭 한 줄)과 OPEN-QUESTIONS로).
+  - 다 됐다: 일부러 넣은 위반(하위 폴더의 실제 전송 · 정의 안 된 이름 · 다시 내보내기 · 다른 커밋 작성자 · 키 꼴 문자열)을 각각 잡는 것을 한 번씩 보임 · lock 파일로 새로 설치한 환경에서도 pytest 통과 · `check.sh` 통과.
   - 결과:
 
 ## 1. 지우기
@@ -46,7 +47,7 @@
   - 웹: 화면에서 닿지 않는 23개(`src/graph/*` · `components/graph/*` · `copy/editor` · `copy/graph` · `copy/particles` · `components/Badges` · `Chips` · `Dots` · `StageIcon` · `Text` · `Toast` · `lib/money` · `lib/runDates` · `screens/LoadError` · 그 시험 · `public/flags/*` · `web/tests/fixtures/graph_cases.json` · `public/licenses/flag-icons-MIT.txt` · `licenses/README.txt`의 해당 줄) · `api/mvp.ts`(화면이 직접 쓰는 **8개** `useAppState` · `useConnect` · `keys` · `createQueryClient` · `usePost` · 타입 `CheckResult` · `CheckStep` · `ConnectView`와 같이 옮길 2개 `useRefreshAll` · `AppState`를 동작 그대로(재시도 규칙 · staleTime 5초 포함) 새 `api/`로 옮긴 뒤).
   - 다 됐다: 기준선 '남는 것'과 같음(화면 · API 모양 · 엔진 · 하루 흐름) · 남은 시험 통과 · 지운 줄 수 표 · 바꾼 시험 목록.
   - 결과:
-- [ ] **P1-04 구조 장치(지운 뒤)** — `tests/test_layers.py`(ARCHITECTURE 2절 · 하위 폴더) · ESLint 경계(3절) · 중복 · 같은 글 · SQL 위치 · 시각 숫자 · 토큰 규칙 시험(7절 셈 규칙). 지금 어긋나는 곳은 허용 목록(`tests/allow/*.txt` · 줄마다 까닭)에 넣고 **어긋남 수가 줄어들기만** 하게 해요(파일을 나눠 줄이 갈라져도 수로 셈). 1단계 끝에 허용 목록은 ARCHITECTURE 6절 '1단계 예외'만 남아요.
+- [ ] **P1-04 구조 장치(지운 뒤)** — `tests/test_layers.py`(ARCHITECTURE 2절 · 하위 폴더) · ESLint 경계(3절 · 1단계는 지금 폴더에 맞춰 셈 · ARCHITECTURE 6절) · 중복 · 같은 글 · SQL 위치 · 시각 숫자 · 토큰 규칙 시험(7절 셈 규칙). 지금 어긋나는 곳은 허용 목록(`tests/allow/*.txt` · 줄마다 까닭)에 넣고 **어긋남 수가 줄어들기만** 하게 해요(파일을 나눠 줄이 갈라져도 수로 셈). 1단계 끝에 허용 목록은 ARCHITECTURE 6절 '1단계 예외'만 남아요.
   - 다 됐다: 허용 목록 밖의 새 어긋남을 넣으면 실패하는 것을 한 번씩 보임 · 시작 숫자를 결과 줄에.
   - 결과:
 
@@ -74,16 +75,16 @@
 - [ ] **P1-11 화면 글 한 출처** — `copy/texts.json`(id → **지금 글 그대로** · 변수는 `{name}` 꼴 · 조건 사전 `app/catalog.py`와 이름이 겹치지 않게)에서 파이썬 · TS 글을 만들어요. 서버가 보내는 글은 지금처럼 보내되 출처를 글 목록으로 · 같은 글이 두 곳에 있는 것을 0으로(지운 뒤 다시 셈 · 대략 16 · 27 · 20). 조사는 **견본만 얼리고 합치지 않음**(3단계).
   - 다 됐다: 같은 글 0(`BlockEditor/*` 빼고) · 금지어 0 · 화면 글 기준선과 같음 · API 모양 같음.
   - 결과:
-- [ ] **P1-12 토큰 파이프라인** — `design/tokens-export.json`(Figma 정답 3묶음) → `web/design/tokens.json` → `web/src/ds/tokens/tokens.css`를 스크립트로. 글꼴 이름 바꿈 규칙('Pretendard Variable' → 'Pretendard')으로 지금과 같게 · 1단계 범위는 지금 쓰는 180개(나머지 43개는 목록으로 남김). features · composites의 원시 토큰 직접 사용을 같은 값의 의미 토큰으로 · 화면 안 임의 변수를 토큰으로(`BlockEditor/*`는 뺌).
+- [ ] **P1-12 토큰 파이프라인** — `design/tokens-export.json`(Figma 정답 3묶음) → `web/design/tokens.json` → `web/src/styles/tokens.css`(지금 자리 · `web/scripts/gen-tokens.ts`가 만듦 · `ds/tokens/`로 옮기는 것은 3단계)를 스크립트로. 글꼴 이름 바꿈 규칙('Pretendard Variable' → 'Pretendard')으로 지금과 같게 · 1단계 범위는 지금 쓰는 180개(나머지 43개는 목록으로 남김). 원시 토큰 직접 사용을 같은 값의 의미 토큰으로 · 화면 안 임의 변수를 토큰으로(`BlockEditor/*`는 뺌 · 1단계 셈 범위는 지금 폴더 `screens/` · `components/` · `charts/` · ARCHITECTURE 6절).
   - 다 됐다: 원시 토큰 직접 사용 0(`BlockEditor/*` 빼고) · 토큰 대조 시험 · 화면 그림 기준선 0.5% 이하 · 화면 글 같음.
   - 결과:
-- [ ] **P1-13 부품 합치기 · 경계** — `web/src/`를 ARCHITECTURE 3절 꼴로 옮기고 겹친 부품을 하나로: SideTag 2벌 → SideMark · HowTo 2벌 → HowToSteps · Kv ↔ KeyValue → KeyValue · 창(덮개 + 창)은 `BlockEditor/*` 밖 2벌 → Dialog · Sheet · 칩 클래스 → Chip 부품 · Layout · Page 틀은 `ds/composites`. 부품이 API를 부르는 곳(Header · ConfirmHost)은 props로(P1-02의 금고 흐름 화면 시험 통과 유지). 기능끼리 가져오는 5쌍(Setup → Auth 포함) · 기능 → shell 15곳 · shell → api · lib → copy · lib ↔ charts 순환을 없앰(`main.tsx`는 웹 조립이라 무엇이든 가져와도 됨). **페이지 제목 굵기는 지금 700 그대로**.
+- [ ] **P1-13 부품 합치기 · 경계(1단계에서 하지 않음 · 3단계로 옮김 · 아래는 기록)** — `web/src/`를 ARCHITECTURE 3절 꼴로 옮기고 겹친 부품을 하나로: SideTag 2벌 → SideMark · HowTo 2벌 → HowToSteps · Kv ↔ KeyValue → KeyValue · 창(덮개 + 창)은 `BlockEditor/*` 밖 2벌 → Dialog · Sheet · 칩 클래스 → Chip 부품 · Layout · Page 틀은 `ds/composites`. 부품이 API를 부르는 곳(Header · ConfirmHost)은 props로(P1-02의 금고 흐름 화면 시험 통과 유지). 기능끼리 가져오는 5쌍(Setup → Auth 포함) · 기능 → shell 15곳 · shell → api · lib → copy · lib ↔ charts 순환을 없앰(`main.tsx`는 웹 조립이라 무엇이든 가져와도 됨). **페이지 제목 굵기는 지금 700 그대로**.
   - 다 됐다: ESLint 경계 0 · 웹 중복 1% 미만 · 같은 CSS 본문 0(셋 다 `BlockEditor/*` 빼고) · 화면 그림 기준선 0.5% 이하 · 화면 글 같음.
   - 결과:
 
 ## 4. 마무리
-- [ ] **P1-14 대조 · 보고** — 기준선(P1-01 '남는 것')과 대조: 화면 그림 · 화면 글 · API 모양 · 엔진 거래 · 하루 흐름 · pytest 수(지운 · 옮긴 시험 표와 함께) · 시간(20% 넘게 느려지지 않음). 허용 목록은 '1단계 예외'만. 전후 숫자 표. PR 초안 본문에 이 표 · 가정 · 남은 질문(**세션 주소 · 꼬리 줄은 넣지 않음**).
-  - 다 됐다: 동작 변화 0 · ARCHITECTURE 7절 문턱 모두 · 커밋 위생 확인 통과.
+- [ ] **P1-14 대조 · 보고** — 기준선(P1-01 '남는 것')과 대조: 화면 그림 · 화면 글 · API 모양 · 엔진 거래 · 하루 흐름 · pytest 수(지운 · 옮긴 시험 표와 함께) · 시간(20% 넘게 느려지지 않음). 허용 목록은 '1단계 예외'만. 전후 숫자 표. 이 대조 뒤에 단계 감사(`../DEVELOPING.md` 5절)를 하고, 통과하면 PR 초안을 열어요. **PR 본문은 이 표 · 가정 · 남은 질문만**(꼬리 줄 0).
+  - 다 됐다: 동작 변화 0 · ARCHITECTURE 7절 문턱 모두(화면 경계 · 웹 중복 · 같은 CSS는 1단계 예외 · 허용 목록이 줄어들기만) · 커밋 위생 확인 통과.
   - 결과:
 
 ## 지난 할 일의 자리(`../history/V2-TASKS.md`의 열린 23개)
@@ -96,11 +97,11 @@
 ## 정한 것(2026-11-04 제품 주인 확인)
 | 무엇 | 정함 |
 |---|---|
-| 진행 범위 | 지금은 P1-00 ~ P1-03 · 그 뒤는 SPEC v5 · 디자인 시스템 v1 · 기술 설계 뒤 |
+| 진행 범위 | 1단계는 P1-00 ~ P1-12 · P1-14(P1-13은 3단계) · 그 뒤는 `ROADMAP.md` |
 | 증권사 | 토스만 · 다른 증권사는 하지 않음(나중에 넓힐 자리로 `Broker` 포트 하나만) |
 | 옛 전략 호환 | `app/v1/*` · `engine_v1.py` · v1 → v3 일치 시험만 지움 · v3 안의 v1 변환은 1단계 동안 그대로 · 2단계에서 v3 → v5 문턱만 둠 |
 | 동작 변화 0의 범위 | API 응답 모양까지 · 번호로 보내기 · 서버 합계는 3단계 |
 | 화면 글 기준 | 지금 글 그대로(SPEC과 다른 글은 3단계에 고침) |
 | 설치본 | 없음(2026-11-04 확인) · 바깥 약속은 1단계 동안 고정 |
 | 디자인 토큰 정답 | Figma 기본 3묶음(원시 · 의미 · 컴포넌트) · 옛 시안 묶음(B · C · D)은 쓰지 않음 |
-| 일하는 곳 | 새 세션(제품 주인이 시작하고 지시) · `service-v5` 브랜치 · PR 초안(합치기는 사람이) |
+| 일하는 곳 | `service-v5` 브랜치 · PR 초안(합치기는 제품 주인이) |

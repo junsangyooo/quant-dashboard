@@ -87,24 +87,26 @@
 | 동시성 | 실전 상태는 주인(`run/live.py`)만 바꿈 · API는 주인의 공개 메서드를 부름 · 잠금은 2단계 |
 | 시각 | `Clock` 포트로 받음 · 장 시간 · 휴장일 · 한국 시간은 `domain/markets/kr.py` · 일 시각은 `run/scheduler.py` |
 | 다시 내보내기 | 옮긴 모듈을 옛 경로에서 다시 내보내지 않음 · 시험은 새 경로를 씀 |
-| 1단계 예외(이름으로 적음) | v3 모듈(`blocks` · `engine` · `copytext` · `catalog`)의 한글 글 · 실제 시계 3곳(일봉 캐시 판단 · `dart.py:231` 하루 한도 날짜 · `api_v2.py:237` 백테스트 기본 기간) · 한 줄 JSON 기록 · 실전 상태 잠금 · 전략 항목 등록부 · Broker 기능표 · '알 수 있었던 시각' · 백테스트 · 모의투자의 Broker(체결 흉내를 Broker 뒤로 옮기기 · 엔진 모듈은 지금도 하나) → 2단계 / 화면이 돈 숫자를 더하는 곳 · 화면이 글자로 상태를 판정하는 곳 · `web/src/screens/BlockEditor/*` → 3단계 |
+| 1단계 예외(이름으로 적음) | v3 모듈(`blocks` · `engine` · `copytext` · `catalog`)의 한글 글 · 실제 시계 3곳(일봉 캐시 판단 · `dart.py:231` 하루 한도 날짜 · `api_v2.py:237` 백테스트 기본 기간) · 한 줄 JSON 기록 · 실전 상태 잠금 · 전략 항목 등록부 · Broker 기능표 · '알 수 있었던 시각' · 백테스트 · 모의투자의 Broker(체결 흉내를 Broker 뒤로 옮기기 · 엔진 모듈은 지금도 하나) → 2단계 / 화면이 돈 숫자를 더하는 곳 · 화면이 글자로 상태를 판정하는 곳 · `web/src/screens/BlockEditor/*` · 화면 경계 · 웹 중복 · 같은 CSS의 0 문턱(옛 화면 부품 합치기 P1-13을 디자인 시스템 v1 부품과 함께 하므로 · 1단계에는 허용 목록이 줄어들기만) · `ds/` · `features/` 폴더(1단계 셈은 지금 폴더에 맞춤: `screens/` = features 자리 · `components/` · `charts/` = ds 자리 · `api/` · `copy/` · `lib/` · `shell/`은 이름이 같음) → 3단계 |
 
 ## 7. 지키는 장치(시험 · 문턱 · 셈 규칙)
 | 장치 | 방법 | 문턱 | 셈 규칙 |
 |---|---|---|---|
 | 파이썬 층 | 표준 라이브러리 AST 시험 `tests/test_layers.py`(2절 표 · 하위 폴더까지) | 어긋남 0(1단계 예외 목록 밖) | 모듈 맨 위 · 함수 안 import 모두 |
-| 화면 경계 | ESLint `no-restricted-imports` patterns(3절 표) | warnings 0 | 정적 import · 동적 import |
-| 중복 · 웹 | jscpd(개발 의존성) | 1% 미만 | 최소 50토큰 · 시험 · 생성 파일 뺌 |
+| 화면 경계 | ESLint `no-restricted-imports` patterns(3절 표) | warnings 0(1단계는 허용 목록이 줄어들기만 · 6절) | 정적 import · 동적 import |
+| 중복 · 웹 | jscpd(개발 의존성) | 1% 미만(1단계는 줄어들기만 · 6절) | 최소 50토큰 · 시험 · 생성 파일 뺌 |
 | 중복 · 파이썬 | AST 본문 해시 | 같은 본문 0 · 모듈 사이 같은 이름 0 | 5줄 이상 함수 · 맨 위 공개 함수만(`main` · 포트 구현 · 시험 뺌) |
-| 중복 · CSS | 규칙 본문 비교 | 0 | 선언 3개 이상 |
+| 중복 · CSS | 규칙 본문 비교 | 0(1단계는 줄어들기만 · 6절) | 선언 3개 이상 |
 | 같은 글 | 글 목록 밖 같은 글 | 0 | 8자 이상 한글 문자열 · 서버 · 웹 · 빌드 결과 |
 | SQL 위치 | AST · 문자열 검사 | `store/` 밖 0 | sqlite3 호출 · SQL 낱말로 시작하는 문자열 |
 | 시각 숫자 | 문자열 · 숫자 검사 | `domain/markets/kr.py` · `run/scheduler.py` 밖 0 | 서버(`app/`)만 · `HH:MM` 문자열 · 시각 생성자(독스트링 · 글 목록 · 시험 뺌 · 웹은 3단계) |
-| 토큰 | 원시 토큰 사용 · 위치 · 모서리 px 리터럴 · 내보내기 대조 | 0 | features · composites의 CSS · TSX |
+| 토큰 | 원시 토큰 사용 · 위치 · 모서리 px 리터럴 · 내보내기 대조 | 0 | features · composites의 CSS · TSX(1단계는 `screens/` · `components/` · `charts/` · 6절) |
 | 화면 그림 | Playwright 기준선(1440 · 390 · 고정 시각) | 화면마다 0.5% 이하 + 화면 글이 같음 | 기준선 화면 목록 전부 |
 | 금지어 | `GLOSSARY.md` 5절 | 0건 | 서버 · 화면 · 빌드 결과 · 글 목록 · 하위 폴더 |
 | 가짜 전송에서만 주문 | `tests/test_no_orders.py`(하위 폴더 · AI 제공사 SDK · urllib3 · websockets · subprocess 금지) + 바깥 소켓 0 · 자식 프로세스는 HOME을 임시 폴더로 | 실제 전송 객체 0 · 바깥 소켓 0 | 시험 전체 |
 | API 모양 | 시험 전체에서 오간 응답의 키 · 타입(가릴 필드 목록 따로) | 기준선과 같음 | 라우트마다 |
 | API 타입 | 생성 타입 최신 시험 | 손으로 쓴 API 타입 0 | `web/src/api` |
-| 커밋 위생 | `git log origin/quant-service..HEAD --format='%an <%ae> / %cn <%ce> / %(trailers)'` · 로컬 commit-msg 훅 | 작성자 · 커미터가 정확히 `Junsang Yoo <70479629+junsangyooo@users.noreply.github.com>` · 꼬리 줄 0 · PR 본문에 세션 주소 0 | 브랜치의 모든 커밋 |
-| 한 번에 | `scripts/check.sh`(pytest · ruff · mypy · typecheck · lint · test · build · 위 전부) | 모두 통과 | — |
+| 커밋 위생 | `git log origin/quant-service..HEAD --format='%an <%ae> / %cn <%ce> / %(trailers)'` · commit-msg 훅 | 작성자 · 커미터가 정확히 `Junsang Yoo <70479629+junsangyooo@users.noreply.github.com>` · 꼬리 줄 0 · PR 본문은 정한 틀만(TASKS P1-14) | 브랜치의 모든 커밋 |
+| 비밀 검사 | 문자열 검사(QUALITY S11) | 키 · 토큰 꼴 · 계좌번호 꼴 · 공인 IP 0(허용 목록 밖) | `product/` 아래 추적되는 파일(생성 파일 · `vendor/` · 시험 자료는 까닭과 함께 뺌) |
+| 의존성 | lock 파일(해시) · pip-audit · npm audit(QUALITY S7) | 허용 목록 밖 취약점 0 | 파이썬 · 웹 의존성 |
+| 한 번에 | `product/service/app/scripts/check.sh`(pytest · ruff · mypy · typecheck · lint · test · build · 위 전부) | 모두 통과 | — |

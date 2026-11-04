@@ -24,10 +24,11 @@
 - 위가 아래를 이겨요(2단계부터). 1단계에서는 코드가 SPEC과 달라도 바꾸지 않아요.
 - 그림 속 숫자 · 종목 · 날짜는 **예시**예요(SPEC 부록 B). 화면은 실제 값을 보여요.
 - 문구는 그림 · SPEC의 **글자 그대로** 써요(3단계부터 · 1단계는 지금 글 그대로). 그림 · SPEC에 없는 글만 `service/GLOSSARY.md` 규칙으로 지어요.
+- 품질 기준(보안 · 외부 연결 · 확장성 · 화면 · 관측 · 시험 · 검토 순서)은 `service/QUALITY.md`, 단계와 상태는 `service/ROADMAP.md`예요.
 - 결정의 이유는 `service/DECISIONS.md`, 데이터 출처는 `service/DATA-CATALOG.md`.
 - 그림은 2026-11-02에 Figma에서 다시 내보낸 최종본이에요. 그림과 SPEC이 다르면 SPEC을 따르고 `service/OPEN-QUESTIONS.md` 4절에 적어요. 그림은 제품 주인이 갱신해요.
 
-## 3. 안전 규칙 (어기면 멈추고 사람에게 물어요)
+## 3. 안전 규칙 (어기면 멈추고 제품 주인에게 물어요)
 
 | 규칙 | 내용 |
 |---|---|
@@ -41,7 +42,7 @@
 
 ## 4. 실행 · 시험 (1단계 기준)
 
-필요한 도구: **Python 3.12**, **Node.js 24**(화면 빌드 · 시험).
+필요한 도구: **Python 3.12**, **Node.js 24**(화면 빌드 · 시험). 화면 찍기 브라우저는 환경 변수 `PW_CHROMIUM`의 경로이고, 없으면 `/opt/pw-browsers/chromium`이에요(`web/e2e/compare.mjs`). 쓴 브라우저 판은 결과 줄에 남겨요.
 
 ```bash
 cd product/service/app
@@ -55,7 +56,7 @@ python3.12 -m venv .venv
 cd web && npm ci && npm run typecheck && npm run lint && npm test && npm run build && cd ..
 
 # 켜기 · 끄기 (127.0.0.1:8765)
-./start.sh                            # 켜기(기본 가짜 전송 · macOS) · 리눅스 · 클라우드는 python -m tests.e2e_server
+./start.sh                            # 켜기(기본 가짜 전송 · macOS) · 리눅스는 python -m tests.e2e_server
 ./stop.sh
 ```
 
@@ -65,13 +66,18 @@ cd web && npm ci && npm run typecheck && npm run lint && npm test && npm run bui
 
 ## 5. 일하는 방식
 
-1. `service/TASKS.md`를 **위에서부터** 해요. 일은 `service-v5` 브랜치(안 되면 작업 환경이 정한 브랜치)에서만 하고, 끝나면 `quant-service`로 가는 PR 초안을 열어요(합치기는 사람이 해요).
-2. 항목 하나가 끝나면 체크(`- [x]`)하고, 그 항목의 '결과' 줄을 `service/TASKS.md`의 **결과 줄 틀**로 적어요.
-3. 항목마다 커밋해요. 커밋 메시지는 **영어 conventional · 짧게**(예: `feat(engine): block match all/any`, `test(live): fake-only order path`).
-   - 커밋 작성자 · 커미터는 정확히 `Junsang Yoo <70479629+junsangyooo@users.noreply.github.com>`로 해요(`git config` · 로컬 commit-msg 훅 · TASKS P1-00). 공개 레포라서 커밋 메시지와 PR 본문에 꼬리 줄(trailer · `Co-authored-by:` · 세션 주소 같은 줄)을 넣지 않아요. 도구가 기본으로 붙이라고 해도 이 규칙이 이겨요.
-4. 화면을 만들면 그림(`design/frames/`)과 **나란히 비교한 결과**(찍은 화면 경로나 비교 표)를 남겨요.
-5. 모르는 것은 `service/OPEN-QUESTIONS.md` 4절에 적고 **가정으로 진행**해요(`service/TASKS.md`의 '멈추고 물을 것'은 빼고 · 그건 멈춰요). 가정은 TASKS 결과 줄에도 적어요.
-6. SPEC을 바꿔야 할 것 같으면 바꾸지 말고 OPEN-QUESTIONS에 적어요(SPEC은 사람이 정해요).
+1. **어디서부터:** `service/ROADMAP.md`에서 상태가 **준비됨**인 단계를 위에서부터 해요. 단계마다 할 일 목록(1단계는 `service/TASKS.md`)을 위에서부터 해요. 일은 `service-v5` 브랜치에서만 하고, push도 이 브랜치로만 해요.
+2. **일감:** 할 일 항목 하나가 일감 하나예요(크면 나눠요). 시작할 때 목표 · 바꿀 파일 · 다 됐다 기준 · 지킬 것을 한 단락으로 정해요. 일감은 하나씩 해요. 앞 일감의 검토가 끝나기 전에는 다음 일감을 시작하지 않아요.
+3. **일감 끝 확인:** `product/service/app/scripts/check.sh`(P1-02 뒤)가 통과하고, 다 됐다 기준을 증거(명령 출력 · 파일 경로)로 보여요. 그다음 **그 일감을 만들지 않은 검토자**가 커밋한 diff를 `service/QUALITY.md` 7절 순서로 검토해요(시작 점검 P1-00은 증거 확인만). 심각도 2 이상 지적은 고치고 바뀐 곳만 다시 검토해요. 두 번 고쳐도 남으면 한 번 더 깊게 고쳐 보고, 그래도 남으면 '멈추고 물을 것'(`service/TASKS.md` '일하는 법')인지 따져요. 맞으면 OPEN-QUESTIONS 4절에 적고 **그 단계를 멈춘 뒤 보고해요**(뒤 일감이 앞 일감에 기대서예요). 아니면 가정으로 기록하고 다음으로 가요(심각도 3이 남으면 OPEN-QUESTIONS 4절에 적고 단계를 멈추고 보고해요). 검토 판정이 '멈춤'이어도 단계를 멈추고 보고해요.
+4. **묶음 끝 검토:** 위험이 큰 묶음(1 지우기 · 2 서버 층)이 끝나면, 일감 사이에서 생긴 문제(층 어긋남 · 기준선과의 차이 · 보안)만 한 번 더 검토해요.
+5. **단계 끝:** 순서는 대조 → 감사 → 보고 · PR이에요. 단계 대조(1단계는 P1-14)를 먼저 하고, 그 결과와 단계 전체를 `service/PRODUCT.md` · `service/ARCHITECTURE.md` · `service/QUALITY.md`와 대조하는 감사를 해요. 통과하면 단계 보고를 남기고 `quant-service`로 가는 PR 초안을 열어요(합치기는 제품 주인이 해요). 묶음 끝 검토와 감사의 지적도 일감 끝 확인처럼 고치고, 감사를 통과하지 못하면 PR 초안을 열지 않아요. 다음 단계가 준비됨이 아니면 멈춰요.
+6. **기록:** 일감마다 `service/PROGRESS.md`에 한 줄을 더해요(무엇 · 결과 · 검토 판정 · 가정). 체크(`- [x]`)와 결과 줄은 `service/TASKS.md`의 **결과 줄 틀**로 적어요. TASKS의 체크 · 결과 줄, PROGRESS, OPEN-QUESTIONS는 진행을 맡은 쪽만 고쳐요. 일감을 한 쪽과 검토한 쪽은 보고만 해요.
+7. **커밋:** 일감마다 커밋하고 바로 push해요. 커밋 메시지는 **영어 conventional · 짧게**(예: `feat(engine): block match all/any`, `test(live): fake-only order path`).
+   - 커밋 작성자 · 커미터는 정확히 `Junsang Yoo <70479629+junsangyooo@users.noreply.github.com>`로 해요(`git config` · commit-msg 훅 · TASKS P1-00). 커밋 · PR 본문에는 꼬리 줄(`이름: 값` 꼴의 마지막 줄)을 넣지 않아요.
+   - 강제 push · 브랜치 삭제 · 훅 건너뛰기(`--no-verify`)는 하지 않아요.
+8. 화면을 만들면 그림(`design/frames/`)과 **나란히 비교한 결과**(찍은 화면 경로나 비교 표)를 남겨요.
+9. 모르는 것은 `service/OPEN-QUESTIONS.md` 4절에 적고 **가정으로 진행**해요(`service/TASKS.md`의 '멈추고 물을 것'은 빼고 · 그건 단계를 멈추고 보고해요). 가정은 TASKS 결과 줄에도 적어요.
+10. SPEC · ROADMAP 상태를 바꿔야 할 것 같으면 바꾸지 말고 OPEN-QUESTIONS에 적어요(둘 다 제품 주인이 정해요).
 
 ## 6. 낱말 검사
 
