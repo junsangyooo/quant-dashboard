@@ -3,7 +3,7 @@
 import clsx from 'clsx';
 import { useEffect, useRef } from 'react';
 import { Navigate, Outlet, ScrollRestoration, useLocation, useMatches } from 'react-router';
-import { useAppState } from '../api/mvp';
+import { useAppState } from '../api/state';
 import { copy } from '../copy';
 import { Header } from '../components/Header';
 import { BottomTabs } from '../components/Nav';

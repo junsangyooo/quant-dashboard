@@ -4,13 +4,8 @@ import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { CircleCheck, CircleX, Clock, Hourglass, Circle, Info } from 'lucide-react';
 import { api, isApiError } from '../../api/client';
-import {
-  usePost,
-  useConnect,
-  type CheckResult,
-  type CheckStep,
-  type ConnectView,
-} from '../../api/mvp';
+import { useConnect, type CheckResult, type CheckStep, type ConnectView } from '../../api/connect';
+import { usePost } from '../../api/query';
 import { Box } from '../../components/Box';
 import { Button, ExpandButton, CollapseButton } from '../../components/Buttons';
 import { Card, KeyValue } from '../../components/Card';

@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { configureClient } from './api/client';
-import { createQueryClient, keys } from './api/mvp';
+import { createQueryClient, keys } from './api/query';
 import { routes } from './routes';
 import './styles/pretendard.css';
 import './styles/tokens.css';

@@ -3,7 +3,8 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, isApiError } from '../../api/client';
-import { keys, useConnect } from '../../api/mvp';
+import { useConnect } from '../../api/connect';
+import { keys } from '../../api/query';
 import {
   download,
   restoreBackup,
