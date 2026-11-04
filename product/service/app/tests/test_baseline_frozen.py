@@ -150,12 +150,13 @@ def test_frozen_legacy_bodies_read_as_v3() -> None:
 
 
 def test_frozen_legacy_body_through_api(app_client) -> None:  # type: ignore[no-untyped-def]
-    """test_api_v2.py test_old_body_reads_as_v3와 같은 길(옛 라우트로 넣고 v2 라우트로 읽음)을 얼린 입력으로."""
+    """test_api_v2.py test_old_body_reads_as_v3와 같은 길(본문을 DB에 직접 넣고 v2 라우트로 읽음)을 얼린 입력으로."""
     from tests.conftest import setup_owner
+    from tests.helpers import store_v1_body
 
     setup_owner(app_client)
     old = next(r for r in FX["legacy"] if (r["template"], r["name"]) == ("event", "옛 전략"))
-    sid = app_client.post("/api/strategies", json={"body": old["body"]}).json()["id"]
+    sid = store_v1_body(app_client.app_ref.state.db, old["body"])  # P1-03: 지운 MVP 라우트 대신 DB에 직접
     got = app_client.get(f"/api/v2/strategies/{sid}").json()
     assert [b["stage"] for b in got["body"]["graph"]["blocks"]][:2] == ["universe", "select"]
     assert got["body"]["converted"] == "v1"

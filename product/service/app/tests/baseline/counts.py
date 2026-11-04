@@ -38,6 +38,7 @@ LAYER_OF: dict[str, str] = {
     "app/serve.py": "entry", "app/install.py": "entry", "app/main.py": "assembly", "app/__init__.py": "shared",
     "app/api_v2.py": "api", "app/updates.py": "services", "app/datamgmt.py": "services",
     "app/connect.py": "security", "app/vault.py": "security",
+    "app/stock_names.py": "domain",  # P1-03: 옛 pieces.py의 종목 이름 사전
     "app/live.py": "run", "app/paper_v2.py": "run", "app/backtest_v2.py": "run", "app/schedule.py": "run",
     "app/market.py": "run",
     "app/toss.py": "adapters", "app/dart.py": "adapters", "app/telegram.py": "adapters",

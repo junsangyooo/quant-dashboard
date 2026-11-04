@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.conftest import setup_owner
-from tests.helpers import legacy
+from tests.helpers import legacy, store_v1_body
 from tests.test_blocks import big_breakout
 
 
@@ -62,7 +62,7 @@ def test_bad_body_rejected(app_client) -> None:  # type: ignore[no-untyped-def]
 
 def test_old_body_reads_as_v3(app_client) -> None:  # type: ignore[no-untyped-def]
     setup_owner(app_client)
-    sid = app_client.post("/api/strategies", json={"body": legacy("event", "옛 전략")}).json()["id"]
+    sid = store_v1_body(app_client.app_ref.state.db, legacy("event", "옛 전략"))  # P1-03: 지운 MVP 라우트 대신 DB에 직접
     got = app_client.get(f"/api/v2/strategies/{sid}").json()
     assert [b["stage"] for b in got["body"]["graph"]["blocks"]][:2] == ["universe", "select"]
     assert got["body"]["converted"] == "v1"
