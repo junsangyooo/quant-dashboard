@@ -117,3 +117,9 @@ def test_file_export_import_and_delete(app_client) -> None:  # type: ignore[no-u
     assert again["body"]["graph"] == app_client.get(f"/api/v2/strategies/{sid}").json()["body"]["graph"]
     assert app_client.delete(f"/api/v2/strategies/{r['id']}").json() == {"ok": True}
     assert app_client.get(f"/api/v2/strategies/{r['id']}").status_code == 404
+
+
+def test_no_bundled_examples(app_client) -> None:  # type: ignore[no-untyped-def]
+    """T-31 · SPEC 8-1 · DEC-NO-BUNDLED: 앱에 예시 전략이 없어요(P1-03에서 지운 `test_graph.py`에서 옮김 · 단언 그대로)."""
+    setup_owner(app_client)
+    assert app_client.get("/api/examples").status_code == 404

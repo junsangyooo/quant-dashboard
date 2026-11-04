@@ -52,11 +52,11 @@ NETWORK_CALLS = re.compile(r"urlopen|create_connection|_urllib_transport|_urllib
 AI_SDK_MODULES = {"anthropic", "openai", "google.generativeai", "google.genai", "mistralai", "cohere", "ollama",
                   "litellm", "xai_sdk", "vertexai", "boto3", "botocore", "groq", "together", "replicate",
                   "huggingface_hub", "transformers"}
-FORBIDDEN_MODULES = AI_SDK_MODULES | {"urllib3", "websockets", "websocket", "subprocess", "asyncio.subprocess"}
+FORBIDDEN_MODULES = AI_SDK_MODULES | {"urllib3", "websockets", "websocket", "subprocess", "asyncio.subprocess", "pty"}
 FORBIDDEN_PREFIXES = ("langchain",)  # 첫 이름이 이걸로 시작하면 모두(langchain · langchain_openai · langchain_core …)
 # import 문이 아닌 길로 모듈을 들이거나 다른 프로그램을 띄우는 꼴(글 검사 · AST가 못 보는 것 · QUALITY E1).
 DYNAMIC_CALLS = re.compile(r"import_module\(|__import__\(|create_subprocess_|os\.(?:system|popen|exec\w*|spawn\w*)\("
-                           r"|(?<=\bimport )pty\b|\bpty(?=\.)")  # pty는 `import pty` · `pty.` 꼴만(P1-02 검토 다듬기)
+                           r"|\bpty(?=\.)")  # `pty.` 꼴만 · pty import는 어떤 꼴이든 위 AST 목록(FORBIDDEN_MODULES)이 봐요
 
 
 def _label(path: Path) -> str:
@@ -322,7 +322,7 @@ def test_planted_dynamic_import_and_shell_calls_are_caught(tmp_path: Path) -> No
         "    os.popen('ls')\n"
         "    os.execv('/bin/ls', ['ls'])\n"
         "    os.spawnl(0, '/bin/ls')\n"
-        "    import pty\n",
+        "    pty.spawn('ls')\n",  # `pty.` 꼴(글 검사) · `import pty` 꼴은 AST 목록이 봐요(아래 시험)
         encoding="utf-8",
     )
     assert forbidden_hits([planted]) == [
@@ -330,6 +330,17 @@ def test_planted_dynamic_import_and_shell_calls_are_caught(tmp_path: Path) -> No
         "y.py:6: create_subprocess_", "y.py:9: import_module(", "y.py:10: __import__(", "y.py:11: os.system(",
         "y.py:12: os.popen(", "y.py:13: os.execv(", "y.py:14: os.spawnl(", "y.py:15: pty",
     ]
+
+
+def test_planted_pty_import_in_any_form_is_caught(tmp_path: Path) -> None:
+    """`pty`는 import 꼴이 무엇이든(`from pty import spawn` · `import os, pty` · 하위 폴더) AST 목록이 잡아요(P1-03a 검토 지적 · QUALITY E1)."""
+    sub = tmp_path / "app" / "adapters"
+    sub.mkdir(parents=True)
+    (sub / "z1.py").write_text("from pty import spawn\n", encoding="utf-8")
+    (sub / "z2.py").write_text("import os, pty\n", encoding="utf-8")
+    (sub / "z3.py").write_text("x = 'pty'\n", encoding="utf-8")  # 글자만 · 잡히지 않아요
+    found = sorted((tmp_path / "app").rglob("*.py"))
+    assert forbidden_hits(found) == ["z1.py: import pty", "z2.py: import pty"]
 
 
 def test_planted_real_call_fails_a_test_run() -> None:
