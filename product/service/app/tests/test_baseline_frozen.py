@@ -2,7 +2,9 @@
 
 이 파일은 두 부분이에요(P1-03이 지울 때 헷갈리지 않게 머리 글로 나눠요).
 
-1부 **v3만 쓰는 시험**(P1-03 뒤에도 그대로 남음): `app.engine` · `app.copytext` · `app.blocks`와 얼린 파일만 써요.
+1부 **v3만 쓰는 시험**(P1-03 뒤에도 그대로 남음 · 예외 하나: `test_frozen_legacy_body_through_api`가 본문을 넣는 길
+   `/api/strategies`는 P1-03이 지우는 MVP 라우트라 그때 v2 라우트나 DB 직접 넣기로 **넣는 길만** 바뀜 · 정답은 얼린 값 그대로):
+   `app.engine` · `app.copytext` · `app.blocks`와 얼린 파일만 써요.
    - 얼린 326개를 v3 엔진으로 다시 돌려 거래 · 건너뜀 · 값 없음 기록 · 끝 자산 · 남은 보유가 모두 같음(다 됐다 A).
    - 재생 코드 경로가 지울 모듈을 가져오지 않음(새 프로세스에서 `sys.modules` 검사).
    - v1에서 나온 시험 입력(얼린 것)이 v3 변환으로 얼린 정답을 내줌(다 됐다 B의 v3 쪽).
@@ -110,7 +112,7 @@ def test_frozen_v1_bodies_convert_to_frozen_v3() -> None:
 def test_frozen_examples_convert_and_copy_text_parse() -> None:
     """옛 예시 4개(얼린 본문) → `convert_v1` = 얼린 v3(R-C8 · R-C9) · v2 복사 글(얼린 글) → 새 전략으로 읽힘."""
     ex = {e["id"]: e for e in FX["examples"]}
-    assert list(ex) == ["breakout", "either", "trend", "rebalance"] or len(ex) == 4
+    assert list(ex) == ["breakout", "either", "trend", "rebalance"]
     for e in FX["examples"]:
         body = ct.convert_v1(e["body"])
         assert body == e["v3"] and body["converted"] == "v1"
