@@ -51,15 +51,15 @@ def test_layer_of_maps_current_folders_to_architecture_layers() -> None:
 
 
 def test_boundary_violations_match_the_p1_13_line() -> None:
-    """P1-13 줄: 기능끼리 5쌍 · 기능 → shell 15곳(+ 지울 LoadError 1) · shell → api · lib → copy · lib ↔ charts 순환."""
+    """P1-13 줄: 기능끼리 5쌍 · 기능 → shell 15곳(지운 LoadError 1은 P1-03b 뒤 빠짐) · shell → api · lib → copy · lib ↔ charts 순환."""
     bd = webcounts.boundary_violations()
     g = bd["groups"]
     assert g["feature_to_feature_pairs"] == ["Live → Setup", "Settings → Auth", "Settings → Setup", "Setup → Auth",
                                             "StrategiesV2 → BlockEditor"]
     kept_to_shell = [e for e in bd["edges"] if e["from_layer"] == "features" and e["to_layer"] == "shell" and e["kept"]]
-    assert len(kept_to_shell) == 15 and g["feature_to_shell_places"] == 16
+    assert len(kept_to_shell) == 15 and g["feature_to_shell_places"] == 15
     assert g["shell_to_api_places"] == 1
-    assert g["lib_to_copy_places"] == 2  # format.ts · 지울 money.ts
+    assert g["lib_to_copy_places"] == 1  # format.ts(지운 money.ts 몫 1은 P1-03b 뒤 빠짐)
     assert g["lib_charts_cycle"] is True
     assert bd["unresolved"] == []
     assert all("web/" not in e["from"] and not e["from"].startswith("/") for e in bd["edges"])
@@ -125,7 +125,7 @@ def test_deleted_web_list_is_p1_01a_8_4() -> None:
     assert len(webcounts.DELETED_WEB) == 32
     assert sum(1 for d in webcounts.DELETED_WEB if d.startswith("src/") and d != "src/api/mvp.ts") == 23
     missing = [d for d in webcounts.DELETED_WEB if not (webcounts.WEB / d).exists()]
-    assert missing == []  # 지우기 전(P1-03 전)에는 모두 있어요
+    assert missing == list(webcounts.DELETED_WEB)  # 지운 뒤(P1-03b)에는 모두 없어요(P1-01c가 적어 둔 뒤집기)
 
 
 def test_forbidden_words_rule_matches_words_test_examples() -> None:
@@ -278,7 +278,18 @@ def test_web_counts_record_matches_recount_without_jscpd() -> None:
     assert p.exists(), "기준선 웹 숫자 기록이 커밋돼 있어야 해요"
     rec = json.loads(p.read_text(encoding="utf-8"))["summary"]
     now = webcounts.run_all(with_jscpd=False)["summary"]
-    assert {k: v for k, v in rec.items() if not k.startswith("jscpd")} == now
+    # P1-03b가 지울 파일을 지운 뒤라 기록(지우기 전 표)과 같을 수 없어요. 기록은 그대로 두고(P1-01c) ARCHITECTURE 6절의
+    # '줄어들기만'으로 봐요: 어긋남 수는 기준선 이하 · 토큰 수는 같음 · 남는/지울 나눔은 모두 남는 쪽.
+    assert now["files_deleted"] == 0 and now["lines_deleted"] == 0
+    assert now["files_kept"] == now["files"] and now["lines_kept"] == now["lines"]
+    assert now["boundary_violations_kept"] == now["boundary_violations"]
+    for k, v in rec.items():
+        if k.startswith("jscpd") or k.endswith(("_kept", "_deleted")) or k in ("files", "lines"):
+            continue
+        if isinstance(v, bool) or k in ("tokens_export", "tokens_json", "tokens_css"):
+            assert now[k] == v, k
+        else:
+            assert now[k] <= v, (k, v, now[k])
     assert rec["tokens_unused_export_only"] == 43 and rec["feature_pairs"] == 5
 
 

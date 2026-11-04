@@ -339,8 +339,9 @@ def test_planted_pty_import_in_any_form_is_caught(tmp_path: Path) -> None:
     (sub / "z1.py").write_text("from pty import spawn\n", encoding="utf-8")
     (sub / "z2.py").write_text("import os, pty\n", encoding="utf-8")
     (sub / "z3.py").write_text("x = 'pty'\n", encoding="utf-8")  # 글자만 · 잡히지 않아요
+    (sub / "z4.py").write_text("import pty\n", encoding="utf-8")  # 맨 import 꼴
     found = sorted((tmp_path / "app").rglob("*.py"))
-    assert forbidden_hits(found) == ["z1.py: import pty", "z2.py: import pty"]
+    assert forbidden_hits(found) == ["z1.py: import pty", "z2.py: import pty", "z4.py: import pty"]
 
 
 def test_planted_real_call_fails_a_test_run() -> None:
