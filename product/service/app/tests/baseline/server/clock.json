@@ -1,0 +1,44 @@
+{
+ "clock_sites": [
+  {
+   "module": "app.api_v2",
+   "name": "datetime",
+   "where": "api_v2.py:237 백테스트 기본 기간(default_range)"
+  },
+  {
+   "module": "app.connect",
+   "name": "datetime",
+   "where": "connect.py:79 _now · 연결 확인 시각"
+  },
+  {
+   "module": "app.vault",
+   "name": "datetime",
+   "where": "vault.py:91 _now_iso · 금고 · 세션 기록 시각"
+  },
+  {
+   "module": "app.main",
+   "name": "datetime",
+   "where": "main.py:1267 _now · 전략 저장 시각(api_v2 now 인자)"
+  },
+  {
+   "module": "app.backtest_v2",
+   "name": "datetime",
+   "where": "backtest_v2.py:120 ran_at"
+  },
+  {
+   "module": "app.market",
+   "name": "datetime",
+   "where": "market.py:79 now_kst · create_app now 기본값 → Live · Scheduler · PaperV2 · Telegram"
+  }
+ ],
+ "fixed_now_epoch_ms": 1748851200000,
+ "fixed_now_kst": "2025-06-02T17:00:00+09:00",
+ "fixed_now_utc_iso": "2025-06-02T08:00:00+00:00",
+ "recovery_code": "2PAJB9JHYDYBA7DH",
+ "recovery_seed": 20250602,
+ "seed_site": {
+  "module": "app.vault",
+  "name": "secrets",
+  "where": "vault.py:109 new_recovery_code의 secrets.choice"
+ }
+}

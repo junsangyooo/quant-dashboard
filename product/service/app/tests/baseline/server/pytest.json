@@ -1,0 +1,29 @@
+{
+ "exit_code": 1,
+ "failed": 21,
+ "failed_list": [
+  "tests/test_catalog.py::test_catalog_blocks_match_dictionary_blocks",
+  "tests/test_catalog.py::test_catalog_row_text[19]",
+  "tests/test_catalog.py::test_catalog_row_text[20]",
+  "tests/test_catalog.py::test_catalog_row_text[21]",
+  "tests/test_catalog.py::test_catalog_row_text[22]",
+  "tests/test_catalog.py::test_catalog_row_text[23]",
+  "tests/test_catalog.py::test_catalog_row_text[24]",
+  "tests/test_catalog.py::test_catalog_row_text[25]",
+  "tests/test_catalog.py::test_catalog_row_text[26]",
+  "tests/test_catalog.py::test_catalog_row_text[27]",
+  "tests/test_catalog.py::test_catalog_row_text[28]",
+  "tests/test_catalog.py::test_catalog_row_text[29]",
+  "tests/test_catalog.py::test_catalog_row_text[30]",
+  "tests/test_catalog.py::test_catalog_row_text[31]",
+  "tests/test_catalog.py::test_catalog_row_text[48]",
+  "tests/test_catalog.py::test_dictionary_row[48]",
+  "tests/test_catalog.py::test_same_count_and_order",
+  "tests/test_copytext.py::test_forbidden_list_is_the_glossary",
+  "tests/test_db.py::test_v1_file_moves_to_v2_keeping_everything",
+  "tests/test_db.py::test_v1_file_opens_in_the_app",
+  "tests/test_db.py::test_v1_slots_body_is_marked"
+ ],
+ "passed": 1777,
+ "skipped": 0
+}

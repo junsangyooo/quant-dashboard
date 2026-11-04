@@ -1,0 +1,2152 @@
+{
+ "duplicates": {
+  "functions": 102,
+  "same_body": [],
+  "same_body_groups": 0,
+  "same_name": {},
+  "same_name_across_modules": 0
+ },
+ "layers": {
+  "by_module": {
+   "app/backtest_v2.py": 1,
+   "app/connect.py": 1,
+   "app/dart.py": 1,
+   "app/install.py": 3,
+   "app/live.py": 3,
+   "app/market.py": 1,
+   "app/telegram.py": 2
+  },
+  "count": 12,
+  "edges": [
+   {
+    "from": "app/backtest_v2.py",
+    "import": "app.dart",
+    "in_function": false,
+    "layer": "run",
+    "line": 19,
+    "to_layer": "adapters",
+    "why": "run ← adapters 허용 표 밖"
+   },
+   {
+    "from": "app/connect.py",
+    "import": "app.toss",
+    "in_function": false,
+    "layer": "security",
+    "line": 17,
+    "to_layer": "adapters",
+    "why": "security ← adapters 허용 표 밖"
+   },
+   {
+    "from": "app/dart.py",
+    "import": "app.db",
+    "in_function": false,
+    "layer": "adapters",
+    "line": 27,
+    "to_layer": "store",
+    "why": "adapters ← store 허용 표 밖"
+   },
+   {
+    "from": "app/install.py",
+    "import": "app.market",
+    "in_function": false,
+    "layer": "entry",
+    "line": 25,
+    "to_layer": "run",
+    "why": "entry ← run 허용 표 밖"
+   },
+   {
+    "from": "app/install.py",
+    "import": "app.updates",
+    "in_function": true,
+    "layer": "entry",
+    "line": 107,
+    "to_layer": "services",
+    "why": "entry ← services 허용 표 밖"
+   },
+   {
+    "from": "app/install.py",
+    "import": "app.db",
+    "in_function": true,
+    "layer": "entry",
+    "line": 148,
+    "to_layer": "store",
+    "why": "entry ← store 허용 표 밖"
+   },
+   {
+    "from": "app/live.py",
+    "import": "app.toss",
+    "in_function": false,
+    "layer": "run",
+    "line": 31,
+    "to_layer": "adapters",
+    "why": "run ← adapters 허용 표 밖"
+   },
+   {
+    "from": "app/live.py",
+    "import": "app.transport",
+    "in_function": false,
+    "layer": "run",
+    "line": 32,
+    "to_layer": "adapters",
+    "why": "run ← adapters 허용 표 밖"
+   },
+   {
+    "from": "app/live.py",
+    "import": "app.datamgmt",
+    "in_function": true,
+    "layer": "run",
+    "line": 1132,
+    "to_layer": "services",
+    "why": "run ← services 허용 표 밖"
+   },
+   {
+    "from": "app/market.py",
+    "import": "app.toss",
+    "in_function": false,
+    "layer": "run",
+    "line": 21,
+    "to_layer": "adapters",
+    "why": "run ← adapters 허용 표 밖"
+   },
+   {
+    "from": "app/telegram.py",
+    "import": "app.db",
+    "in_function": false,
+    "layer": "adapters",
+    "line": 19,
+    "to_layer": "store",
+    "why": "adapters ← store 허용 표 밖"
+   },
+   {
+    "from": "app/telegram.py",
+    "import": "app.vault",
+    "in_function": false,
+    "layer": "adapters",
+    "line": 21,
+    "to_layer": "security",
+    "why": "adapters ← security 허용 표 밖"
+   }
+  ],
+  "layer_of": {
+   "app/__init__.py": "shared",
+   "app/api_v2.py": "api",
+   "app/backtest_v2.py": "run",
+   "app/blocks.py": "domain",
+   "app/catalog.py": "domain",
+   "app/connect.py": "security",
+   "app/copytext.py": "domain",
+   "app/dart.py": "adapters",
+   "app/datamgmt.py": "services",
+   "app/db.py": "store",
+   "app/engine.py": "domain",
+   "app/fundamentals.py": "domain",
+   "app/indicators.py": "domain",
+   "app/install.py": "entry",
+   "app/live.py": "run",
+   "app/main.py": "assembly",
+   "app/market.py": "run",
+   "app/paper_v2.py": "run",
+   "app/publicip.py": "adapters",
+   "app/rules.py": "domain",
+   "app/schedule.py": "run",
+   "app/serve.py": "entry",
+   "app/telegram.py": "adapters",
+   "app/toss.py": "adapters",
+   "app/transport.py": "adapters",
+   "app/updates.py": "services",
+   "app/vault.py": "security"
+  }
+ },
+ "lines": {
+  "lines": 14995,
+  "lines_deleted": 4535,
+  "lines_kept": 10460,
+  "modules": 38,
+  "modules_deleted": 11,
+  "modules_kept": 27,
+  "per_module": {
+   "app/__init__.py": {
+    "kept": true,
+    "lines": 4
+   },
+   "app/api_v2.py": {
+    "kept": true,
+    "lines": 320
+   },
+   "app/backtest_v2.py": {
+    "kept": true,
+    "lines": 121
+   },
+   "app/blocks.py": {
+    "kept": true,
+    "lines": 1068
+   },
+   "app/catalog.py": {
+    "kept": true,
+    "lines": 457
+   },
+   "app/connect.py": {
+    "kept": true,
+    "lines": 255
+   },
+   "app/copytext.py": {
+    "kept": true,
+    "lines": 325
+   },
+   "app/dart.py": {
+    "kept": true,
+    "lines": 415
+   },
+   "app/datamgmt.py": {
+    "kept": true,
+    "lines": 171
+   },
+   "app/db.py": {
+    "kept": true,
+    "lines": 341
+   },
+   "app/engine.py": {
+    "kept": true,
+    "lines": 973
+   },
+   "app/engine_mvp.py": {
+    "kept": false,
+    "lines": 559
+   },
+   "app/engine_v1.py": {
+    "kept": false,
+    "lines": 20
+   },
+   "app/fundamentals.py": {
+    "kept": true,
+    "lines": 131
+   },
+   "app/graph.py": {
+    "kept": false,
+    "lines": 643
+   },
+   "app/indicators.py": {
+    "kept": true,
+    "lines": 205
+   },
+   "app/install.py": {
+    "kept": true,
+    "lines": 161
+   },
+   "app/live.py": {
+    "kept": true,
+    "lines": 1267
+   },
+   "app/main.py": {
+    "kept": true,
+    "lines": 1268
+   },
+   "app/market.py": {
+    "kept": true,
+    "lines": 268
+   },
+   "app/paper.py": {
+    "kept": false,
+    "lines": 658
+   },
+   "app/paper_v2.py": {
+    "kept": true,
+    "lines": 243
+   },
+   "app/pieces.py": {
+    "kept": false,
+    "lines": 298
+   },
+   "app/publicip.py": {
+    "kept": true,
+    "lines": 35
+   },
+   "app/rules.py": {
+    "kept": true,
+    "lines": 87
+   },
+   "app/schedule.py": {
+    "kept": true,
+    "lines": 83
+   },
+   "app/serve.py": {
+    "kept": true,
+    "lines": 79
+   },
+   "app/strategy.py": {
+    "kept": false,
+    "lines": 425
+   },
+   "app/telegram.py": {
+    "kept": true,
+    "lines": 326
+   },
+   "app/toss.py": {
+    "kept": true,
+    "lines": 1054
+   },
+   "app/transport.py": {
+    "kept": true,
+    "lines": 184
+   },
+   "app/updates.py": {
+    "kept": true,
+    "lines": 73
+   },
+   "app/v1/__init__.py": {
+    "kept": false,
+    "lines": 9
+   },
+   "app/v1/engine.py": {
+    "kept": false,
+    "lines": 557
+   },
+   "app/v1/graph.py": {
+    "kept": false,
+    "lines": 643
+   },
+   "app/v1/pieces.py": {
+    "kept": false,
+    "lines": 298
+   },
+   "app/v1/strategy.py": {
+    "kept": false,
+    "lines": 425
+   },
+   "app/vault.py": {
+    "kept": true,
+    "lines": 546
+   }
+  }
+ },
+ "same_text": {
+  "count": 24,
+  "occurrences": 61,
+  "texts": [
+   {
+    "text": " · 종목 코드를 확인해 주세요",
+    "where": [
+     "app/market.py:211",
+     "app/market.py:263"
+    ]
+   },
+   {
+    "text": " 단계는 하나만 놓을 수 있어요",
+    "where": [
+     "app/blocks.py:240",
+     "app/blocks.py:388"
+    ]
+   },
+   {
+    "text": "% · 끝나면 백테스트할 수 있어요",
+    "where": [
+     "app/blocks.py:912",
+     "app/blocks.py:914"
+    ]
+   },
+   {
+    "text": "DART 응답 형식이 맞지 않아요",
+    "where": [
+     "app/dart.py:131",
+     "app/dart.py:142",
+     "app/dart.py:148",
+     "app/dart.py:167",
+     "app/dart.py:184",
+     "app/dart.py:189",
+     "app/dart.py:204"
+    ]
+   },
+   {
+    "text": "DART가 응답하지 않아요",
+    "where": [
+     "app/dart.py:121",
+     "app/dart.py:123"
+    ]
+   },
+   {
+    "text": "개까지 놓을 수 있어요",
+    "where": [
+     "app/blocks.py:238",
+     "app/blocks.py:270"
+    ]
+   },
+   {
+    "text": "백테스트를 할 수 없어요",
+    "where": [
+     "app/api_v2.py:259",
+     "app/blocks.py:903"
+    ]
+   },
+   {
+    "text": "시세를 받지 못했어요 · ",
+    "where": [
+     "app/market.py:218",
+     "app/market.py:267"
+    ]
+   },
+   {
+    "text": "시작 날짜가 끝 날짜보다 앞이어야 해요",
+    "where": [
+     "app/backtest_v2.py:106",
+     "app/main.py:1016"
+    ]
+   },
+   {
+    "text": "실전 운용이나 모의투자 기록이 있는 전략은 삭제할 수 없어요",
+    "where": [
+     "app/api_v2.py:48",
+     "app/main.py:973"
+    ]
+   },
+   {
+    "text": "실전 주문 전부 0 · 장중 감시도 멈춤",
+    "where": [
+     "app/live.py:71",
+     "app/live.py:73"
+    ]
+   },
+   {
+    "text": "요청 형식이 맞지 않아요",
+    "where": [
+     "app/api_v2.py:133",
+     "app/api_v2.py:135",
+     "app/main.py:283",
+     "app/main.py:96",
+     "app/main.py:98"
+    ]
+   },
+   {
+    "text": "이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요",
+    "where": [
+     "app/live.py:1042",
+     "app/live.py:227"
+    ]
+   },
+   {
+    "text": "이 앱 버전에 없는 조건이 있어요",
+    "where": [
+     "app/blocks.py:249",
+     "app/copytext.py:30"
+    ]
+   },
+   {
+    "text": "이 앱 버전에 없는 조건이 있어요 · ",
+    "where": [
+     "app/blocks.py:328",
+     "app/blocks.py:331"
+    ]
+   },
+   {
+    "text": "일봉이 없는 종목 코드가 있어요 · ",
+    "where": [
+     "app/market.py:211",
+     "app/market.py:263"
+    ]
+   },
+   {
+    "text": "잠금 · 비밀번호를 입력하면 다시 실행돼요",
+    "where": [
+     "app/connect.py:199",
+     "app/telegram.py:249",
+     "app/vault.py:511"
+    ]
+   },
+   {
+    "text": "잠시 뒤 다시 확인해요",
+    "where": [
+     "app/connect.py:68",
+     "app/connect.py:73"
+    ]
+   },
+   {
+    "text": "전략 버전을 골라 주세요",
+    "where": [
+     "app/api_v2.py:247",
+     "app/main.py:1057",
+     "app/main.py:1136",
+     "app/main.py:998"
+    ]
+   },
+   {
+    "text": "전략 형식이 맞지 않아요",
+    "where": [
+     "app/blocks.py:264",
+     "app/blocks.py:268"
+    ]
+   },
+   {
+    "text": "조건 형식이 맞지 않아요",
+    "where": [
+     "app/blocks.py:292",
+     "app/blocks.py:325",
+     "app/blocks.py:334"
+    ]
+   },
+   {
+    "text": "토스 연결이 필요해요 · 시세와 계좌를 토스에서 받아요 · 연결 ›",
+    "where": [
+     "app/backtest_v2.py:100",
+     "app/live.py:258"
+    ]
+   },
+   {
+    "text": "토스 일봉(수정주가)",
+    "where": [
+     "app/backtest_v2.py:29",
+     "app/main.py:1044"
+    ]
+   },
+   {
+    "text": "하루 20,000건을 넘었어요 · 내일 이어서 받아요",
+    "where": [
+     "app/dart.py:196",
+     "app/dart.py:242",
+     "app/dart.py:306"
+    ]
+   }
+  ]
+ },
+ "sql": {
+  "by_module": {
+   "app/api_v2.py": 21,
+   "app/backtest_v2.py": 2,
+   "app/dart.py": 19,
+   "app/datamgmt.py": 21,
+   "app/live.py": 83,
+   "app/main.py": 35,
+   "app/market.py": 5,
+   "app/paper_v2.py": 18,
+   "app/telegram.py": 4,
+   "app/vault.py": 18
+  },
+  "count_all": 252,
+  "count_outside_store": 226,
+  "hits": [
+   {
+    "kind": "sql",
+    "line": 147,
+    "module": "app/api_v2.py",
+    "text": "SELECT COALESCE(MAX(no),0)+1 AS n FROM versions WHERE strate"
+   },
+   {
+    "kind": "sql",
+    "line": 150,
+    "module": "app/api_v2.py",
+    "text": "INSERT INTO versions(strategy_id,no,body,problems,created_at"
+   },
+   {
+    "kind": "sql",
+    "line": 152,
+    "module": "app/api_v2.py",
+    "text": "UPDATE strategies SET name=?, template=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 156,
+    "module": "app/api_v2.py",
+    "text": "SELECT ran_at FROM backtest_runs WHERE version_id=? ORDER BY"
+   },
+   {
+    "kind": "sql",
+    "line": 168,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM strategies ORDER BY id"
+   },
+   {
+    "kind": "sql",
+    "line": 169,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC "
+   },
+   {
+    "kind": "sql",
+    "line": 202,
+    "module": "app/api_v2.py",
+    "text": "INSERT INTO strategies(name,template,source,created_at) VALU"
+   },
+   {
+    "kind": "sql",
+    "line": 209,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC "
+   },
+   {
+    "kind": "sql",
+    "line": 218,
+    "module": "app/api_v2.py",
+    "text": "SELECT id FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 223,
+    "module": "app/api_v2.py",
+    "text": "DELETE FROM versions WHERE strategy_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 224,
+    "module": "app/api_v2.py",
+    "text": "DELETE FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 229,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 233,
+    "module": "app/api_v2.py",
+    "text": "SELECT name FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 248,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 261,
+    "module": "app/api_v2.py",
+    "text": "INSERT INTO backtest_runs(version_id, ran_at, start_d, end_d"
+   },
+   {
+    "kind": "sql",
+    "line": 279,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 282,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC "
+   },
+   {
+    "kind": "sql",
+    "line": 288,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC"
+   },
+   {
+    "kind": "sql",
+    "line": 299,
+    "module": "app/api_v2.py",
+    "text": "INSERT INTO strategies(name,template,source,created_at) VALU"
+   },
+   {
+    "kind": "sql",
+    "line": 305,
+    "module": "app/api_v2.py",
+    "text": "SELECT id FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 313,
+    "module": "app/api_v2.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC "
+   },
+   {
+    "kind": "sql",
+    "line": 74,
+    "module": "app/backtest_v2.py",
+    "text": "SELECT shares FROM dart_shares WHERE stock_code=? AND rcept_"
+   },
+   {
+    "kind": "sql",
+    "line": 76,
+    "module": "app/backtest_v2.py",
+    "text": "SELECT dps FROM dart_div WHERE stock_code=? AND rcept_dt<? O"
+   },
+   {
+    "kind": "sql",
+    "line": 237,
+    "module": "app/dart.py",
+    "text": "SELECT used FROM dart_quota WHERE day=?"
+   },
+   {
+    "kind": "sql",
+    "line": 243,
+    "module": "app/dart.py",
+    "text": "INSERT INTO dart_quota(day, used) VALUES(?, 1) ON CONFLICT(d"
+   },
+   {
+    "kind": "sql",
+    "line": 247,
+    "module": "app/dart.py",
+    "text": "INSERT INTO dart_quota(day, used) VALUES(?, ?) ON CONFLICT(d"
+   },
+   {
+    "kind": "sql",
+    "line": 253,
+    "module": "app/dart.py",
+    "text": "INSERT OR IGNORE INTO dart_jobs(phase, kind, arg) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 258,
+    "module": "app/dart.py",
+    "text": "SELECT corp_code FROM dart_corp ORDER BY stock_code"
+   },
+   {
+    "kind": "sql",
+    "line": 274,
+    "module": "app/dart.py",
+    "text": "INSERT OR IGNORE INTO dart_jobs(phase, kind, arg) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 280,
+    "module": "app/dart.py",
+    "text": "SELECT COUNT(*) n FROM dart_jobs"
+   },
+   {
+    "kind": "sql",
+    "line": 281,
+    "module": "app/dart.py",
+    "text": "SELECT COUNT(*) n FROM dart_jobs WHERE done=1"
+   },
+   {
+    "kind": "sql",
+    "line": 282,
+    "module": "app/dart.py",
+    "text": "SELECT COUNT(*) n FROM dart_jobs WHERE done=0 AND phase<?"
+   },
+   {
+    "kind": "sql",
+    "line": 297,
+    "module": "app/dart.py",
+    "text": "SELECT * FROM dart_jobs WHERE done=0 ORDER BY phase, id LIMI"
+   },
+   {
+    "kind": "sql",
+    "line": 301,
+    "module": "app/dart.py",
+    "text": "UPDATE dart_jobs SET done=1 WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 325,
+    "module": "app/dart.py",
+    "text": "SELECT stock_code FROM dart_corp WHERE corp_code=?"
+   },
+   {
+    "kind": "sql",
+    "line": 331,
+    "module": "app/dart.py",
+    "text": "INSERT INTO dart_corp(stock_code, corp_code, name) VALUES(?,"
+   },
+   {
+    "kind": "sql",
+    "line": 345,
+    "module": "app/dart.py",
+    "text": "INSERT OR REPLACE INTO dart_shares VALUES(?,?,?,?,?,?,?)"
+   },
+   {
+    "kind": "sql",
+    "line": 356,
+    "module": "app/dart.py",
+    "text": "INSERT OR REPLACE INTO dart_div VALUES(?,?,?,?,?)"
+   },
+   {
+    "kind": "sql",
+    "line": 373,
+    "module": "app/dart.py",
+    "text": "INSERT OR REPLACE INTO dart_fin VALUES(?,?,?,?,?,?,?,?,?)"
+   },
+   {
+    "kind": "sql",
+    "line": 391,
+    "module": "app/dart.py",
+    "text": "INSERT OR REPLACE INTO dart_disc VALUES(?,?,?,?,?)"
+   },
+   {
+    "kind": "sql",
+    "line": 398,
+    "module": "app/dart.py",
+    "text": "SELECT * FROM dart_fin WHERE stock_code=? ORDER BY year, rep"
+   },
+   {
+    "kind": "sql",
+    "line": 409,
+    "module": "app/dart.py",
+    "text": "SELECT * FROM dart_disc WHERE stock_code=? ORDER BY rcept_dt"
+   },
+   {
+    "kind": "sql",
+    "line": 40,
+    "module": "app/datamgmt.py",
+    "text": "SELECT 1 FROM runs WHERE status != 'ended' LIMIT 1"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 48,
+    "module": "app/datamgmt.py",
+    "text": "sqlite3.connect"
+   },
+   {
+    "kind": "sql",
+    "line": 50,
+    "module": "app/datamgmt.py",
+    "text": "DELETE FROM secrets"
+   },
+   {
+    "kind": "sql",
+    "line": 51,
+    "module": "app/datamgmt.py",
+    "text": "DELETE FROM owner_keyfile"
+   },
+   {
+    "kind": "sql",
+    "line": 52,
+    "module": "app/datamgmt.py",
+    "text": "DELETE FROM meta WHERE k LIKE 'tg.%' OR k LIKE 'sched.%'"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 67,
+    "module": "app/datamgmt.py",
+    "text": "sqlite3.connect"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 68,
+    "module": "app/datamgmt.py",
+    "text": "sqlite3.Error"
+   },
+   {
+    "kind": "sql",
+    "line": 71,
+    "module": "app/datamgmt.py",
+    "text": "PRAGMA integrity_check"
+   },
+   {
+    "kind": "sql",
+    "line": 73,
+    "module": "app/datamgmt.py",
+    "text": "SELECT name FROM sqlite_master WHERE type='table'"
+   },
+   {
+    "kind": "sql",
+    "line": 76,
+    "module": "app/datamgmt.py",
+    "text": "SELECT COUNT(*) FROM owner"
+   },
+   {
+    "kind": "sql",
+    "line": 78,
+    "module": "app/datamgmt.py",
+    "text": "PRAGMA user_version"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 80,
+    "module": "app/datamgmt.py",
+    "text": "sqlite3.DatabaseError"
+   },
+   {
+    "kind": "sql",
+    "line": 98,
+    "module": "app/datamgmt.py",
+    "text": "SELECT k FROM meta WHERE k LIKE 'sched.%'"
+   },
+   {
+    "kind": "sql",
+    "line": 109,
+    "module": "app/datamgmt.py",
+    "text": "SELECT COUNT(DISTINCT symbol) AS n, MIN(d) AS a, MAX(d) AS b"
+   },
+   {
+    "kind": "sql",
+    "line": 110,
+    "module": "app/datamgmt.py",
+    "text": "SELECT MAX(fetched_at) AS t FROM bar_meta"
+   },
+   {
+    "kind": "sql",
+    "line": 111,
+    "module": "app/datamgmt.py",
+    "text": "SELECT COUNT(*) AS n FROM"
+   },
+   {
+    "kind": "sql",
+    "line": 124,
+    "module": "app/datamgmt.py",
+    "text": "SELECT o.*, s.name AS sname FROM orders o LEFT JOIN stock_in"
+   },
+   {
+    "kind": "sql",
+    "line": 127,
+    "module": "app/datamgmt.py",
+    "text": "SELECT * FROM fills ORDER BY filled_at, id"
+   },
+   {
+    "kind": "sql",
+    "line": 168,
+    "module": "app/datamgmt.py",
+    "text": "SELECT * FROM"
+   },
+   {
+    "kind": "sql",
+    "line": 169,
+    "module": "app/datamgmt.py",
+    "text": "SELECT name FROM secrets ORDER BY name"
+   },
+   {
+    "kind": "sql",
+    "line": 170,
+    "module": "app/datamgmt.py",
+    "text": "SELECT k FROM meta"
+   },
+   {
+    "kind": "sql",
+    "line": 19,
+    "module": "app/db.py",
+    "text": "CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 189,
+    "module": "app/db.py",
+    "text": "sqlite3.connect"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 190,
+    "module": "app/db.py",
+    "text": "sqlite3.Row"
+   },
+   {
+    "kind": "sql",
+    "line": 194,
+    "module": "app/db.py",
+    "text": "PRAGMA journal_mode=WAL"
+   },
+   {
+    "kind": "sql",
+    "line": 199,
+    "module": "app/db.py",
+    "text": "SELECT name FROM sqlite_master WHERE type='table'"
+   },
+   {
+    "kind": "sql",
+    "line": 202,
+    "module": "app/db.py",
+    "text": "PRAGMA user_version"
+   },
+   {
+    "kind": "sql",
+    "line": 211,
+    "module": "app/db.py",
+    "text": "PRAGMA user_version="
+   },
+   {
+    "kind": "sql",
+    "line": 216,
+    "module": "app/db.py",
+    "text": "PRAGMA table_info(versions)"
+   },
+   {
+    "kind": "sql",
+    "line": 218,
+    "module": "app/db.py",
+    "text": "ALTER TABLE versions ADD COLUMN format TEXT"
+   },
+   {
+    "kind": "sql",
+    "line": 219,
+    "module": "app/db.py",
+    "text": "PRAGMA table_info(bar_meta)"
+   },
+   {
+    "kind": "sql",
+    "line": 221,
+    "module": "app/db.py",
+    "text": "ALTER TABLE bar_meta RENAME COLUMN yahoo TO source"
+   },
+   {
+    "kind": "sql",
+    "line": 226,
+    "module": "app/db.py",
+    "text": "PRAGMA wal_checkpoint(TRUNCATE)"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 229,
+    "module": "app/db.py",
+    "text": "sqlite3.connect"
+   },
+   {
+    "kind": "sql",
+    "line": 240,
+    "module": "app/db.py",
+    "text": "SELECT id, body FROM versions"
+   },
+   {
+    "kind": "sql",
+    "line": 241,
+    "module": "app/db.py",
+    "text": "UPDATE versions SET format=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 245,
+    "module": "app/db.py",
+    "text": "PRAGMA user_version="
+   },
+   {
+    "kind": "sqlite3",
+    "line": 252,
+    "module": "app/db.py",
+    "text": "sqlite3.Row"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 256,
+    "module": "app/db.py",
+    "text": "sqlite3.Row"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 291,
+    "module": "app/db.py",
+    "text": "sqlite3.connect"
+   },
+   {
+    "kind": "sql",
+    "line": 307,
+    "module": "app/db.py",
+    "text": "PRAGMA wal_checkpoint(TRUNCATE)"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 324,
+    "module": "app/db.py",
+    "text": "sqlite3.connect"
+   },
+   {
+    "kind": "sqlite3",
+    "line": 325,
+    "module": "app/db.py",
+    "text": "sqlite3.Row"
+   },
+   {
+    "kind": "sql",
+    "line": 329,
+    "module": "app/db.py",
+    "text": "PRAGMA journal_mode=WAL"
+   },
+   {
+    "kind": "sql",
+    "line": 334,
+    "module": "app/db.py",
+    "text": "SELECT v FROM meta WHERE k=?"
+   },
+   {
+    "kind": "sql",
+    "line": 339,
+    "module": "app/db.py",
+    "text": "DELETE FROM meta WHERE k=?"
+   },
+   {
+    "kind": "sql",
+    "line": 341,
+    "module": "app/db.py",
+    "text": "INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE S"
+   },
+   {
+    "kind": "sql",
+    "line": 121,
+    "module": "app/live.py",
+    "text": "SELECT * FROM runs WHERE status=? ORDER BY id DESC LIMIT 1"
+   },
+   {
+    "kind": "sql",
+    "line": 122,
+    "module": "app/live.py",
+    "text": "SELECT * FROM runs WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 128,
+    "module": "app/live.py",
+    "text": "SELECT state FROM live_state WHERE run_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 149,
+    "module": "app/live.py",
+    "text": "INSERT INTO live_state(run_id,state,updated_at) VALUES(?,?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 152,
+    "module": "app/live.py",
+    "text": "DELETE FROM positions WHERE run_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 154,
+    "module": "app/live.py",
+    "text": "INSERT INTO positions(run_id,symbol,qty,avg_price,first_d,pe"
+   },
+   {
+    "kind": "sql",
+    "line": 170,
+    "module": "app/live.py",
+    "text": "SELECT id FROM todos WHERE kind=? AND IFNULL(symbol,'')=? AN"
+   },
+   {
+    "kind": "sql",
+    "line": 179,
+    "module": "app/live.py",
+    "text": "INSERT INTO todos(run_id,kind,severity,symbol,title,body,dat"
+   },
+   {
+    "kind": "sql",
+    "line": 190,
+    "module": "app/live.py",
+    "text": "SELECT body FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 223,
+    "module": "app/live.py",
+    "text": "SELECT * FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 226,
+    "module": "app/live.py",
+    "text": "SELECT 1 FROM backtest_runs WHERE version_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 237,
+    "module": "app/live.py",
+    "text": "INSERT INTO runs(strategy_id,version_id,status,amount,settin"
+   },
+   {
+    "kind": "sql",
+    "line": 240,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_versions(run_id,version_id,from_d) VALUES(?,"
+   },
+   {
+    "kind": "sql",
+    "line": 242,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 312,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_equity(run_id,d,equity,cash) VALUES(?,?,?,?)"
+   },
+   {
+    "kind": "sql",
+    "line": 334,
+    "module": "app/live.py",
+    "text": "SELECT toss_order_id FROM orders WHERE run_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 354,
+    "module": "app/live.py",
+    "text": "UPDATE todos SET status='resolved', resolved_at=? WHERE kind"
+   },
+   {
+    "kind": "sql",
+    "line": 411,
+    "module": "app/live.py",
+    "text": "SELECT * FROM cond_orders WHERE run_id=? AND symbol=? AND st"
+   },
+   {
+    "kind": "sql",
+    "line": 414,
+    "module": "app/live.py",
+    "text": "UPDATE cond_orders SET status='canceled' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 472,
+    "module": "app/live.py",
+    "text": "SELECT MAX(round) AS r FROM orders WHERE run_id=? AND d=? AN"
+   },
+   {
+    "kind": "sql",
+    "line": 476,
+    "module": "app/live.py",
+    "text": "INSERT INTO orders(run_id,d,symbol,side,round,client_order_i"
+   },
+   {
+    "kind": "sql",
+    "line": 486,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='unknown' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 490,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='failed', updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 493,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET toss_order_id=?, status='sent', updated_at"
+   },
+   {
+    "kind": "sql",
+    "line": 499,
+    "module": "app/live.py",
+    "text": "SELECT toss_order_id FROM orders WHERE toss_order_id IS NOT "
+   },
+   {
+    "kind": "sql",
+    "line": 511,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 519,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET toss_order_id=?, status='sent', updated_at"
+   },
+   {
+    "kind": "sql",
+    "line": 522,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='absent', updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 528,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='unknown', updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 535,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE id=? AND run_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 541,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='filled' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 543,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='absent' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 546,
+    "module": "app/live.py",
+    "text": "UPDATE todos SET status='resolved', resolved_at=? WHERE kind"
+   },
+   {
+    "kind": "sql",
+    "line": 556,
+    "module": "app/live.py",
+    "text": "INSERT INTO fills(order_id,qty,price,commission,tax,filled_a"
+   },
+   {
+    "kind": "sql",
+    "line": 569,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 579,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 586,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE run_id=? AND status IN ('sent','p"
+   },
+   {
+    "kind": "sql",
+    "line": 596,
+    "module": "app/live.py",
+    "text": "SELECT IFNULL(SUM(qty),0) AS q FROM fills WHERE order_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 603,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='filled', updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 609,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status=?, updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 615,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='partial', updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 640,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE run_id=? AND d=? AND side='buy' A"
+   },
+   {
+    "kind": "sql",
+    "line": 646,
+    "module": "app/live.py",
+    "text": "SELECT IFNULL(SUM(qty),0) AS q FROM fills WHERE order_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 650,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status=?, reason=?, updated_at=? WHERE id="
+   },
+   {
+    "kind": "sql",
+    "line": 719,
+    "module": "app/live.py",
+    "text": "SELECT 1 FROM orders WHERE run_id=? AND symbol=? AND side='s"
+   },
+   {
+    "kind": "sql",
+    "line": 744,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE run_id=? AND kind IN ('intraday_p"
+   },
+   {
+    "kind": "sql",
+    "line": 770,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET price=?, reason=?, updated_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 798,
+    "module": "app/live.py",
+    "text": "SELECT * FROM cond_orders WHERE run_id=? AND symbol=? AND st"
+   },
+   {
+    "kind": "sql",
+    "line": 824,
+    "module": "app/live.py",
+    "text": "INSERT INTO cond_orders(run_id,symbol,toss_cond_id,kind,qty,"
+   },
+   {
+    "kind": "sql",
+    "line": 837,
+    "module": "app/live.py",
+    "text": "SELECT * FROM cond_orders WHERE run_id=? AND status IN ('wat"
+   },
+   {
+    "kind": "sql",
+    "line": 845,
+    "module": "app/live.py",
+    "text": "UPDATE cond_orders SET status='triggered', triggered_at=? WH"
+   },
+   {
+    "kind": "sql",
+    "line": 846,
+    "module": "app/live.py",
+    "text": "SELECT * FROM cond_orders WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 854,
+    "module": "app/live.py",
+    "text": "INSERT INTO orders(run_id,d,symbol,side,round,client_order_i"
+   },
+   {
+    "kind": "sql",
+    "line": 860,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 862,
+    "module": "app/live.py",
+    "text": "UPDATE cond_orders SET status='filled' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 867,
+    "module": "app/live.py",
+    "text": "UPDATE cond_orders SET status='canceled' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 890,
+    "module": "app/live.py",
+    "text": "INSERT INTO corp_actions(run_id,symbol,kind,ratio,detected_a"
+   },
+   {
+    "kind": "sql",
+    "line": 897,
+    "module": "app/live.py",
+    "text": "SELECT toss_order_id FROM orders WHERE toss_order_id IS NOT "
+   },
+   {
+    "kind": "sql",
+    "line": 914,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 929,
+    "module": "app/live.py",
+    "text": "SELECT * FROM corp_actions WHERE run_id=? AND symbol=? AND a"
+   },
+   {
+    "kind": "sql",
+    "line": 941,
+    "module": "app/live.py",
+    "text": "UPDATE corp_actions SET applied_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 942,
+    "module": "app/live.py",
+    "text": "UPDATE todos SET status='resolved', resolved_at=? WHERE kind"
+   },
+   {
+    "kind": "sql",
+    "line": 956,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE run_id=? AND side='buy' AND statu"
+   },
+   {
+    "kind": "sql",
+    "line": 963,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='canceled' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 982,
+    "module": "app/live.py",
+    "text": "SELECT * FROM orders WHERE run_id=? AND status IN ('sent','p"
+   },
+   {
+    "kind": "sql",
+    "line": 987,
+    "module": "app/live.py",
+    "text": "UPDATE orders SET status='canceled' WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 990,
+    "module": "app/live.py",
+    "text": "UPDATE runs SET status=?, ended_at=?, end_kind=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1035,
+    "module": "app/live.py",
+    "text": "UPDATE runs SET status=?, ended_at=?, end_kind=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1041,
+    "module": "app/live.py",
+    "text": "SELECT 1 FROM backtest_runs WHERE version_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1046,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_versions(run_id,version_id,from_d) VALUES(?,"
+   },
+   {
+    "kind": "sql",
+    "line": 1048,
+    "module": "app/live.py",
+    "text": "UPDATE runs SET version_id=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1061,
+    "module": "app/live.py",
+    "text": "UPDATE runs SET amount=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1062,
+    "module": "app/live.py",
+    "text": "INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 1084,
+    "module": "app/live.py",
+    "text": "UPDATE runs SET settings=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1099,
+    "module": "app/live.py",
+    "text": "UPDATE todos SET status='resolved', resolved_at=? WHERE kind"
+   },
+   {
+    "kind": "sql",
+    "line": 1104,
+    "module": "app/live.py",
+    "text": "SELECT * FROM todos WHERE id=? AND kind IN ('huge','too_big'"
+   },
+   {
+    "kind": "sql",
+    "line": 1110,
+    "module": "app/live.py",
+    "text": "UPDATE todos SET status='resolved', resolved_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1115,
+    "module": "app/live.py",
+    "text": "SELECT id,kind,severity,symbol,title,body,created_at FROM to"
+   },
+   {
+    "kind": "sql",
+    "line": 1151,
+    "module": "app/live.py",
+    "text": "SELECT id,at,live,kind,title,read FROM alerts ORDER BY id DE"
+   },
+   {
+    "kind": "sql",
+    "line": 1154,
+    "module": "app/live.py",
+    "text": "SELECT * FROM runs ORDER BY id DESC LIMIT 1"
+   },
+   {
+    "kind": "sql",
+    "line": 1159,
+    "module": "app/live.py",
+    "text": "SELECT v.no, s.name FROM versions v JOIN strategies s ON s.i"
+   },
+   {
+    "kind": "sql",
+    "line": 1174,
+    "module": "app/live.py",
+    "text": "SELECT d, equity FROM run_equity WHERE run_id=? ORDER BY d"
+   },
+   {
+    "kind": "sql",
+    "line": 1189,
+    "module": "app/live.py",
+    "text": "SELECT o.d, o.symbol, o.side, f.qty, f.price FROM fills f JO"
+   },
+   {
+    "kind": "sql",
+    "line": 157,
+    "module": "app/main.py",
+    "text": "SELECT dps FROM dart_div WHERE stock_code=? ORDER BY rcept_d"
+   },
+   {
+    "kind": "sql",
+    "line": 162,
+    "module": "app/main.py",
+    "text": "SELECT * FROM stock_info"
+   },
+   {
+    "kind": "sql",
+    "line": 168,
+    "module": "app/main.py",
+    "text": "SELECT COUNT(*) AS n FROM todos WHERE status='open'"
+   },
+   {
+    "kind": "sql",
+    "line": 359,
+    "module": "app/main.py",
+    "text": "SELECT terms_at, created_at FROM owner WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 506,
+    "module": "app/main.py",
+    "text": "SELECT v.*, s.name FROM versions v JOIN strategies s ON s.id"
+   },
+   {
+    "kind": "sql",
+    "line": 521,
+    "module": "app/main.py",
+    "text": "SELECT 1 FROM backtest_runs WHERE version_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 587,
+    "module": "app/main.py",
+    "text": "SELECT data FROM todos WHERE id=? AND kind='unknown'"
+   },
+   {
+    "kind": "sql",
+    "line": 597,
+    "module": "app/main.py",
+    "text": "SELECT symbol FROM todos WHERE id=? AND kind='corp'"
+   },
+   {
+    "kind": "sql",
+    "line": 606,
+    "module": "app/main.py",
+    "text": "SELECT symbol FROM todos WHERE id=? AND kind='mismatch'"
+   },
+   {
+    "kind": "sql",
+    "line": 700,
+    "module": "app/main.py",
+    "text": "SELECT * FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 710,
+    "module": "app/main.py",
+    "text": "SELECT strategy_id, no FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 728,
+    "module": "app/main.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC"
+   },
+   {
+    "kind": "sql",
+    "line": 734,
+    "module": "app/main.py",
+    "text": "SELECT COALESCE(MAX(no),0)+1 AS n FROM versions WHERE strate"
+   },
+   {
+    "kind": "sql",
+    "line": 738,
+    "module": "app/main.py",
+    "text": "INSERT INTO versions(strategy_id,no,body,problems,created_at"
+   },
+   {
+    "kind": "sql",
+    "line": 742,
+    "module": "app/main.py",
+    "text": "UPDATE strategies SET name=?, template=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 749,
+    "module": "app/main.py",
+    "text": "SELECT id, name FROM strategies"
+   },
+   {
+    "kind": "sql",
+    "line": 766,
+    "module": "app/main.py",
+    "text": "SELECT COUNT(*) AS n FROM strategies"
+   },
+   {
+    "kind": "sql",
+    "line": 768,
+    "module": "app/main.py",
+    "text": "SELECT 1 FROM paper_runs LIMIT 1"
+   },
+   {
+    "kind": "sql",
+    "line": 769,
+    "module": "app/main.py",
+    "text": "SELECT id FROM strategies ORDER BY id DESC LIMIT 1"
+   },
+   {
+    "kind": "sql",
+    "line": 785,
+    "module": "app/main.py",
+    "text": "SELECT * FROM strategies ORDER BY id DESC"
+   },
+   {
+    "kind": "sql",
+    "line": 787,
+    "module": "app/main.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC "
+   },
+   {
+    "kind": "sql",
+    "line": 814,
+    "module": "app/main.py",
+    "text": "INSERT INTO strategies(name,template,source,created_at) VALU"
+   },
+   {
+    "kind": "sql",
+    "line": 824,
+    "module": "app/main.py",
+    "text": "SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC "
+   },
+   {
+    "kind": "sql",
+    "line": 848,
+    "module": "app/main.py",
+    "text": "SELECT 1 FROM paper_runs r JOIN versions v ON v.id=r.version"
+   },
+   {
+    "kind": "sql",
+    "line": 892,
+    "module": "app/main.py",
+    "text": "SELECT * FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 910,
+    "module": "app/main.py",
+    "text": "SELECT no, body FROM versions WHERE strategy_id=? ORDER BY n"
+   },
+   {
+    "kind": "sql",
+    "line": 956,
+    "module": "app/main.py",
+    "text": "INSERT INTO strategies(name,template,source,created_at) VALU"
+   },
+   {
+    "kind": "sql",
+    "line": 969,
+    "module": "app/main.py",
+    "text": "SELECT 1 FROM paper_runs r JOIN versions v ON v.id=r.version"
+   },
+   {
+    "kind": "sql",
+    "line": 975,
+    "module": "app/main.py",
+    "text": "DELETE FROM versions WHERE strategy_id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 976,
+    "module": "app/main.py",
+    "text": "DELETE FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 999,
+    "module": "app/main.py",
+    "text": "SELECT * FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1119,
+    "module": "app/main.py",
+    "text": "SELECT * FROM stock_info"
+   },
+   {
+    "kind": "sql",
+    "line": 1156,
+    "module": "app/main.py",
+    "text": "SELECT * FROM stock_info"
+   },
+   {
+    "kind": "sql",
+    "line": 1165,
+    "module": "app/main.py",
+    "text": "SELECT no FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 1174,
+    "module": "app/main.py",
+    "text": "SELECT r.id FROM paper_runs r JOIN versions v ON v.id=r.vers"
+   },
+   {
+    "kind": "sql",
+    "line": 197,
+    "module": "app/market.py",
+    "text": "SELECT * FROM bar_meta WHERE symbol=?"
+   },
+   {
+    "kind": "sql",
+    "line": 220,
+    "module": "app/market.py",
+    "text": "INSERT INTO bars(symbol,d,o,h,l,c,v) VALUES(?,?,?,?,?,?,?) O"
+   },
+   {
+    "kind": "sql",
+    "line": 225,
+    "module": "app/market.py",
+    "text": "SELECT from_d, to_d FROM bar_meta WHERE symbol=?"
+   },
+   {
+    "kind": "sql",
+    "line": 234,
+    "module": "app/market.py",
+    "text": "INSERT INTO bar_meta(symbol,source,from_d,to_d,fetched_at) V"
+   },
+   {
+    "kind": "sql",
+    "line": 244,
+    "module": "app/market.py",
+    "text": "SELECT d,o,h,l,c,v FROM bars WHERE symbol=? AND d>=? AND d<="
+   },
+   {
+    "kind": "sql",
+    "line": 68,
+    "module": "app/paper_v2.py",
+    "text": "SELECT * FROM paper_runs WHERE id=? AND status IN (?,?)"
+   },
+   {
+    "kind": "sql",
+    "line": 74,
+    "module": "app/paper_v2.py",
+    "text": "SELECT * FROM versions WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 81,
+    "module": "app/paper_v2.py",
+    "text": "SELECT r.* FROM paper_runs r JOIN versions v ON v.id=r.versi"
+   },
+   {
+    "kind": "sql",
+    "line": 103,
+    "module": "app/paper_v2.py",
+    "text": "INSERT INTO paper_runs(version_id,cash0,state,status,started"
+   },
+   {
+    "kind": "sql",
+    "line": 109,
+    "module": "app/paper_v2.py",
+    "text": "UPDATE paper_runs SET last_date=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 113,
+    "module": "app/paper_v2.py",
+    "text": "UPDATE paper_runs SET last_date=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 119,
+    "module": "app/paper_v2.py",
+    "text": "UPDATE paper_runs SET status=?, ended_at=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 129,
+    "module": "app/paper_v2.py",
+    "text": "SELECT * FROM paper_runs WHERE status=? ORDER BY id"
+   },
+   {
+    "kind": "sql",
+    "line": 161,
+    "module": "app/paper_v2.py",
+    "text": "INSERT INTO paper_trades(run_id,d,symbol,side,qty,price,amou"
+   },
+   {
+    "kind": "sql",
+    "line": 168,
+    "module": "app/paper_v2.py",
+    "text": "INSERT INTO paper_judgements(run_id,d,made_at,plans,how) VAL"
+   },
+   {
+    "kind": "sql",
+    "line": 171,
+    "module": "app/paper_v2.py",
+    "text": "UPDATE paper_runs SET state=?, last_date=? WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 174,
+    "module": "app/paper_v2.py",
+    "text": "INSERT INTO alerts(at, live, kind, title, body) VALUES(?,?,?"
+   },
+   {
+    "kind": "sql",
+    "line": 178,
+    "module": "app/paper_v2.py",
+    "text": "INSERT INTO paper_equity(run_id,d,equity,cash) VALUES(?,?,?,"
+   },
+   {
+    "kind": "sql",
+    "line": 187,
+    "module": "app/paper_v2.py",
+    "text": "SELECT v.no, v.strategy_id, s.name FROM versions v JOIN stra"
+   },
+   {
+    "kind": "sql",
+    "line": 190,
+    "module": "app/paper_v2.py",
+    "text": "SELECT d, equity FROM paper_equity WHERE run_id=? ORDER BY d"
+   },
+   {
+    "kind": "sql",
+    "line": 192,
+    "module": "app/paper_v2.py",
+    "text": "SELECT * FROM paper_trades WHERE run_id=? ORDER BY id"
+   },
+   {
+    "kind": "sql",
+    "line": 234,
+    "module": "app/paper_v2.py",
+    "text": "SELECT name FROM strategies WHERE id=?"
+   },
+   {
+    "kind": "sql",
+    "line": 242,
+    "module": "app/paper_v2.py",
+    "text": "SELECT id FROM paper_runs WHERE status IN (?,?) ORDER BY id "
+   },
+   {
+    "kind": "sql",
+    "line": 273,
+    "module": "app/telegram.py",
+    "text": "UPDATE todos SET status='resolved', resolved_at=? WHERE kind"
+   },
+   {
+    "kind": "sql",
+    "line": 278,
+    "module": "app/telegram.py",
+    "text": "SELECT 1 FROM todos WHERE kind='telegram_fail' AND status='o"
+   },
+   {
+    "kind": "sql",
+    "line": 281,
+    "module": "app/telegram.py",
+    "text": "INSERT INTO todos(run_id, kind, severity, title, body, statu"
+   },
+   {
+    "kind": "sql",
+    "line": 292,
+    "module": "app/telegram.py",
+    "text": "INSERT INTO alerts(at, live, kind, title, body, telegram) VA"
+   },
+   {
+    "kind": "sql",
+    "line": 173,
+    "module": "app/vault.py",
+    "text": "SELECT 1 FROM owner WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 182,
+    "module": "app/vault.py",
+    "text": "SELECT locked_until FROM owner WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 209,
+    "module": "app/vault.py",
+    "text": "INSERT INTO owner(id,scrypt_n,pw_salt,pw_wrap,rc_salt,rc_wra"
+   },
+   {
+    "kind": "sql",
+    "line": 220,
+    "module": "app/vault.py",
+    "text": "SELECT * FROM owner WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 239,
+    "module": "app/vault.py",
+    "text": "UPDATE owner SET fails=0, locked_until=? WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 242,
+    "module": "app/vault.py",
+    "text": "UPDATE owner SET fails=? WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 260,
+    "module": "app/vault.py",
+    "text": "UPDATE owner SET fails=0, locked_until=0 WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 290,
+    "module": "app/vault.py",
+    "text": "UPDATE owner SET pw_salt=?, pw_wrap=?, rc_salt=?, rc_wrap=?,"
+   },
+   {
+    "kind": "sql",
+    "line": 329,
+    "module": "app/vault.py",
+    "text": "UPDATE owner SET pw_salt=?, pw_wrap=?, fails=0, locked_until"
+   },
+   {
+    "kind": "sql",
+    "line": 368,
+    "module": "app/vault.py",
+    "text": "SELECT wrap FROM owner_keyfile WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 377,
+    "module": "app/vault.py",
+    "text": "INSERT INTO owner_keyfile(id,wrap,at) VALUES(1,?,?) ON CONFL"
+   },
+   {
+    "kind": "sql",
+    "line": 388,
+    "module": "app/vault.py",
+    "text": "SELECT wrap FROM owner_keyfile WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 422,
+    "module": "app/vault.py",
+    "text": "DELETE FROM owner_keyfile"
+   },
+   {
+    "kind": "sql",
+    "line": 440,
+    "module": "app/vault.py",
+    "text": "UPDATE owner SET fails=0, locked_until=0 WHERE id=1"
+   },
+   {
+    "kind": "sql",
+    "line": 519,
+    "module": "app/vault.py",
+    "text": "INSERT INTO secrets(name,blob,updated_at) VALUES(?,?,?) ON C"
+   },
+   {
+    "kind": "sql",
+    "line": 526,
+    "module": "app/vault.py",
+    "text": "SELECT blob FROM secrets WHERE name=?"
+   },
+   {
+    "kind": "sql",
+    "line": 536,
+    "module": "app/vault.py",
+    "text": "SELECT 1 FROM secrets WHERE name=?"
+   },
+   {
+    "kind": "sql",
+    "line": 539,
+    "module": "app/vault.py",
+    "text": "DELETE FROM secrets WHERE name=?"
+   }
+  ],
+  "store_modules": [
+   "app/db.py"
+  ]
+ },
+ "summary": {
+  "duplicate_bodies": 0,
+  "duplicate_names": 0,
+  "layer_violations": 12,
+  "lines": 14995,
+  "lines_deleted": 4535,
+  "lines_kept": 10460,
+  "modules": 38,
+  "modules_deleted": 11,
+  "modules_kept": 27,
+  "same_text": 24,
+  "sql_outside_store": 226,
+  "time_literals": 14
+ },
+ "time_literals": {
+  "by_module": {
+   "app/install.py": 5,
+   "app/live.py": 2,
+   "app/main.py": 1,
+   "app/paper_v2.py": 3,
+   "app/telegram.py": 3
+  },
+  "count": 14,
+  "hits": [
+   {
+    "kind": "time()",
+    "line": 28,
+    "module": "app/install.py",
+    "text": "time(16, 0)"
+   },
+   {
+    "kind": "time()",
+    "line": 29,
+    "module": "app/install.py",
+    "text": "time(20, 0)"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 30,
+    "module": "app/install.py",
+    "text": "16:00"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 30,
+    "module": "app/install.py",
+    "text": "20:00"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 30,
+    "module": "app/install.py",
+    "text": "20:10"
+   },
+   {
+    "kind": "time()",
+    "line": 37,
+    "module": "app/live.py",
+    "text": "time(20, 10)"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 359,
+    "module": "app/live.py",
+    "text": "08:35"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 1077,
+    "module": "app/main.py",
+    "text": "16:30"
+   },
+   {
+    "kind": "time()",
+    "line": 30,
+    "module": "app/paper_v2.py",
+    "text": "time(20, 10)"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 35,
+    "module": "app/paper_v2.py",
+    "text": "20:10"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 226,
+    "module": "app/paper_v2.py",
+    "text": "20:10"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 34,
+    "module": "app/telegram.py",
+    "text": "08:30"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 35,
+    "module": "app/telegram.py",
+    "text": "20:10"
+   },
+   {
+    "kind": "hh:mm",
+    "line": 71,
+    "module": "app/telegram.py",
+    "text": "08:35"
+   }
+  ]
+ }
+}

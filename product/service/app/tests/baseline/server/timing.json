@@ -1,0 +1,77 @@
+{
+ "captured_on": "2026-11-04",
+ "dayflow_seconds": 7.88,
+ "engine_cases_seconds": 1.09,
+ "note": "두 번 같을 수 없음 · 본체 대조에서 뺌 · 규칙: 20% 넘게 느려지지 않음(QUALITY T7)",
+ "pytest_reported_seconds": 82.18,
+ "pytest_seconds": 84.14,
+ "replay_326_cases": 326,
+ "replay_326_diff_cases": 0,
+ "replay_326_seconds": 7.11,
+ "screen_api": {
+  "/api/about": {
+   "bytes": 124,
+   "max_ms": 4.66,
+   "n": 30,
+   "p50_ms": 3.94,
+   "p95_ms": 4.63,
+   "status": 200
+  },
+  "/api/history/csv": {
+   "bytes": 172,
+   "max_ms": 7.79,
+   "n": 30,
+   "p50_ms": 4.78,
+   "p95_ms": 6.95,
+   "status": 200
+  },
+  "/api/live/screen": {
+   "bytes": 1909,
+   "max_ms": 10.55,
+   "n": 30,
+   "p50_ms": 7.46,
+   "p95_ms": 9.39,
+   "status": 200
+  },
+  "/api/state": {
+   "bytes": 128,
+   "max_ms": 7.57,
+   "n": 30,
+   "p50_ms": 5.25,
+   "p95_ms": 6.65,
+   "status": 200
+  },
+  "/api/v2/paper": {
+   "bytes": 11,
+   "max_ms": 7.23,
+   "n": 30,
+   "p50_ms": 3.8,
+   "p95_ms": 4.98,
+   "status": 200
+  },
+  "/api/v2/strategies": {
+   "bytes": 279,
+   "max_ms": 9.66,
+   "n": 30,
+   "p50_ms": 5.27,
+   "p95_ms": 7.3,
+   "status": 200
+  }
+ },
+ "screen_api_setup": {
+  "backtest": 200,
+  "connect": 200,
+  "live_start": 200,
+  "open_orders": [
+   "sent"
+  ],
+  "precheck": true
+ },
+ "screen_api_summary": {
+  "history": 1,
+  "holdings": 1,
+  "plan_rows": 1,
+  "recent": 1,
+  "running": true
+ }
+}
