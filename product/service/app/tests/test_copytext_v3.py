@@ -14,7 +14,7 @@ from tests.baseline import replay
 from tests.test_blocks import big_breakout
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "copy-v3-example.txt"
-# v1 쪽 입력 · 기대값은 P1-01a가 얼린 `tests/baseline/frozen/v1_fixtures.json`(P1-03 전에는 `app.v1` · `tests.regression.cases`가
+# v1 쪽 입력 · 기대값은 P1-01a가 얼린 `tests/baseline/frozen/v1_fixtures.json`(P1-03 전에는 지운 v1 전략 모듈 · 회귀 도구가
 # 만들던 값 · 같음을 `test_v1_*`로 확인한 뒤 v1 코드를 지움). 값은 그대로예요.
 FX = replay.load_v1_fixtures()
 

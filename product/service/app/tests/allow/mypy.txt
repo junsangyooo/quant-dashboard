@@ -12,16 +12,7 @@ app/engine.py assignment 2  # v3 엔진 · 동작 그대로
 app/engine.py list-item 1  # v3 엔진 · 동작 그대로
 app/engine.py operator 4  # None과 연산 가능성 · v3 엔진 · 동작 그대로
 app/engine.py unused-ignore 2  # 필요 없는 `type: ignore` · v3 엔진
-app/engine_mvp.py assignment 3  # 지울 모듈(P1-03)
-app/engine_mvp.py list-item 1  # 지울 모듈(P1-03)
 app/live.py arg-type 2  # P1-08 run/live.py로 옮길 때 정리
 app/live.py assignment 1  # P1-08 run/live.py로 옮길 때 정리
 app/live.py index 11  # sqlite3.Row | None을 바로 색인 · P1-07 저장 층에서 정리
-app/main.py index 5  # sqlite3.Row | None을 바로 색인 · P1-09 api/·services/로 나눌 때 정리
-app/paper.py index 4  # 지울 모듈(P1-03)
-app/paper.py unused-ignore 1  # 지울 모듈(P1-03)
-app/strategy.py assignment 1  # 지울 모듈(P1-03)
-app/v1/engine.py assignment 3  # 지울 모듈(P1-03)
-app/v1/engine.py list-item 1  # 지울 모듈(P1-03)
-app/v1/strategy.py assignment 1  # 지울 모듈(P1-03)
 app/vault.py no-untyped-call 5  # 타입 없는 함수 호출(cryptography 도우미) · P1-06 뒤 정리

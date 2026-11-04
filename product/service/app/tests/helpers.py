@@ -1,6 +1,6 @@
 """시험 도우미: 옛 일곱 칸 본문(얼린 것)과 그것을 DB에 직접 넣기.
 
-P1-03 전에는 `app.strategy`(지운 MVP 모듈)의 `PIECES`로 본문을 만들고 MVP 라우트 `/api/strategies`로 넣었어요. 지금은
+P1-03 전에는 지운 MVP 전략 모듈의 조건 사전(`PIECES`)으로 본문을 만들고 지운 MVP 라우트 `/api/strategies`로 넣었어요. 지금은
 P1-01a가 얼린 `tests/baseline/frozen/v1_fixtures.json`의 `legacy` 행(그때 `legacy(template, name)`이 만든 본문 그대로 ·
 `test_v1_legacy_helper_matches_frozen`이 같음을 확인했음)을 돌려주고, 본문은 `versions` 표에 직접 넣어요(읽을 때 v3로 바뀌는
 길은 그대로 `copytext.read_body`).

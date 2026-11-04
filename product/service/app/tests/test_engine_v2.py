@@ -521,7 +521,7 @@ def test_R_B3_converted_v1_without_switching_is_identical() -> None:
     """같은 날 갈아타기가 없는 v1 전략 → 비용 · 수량까지 같음(R-C10 문턱은 T-24 · 여기는 한 건)."""
     from tests.baseline import replay
 
-    # v1 쪽(본문 · 일봉 · run_v1 거래)은 P1-01a가 얼린 값(P1-03 전에는 `tests.regression.cases` · `app.engine_v1`이 만들던 값 · 같음)
+    # v1 쪽(본문 · 일봉 · run_v1 거래)은 P1-01a가 얼린 값(P1-03 전에는 지운 회귀 도구 · v1 엔진이 만들던 값 · 같음을 확인한 뒤 지움)
     fx = replay.load_v1_fixtures()
     rb = fx["R_B3"]
     b = fx["bodies"][rb["body_index"]]["slots"]

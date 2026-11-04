@@ -34,7 +34,14 @@ from app.transport import FakeTransport, HttpRequest, Transports, build_transpor
 from tests import conftest
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_SOURCES = sorted((ROOT / "app").rglob("*.py"))  # 하위 폴더까지(P1-02 ②)
+
+
+def app_sources(root: Path) -> list[Path]:
+    """검사 대상: `root/app/**/*.py`(하위 폴더까지 · P1-02 ②)."""
+    return sorted((root / "app").rglob("*.py"))
+
+
+APP_SOURCES = app_sources(ROOT)
 GATE = ROOT / "app" / "transport.py"
 
 # 바깥으로 나가는 수단. transport.py 밖의 앱 코드에서는 0건이어야 해요.
@@ -48,7 +55,8 @@ AI_SDK_MODULES = {"anthropic", "openai", "google.generativeai", "google.genai", 
 FORBIDDEN_MODULES = AI_SDK_MODULES | {"urllib3", "websockets", "websocket", "subprocess", "asyncio.subprocess"}
 FORBIDDEN_PREFIXES = ("langchain",)  # 첫 이름이 이걸로 시작하면 모두(langchain · langchain_openai · langchain_core …)
 # import 문이 아닌 길로 모듈을 들이거나 다른 프로그램을 띄우는 꼴(글 검사 · AST가 못 보는 것 · QUALITY E1).
-DYNAMIC_CALLS = re.compile(r"import_module\(|__import__\(|create_subprocess_|os\.(?:system|popen|exec\w*|spawn\w*)\(|\bpty\b")
+DYNAMIC_CALLS = re.compile(r"import_module\(|__import__\(|create_subprocess_|os\.(?:system|popen|exec\w*|spawn\w*)\("
+                           r"|(?<=\bimport )pty\b|\bpty(?=\.)")  # pty는 `import pty` · `pty.` 꼴만(P1-02 검토 다듬기)
 
 
 def _label(path: Path) -> str:
@@ -220,9 +228,15 @@ def test_sources_exist() -> None:
     assert {"toss.py", "main.py", "transport.py", "publicip.py", "market.py"} <= names
 
 
-def test_sources_include_subfolders() -> None:
-    """검사 범위가 `app/` 하위 폴더까지예요(지금은 `app/v1/` · 뒤 일감의 `domain/` · `adapters/` 등도 저절로 들어와요)."""
-    assert ROOT / "app" / "v1" / "__init__.py" in APP_SOURCES
+def test_sources_include_subfolders(tmp_path: Path) -> None:
+    """검사 범위가 `app/` 하위 폴더까지예요(뒤 일감의 `domain/` · `adapters/` 등도 저절로 들어와요).
+
+    P1-03 전에는 실제 하위 폴더 `app/v1/`로 봤어요. 그 폴더를 지워 지금 `app/`에는 하위 폴더가 없어서, 같은 셈 함수(`app_sources`)에
+    하위 폴더를 심은 임시 뿌리를 주어 봐요."""
+    (tmp_path / "app" / "sub").mkdir(parents=True)
+    (tmp_path / "app" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "app" / "sub" / "__init__.py").write_text("", encoding="utf-8")
+    assert tmp_path / "app" / "sub" / "__init__.py" in app_sources(tmp_path)
     assert all(p.is_relative_to(ROOT / "app") for p in APP_SOURCES)
 
 

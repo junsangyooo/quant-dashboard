@@ -25,10 +25,11 @@ REAL_CONFIG_DIR = Path(REAL_HOME) / ".config" / "quant-service" if REAL_HOME els
 REAL_CONFIG_EXISTED_AT_START = bool(REAL_CONFIG_DIR and REAL_CONFIG_DIR.exists())
 
 
-def config_tree(root: Path | None) -> list[tuple[str, int, int]]:
-    """폴더 아래 모든 항목의 (상대 경로 · 크기 · 바뀐 시각) · 없으면 빈 목록(실제 설정 폴더를 건드리지 않았는지 전후 비교용)."""
+def config_tree(root: Path | None) -> list[tuple[str, int, int]] | None:
+    """폴더 아래 모든 항목의 (상대 경로 · 크기 · 바뀐 시각) · 폴더가 없으면 None(빈 폴더 []와 구별 · 시험이 빈 폴더를 만들어도 잡히게 ·
+    실제 설정 폴더를 건드리지 않았는지 전후 비교용)."""
     if root is None or not root.exists():
-        return []
+        return None
     return sorted((p.relative_to(root).as_posix(), p.stat().st_size, p.stat().st_mtime_ns) for p in root.rglob("*"))
 
 

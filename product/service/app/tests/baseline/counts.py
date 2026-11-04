@@ -129,7 +129,7 @@ def lines() -> dict[str, Any]:
 def _imports(tree: ast.AST, module_rel: str) -> list[tuple[str, int, bool]]:
     """(가져오는 모듈 이름 · 줄 · 함수 안인가). 상대 import는 `app.x` 꼴로 풀어요."""
     out = []
-    pkg = module_rel.rsplit("/", 1)[0].replace("/", ".")  # app 또는 app.v1
+    pkg = module_rel.rsplit("/", 1)[0].replace("/", ".")  # app 또는 하위 패키지(P1-05 뒤 app.domain 등)
 
     def walk(node: ast.AST, inside: bool) -> None:
         for child in ast.iter_child_nodes(node):

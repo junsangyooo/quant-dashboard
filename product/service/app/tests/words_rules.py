@@ -2,7 +2,7 @@
 
 - 목록의 정답은 문서예요. 이 파일은 문서 표를 읽어 규칙으로 바꾸기만 해요.
 - 화면 시험(web/tests/words.test.ts)은 같은 규칙을 `web/tests/forbiddenWords.json`으로 읽어요.
-  그 파일이 문서와 같은지는 `tests/test_copytext.py`가 봐요. 다시 만들기:
+  그 파일이 문서와 같은지는 `tests/test_words.py`(P1-03 전에는 `tests/test_copytext.py`)가 봐요. 다시 만들기:
   `.venv/bin/python -m tests.words_rules --write`
 - 검사 꼴: 예외 꼴을 지운 뒤 남은 것만 세요(GLOSSARY 5절 '검사 꼴').
 """

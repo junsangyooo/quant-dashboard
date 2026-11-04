@@ -104,7 +104,7 @@ def test_frozen_v1_bodies_convert_to_frozen_v3() -> None:
 def test_frozen_examples_convert_and_copy_text_parse() -> None:
     """옛 예시 4개(얼린 본문) → `convert_v1` = 얼린 v3(R-C8 · R-C9) · v2 복사 글(얼린 글) → 새 전략으로 읽힘."""
     ex = {e["id"]: e for e in FX["examples"]}
-    assert list(ex) == ["breakout", "either", "equal", "trend"]  # app/v1/strategy.py EXAMPLES 순서
+    assert list(ex) == ["breakout", "either", "equal", "trend"]  # 옛 v1 예시(EXAMPLES) 순서
     for e in FX["examples"]:
         body = ct.convert_v1(e["body"])
         assert body == e["v3"] and body["converted"] == "v1"

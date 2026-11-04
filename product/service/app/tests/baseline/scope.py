@@ -2,6 +2,12 @@
 
 기준선 기록은 이 경계로 '남는 것'과 '지울 것'을 나누고, 대조(`compare.py`)는 '남는 것'만 봐요.
 라우트 · 모듈 · 시험 파일 · 시험 함수의 네 가지예요. 줄 번호는 `8b67df6` 기준이에요.
+
+P1-03a가 실제로 지운 것과 같아요(`tests/baseline/reports/P1-03a.md`): 라우트 21 · 모듈 11 · 시험 파일 9 모두 통째로 지움 ·
+부분 파일의 '남는(옮긴)' 함수는 `tests/test_api_secrets.py` · `tests/test_access.py` · `tests/test_words.py`로 옮겨 갔어요
+(아래 표의 함수 이름 그대로 · 기준선 `api_shapes.json`의 관측은 옛 nodeid 기준이라 이 표는 그대로 둬요). `test_copytext.py`의
+API 시험 2건(`test_import_api_flow` · `test_import_api_rejects_bad_links`)은 지운 MVP 라우트의 응답 모양을 단언해서 옮기지 못하고
+지웠어요(P1-03a 보고 · 가정). 그래서 그 파일도 통째로 사라졌어요.
 """
 
 from __future__ import annotations
@@ -56,9 +62,8 @@ KEPT_FUNCS_IN_PARTIAL_FILES: dict[str, frozenset[str]] = {
         "test_lock_drops_the_toss_client", "test_session_expiry_drops_the_toss_client",
         "test_last_session_logout_drops_the_toss_client",
     }),
-    "tests/test_copytext.py": frozenset({
-        "test_import_api_flow", "test_import_api_rejects_bad_links", "test_forbidden_list_is_the_glossary",
-        "test_forbidden_rule_catches_and_allows", "test_server_text_forbidden_words",
+    "tests/test_copytext.py": frozenset({  # 금지어 3건만 옮김(tests/test_words.py) · API 2건은 지움(P1-03a 가정)
+        "test_forbidden_list_is_the_glossary", "test_forbidden_rule_catches_and_allows", "test_server_text_forbidden_words",
     }),
 }
 
