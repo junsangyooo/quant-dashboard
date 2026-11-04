@@ -6,6 +6,7 @@
 //   node tests/baseline/screens.mjs capture --out DIR --python PY --now-ms N [--only GROUP[:INDEX]] [--widths 1440,390] [--port 8797]
 //   node tests/baseline/screens.mjs diff PAIRS.json        (PNG 두 장의 픽셀 차 % · 브라우저 canvas로 셈)
 //
+// 바깥 요청: `ctx.route`로 서버(127.0.0.1:포트) 밖 요청을 모두 막고 세요(1건이라도 있으면 찍기 실패 · `screens.json`에 수를 남김).
 // 두 번 같게 찍는 장치: 서버 · 페이지 시각 고정(`page.clock.setFixedTime`) · 복구 코드 씨앗(서버) · `reducedMotion` ·
 // `timezoneId: Asia/Seoul` · 글꼴 로딩 기다림(`document.fonts.ready` · 동작 뒤에도) · 애니메이션 끔 · 커서 숨김
 // (`screenshot({ animations: 'disabled', caret: 'hide' })`) · 상태마다 새 서버라 앞 상태의 자료가 섞이지 않음.
@@ -184,7 +185,8 @@ async function startServer(python, live, port) {
     await new Promise((r) => setTimeout(r, 100));
   }
   const args = ['-m', 'tests.baseline.screen_server', dataDir, String(port), ...(live ? ['live'] : [])];
-  const proc = spawn(python, args, { cwd: APP, env: { ...process.env, HOME: home }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // HOME · 키 파일 폴더는 임시 폴더(stop()이 지움 · 키 파일이 /tmp에 남지 않게)
+  const proc = spawn(python, args, { cwd: APP, env: { ...process.env, HOME: home, QUANT_BASELINE_KEYFILE_DIR: join(home, 'kf') }, stdio: ['ignore', 'pipe', 'pipe'] });
   let err = '';
   proc.stderr.on('data', (d) => { err += d.toString(); });
   const base = `http://127.0.0.1:${port}`;
@@ -197,7 +199,10 @@ async function startServer(python, live, port) {
   }
   const stop = async () => {
     proc.kill('SIGTERM');
-    await new Promise((r) => { proc.on('exit', r); setTimeout(() => { proc.kill('SIGKILL'); r(); }, 10000); });
+    await new Promise((r) => {
+      const timer = setTimeout(() => { proc.kill('SIGKILL'); r(); }, 10000);
+      proc.on('exit', () => { clearTimeout(timer); r(); });
+    });
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
   };
@@ -234,6 +239,15 @@ async function captureOne(browser, python, nowMs, meta, st, width, outDir, port)
     const ctx = await browser.newContext({ viewport, deviceScaleFactor: scale, locale: 'ko-KR', timezoneId: 'Asia/Seoul', reducedMotion: 'reduce', colorScheme: 'light' });
     await ctx.clock.setFixedTime(nowMs);
     const base = server.base;
+    // 바깥 요청 차단: 페이지가 서버(127.0.0.1:포트) 밖으로 내는 요청은 모두 막고 적어요(1건이라도 있으면 찍기 실패)
+    const outbound = [];
+    await ctx.route('**/*', (route) => {
+      const url = route.request().url();
+      if (url.startsWith(`${base}/`)) return route.continue();
+      outbound.push(url);
+      return route.abort('blockedbyclient');
+    });
+    rec.outbound = outbound;
     const id = st.fresh ? 0 : await setup(ctx, base, { dart: !st.noDart });
     if (st.loggedOut) await ctx.request.post(`${base}/api/logout`);
     if (st.body) await ctx.request.post(`${base}/api/v2/strategies/${id}/versions`, { data: { body: st.body(row) } });
@@ -258,6 +272,7 @@ async function captureOne(browser, python, nowMs, meta, st, width, outDir, port)
     rec.text = await page.evaluate(() => document.body.innerText);
     rec.aria = await page.locator('body').ariaSnapshot();
     await ctx.close();
+    if (outbound.length) throw new Error(`바깥 요청 ${outbound.length}건(화면이 바깥 자원에 기대요 · 고치지 말고 보고): ${rec.id} ${width} · ${outbound.slice(0, 5).join(' · ')}`);
   } finally {
     await server.stop();
   }

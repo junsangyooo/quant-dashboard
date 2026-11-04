@@ -1,7 +1,9 @@
 """P1-01c 화면 · 웹 숫자 기준선 시험(`tests/baseline/web/`의 기록과 셈 함수).
 
-1부: 셈 규칙(`webcounts.py` · `webchecks.py` · `screens.py`)이 문서대로 세는지 — 브라우저 없이 돌아요.
-2부: 저장된 기준선 기록이 자기모순 없이 있는지(화면 목록 · PNG · 화면 글 · 금지어 0 · 절대 경로 0).
+1부: 셈 규칙(`webcounts.py` · `webchecks.py` · `screens.py`)과 화면 대조(`screens.compare` · 가짜 diff)가 문서대로인지 —
+브라우저 없이 돌아요.
+2부: 저장된 기준선 기록이 자기모순 없이 있는지(화면 목록 · PNG · 화면 글 · 금지어 0 · 바깥 요청 0 · 절대 경로 0 · 기록이
+없으면 실패 · 커밋돼 있어야 해요).
 3부: 픽셀 차 셈(Node 24 + `PW_CHROMIUM` 브라우저가 있을 때만 · 없으면 건너뜀).
 """
 
@@ -154,10 +156,63 @@ def test_png_size_reads_ihdr(tmp_path: Path) -> None:
         screens.png_size(tmp_path / "b.png")
 
 
+def _tiny_png(w: int = 2, h: int = 2, fill: int = 0) -> bytes:
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    raw = b"".join(b"\x00" + bytes([fill] * 3) * w for _ in range(h))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def _fake_screens_dir(root: Path, *, text: str = "자산\n운용 중", fill: int = 0, drop: bool = False) -> Path:
+    """작은 가짜 화면 폴더: 화면 하나(`s-00__1440`) · PNG 2×2 · 글 JSON."""
+    d = root
+    d.mkdir(parents=True, exist_ok=True)
+    rows = [] if drop else [{"id": "s-00", "width": 1440, "png": "s-00__1440.png"}]
+    (d / "screens.json").write_text(json.dumps({"browser": "x", "screens": rows}), encoding="utf-8")
+    (d / "screen_texts.json").write_text(json.dumps({"s-00__1440": {"text": text, "aria": "- main"}}), encoding="utf-8")
+    if not drop:
+        (d / "s-00__1440.png").write_bytes(_tiny_png(fill=fill))
+    return d
+
+
+def test_screens_compare_passes_when_png_and_text_are_the_same(tmp_path: Path) -> None:
+    base = _fake_screens_dir(tmp_path / "base")
+    new = _fake_screens_dir(tmp_path / "new")
+    problems, notes, rows = screens.compare(base, new)  # 같은 바이트 → 브라우저 없이 0%
+    assert problems == [] and notes == []
+    assert rows == [{"screen": "s-00__1440", "pixel_pct": 0.0, "pixels": 0, "size": "2×2 → 2×2", "text_same": True, "aria_same": True}]
+
+
+def test_screens_compare_fails_over_the_pixel_threshold_and_notes_under_it(tmp_path: Path) -> None:
+    base = _fake_screens_dir(tmp_path / "base", fill=0)
+    new = _fake_screens_dir(tmp_path / "new", fill=255)  # 바이트가 달라 diff를 불러요 · 브라우저 대신 가짜 diff
+    fake = lambda pairs, pct=[1.25]: {id_: {"percent": pct[0], "a": [2, 2], "b": [2, 2], "changed": 1, "total": 4} for id_, _a, _b in pairs}  # noqa: E731
+    problems, notes, rows = screens.compare(base, new, diff=fake)
+    assert problems == ["화면 그림 차 1.25% > 0.5%: s-00__1440 (2×2 → 2×2)"] and notes == []
+    problems, notes, rows = screens.compare(base, new, diff=lambda pairs: fake(pairs, [0.3]))
+    assert problems == [] and notes == ["화면 그림 차 0.3%(1픽셀 · 문턱 안): s-00__1440"] and rows[0]["pixel_pct"] == 0.3
+    problems, notes, _rows = screens.compare(base, new, diff=lambda pairs: fake(pairs, [0.0]))  # 몇 픽셀이라 0.000%로 반올림
+    assert problems == [] and notes == ["화면 그림 차 0.0%(1픽셀 · 문턱 안): s-00__1440"]
+
+
+def test_screens_compare_fails_on_text_change_and_missing_screen(tmp_path: Path) -> None:
+    base = _fake_screens_dir(tmp_path / "base")
+    changed = _fake_screens_dir(tmp_path / "changed", text="자산\n운용 끝")
+    problems, _notes, rows = screens.compare(base, changed)
+    assert problems == ["화면 글 다름: s-00__1440"] and rows[0]["text_same"] is False and rows[0]["pixel_pct"] == 0.0
+    gone = _fake_screens_dir(tmp_path / "gone", drop=True)
+    problems, _notes, rows = screens.compare(base, gone)
+    assert problems == ["화면이 사라짐: s-00 1440"] and rows == []
+
+
 def test_pixel_diff_fast_path_without_browser(tmp_path: Path) -> None:
     src = sorted(SCREENS.glob("*__1440.png"))
-    if not src:
-        pytest.skip("기준선 화면이 없어요")
+    assert src, "기준선 화면이 커밋돼 있어야 해요"
     a = tmp_path / "a.png"
     shutil.copy(src[0], a)
     d = screens.pixel_diff([("same", src[0], a)])
@@ -169,8 +224,7 @@ def test_pixel_diff_fast_path_without_browser(tmp_path: Path) -> None:
 
 @pytest.fixture(scope="module")
 def index() -> dict:  # type: ignore[type-arg]
-    if not (SCREENS / "screens.json").exists():
-        pytest.skip("기준선 화면 기록이 없어요(capture 전)")
+    assert (SCREENS / "screens.json").exists(), "기준선 화면 기록이 커밋돼 있어야 해요"
     return json.loads((SCREENS / "screens.json").read_text(encoding="utf-8"))
 
 
@@ -178,7 +232,8 @@ def test_screen_index_has_every_state_at_both_widths(index: dict) -> None:  # ty
     s = index["summary"]
     assert index["widths"] == [1440, 390] and index["pixel_threshold_pct"] == 0.5
     assert s["states"] == 36 and s["screens"] == 72 and s["captured"] + s["skipped"] == 72
-    assert s["frames_missing_file"] == 0
+    assert s["frames_missing_file"] == 0 and s["outbound_requests"] == 0
+    assert all(r["outbound_requests"] == 0 for r in index["screens"])
     keys = {(r["id"], r["width"]) for r in index["screens"]}
     assert keys == {(st["id"], w) for st in index["states"] for w in (1440, 390)}
     overflow = []
@@ -211,8 +266,7 @@ def test_screen_texts_cover_captured_screens_without_paths(index: dict) -> None:
 
 def test_forbidden_words_record_is_zero_and_matches_recount() -> None:
     p = WEB_BASE / "forbidden_words.json"
-    if not p.exists():
-        pytest.skip("기준선 금지어 기록이 없어요(capture 전)")
+    assert p.exists(), "기준선 금지어 기록이 커밋돼 있어야 해요"
     rec = json.loads(p.read_text(encoding="utf-8"))
     assert rec["dist_count"] == 0 and rec["screen_count"] == 0 and rec["screens"] == 67
     now = webchecks.forbidden_words(SCREENS / "screen_texts.json")
@@ -221,8 +275,7 @@ def test_forbidden_words_record_is_zero_and_matches_recount() -> None:
 
 def test_web_counts_record_matches_recount_without_jscpd() -> None:
     p = WEB_BASE / "web_counts.json"
-    if not p.exists():
-        pytest.skip("기준선 웹 숫자 기록이 없어요(capture 전)")
+    assert p.exists(), "기준선 웹 숫자 기록이 커밋돼 있어야 해요"
     rec = json.loads(p.read_text(encoding="utf-8"))["summary"]
     now = webcounts.run_all(with_jscpd=False)["summary"]
     assert {k: v for k, v in rec.items() if not k.startswith("jscpd")} == now
@@ -236,7 +289,6 @@ def test_web_counts_record_matches_recount_without_jscpd() -> None:
 def test_pixel_diff_counts_changed_pixels_with_the_browser() -> None:
     a = SCREENS / "settings-00-V2-01_기본__1440.png"
     b = SCREENS / "settings-02-V2-03_기본__1440.png"
-    if not (a.exists() and b.exists()):
-        pytest.skip("기준선 화면이 없어요")
+    assert a.exists() and b.exists(), "기준선 화면이 커밋돼 있어야 해요"
     d = screens.pixel_diff([("x", a, b)])["x"]
     assert d["identical"] is False and d["percent"] > 0 and d["bbox"] and d["changed"] <= d["total"]

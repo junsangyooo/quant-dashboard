@@ -1,66 +1,66 @@
 {
  "captured_on": "2026-11-04",
- "dayflow_seconds": 8.59,
- "engine_cases_seconds": 0.98,
+ "dayflow_seconds": 9.03,
+ "engine_cases_seconds": 1.03,
  "note": "두 번 같을 수 없음 · 본체 대조에서 뺌 · 규칙: 20% 넘게 느려지지 않음(QUALITY T7)",
  "npm_seconds": {
-  "build": 2.86,
-  "lint": 27.51,
-  "test": 7.2,
-  "typecheck": 0.24
+  "build": 1.96,
+  "lint": 26.16,
+  "test": 6.6,
+  "typecheck": 0.29
  },
- "pytest_reported_seconds": 88.58,
- "pytest_seconds": 90.85,
+ "pytest_reported_seconds": 83.19,
+ "pytest_seconds": 85.25,
  "replay_326_cases": 326,
  "replay_326_diff_cases": 0,
- "replay_326_seconds": 7.48,
+ "replay_326_seconds": 7.17,
  "screen_api": {
   "/api/about": {
    "bytes": 124,
-   "max_ms": 8.02,
+   "max_ms": 5.77,
    "n": 30,
-   "p50_ms": 3.95,
-   "p95_ms": 5.1,
+   "p50_ms": 4.22,
+   "p95_ms": 5.36,
    "status": 200
   },
   "/api/history/csv": {
    "bytes": 172,
-   "max_ms": 5.1,
+   "max_ms": 6.15,
    "n": 30,
-   "p50_ms": 3.87,
-   "p95_ms": 4.76,
+   "p50_ms": 4.1,
+   "p95_ms": 5.35,
    "status": 200
   },
   "/api/live/screen": {
    "bytes": 1909,
-   "max_ms": 11.79,
+   "max_ms": 9.39,
    "n": 30,
-   "p50_ms": 5.9,
-   "p95_ms": 9.66,
+   "p50_ms": 6.26,
+   "p95_ms": 8.62,
    "status": 200
   },
   "/api/state": {
    "bytes": 128,
-   "max_ms": 6.32,
+   "max_ms": 12.14,
    "n": 30,
-   "p50_ms": 4.35,
-   "p95_ms": 6.22,
+   "p50_ms": 4.55,
+   "p95_ms": 9.06,
    "status": 200
   },
   "/api/v2/paper": {
    "bytes": 11,
-   "max_ms": 5.94,
+   "max_ms": 6.12,
    "n": 30,
-   "p50_ms": 4.28,
-   "p95_ms": 5.56,
+   "p50_ms": 4.89,
+   "p95_ms": 5.71,
    "status": 200
   },
   "/api/v2/strategies": {
    "bytes": 279,
-   "max_ms": 129.62,
+   "max_ms": 97.22,
    "n": 30,
-   "p50_ms": 4.89,
-   "p95_ms": 6.66,
+   "p50_ms": 4.82,
+   "p95_ms": 5.88,
    "status": 200
   }
  },
@@ -80,6 +80,6 @@
   "recent": 1,
   "running": true
  },
- "screens_seconds": 233.27,
- "webcounts_seconds": 2.37
+ "screens_seconds": 232.36,
+ "webcounts_seconds": 2.15
 }

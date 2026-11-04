@@ -2,6 +2,8 @@
 
     cd product/service/app && .venv/bin/python -m tests.baseline.capture [--out DIR] [--web-out DIR] [--skip-pytest] [--skip-web]
 
+`--out DIR`만 주면 웹 기록도 저장소 밖으로 가요(`DIR`이 `server`로 끝나면 그 옆 `web` · 아니면 `DIR/web`).
+
 `tests/baseline/server/`에 적는 것(본체 · 대조 대상):
 - `clock.json` · `mask.json`: 고정 시각 · 씨앗 · 패치 자리 · 가릴 필드.
 - `api_shapes.json`: pytest 전체(`-p tests.baseline.plugin`)에서 오간 응답의 라우트 × 상태 코드 → 키 · 타입 구조 ·
@@ -148,6 +150,11 @@ def require_node_24() -> str:
     return v
 
 
+def web_out_for(out: Path) -> Path:
+    """`--out`만 주면 웹 기록도 저장소 밖으로: `…/server` → `…/web`(compare · 기본 배치와 같음) · 그 밖은 `<out>/web`."""
+    return out.parent / "web" if out.name == "server" else out / "web"
+
+
 def run_web(web_out: Path, timing: dict[str, Any], *, quiet: bool = False) -> None:
     """화면 · 웹 숫자(P1-01c): npm 검사(build가 dist를 만듦) → 화면 찍기 → 웹 숫자 → 금지어."""
     from tests.baseline import screens, webchecks, webcounts
@@ -186,7 +193,7 @@ def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False, skip_web: 
         web_out: Path | None = None) -> dict[str, Any]:
     from tests.baseline import clock, counts, dayflow, engine_cases, mask, replay, screen_api
 
-    web_out = web_out or DEFAULT_WEB_OUT
+    web_out = web_out or web_out_for(out)
     require_node_24()
     clock.freeze_plain()
     out.mkdir(parents=True, exist_ok=True)
@@ -254,12 +261,13 @@ def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False, skip_web: 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=str(DEFAULT_OUT))
-    ap.add_argument("--web-out", default=str(DEFAULT_WEB_OUT))
+    ap.add_argument("--web-out", default=None, help="웹 기록 폴더(기본: --out이 `server`로 끝나면 그 옆 `web` · 아니면 --out 아래 `web`)")
     ap.add_argument("--skip-pytest", action="store_true", help="API 모양 · pytest 수를 다시 만들지 않음(빠른 확인용)")
     ap.add_argument("--skip-web", action="store_true", help="화면 · 웹 숫자(P1-01c)를 다시 만들지 않음(빠른 확인용)")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args(argv)
-    run(Path(a.out), skip_pytest=a.skip_pytest, quiet=a.quiet, skip_web=a.skip_web, web_out=Path(a.web_out))
+    run(Path(a.out), skip_pytest=a.skip_pytest, quiet=a.quiet, skip_web=a.skip_web,
+        web_out=Path(a.web_out) if a.web_out else web_out_for(Path(a.out)))
     return 0
 
 

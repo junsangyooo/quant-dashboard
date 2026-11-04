@@ -24,6 +24,6 @@
   "tests/test_db.py::test_v1_file_opens_in_the_app",
   "tests/test_db.py::test_v1_slots_body_is_marked"
  ],
- "passed": 1795,
+ "passed": 1798,
  "skipped": 0
 }

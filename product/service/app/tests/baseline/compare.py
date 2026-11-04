@@ -158,10 +158,10 @@ def compare_web(base: Path, new: Path) -> tuple[list[str], list[str], list[str]]
     notes += n
     worst = max((r["pixel_pct"] for r in rows), default=0.0)
     lines.append(f"[화면 · 기준선 {len(rows)}장 · 픽셀 차 최대 {worst}% · 문턱 {screens.PIXEL_THRESHOLD_PCT}% · "
-                 f"다른 그림 {sum(1 for r in rows if r['pixel_pct'] > 0)}장 · 글 다름 {sum(1 for r in rows if not r['text_same'])}장]")
+                 f"다른 그림 {sum(1 for r in rows if r['pixels'] > 0)}장 · 글 다름 {sum(1 for r in rows if not r['text_same'])}장]")
     for r in rows:
-        if r["pixel_pct"] > 0 or not r["text_same"] or not r["aria_same"]:
-            lines.append(f"  {r['screen']}: 픽셀 차 {r['pixel_pct']}% ({r['size']}) · 글 같음 {r['text_same']} · 역할 트리 같음 {r['aria_same']}")
+        if r["pixels"] > 0 or not r["text_same"] or not r["aria_same"]:
+            lines.append(f"  {r['screen']}: 픽셀 차 {r['pixel_pct']}%({r['pixels']}픽셀 · {r['size']}) · 글 같음 {r['text_same']} · 역할 트리 같음 {r['aria_same']}")
     b_wc, n_wc = _load(base, "web_counts.json"), _load(new, "web_counts.json")
     if b_wc and n_wc:
         lines += table(b_wc["summary"], n_wc["summary"], "웹 숫자")
