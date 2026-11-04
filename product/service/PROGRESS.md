@@ -27,5 +27,5 @@
 | 화면 기준선 흔들림 | `tests/baseline/web/screens/` `editor-05` 1440 | 펼친 '문제 2 · 빈칸 1' 단추 오른쪽 위 모서리 안티에일리어싱 5픽셀(0.000%)이 두 변형(`3db911…` · `3de817…`)을 오감 · compare는 '문턱 안' 알림 | 기록만(원인은 브라우저 렌더링 · 문턱 0.5% 안) |
 | X(ruff · mypy · 시작값) | `tests/allow/ruff.txt`(18줄 · 26건) · `tests/allow/mypy.txt`(25줄 · 74건) | 원래 있던 lint · 타입 위반(F821 · E9 없음) · 지울 파일 몫 ruff 15 · mypy 15 · secrets 1은 P1-03에서 같이 지움 | 1단계(줄어들기만) · 나머지는 2단계 |
 | S7(의존성) | `tests/allow/audit-pip.txt`(6) · `audit-npm.txt`(10) | `pip==24.0` PYSEC 6건(설치 도구 · 앱 실행 경로 아님) · npm 개발 의존성 10(undici 8 · minimatch 1 · zod 1 · `web/dist`에 없음) → Q-N19 | 2단계(판 올림) |
-| S11(비밀 검사) | `product/service/SPEC.md:541 · 684` | 허용 IP 예시가 공인 대역 꼴(`43.201.12.85`) → Q-N20(문서용 `203.0.113.x`로) | 제품 주인 |
+| S11(비밀 검사) | `product/service/SPEC.md:541 · 684` | 허용 IP 예시가 공인 대역 꼴(`43.201.12.x`) → Q-N20(문서용 `203.0.113.x`로) | 제품 주인 |
 | 커밋 위생 | `scripts/commit_hygiene.sh` | 금지 낱말 목록이 훅과 같아 다른 도구 이름(GPT · Copilot 등)은 잡지 않음 | 기록만 |
