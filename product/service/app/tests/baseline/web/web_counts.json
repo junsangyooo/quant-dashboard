@@ -1,0 +1,6131 @@
+{
+ "boundaries": {
+  "by_kind": {
+   "copy → lib": 1,
+   "ds → api": 5,
+   "ds → copy": 9,
+   "features → other feature": 7,
+   "features → shell": 16,
+   "lib → copy": 2,
+   "lib → ds": 1,
+   "shell → api": 1
+  },
+  "count": 42,
+  "count_kept": 32,
+  "edges": [
+   {
+    "dynamic": false,
+    "from": "src/components/Badges.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": false,
+    "line": 2,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/ConfirmHost.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 3,
+    "to": "src/api/client.ts",
+    "to_feature": null,
+    "to_layer": "api",
+    "why": "ds → api"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/ConfirmHost.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 4,
+    "to": "src/copy/confirm.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/Header.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 3,
+    "to": "src/api/live.ts",
+    "to_feature": null,
+    "to_layer": "api",
+    "why": "ds → api"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/Header.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 4,
+    "to": "src/copy/live.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/Header.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 5,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/Nav.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 5,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/Sheet.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 5,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/StageIcon.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": false,
+    "line": 12,
+    "to": "src/api/mvp.ts",
+    "to_feature": null,
+    "to_layer": "api",
+    "why": "ds → api"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/Tags.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": true,
+    "line": 10,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/graph/GraphView.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": false,
+    "line": 4,
+    "to": "src/api/mvp.ts",
+    "to_feature": null,
+    "to_layer": "api",
+    "why": "ds → api"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/graph/PathsPanel.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": false,
+    "line": 4,
+    "to": "src/api/mvp.ts",
+    "to_feature": null,
+    "to_layer": "api",
+    "why": "ds → api"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/graph/PathsPanel.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": false,
+    "line": 5,
+    "to": "src/copy/editor.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/components/graph/PathsPanel.tsx",
+    "from_feature": null,
+    "from_layer": "ds",
+    "kept": false,
+    "line": 16,
+    "to": "src/copy/particles.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "ds → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/copy/particles.ts",
+    "from_feature": null,
+    "from_layer": "copy",
+    "kept": false,
+    "line": 1,
+    "to": "src/lib/format.ts",
+    "to_feature": null,
+    "to_layer": "lib",
+    "why": "copy → lib"
+   },
+   {
+    "dynamic": false,
+    "from": "src/lib/format.ts",
+    "from_feature": null,
+    "from_layer": "lib",
+    "kept": true,
+    "line": 4,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "lib → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/lib/money.ts",
+    "from_feature": null,
+    "from_layer": "lib",
+    "kept": false,
+    "line": 1,
+    "to": "src/copy.ts",
+    "to_feature": null,
+    "to_layer": "copy",
+    "why": "lib → copy"
+   },
+   {
+    "dynamic": false,
+    "from": "src/lib/when.ts",
+    "from_feature": null,
+    "from_layer": "lib",
+    "kept": true,
+    "line": 1,
+    "to": "src/charts/geometry/scale.ts",
+    "to_feature": null,
+    "to_layer": "ds",
+    "why": "lib → ds"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Auth/LoginScreen.tsx",
+    "from_feature": "Auth",
+    "from_layer": "features",
+    "kept": true,
+    "line": 12,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Auth/LoginScreen.tsx",
+    "from_feature": "Auth",
+    "from_layer": "features",
+    "kept": true,
+    "line": 13,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Auth/RecoverScreen.tsx",
+    "from_feature": "Auth",
+    "from_layer": "features",
+    "kept": true,
+    "line": 11,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Auth/RecoverScreen.tsx",
+    "from_feature": "Auth",
+    "from_layer": "features",
+    "kept": true,
+    "line": 12,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Live/LiveScreens.tsx",
+    "from_feature": "Live",
+    "from_layer": "features",
+    "kept": true,
+    "line": 26,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Live/LiveScreens.tsx",
+    "from_feature": "Live",
+    "from_layer": "features",
+    "kept": true,
+    "line": 27,
+    "to": "src/screens/Setup/Wizard.tsx",
+    "to_feature": "Setup",
+    "to_layer": "features",
+    "why": "features → other feature (Live → Setup)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/LoadError.tsx",
+    "from_feature": "LoadError",
+    "from_layer": "features",
+    "kept": false,
+    "line": 4,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/NotFoundScreen.tsx",
+    "from_feature": "NotFoundScreen",
+    "from_layer": "features",
+    "kept": true,
+    "line": 2,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/NotFoundScreen.tsx",
+    "from_feature": "NotFoundScreen",
+    "from_layer": "features",
+    "kept": true,
+    "line": 3,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/ConnectScreen.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 24,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/ConnectScreen.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 25,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/PasswordScreen.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 8,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/PasswordScreen.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 9,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/SettingsV2.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 27,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/SettingsV2.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 28,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/SettingsV2.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 29,
+    "to": "src/screens/Setup/Wizard.tsx",
+    "to_feature": "Setup",
+    "to_layer": "features",
+    "why": "features → other feature (Settings → Setup)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/SettingsV2.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 38,
+    "to": "src/screens/Setup/SetupSteps.tsx",
+    "to_feature": "Setup",
+    "to_layer": "features",
+    "why": "features → other feature (Settings → Setup)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Settings/SettingsV2.tsx",
+    "from_feature": "Settings",
+    "from_layer": "features",
+    "kept": true,
+    "line": 39,
+    "to": "src/screens/Auth/Auth.module.css",
+    "to_feature": "Auth",
+    "to_layer": "features",
+    "why": "features → other feature (Settings → Auth)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Setup/SetupSteps.tsx",
+    "from_feature": "Setup",
+    "from_layer": "features",
+    "kept": true,
+    "line": 30,
+    "to": "src/shell/page.ts",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Setup/SetupSteps.tsx",
+    "from_feature": "Setup",
+    "from_layer": "features",
+    "kept": true,
+    "line": 34,
+    "to": "src/screens/Auth/Auth.module.css",
+    "to_feature": "Auth",
+    "to_layer": "features",
+    "why": "features → other feature (Setup → Auth)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/Setup/Wizard.tsx",
+    "from_feature": "Setup",
+    "from_layer": "features",
+    "kept": true,
+    "line": 6,
+    "to": "src/shell/Layout.tsx",
+    "to_feature": null,
+    "to_layer": "shell",
+    "why": "features → shell"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/StrategiesV2/StrategiesV2.tsx",
+    "from_feature": "StrategiesV2",
+    "from_layer": "features",
+    "kept": true,
+    "line": 34,
+    "to": "src/screens/BlockEditor/model.ts",
+    "to_feature": "BlockEditor",
+    "to_layer": "features",
+    "why": "features → other feature (StrategiesV2 → BlockEditor)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/screens/StrategiesV2/StrategiesV2.tsx",
+    "from_feature": "StrategiesV2",
+    "from_layer": "features",
+    "kept": true,
+    "line": 35,
+    "to": "src/screens/BlockEditor/StageGlyph.tsx",
+    "to_feature": "BlockEditor",
+    "to_layer": "features",
+    "why": "features → other feature (StrategiesV2 → BlockEditor)"
+   },
+   {
+    "dynamic": false,
+    "from": "src/shell/AppShell.tsx",
+    "from_feature": null,
+    "from_layer": "shell",
+    "kept": false,
+    "line": 5,
+    "to": "src/api/mvp.ts",
+    "to_feature": null,
+    "to_layer": "api",
+    "why": "shell → api"
+   }
+  ],
+  "groups": {
+   "charts_to_lib_places": 1,
+   "ds_to_api_places": 5,
+   "feature_to_feature_pairs": [
+    "Live → Setup",
+    "Settings → Auth",
+    "Settings → Setup",
+    "Setup → Auth",
+    "StrategiesV2 → BlockEditor"
+   ],
+   "feature_to_feature_places": 7,
+   "feature_to_shell_places": 16,
+   "lib_charts_cycle": true,
+   "lib_to_charts_places": 1,
+   "lib_to_copy_places": 2,
+   "shell_to_api_places": 1
+  },
+  "layer_of": {
+   "src/api/client.ts": "api",
+   "src/api/live.ts": "api",
+   "src/api/mvp.ts": "api",
+   "src/api/settingsV2.ts": "api",
+   "src/api/v2.ts": "api",
+   "src/charts/LineChart.tsx": "ds",
+   "src/charts/geometry/lineChart.ts": "ds",
+   "src/charts/geometry/mvpAxis.ts": "ds",
+   "src/charts/geometry/scale.ts": "ds",
+   "src/charts/useElementWidth.ts": "ds",
+   "src/components/Badges.tsx": "ds",
+   "src/components/Box.tsx": "ds",
+   "src/components/Buttons.tsx": "ds",
+   "src/components/Card.tsx": "ds",
+   "src/components/Chips.tsx": "ds",
+   "src/components/ConfirmHost.tsx": "ds",
+   "src/components/Controls.tsx": "ds",
+   "src/components/Dots.tsx": "ds",
+   "src/components/Field.tsx": "ds",
+   "src/components/Header.tsx": "ds",
+   "src/components/MenuRow.tsx": "ds",
+   "src/components/Nav.tsx": "ds",
+   "src/components/Sheet.tsx": "ds",
+   "src/components/StageIcon.tsx": "ds",
+   "src/components/Tags.tsx": "ds",
+   "src/components/Text.tsx": "ds",
+   "src/components/Toast.tsx": "ds",
+   "src/components/graph/GraphView.tsx": "ds",
+   "src/components/graph/PathsPanel.tsx": "ds",
+   "src/copy.ts": "copy",
+   "src/copy/auth.ts": "copy",
+   "src/copy/backtestV2.ts": "copy",
+   "src/copy/blockEditor.ts": "copy",
+   "src/copy/confirm.ts": "copy",
+   "src/copy/editor.ts": "copy",
+   "src/copy/graph.ts": "copy",
+   "src/copy/live.ts": "copy",
+   "src/copy/paperV2.ts": "copy",
+   "src/copy/particles.ts": "copy",
+   "src/copy/settings.ts": "copy",
+   "src/copy/settingsV2.ts": "copy",
+   "src/copy/setupV2.ts": "copy",
+   "src/copy/strategyV2.ts": "copy",
+   "src/copy/terms.ts": "copy",
+   "src/graph/layout.ts": "graph",
+   "src/graph/rules.ts": "graph",
+   "src/graph/text.ts": "graph",
+   "src/lib/format.ts": "lib",
+   "src/lib/money.ts": "lib",
+   "src/lib/runDates.ts": "lib",
+   "src/lib/useMedia.ts": "lib",
+   "src/lib/when.ts": "lib",
+   "src/main.tsx": "assembly",
+   "src/routes.tsx": "shell",
+   "src/screens/Auth/LoginScreen.tsx": "features",
+   "src/screens/Auth/RecoverScreen.tsx": "features",
+   "src/screens/Auth/RecoveryCode.tsx": "features",
+   "src/screens/BacktestV2/BacktestV2Screen.tsx": "features",
+   "src/screens/BlockEditor/AddMenu.tsx": "features",
+   "src/screens/BlockEditor/BlockCard.tsx": "features",
+   "src/screens/BlockEditor/BlockEditorScreen.tsx": "features",
+   "src/screens/BlockEditor/SidePanel.tsx": "features",
+   "src/screens/BlockEditor/StageGlyph.tsx": "features",
+   "src/screens/BlockEditor/model.ts": "features",
+   "src/screens/Live/LiveScreens.tsx": "features",
+   "src/screens/LoadError.tsx": "features",
+   "src/screens/NotFoundScreen.tsx": "features",
+   "src/screens/PaperV2/PaperV2.tsx": "features",
+   "src/screens/Settings/ConnectScreen.tsx": "features",
+   "src/screens/Settings/PasswordScreen.tsx": "features",
+   "src/screens/Settings/SettingsV2.tsx": "features",
+   "src/screens/Setup/SetupSteps.tsx": "features",
+   "src/screens/Setup/Wizard.tsx": "features",
+   "src/screens/StrategiesV2/StrategiesV2.tsx": "features",
+   "src/shell/AppShell.tsx": "shell",
+   "src/shell/Layout.tsx": "shell",
+   "src/shell/page.ts": "shell"
+  },
+  "unresolved": []
+ },
+ "jscpd": {
+  "clone_list": [
+   {
+    "a": "src/api/mvp.ts:205-217",
+    "b": "src/api/mvp.ts:489-501",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 13,
+    "tokens": 56
+   },
+   {
+    "a": "src/charts/geometry/lineChart.ts:80-85",
+    "b": "src/charts/geometry/mvpAxis.ts:5-10",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 6,
+    "tokens": 76
+   },
+   {
+    "a": "src/components/Badges.module.css:3-11",
+    "b": "src/components/Chips.module.css:3-11",
+    "block_editor": false,
+    "format": "css",
+    "lines": 9,
+    "tokens": 67
+   },
+   {
+    "a": "src/components/Badges.module.css:3-8",
+    "b": "src/components/Tags.module.css:3-8",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 53
+   },
+   {
+    "a": "src/components/Field.module.css:84-89",
+    "b": "src/components/graph/Graph.module.css:32-37",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 51
+   },
+   {
+    "a": "src/components/Field.tsx:21-32",
+    "b": "src/components/Field.tsx:64-75",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 12,
+    "tokens": 82
+   },
+   {
+    "a": "src/graph/layout.ts:347-352",
+    "b": "src/graph/layout.ts:358-363",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 6,
+    "tokens": 52
+   },
+   {
+    "a": "src/graph/layout.ts:424-431",
+    "b": "src/graph/layout.ts:518-525",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 8,
+    "tokens": 89
+   },
+   {
+    "a": "src/graph/rules.ts:162-174",
+    "b": "src/screens/BlockEditor/model.ts:108-120",
+    "block_editor": true,
+    "format": "typescript",
+    "lines": 13,
+    "tokens": 132
+   },
+   {
+    "a": "src/screens/Auth/RecoverScreen.tsx:22-27",
+    "b": "src/screens/Settings/PasswordScreen.tsx:15-20",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 6,
+    "tokens": 62
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:11-33",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:39-61",
+    "block_editor": true,
+    "format": "css",
+    "lines": 23,
+    "tokens": 115
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:134-140",
+    "b": "src/screens/BacktestV2/BacktestV2.module.css:191-197",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:134-140",
+    "b": "src/screens/BacktestV2/BacktestV2.module.css:204-210",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:18-33",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:33-48",
+    "block_editor": false,
+    "format": "css",
+    "lines": 16,
+    "tokens": 78
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:24-33",
+    "b": "src/screens/PaperV2/PaperV2.module.css:34-43",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 53
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:30-38",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:293-301",
+    "block_editor": true,
+    "format": "css",
+    "lines": 9,
+    "tokens": 58
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:30-42",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:82-94",
+    "block_editor": false,
+    "format": "css",
+    "lines": 13,
+    "tokens": 74
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:33-38",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:480-485",
+    "block_editor": true,
+    "format": "css",
+    "lines": 6,
+    "tokens": 53
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/PaperV2/PaperV2.module.css:138-147",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/PaperV2/PaperV2.module.css:187-196",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/Setup/Wizard.module.css:75-84",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:208-217",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:71-76",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:232-237",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2Screen.tsx:228-236",
+    "b": "src/screens/PaperV2/PaperV2.tsx:384-392",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 9,
+    "tokens": 61
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockCard.tsx:109-115",
+    "b": "src/screens/BlockEditor/BlockCard.tsx:134-140",
+    "block_editor": true,
+    "format": "tsx",
+    "lines": 7,
+    "tokens": 65
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:185-194",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:400-409",
+    "block_editor": true,
+    "format": "css",
+    "lines": 10,
+    "tokens": 78
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:297-302",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:481-486",
+    "block_editor": true,
+    "format": "css",
+    "lines": 6,
+    "tokens": 58
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:447-453",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:564-570",
+    "block_editor": true,
+    "format": "css",
+    "lines": 7,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:447-453",
+    "b": "src/screens/PaperV2/PaperV2.module.css:222-228",
+    "block_editor": true,
+    "format": "css",
+    "lines": 7,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:607-614",
+    "b": "src/screens/Setup/Wizard.module.css:87-94",
+    "block_editor": true,
+    "format": "css",
+    "lines": 8,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:61-66",
+    "b": "src/screens/BlockEditor/BlockEditor.module.css:332-337",
+    "block_editor": true,
+    "format": "css",
+    "lines": 6,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BlockEditor/BlockEditor.module.css:645-657",
+    "b": "src/screens/PaperV2/PaperV2.module.css:210-222",
+    "block_editor": true,
+    "format": "css",
+    "lines": 13,
+    "tokens": 65
+   },
+   {
+    "a": "src/screens/BlockEditor/SidePanel.tsx:74-81",
+    "b": "src/screens/BlockEditor/SidePanel.tsx:104-111",
+    "block_editor": true,
+    "format": "tsx",
+    "lines": 8,
+    "tokens": 61
+   },
+   {
+    "a": "src/screens/Live/Live.module.css:10-19",
+    "b": "src/screens/PaperV2/PaperV2.module.css:114-123",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 53
+   },
+   {
+    "a": "src/screens/Live/LiveScreens.tsx:193-200",
+    "b": "src/screens/Live/LiveScreens.tsx:211-218",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 8,
+    "tokens": 75
+   },
+   {
+    "a": "src/screens/PaperV2/PaperV2.module.css:18-31",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:123-136",
+    "block_editor": false,
+    "format": "css",
+    "lines": 14,
+    "tokens": 70
+   },
+   {
+    "a": "src/screens/PaperV2/PaperV2.module.css:225-235",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:175-185",
+    "block_editor": false,
+    "format": "css",
+    "lines": 11,
+    "tokens": 56
+   },
+   {
+    "a": "src/screens/PaperV2/PaperV2.module.css:37-47",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:42-52",
+    "block_editor": false,
+    "format": "css",
+    "lines": 11,
+    "tokens": 64
+   },
+   {
+    "a": "src/screens/Setup/Wizard.module.css:84-90",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:272-278",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 60
+   },
+   {
+    "a": "src/screens/Setup/Wizard.module.css:84-90",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:69-75",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 60
+   }
+  ],
+  "clones": 40,
+  "duplicated_lines": 371,
+  "include_block_editor": true,
+  "lines": 16542,
+  "min_tokens": 50,
+  "percentage_lines": 2.243,
+  "percentage_tokens": 2.193,
+  "sources": 105,
+  "version": "5.4.2"
+ },
+ "jscpd_without_block_editor": {
+  "clone_list": [
+   {
+    "a": "src/api/mvp.ts:205-217",
+    "b": "src/api/mvp.ts:489-501",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 13,
+    "tokens": 56
+   },
+   {
+    "a": "src/charts/geometry/lineChart.ts:80-85",
+    "b": "src/charts/geometry/mvpAxis.ts:5-10",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 6,
+    "tokens": 76
+   },
+   {
+    "a": "src/components/Badges.module.css:3-11",
+    "b": "src/components/Chips.module.css:3-11",
+    "block_editor": false,
+    "format": "css",
+    "lines": 9,
+    "tokens": 67
+   },
+   {
+    "a": "src/components/Badges.module.css:3-8",
+    "b": "src/components/Tags.module.css:3-8",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 53
+   },
+   {
+    "a": "src/components/Field.module.css:84-89",
+    "b": "src/components/graph/Graph.module.css:32-37",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 51
+   },
+   {
+    "a": "src/components/Field.tsx:21-32",
+    "b": "src/components/Field.tsx:64-75",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 12,
+    "tokens": 82
+   },
+   {
+    "a": "src/graph/layout.ts:347-352",
+    "b": "src/graph/layout.ts:358-363",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 6,
+    "tokens": 52
+   },
+   {
+    "a": "src/graph/layout.ts:424-431",
+    "b": "src/graph/layout.ts:518-525",
+    "block_editor": false,
+    "format": "typescript",
+    "lines": 8,
+    "tokens": 89
+   },
+   {
+    "a": "src/screens/Auth/RecoverScreen.tsx:22-27",
+    "b": "src/screens/Settings/PasswordScreen.tsx:15-20",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 6,
+    "tokens": 62
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:134-140",
+    "b": "src/screens/BacktestV2/BacktestV2.module.css:191-197",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:134-140",
+    "b": "src/screens/BacktestV2/BacktestV2.module.css:204-210",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:18-33",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:33-48",
+    "block_editor": false,
+    "format": "css",
+    "lines": 16,
+    "tokens": 78
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:24-33",
+    "b": "src/screens/PaperV2/PaperV2.module.css:34-43",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 53
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:30-42",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:82-94",
+    "block_editor": false,
+    "format": "css",
+    "lines": 13,
+    "tokens": 74
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/PaperV2/PaperV2.module.css:138-147",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/PaperV2/PaperV2.module.css:187-196",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/Setup/Wizard.module.css:75-84",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:49-58",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:208-217",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 59
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2.module.css:71-76",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:232-237",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 52
+   },
+   {
+    "a": "src/screens/BacktestV2/BacktestV2Screen.tsx:228-236",
+    "b": "src/screens/PaperV2/PaperV2.tsx:384-392",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 9,
+    "tokens": 61
+   },
+   {
+    "a": "src/screens/Live/Live.module.css:10-19",
+    "b": "src/screens/PaperV2/PaperV2.module.css:114-123",
+    "block_editor": false,
+    "format": "css",
+    "lines": 10,
+    "tokens": 53
+   },
+   {
+    "a": "src/screens/Live/LiveScreens.tsx:193-200",
+    "b": "src/screens/Live/LiveScreens.tsx:211-218",
+    "block_editor": false,
+    "format": "tsx",
+    "lines": 8,
+    "tokens": 75
+   },
+   {
+    "a": "src/screens/PaperV2/PaperV2.module.css:18-31",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:123-136",
+    "block_editor": false,
+    "format": "css",
+    "lines": 14,
+    "tokens": 70
+   },
+   {
+    "a": "src/screens/PaperV2/PaperV2.module.css:225-235",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:175-185",
+    "block_editor": false,
+    "format": "css",
+    "lines": 11,
+    "tokens": 56
+   },
+   {
+    "a": "src/screens/PaperV2/PaperV2.module.css:37-47",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:42-52",
+    "block_editor": false,
+    "format": "css",
+    "lines": 11,
+    "tokens": 64
+   },
+   {
+    "a": "src/screens/Setup/Wizard.module.css:84-90",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:272-278",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 60
+   },
+   {
+    "a": "src/screens/Setup/Wizard.module.css:84-90",
+    "b": "src/screens/StrategiesV2/StrategiesV2.module.css:69-75",
+    "block_editor": false,
+    "format": "css",
+    "lines": 7,
+    "tokens": 60
+   },
+   {
+    "a": "src/screens/Setup/Wizard.module.css:87-92",
+    "b": "src/screens/Setup/Wizard.module.css:162-167",
+    "block_editor": false,
+    "format": "css",
+    "lines": 6,
+    "tokens": 51
+   }
+  ],
+  "clones": 28,
+  "duplicated_lines": 254,
+  "include_block_editor": false,
+  "lines": 13864,
+  "min_tokens": 50,
+  "percentage_lines": 1.832,
+  "percentage_tokens": 1.79,
+  "sources": 98,
+  "version": "5.4.2"
+ },
+ "lines": {
+  "by_ext": {
+   "css": {
+    "deleted_files": 6,
+    "deleted_lines": 313,
+    "kept_files": 25,
+    "kept_lines": 4543
+   },
+   "json": {
+    "deleted_files": 1,
+    "deleted_lines": 1,
+    "kept_files": 1,
+    "kept_lines": 489
+   },
+   "ts": {
+    "deleted_files": 12,
+    "deleted_lines": 2437,
+    "kept_files": 38,
+    "kept_lines": 3921
+   },
+   "tsx": {
+    "deleted_files": 10,
+    "deleted_lines": 689,
+    "kept_files": 35,
+    "kept_lines": 7200
+   }
+  },
+  "deleted_list": [
+   "src/graph/layout.ts",
+   "src/graph/rules.ts",
+   "src/graph/text.ts",
+   "src/components/graph/GraphView.tsx",
+   "src/components/graph/PathsPanel.tsx",
+   "src/components/graph/Graph.module.css",
+   "src/copy/editor.ts",
+   "src/copy/graph.ts",
+   "src/copy/particles.ts",
+   "src/components/Badges.tsx",
+   "src/components/Badges.module.css",
+   "src/components/Chips.tsx",
+   "src/components/Chips.module.css",
+   "src/components/Dots.tsx",
+   "src/components/StageIcon.tsx",
+   "src/components/StageIcon.module.css",
+   "src/components/Text.tsx",
+   "src/components/Text.module.css",
+   "src/components/Toast.tsx",
+   "src/components/Toast.module.css",
+   "src/lib/money.ts",
+   "src/lib/runDates.ts",
+   "src/screens/LoadError.tsx",
+   "src/api/mvp.ts",
+   "tests/graphMirror.test.ts",
+   "tests/particles.test.ts",
+   "tests/money.test.tsx",
+   "tests/runDates.test.ts",
+   "tests/fixtures/graph_cases.json",
+   "public/flags/kr.svg",
+   "public/flags/us.svg",
+   "public/licenses/flag-icons-MIT.txt"
+  ],
+  "deleted_present": 32,
+  "files": 128,
+  "files_deleted": 29,
+  "files_kept": 99,
+  "lines": 19593,
+  "lines_deleted": 3440,
+  "lines_kept": 16153,
+  "per_file": {
+   "src/api/client.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 174
+   },
+   "src/api/live.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 135
+   },
+   "src/api/mvp.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 606
+   },
+   "src/api/settingsV2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 103
+   },
+   "src/api/v2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 380
+   },
+   "src/charts/LineChart.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 158
+   },
+   "src/charts/charts.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 358
+   },
+   "src/charts/geometry/lineChart.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 222
+   },
+   "src/charts/geometry/mvpAxis.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 20
+   },
+   "src/charts/geometry/scale.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 84
+   },
+   "src/charts/useElementWidth.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 27
+   },
+   "src/components/Badges.module.css": {
+    "ext": "css",
+    "kept": false,
+    "lines": 20
+   },
+   "src/components/Badges.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 12
+   },
+   "src/components/Box.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 63
+   },
+   "src/components/Box.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 62
+   },
+   "src/components/Buttons.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 74
+   },
+   "src/components/Buttons.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 136
+   },
+   "src/components/Card.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 53
+   },
+   "src/components/Card.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 56
+   },
+   "src/components/Chips.module.css": {
+    "ext": "css",
+    "kept": false,
+    "lines": 38
+   },
+   "src/components/Chips.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 45
+   },
+   "src/components/ConfirmHost.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 93
+   },
+   "src/components/Controls.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 45
+   },
+   "src/components/Controls.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 42
+   },
+   "src/components/Dots.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 17
+   },
+   "src/components/Field.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 104
+   },
+   "src/components/Field.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 93
+   },
+   "src/components/Header.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 81
+   },
+   "src/components/Header.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 60
+   },
+   "src/components/MenuRow.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 24
+   },
+   "src/components/MenuRow.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 18
+   },
+   "src/components/Nav.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 68
+   },
+   "src/components/Nav.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 62
+   },
+   "src/components/Sheet.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 68
+   },
+   "src/components/Sheet.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 63
+   },
+   "src/components/StageIcon.module.css": {
+    "ext": "css",
+    "kept": false,
+    "lines": 21
+   },
+   "src/components/StageIcon.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 40
+   },
+   "src/components/Tags.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 73
+   },
+   "src/components/Tags.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 70
+   },
+   "src/components/Text.module.css": {
+    "ext": "css",
+    "kept": false,
+    "lines": 56
+   },
+   "src/components/Text.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 66
+   },
+   "src/components/Toast.module.css": {
+    "ext": "css",
+    "kept": false,
+    "lines": 37
+   },
+   "src/components/Toast.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 30
+   },
+   "src/components/graph/Graph.module.css": {
+    "ext": "css",
+    "kept": false,
+    "lines": 141
+   },
+   "src/components/graph/GraphView.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 159
+   },
+   "src/components/graph/PathsPanel.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 229
+   },
+   "src/copy.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 84
+   },
+   "src/copy/auth.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 61
+   },
+   "src/copy/backtestV2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 41
+   },
+   "src/copy/blockEditor.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 223
+   },
+   "src/copy/confirm.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 9
+   },
+   "src/copy/editor.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 285
+   },
+   "src/copy/graph.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 75
+   },
+   "src/copy/live.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 156
+   },
+   "src/copy/paperV2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 48
+   },
+   "src/copy/particles.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 36
+   },
+   "src/copy/settings.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 70
+   },
+   "src/copy/settingsV2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 109
+   },
+   "src/copy/setupV2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 133
+   },
+   "src/copy/strategyV2.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 68
+   },
+   "src/copy/terms.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 61
+   },
+   "src/graph/layout.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 608
+   },
+   "src/graph/rules.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 496
+   },
+   "src/graph/text.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 92
+   },
+   "src/lib/format.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 222
+   },
+   "src/lib/money.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 37
+   },
+   "src/lib/runDates.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 48
+   },
+   "src/lib/useMedia.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 29
+   },
+   "src/lib/when.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 19
+   },
+   "src/main.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 36
+   },
+   "src/routes.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 179
+   },
+   "src/screens/Auth/Auth.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 56
+   },
+   "src/screens/Auth/LoginScreen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 122
+   },
+   "src/screens/Auth/RecoverScreen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 126
+   },
+   "src/screens/Auth/RecoveryCode.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 50
+   },
+   "src/screens/BacktestV2/BacktestV2.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 226
+   },
+   "src/screens/BacktestV2/BacktestV2Screen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 270
+   },
+   "src/screens/BlockEditor/AddMenu.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 120
+   },
+   "src/screens/BlockEditor/BlockCard.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 391
+   },
+   "src/screens/BlockEditor/BlockEditor.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 671
+   },
+   "src/screens/BlockEditor/BlockEditorScreen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 798
+   },
+   "src/screens/BlockEditor/SidePanel.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 394
+   },
+   "src/screens/BlockEditor/StageGlyph.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 26
+   },
+   "src/screens/BlockEditor/model.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 278
+   },
+   "src/screens/Live/Live.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 175
+   },
+   "src/screens/Live/LiveScreens.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 787
+   },
+   "src/screens/LoadError.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 22
+   },
+   "src/screens/NotFoundScreen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 15
+   },
+   "src/screens/PaperV2/PaperV2.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 245
+   },
+   "src/screens/PaperV2/PaperV2.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 444
+   },
+   "src/screens/Settings/Connect.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 120
+   },
+   "src/screens/Settings/ConnectScreen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 513
+   },
+   "src/screens/Settings/PasswordScreen.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 90
+   },
+   "src/screens/Settings/SettingsV2.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 414
+   },
+   "src/screens/Setup/SetupSteps.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 662
+   },
+   "src/screens/Setup/Wizard.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 221
+   },
+   "src/screens/Setup/Wizard.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 153
+   },
+   "src/screens/StrategiesV2/StrategiesV2.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 314
+   },
+   "src/screens/StrategiesV2/StrategiesV2.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 469
+   },
+   "src/shell/AppShell.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 36
+   },
+   "src/shell/AppShell.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 73
+   },
+   "src/shell/Layout.module.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 105
+   },
+   "src/shell/Layout.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 77
+   },
+   "src/shell/page.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 24
+   },
+   "src/styles/global.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 167
+   },
+   "src/styles/mvp.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 86
+   },
+   "src/styles/pretendard.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 924
+   },
+   "src/styles/tokens.css": {
+    "ext": "css",
+    "kept": true,
+    "lines": 186
+   },
+   "tests/blockEditorModel.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 71
+   },
+   "tests/build.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 36
+   },
+   "tests/client.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 80
+   },
+   "tests/components/controls.test.tsx": {
+    "ext": "tsx",
+    "kept": true,
+    "lines": 78
+   },
+   "tests/fixtures/graph_cases.json": {
+    "ext": "json",
+    "kept": false,
+    "lines": 1
+   },
+   "tests/forbiddenWords.json": {
+    "ext": "json",
+    "kept": true,
+    "lines": 489
+   },
+   "tests/forbiddenWords.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 55
+   },
+   "tests/format.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 147
+   },
+   "tests/geometry/chartSeries.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 221
+   },
+   "tests/geometry/lineChart.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 160
+   },
+   "tests/graphMirror.test.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 60
+   },
+   "tests/money.test.tsx": {
+    "ext": "tsx",
+    "kept": false,
+    "lines": 69
+   },
+   "tests/particles.test.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 53
+   },
+   "tests/runDates.test.ts": {
+    "ext": "ts",
+    "kept": false,
+    "lines": 41
+   },
+   "tests/setup.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 29
+   },
+   "tests/styles.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 102
+   },
+   "tests/terms.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 43
+   },
+   "tests/tokens.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 89
+   },
+   "tests/when.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 13
+   },
+   "tests/words.test.ts": {
+    "ext": "ts",
+    "kept": true,
+    "lines": 95
+   }
+  },
+  "src_files": 108,
+  "src_lines": 17661
+ },
+ "same_css": {
+  "group_list": [
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-inline)"
+    ],
+    "rules": [
+     {
+      "selector": ".stack",
+      "where": "src/charts/charts.module.css:13"
+     },
+     {
+      "selector": ".section",
+      "where": "src/components/graph/Graph.module.css:59"
+     },
+     {
+      "selector": ".terms",
+      "where": "src/screens/Auth/Auth.module.css:16"
+     },
+     {
+      "selector": ".stack-inline",
+      "where": "src/styles/mvp.css:71"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "border-radius:var(--radius-control)",
+     "display:inline-flex",
+     "flex:none",
+     "gap:var(--space-tight)",
+     "padding:var(--space-tight) var(--space-inline)",
+     "white-space:nowrap"
+    ],
+    "rules": [
+     {
+      "selector": ".mode",
+      "where": "src/components/Badges.module.css:3"
+     },
+     {
+      "selector": ".chip",
+      "where": "src/components/Chips.module.css:3"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-tight)"
+    ],
+    "rules": [
+     {
+      "selector": ".lines",
+      "where": "src/components/Box.module.css:26"
+     },
+     {
+      "selector": ".head",
+      "where": "src/screens/Auth/Auth.module.css:1"
+     },
+     {
+      "selector": ".stack-tight",
+      "where": "src/styles/mvp.css:77"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-tight)",
+     "min-width:0"
+    ],
+    "rules": [
+     {
+      "selector": ".text",
+      "where": "src/components/MenuRow.module.css:11"
+     },
+     {
+      "selector": ".requiredText",
+      "where": "src/components/graph/Graph.module.css:128"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:flex",
+     "gap:var(--space-inline)"
+    ],
+    "rules": [
+     {
+      "selector": ".done",
+      "where": "src/screens/Auth/Auth.module.css:43"
+     },
+     {
+      "selector": ".step",
+      "where": "src/screens/Settings/Connect.module.css:35"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-16)"
+    ],
+    "rules": [
+     {
+      "selector": ".result",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:116"
+     },
+     {
+      "selector": ".steps",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:614"
+     },
+     {
+      "selector": ".cols",
+      "where": "src/screens/Setup/Wizard.module.css:61"
+     },
+     {
+      "selector": ".detailMain",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:245"
+     },
+     {
+      "selector": ".detailSide",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:266"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "color:var(--text-muted)",
+     "display:inline-flex",
+     "gap:var(--space-4)"
+    ],
+    "rules": [
+     {
+      "selector": ".back",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:14"
+     },
+     {
+      "selector": ".back",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:42"
+     },
+     {
+      "selector": ".back",
+      "where": "src/screens/PaperV2/PaperV2.module.css:147"
+     },
+     {
+      "selector": ".backLink",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:192"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:flex",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".titleRow",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:21"
+     },
+     {
+      "selector": ".cashBox",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:79"
+     },
+     {
+      "selector": ".titleRow",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:49"
+     },
+     {
+      "selector": ".cashBox",
+      "where": "src/screens/PaperV2/PaperV2.module.css:208"
+     },
+     {
+      "selector": ".titleRow",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:36"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "font-size:var(--font-size-24)",
+     "font-weight:var(--font-weight-bold)",
+     "line-height:var(--font-line-32)"
+    ],
+    "rules": [
+     {
+      "selector": ".title",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:27"
+     },
+     {
+      "selector": ".title",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:55"
+     },
+     {
+      "selector": ".title",
+      "where": "src/screens/PaperV2/PaperV2.module.css:37"
+     },
+     {
+      "selector": ".title",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:42"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "background:var(--bg-subtle)",
+     "border-radius:var(--radius-full)",
+     "display:inline-flex",
+     "gap:var(--space-4)",
+     "padding:var(--space-4) var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".chip",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:33"
+     },
+     {
+      "selector": ".chip",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:85"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "background:var(--bg-subtle)",
+     "border-radius:var(--radius-lg)",
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-12)",
+     "padding:var(--space-20)"
+    ],
+    "rules": [
+     {
+      "selector": ".inputCard",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:49"
+     },
+     {
+      "selector": ".past",
+      "where": "src/screens/PaperV2/PaperV2.module.css:138"
+     },
+     {
+      "selector": ".kvCard",
+      "where": "src/screens/PaperV2/PaperV2.module.css:187"
+     },
+     {
+      "selector": ".card",
+      "where": "src/screens/Setup/Wizard.module.css:75"
+     },
+     {
+      "selector": ".confirm",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:208"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-4)"
+    ],
+    "rules": [
+     {
+      "selector": ".field",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:64"
+     },
+     {
+      "selector": ".field",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:638"
+     },
+     {
+      "selector": ".kv",
+      "where": "src/screens/Live/Live.module.css:66"
+     },
+     {
+      "selector": ".field",
+      "where": "src/screens/PaperV2/PaperV2.module.css:202"
+     },
+     {
+      "selector": ".head",
+      "where": "src/screens/Setup/Wizard.module.css:47"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-wrap:wrap",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".chips",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:85"
+     },
+     {
+      "selector": ".chips",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:79"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "gap:var(--space-8)",
+     "justify-content:space-between"
+    ],
+    "rules": [
+     {
+      "selector": ".paletteName",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:138"
+     },
+     {
+      "selector": ".kv",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:461"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "background:var(--color-overlay-1)",
+     "display:flex",
+     "inset:0",
+     "justify-content:center",
+     "position:fixed",
+     "z-index:50"
+    ],
+    "rules": [
+     {
+      "selector": ".dialogBack",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:573"
+     },
+     {
+      "selector": ".back",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:122"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "border-radius:var(--radius-sm)",
+     "border:1px solid var(--border-default)",
+     "font:inherit",
+     "padding:var(--space-12)",
+     "width:100%"
+    ],
+    "rules": [
+     {
+      "selector": ".input",
+      "where": "src/screens/BlockEditor/BlockEditor.module.css:649"
+     },
+     {
+      "selector": ".input",
+      "where": "src/screens/PaperV2/PaperV2.module.css:214"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "font-size:var(--font-size-32)",
+     "font-weight:var(--font-weight-bold)",
+     "line-height:var(--font-line-40)"
+    ],
+    "rules": [
+     {
+      "selector": ".big",
+      "where": "src/screens/Live/Live.module.css:13"
+     },
+     {
+      "selector": ".big",
+      "where": "src/screens/PaperV2/PaperV2.module.css:117"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "background:var(--accent-default)",
+     "border-color:var(--accent-default)",
+     "color:var(--text-inverse)"
+    ],
+    "rules": [
+     {
+      "selector": ".filterOn",
+      "where": "src/screens/Live/Live.module.css:138"
+     },
+     {
+      "selector": ".tabOn",
+      "where": "src/screens/PaperV2/PaperV2.module.css:169"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:grid",
+     "gap:var(--space-12)",
+     "grid-template-columns:1fr 1fr"
+    ],
+    "rules": [
+     {
+      "selector": ".grid2",
+      "where": "src/screens/Live/Live.module.css:72"
+     },
+     {
+      "selector": ".grid4",
+      "where": "src/screens/Live/Live.module.css:78"
+     },
+     {
+      "selector": ".blockGrid",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:260"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:flex",
+     "gap:var(--space-12)",
+     "justify-content:space-between"
+    ],
+    "rules": [
+     {
+      "selector": ".rowBetween",
+      "where": "src/screens/PaperV2/PaperV2.module.css:70"
+     },
+     {
+      "selector": ".switchRow",
+      "where": "src/screens/Setup/Wizard.module.css:199"
+     },
+     {
+      "selector": ".rowBetween",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:29"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:inline-flex",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".chips",
+      "where": "src/screens/PaperV2/PaperV2.module.css:77"
+     },
+     {
+      "selector": ".stageName",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:310"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:flex-start",
+     "display:flex",
+     "gap:var(--space-inline)"
+    ],
+    "rules": [
+     {
+      "selector": ".status",
+      "where": "src/screens/Settings/Connect.module.css:1"
+     },
+     {
+      "selector": ".howStep",
+      "where": "src/screens/Settings/Connect.module.css:112"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:flex-start",
+     "display:flex",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".howItem",
+      "where": "src/screens/Setup/Wizard.module.css:110"
+     },
+     {
+      "selector": ".status",
+      "where": "src/screens/Setup/Wizard.module.css:126"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-block)"
+    ],
+    "rules": [
+     {
+      "selector": ".split",
+      "where": "src/shell/Layout.module.css:45"
+     },
+     {
+      "selector": ".stack-block",
+      "where": "src/styles/mvp.css:59"
+     }
+    ]
+   }
+  ],
+  "groups": 24,
+  "include_block_editor": true,
+  "min_decls": 3,
+  "rules": 591,
+  "rules_in_groups": 69
+ },
+ "same_css_without_block_editor": {
+  "group_list": [
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-inline)"
+    ],
+    "rules": [
+     {
+      "selector": ".stack",
+      "where": "src/charts/charts.module.css:13"
+     },
+     {
+      "selector": ".section",
+      "where": "src/components/graph/Graph.module.css:59"
+     },
+     {
+      "selector": ".terms",
+      "where": "src/screens/Auth/Auth.module.css:16"
+     },
+     {
+      "selector": ".stack-inline",
+      "where": "src/styles/mvp.css:71"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "border-radius:var(--radius-control)",
+     "display:inline-flex",
+     "flex:none",
+     "gap:var(--space-tight)",
+     "padding:var(--space-tight) var(--space-inline)",
+     "white-space:nowrap"
+    ],
+    "rules": [
+     {
+      "selector": ".mode",
+      "where": "src/components/Badges.module.css:3"
+     },
+     {
+      "selector": ".chip",
+      "where": "src/components/Chips.module.css:3"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-tight)"
+    ],
+    "rules": [
+     {
+      "selector": ".lines",
+      "where": "src/components/Box.module.css:26"
+     },
+     {
+      "selector": ".head",
+      "where": "src/screens/Auth/Auth.module.css:1"
+     },
+     {
+      "selector": ".stack-tight",
+      "where": "src/styles/mvp.css:77"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-tight)",
+     "min-width:0"
+    ],
+    "rules": [
+     {
+      "selector": ".text",
+      "where": "src/components/MenuRow.module.css:11"
+     },
+     {
+      "selector": ".requiredText",
+      "where": "src/components/graph/Graph.module.css:128"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:flex",
+     "gap:var(--space-inline)"
+    ],
+    "rules": [
+     {
+      "selector": ".done",
+      "where": "src/screens/Auth/Auth.module.css:43"
+     },
+     {
+      "selector": ".step",
+      "where": "src/screens/Settings/Connect.module.css:35"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-16)"
+    ],
+    "rules": [
+     {
+      "selector": ".result",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:116"
+     },
+     {
+      "selector": ".cols",
+      "where": "src/screens/Setup/Wizard.module.css:61"
+     },
+     {
+      "selector": ".detailMain",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:245"
+     },
+     {
+      "selector": ".detailSide",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:266"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "color:var(--text-muted)",
+     "display:inline-flex",
+     "gap:var(--space-4)"
+    ],
+    "rules": [
+     {
+      "selector": ".back",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:14"
+     },
+     {
+      "selector": ".back",
+      "where": "src/screens/PaperV2/PaperV2.module.css:147"
+     },
+     {
+      "selector": ".backLink",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:192"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:flex",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".titleRow",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:21"
+     },
+     {
+      "selector": ".cashBox",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:79"
+     },
+     {
+      "selector": ".cashBox",
+      "where": "src/screens/PaperV2/PaperV2.module.css:208"
+     },
+     {
+      "selector": ".titleRow",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:36"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "font-size:var(--font-size-24)",
+     "font-weight:var(--font-weight-bold)",
+     "line-height:var(--font-line-32)"
+    ],
+    "rules": [
+     {
+      "selector": ".title",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:27"
+     },
+     {
+      "selector": ".title",
+      "where": "src/screens/PaperV2/PaperV2.module.css:37"
+     },
+     {
+      "selector": ".title",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:42"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "background:var(--bg-subtle)",
+     "border-radius:var(--radius-full)",
+     "display:inline-flex",
+     "gap:var(--space-4)",
+     "padding:var(--space-4) var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".chip",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:33"
+     },
+     {
+      "selector": ".chip",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:85"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "background:var(--bg-subtle)",
+     "border-radius:var(--radius-lg)",
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-12)",
+     "padding:var(--space-20)"
+    ],
+    "rules": [
+     {
+      "selector": ".inputCard",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:49"
+     },
+     {
+      "selector": ".past",
+      "where": "src/screens/PaperV2/PaperV2.module.css:138"
+     },
+     {
+      "selector": ".kvCard",
+      "where": "src/screens/PaperV2/PaperV2.module.css:187"
+     },
+     {
+      "selector": ".card",
+      "where": "src/screens/Setup/Wizard.module.css:75"
+     },
+     {
+      "selector": ".confirm",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:208"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-4)"
+    ],
+    "rules": [
+     {
+      "selector": ".field",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:64"
+     },
+     {
+      "selector": ".kv",
+      "where": "src/screens/Live/Live.module.css:66"
+     },
+     {
+      "selector": ".field",
+      "where": "src/screens/PaperV2/PaperV2.module.css:202"
+     },
+     {
+      "selector": ".head",
+      "where": "src/screens/Setup/Wizard.module.css:47"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-wrap:wrap",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".chips",
+      "where": "src/screens/BacktestV2/BacktestV2.module.css:85"
+     },
+     {
+      "selector": ".chips",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:79"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "font-size:var(--font-size-32)",
+     "font-weight:var(--font-weight-bold)",
+     "line-height:var(--font-line-40)"
+    ],
+    "rules": [
+     {
+      "selector": ".big",
+      "where": "src/screens/Live/Live.module.css:13"
+     },
+     {
+      "selector": ".big",
+      "where": "src/screens/PaperV2/PaperV2.module.css:117"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "background:var(--accent-default)",
+     "border-color:var(--accent-default)",
+     "color:var(--text-inverse)"
+    ],
+    "rules": [
+     {
+      "selector": ".filterOn",
+      "where": "src/screens/Live/Live.module.css:138"
+     },
+     {
+      "selector": ".tabOn",
+      "where": "src/screens/PaperV2/PaperV2.module.css:169"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:grid",
+     "gap:var(--space-12)",
+     "grid-template-columns:1fr 1fr"
+    ],
+    "rules": [
+     {
+      "selector": ".grid2",
+      "where": "src/screens/Live/Live.module.css:72"
+     },
+     {
+      "selector": ".grid4",
+      "where": "src/screens/Live/Live.module.css:78"
+     },
+     {
+      "selector": ".blockGrid",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:260"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:flex",
+     "gap:var(--space-12)",
+     "justify-content:space-between"
+    ],
+    "rules": [
+     {
+      "selector": ".rowBetween",
+      "where": "src/screens/PaperV2/PaperV2.module.css:70"
+     },
+     {
+      "selector": ".switchRow",
+      "where": "src/screens/Setup/Wizard.module.css:199"
+     },
+     {
+      "selector": ".rowBetween",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:29"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:center",
+     "display:inline-flex",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".chips",
+      "where": "src/screens/PaperV2/PaperV2.module.css:77"
+     },
+     {
+      "selector": ".stageName",
+      "where": "src/screens/StrategiesV2/StrategiesV2.module.css:310"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:flex-start",
+     "display:flex",
+     "gap:var(--space-inline)"
+    ],
+    "rules": [
+     {
+      "selector": ".status",
+      "where": "src/screens/Settings/Connect.module.css:1"
+     },
+     {
+      "selector": ".howStep",
+      "where": "src/screens/Settings/Connect.module.css:112"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "align-items:flex-start",
+     "display:flex",
+     "gap:var(--space-8)"
+    ],
+    "rules": [
+     {
+      "selector": ".howItem",
+      "where": "src/screens/Setup/Wizard.module.css:110"
+     },
+     {
+      "selector": ".status",
+      "where": "src/screens/Setup/Wizard.module.css:126"
+     }
+    ]
+   },
+   {
+    "decls": [
+     "display:flex",
+     "flex-direction:column",
+     "gap:var(--space-block)"
+    ],
+    "rules": [
+     {
+      "selector": ".split",
+      "where": "src/shell/Layout.module.css:45"
+     },
+     {
+      "selector": ".stack-block",
+      "where": "src/styles/mvp.css:59"
+     }
+    ]
+   }
+  ],
+  "groups": 21,
+  "include_block_editor": false,
+  "min_decls": 3,
+  "rules": 504,
+  "rules_in_groups": 58
+ },
+ "same_text": {
+  "dist_count": 4,
+  "dist_files": [
+   "icons-CGOhyes9.js",
+   "index-DdVTMihe.js",
+   "rolldown-runtime-CbXtAM7H.js",
+   "vendor-DGaVXaZu.js"
+  ],
+  "dist_texts": [
+   {
+    "text": "버전 ${String(e)}",
+    "times": 2
+   },
+   {
+    "text": "실전 운용 시작",
+    "times": 3
+   },
+   {
+    "text": "큰 주문 보내기",
+    "times": 2
+   },
+   {
+    "text": "할 일 · 알림",
+    "times": 2
+   }
+  ],
+  "server_web_shared": [
+   {
+    "server": [
+     "app/blocks.py:879"
+    ],
+    "text": "경로가 너무 많아요",
+    "web": [
+     "src/copy/editor.ts:224",
+     "src/copy/graph.ts:29"
+    ]
+   },
+   {
+    "server": [
+     "app/vault.py:62"
+    ],
+    "text": "권리 변동 맞추기",
+    "web": [
+     "src/copy/live.ts:103"
+    ]
+   },
+   {
+    "server": [
+     "app/main.py:457"
+    ],
+    "text": "늘 켜 둔 PC",
+    "web": [
+     "src/copy/setupV2.ts:45"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:173"
+    ],
+    "text": "다음 날 시가 매수",
+    "web": [
+     "src/copy/blockEditor.ts:130"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:796"
+    ],
+    "text": "동일 비중 조건이 있어야 해요",
+    "web": [
+     "src/copy/graph.ts:54"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:60"
+    ],
+    "text": "매도 단계는 매수 단계 뒤에 이어요",
+    "web": [
+     "src/copy/blockEditor.ts:188"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:867"
+    ],
+    "text": "매수까지 연결 안 됨",
+    "web": [
+     "src/copy/editor.ts:139",
+     "src/copy/editor.ts:75",
+     "src/copy/graph.ts:27",
+     "src/copy/graph.ts:68"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:46"
+    ],
+    "text": "목표 비중 리밸런싱",
+    "web": [
+     "src/copy/graph.ts:34"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:896"
+    ],
+    "text": "문제 없음 · 모두 채웠어요",
+    "web": [
+     "src/copy/editor.ts:23"
+    ]
+   },
+   {
+    "server": [
+     "app/datamgmt.py:24"
+    ],
+    "text": "복원하면 새 매수를 멈춘 채 시작해요 · 토스 주문 내역과 맞는지 확인한 뒤 다시 켜요",
+    "web": [
+     "src/copy/settingsV2.ts:73"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:63"
+    ],
+    "text": "비중 단계는 매수 단계에 연결해요",
+    "web": [
+     "src/copy/blockEditor.ts:191"
+    ]
+   },
+   {
+    "server": [
+     "app/connect.py:35"
+    ],
+    "text": "삼성전자 현재가",
+    "web": [
+     "src/copy/settings.ts:47",
+     "src/copy/settings.ts:50"
+    ]
+   },
+   {
+    "server": [
+     "app/vault.py:58"
+    ],
+    "text": "새 매수 다시 켜기",
+    "web": [
+     "src/copy/live.ts:65"
+    ]
+   },
+   {
+    "server": [
+     "app/main.py:457"
+    ],
+    "text": "서버(클라우드 · 고정 IP)",
+    "web": [
+     "src/copy/setupV2.ts:42"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:861"
+    ],
+    "text": "선으로 연결해야 전략에 들어가요",
+    "web": [
+     "src/copy/graph.ts:67"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:64"
+    ],
+    "text": "선이 이미 지나온 조건으로 돌아가면 안 돼요",
+    "web": [
+     "src/copy/blockEditor.ts:193",
+     "src/copy/editor.ts:234",
+     "src/copy/graph.ts:11"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:46"
+    ],
+    "text": "순위 교체 리밸런싱",
+    "web": [
+     "src/copy/graph.ts:35"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:61"
+    ],
+    "text": "신호 · 필터 단계는 매수 단계 앞에 이어요",
+    "web": [
+     "src/copy/blockEditor.ts:189"
+    ]
+   },
+   {
+    "server": [
+     "app/vault.py:54"
+    ],
+    "text": "실전 운용 시작",
+    "web": [
+     "src/copy.ts:44",
+     "src/copy/live.ts:114",
+     "src/copy/live.ts:141"
+    ]
+   },
+   {
+    "server": [
+     "app/datamgmt.py:23"
+    ],
+    "text": "실전 운용 중에는 삭제할 수 없어요 · 먼저 운용을 끝내요",
+    "web": [
+     "src/copy/settingsV2.ts:76"
+    ]
+   },
+   {
+    "server": [
+     "app/copytext.py:32"
+    ],
+    "text": "실험실 결과는 이 앱의 백테스트와 다를 수 있어요 · 숫자는 직접 정해요",
+    "web": [
+     "src/copy/strategyV2.ts:25"
+    ]
+   },
+   {
+    "server": [
+     "app/connect.py:35"
+    ],
+    "text": "액세스 토큰 받기",
+    "web": [
+     "src/copy/settings.ts:50"
+    ]
+   },
+   {
+    "server": [
+     "app/vault.py:75"
+    ],
+    "text": "앱 데이터 삭제",
+    "web": [
+     "src/copy/settingsV2.ts:74",
+     "src/copy/settingsV2.ts:77"
+    ]
+   },
+   {
+    "server": [
+     "app/main.py:294"
+    ],
+    "text": "앱 안에서 문제가 생겼어요 · 다시 해 주세요",
+    "web": [
+     "src/copy.ts:66"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:59"
+    ],
+    "text": "유니버스 단계 앞에는 다른 단계를 연결할 수 없어요",
+    "web": [
+     "src/copy/blockEditor.ts:187"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:65"
+    ],
+    "text": "이미 연결돼 있어요",
+    "web": [
+     "src/copy/blockEditor.ts:194",
+     "src/copy/graph.ts:12"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:69"
+    ],
+    "text": "이어서 연결한 매도 조건은 같은 날 모두 맞아야 해요",
+    "web": [
+     "src/copy/blockEditor.ts:102"
+    ]
+   },
+   {
+    "server": [
+     "app/connect.py:199",
+     "app/telegram.py:249",
+     "app/vault.py:511"
+    ],
+    "text": "잠금 · 비밀번호를 입력하면 다시 실행돼요",
+    "web": [
+     "src/copy/settings.ts:68"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:73"
+    ],
+    "text": "장중 감시 · 조건주문(토스)은 셋이 모두 맞을 때만 골라요 · 단계가 '하나라도 맞으면'이거나 줄이 하나 · ⑤ 매수 바로 뒤 · 뒤에 이어진 ⑥ 매도 없음",
+    "web": [
+     "src/copy/blockEditor.ts:64"
+    ]
+   },
+   {
+    "server": [
+     "app/live.py:1018",
+     "app/live.py:1021",
+     "app/vault.py:60"
+    ],
+    "text": "전부 팔고 끝내기",
+    "web": [
+     "src/copy/live.ts:150"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:46"
+    ],
+    "text": "조건 충족 시 매매",
+    "web": [
+     "src/copy/graph.ts:33"
+    ]
+   },
+   {
+    "server": [
+     "app/catalog.py:30"
+    ],
+    "text": "조건주문(토스)",
+    "web": [
+     "src/copy/blockEditor.ts:58"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:62"
+    ],
+    "text": "종목 선정 단계는 매수 단계 바로 앞에 하나만 놓아요",
+    "web": [
+     "src/copy/blockEditor.ts:190"
+    ]
+   },
+   {
+    "server": [
+     "app/vault.py:63"
+    ],
+    "text": "큰 주문 보내기",
+    "web": [
+     "src/copy/live.ts:104",
+     "src/copy/live.ts:105"
+    ]
+   },
+   {
+    "server": [
+     "app/paper_v2.py:35"
+    ],
+    "text": "평일 20:10에 확인하고 다음 거래일 시가로 모의 체결해요 · 실제 돈은 움직이지 않아요",
+    "web": [
+     "src/copy/strategyV2.ts:59"
+    ]
+   },
+   {
+    "server": [
+     "app/blocks.py:70"
+    ],
+    "text": "하나라도 맞으면 팔려면 같은 단계 안으로 옮겨요",
+    "web": [
+     "src/copy/blockEditor.ts:103"
+    ]
+   }
+  ],
+  "server_web_shared_count": 36,
+  "web_count": 36,
+  "web_count_kept_files_only": 20,
+  "web_occurrences": 84,
+  "web_texts": [
+   {
+    "text": "${String(n)}개",
+    "where": [
+     "src/copy/strategyV2.ts:37",
+     "src/copy/strategyV2.ts:4"
+    ]
+   },
+   {
+    "text": "${String(n)}개 놓음",
+    "where": [
+     "src/copy/blockEditor.ts:32",
+     "src/copy/editor.ts:39"
+    ]
+   },
+   {
+    "text": "${name} 편집",
+    "where": [
+     "src/copy/blockEditor.ts:3",
+     "src/copy/editor.ts:5"
+    ]
+   },
+   {
+    "text": "10만 원 ~ 100억 원",
+    "where": [
+     "src/copy/backtestV2.ts:11",
+     "src/copy/paperV2.ts:43"
+    ]
+   },
+   {
+    "text": "Delete 키로도 삭제해요 · 삭제 뒤 알림에서 되돌리기를 누를 수 있어요",
+    "where": [
+     "src/copy/editor.ts:171",
+     "src/copy/editor.ts:212"
+    ]
+   },
+   {
+    "text": "가상 시작 금액",
+    "where": [
+     "src/copy/paperV2.ts:19",
+     "src/copy/paperV2.ts:42"
+    ]
+   },
+   {
+    "text": "같은 기간 코스피",
+    "where": [
+     "src/copy/backtestV2.ts:24",
+     "src/copy/paperV2.ts:30"
+    ]
+   },
+   {
+    "text": "경로 하나 위의 조건은 모두 맞아야 해요 · 경로끼리는 하나라도 통과하면 돼요",
+    "where": [
+     "src/copy/blockEditor.ts:69",
+     "src/copy/editor.ts:116"
+    ]
+   },
+   {
+    "text": "경로가 너무 많아요",
+    "where": [
+     "src/copy/editor.ts:224",
+     "src/copy/graph.ts:29"
+    ]
+   },
+   {
+    "text": "공개 인터넷에는 열지 않아요",
+    "where": [
+     "src/copy/settingsV2.ts:96",
+     "src/copy/setupV2.ts:73"
+    ]
+   },
+   {
+    "text": "두 비밀번호가 달라요 · 다시 입력해 주세요",
+    "where": [
+     "src/copy/auth.ts:11",
+     "src/copy/settings.ts:13"
+    ]
+   },
+   {
+    "text": "매도 경로 ${String(n)}개",
+    "where": [
+     "src/copy/blockEditor.ts:76",
+     "src/copy/editor.ts:125"
+    ]
+   },
+   {
+    "text": "매수까지 연결 안 됨",
+    "where": [
+     "src/copy/editor.ts:139",
+     "src/copy/editor.ts:75",
+     "src/copy/graph.ts:27",
+     "src/copy/graph.ts:68"
+    ]
+   },
+   {
+    "text": "문제 ${String(n)}개",
+    "where": [
+     "src/copy.ts:73",
+     "src/copy/editor.ts:150"
+    ]
+   },
+   {
+    "text": "버전 ${String(n)}",
+    "where": [
+     "src/copy.ts:70",
+     "src/copy/backtestV2.ts:4",
+     "src/copy/blockEditor.ts:8",
+     "src/copy/live.ts:5",
+     "src/copy/particles.ts:32",
+     "src/copy/strategyV2.ts:51"
+    ]
+   },
+   {
+    "text": "복사한 전략 붙여 넣기",
+    "where": [
+     "src/copy.ts:41",
+     "src/copy/strategyV2.ts:21",
+     "src/copy/strategyV2.ts:26"
+    ]
+   },
+   {
+    "text": "비밀번호 다시 만들기",
+    "where": [
+     "src/copy.ts:33",
+     "src/copy/auth.ts:51"
+    ]
+   },
+   {
+    "text": "비밀번호 만들기",
+    "where": [
+     "src/copy.ts:31",
+     "src/copy/auth.ts:6",
+     "src/copy/setupV2.ts:19",
+     "src/copy/setupV2.ts:8"
+    ]
+   },
+   {
+    "text": "사용 조건 · 앱 정보",
+    "where": [
+     "src/copy/settingsV2.ts:100",
+     "src/copy/settingsV2.ts:25"
+    ]
+   },
+   {
+    "text": "삼성전자 현재가",
+    "where": [
+     "src/copy/settings.ts:47",
+     "src/copy/settings.ts:50"
+    ]
+   },
+   {
+    "text": "새 비밀번호 다시 입력",
+    "where": [
+     "src/copy/auth.ts:57",
+     "src/copy/settings.ts:12"
+    ]
+   },
+   {
+    "text": "선을 따라 한 경로 위의 조건이 모두 맞으면 통과해요 · 경로가 여러 개면 하나라도 통과하면 돼요",
+    "where": [
+     "src/copy/blockEditor.ts:19",
+     "src/copy/editor.ts:61"
+    ]
+   },
+   {
+    "text": "선이 이미 지나온 조건으로 돌아가면 안 돼요",
+    "where": [
+     "src/copy/blockEditor.ts:193",
+     "src/copy/editor.ts:234",
+     "src/copy/graph.ts:11"
+    ]
+   },
+   {
+    "text": "실전 운용 시작",
+    "where": [
+     "src/copy.ts:44",
+     "src/copy/live.ts:114",
+     "src/copy/live.ts:141"
+    ]
+   },
+   {
+    "text": "앱 데이터 삭제",
+    "where": [
+     "src/copy/settingsV2.ts:74",
+     "src/copy/settingsV2.ts:77"
+    ]
+   },
+   {
+    "text": "앱 오류 · 연결 · 컴퓨터 꺼짐으로 주문이 늦거나 안 나갈 수 있어요",
+    "where": [
+     "src/copy/live.ts:135",
+     "src/copy/setupV2.ts:27"
+    ]
+   },
+   {
+    "text": "이 전략의 경로",
+    "where": [
+     "src/copy/blockEditor.ts:68",
+     "src/copy/editor.ts:115"
+    ]
+   },
+   {
+    "text": "이미 연결돼 있어요",
+    "where": [
+     "src/copy/blockEditor.ts:194",
+     "src/copy/graph.ts:12"
+    ]
+   },
+   {
+    "text": "저장하지 않고 나갈까요?",
+    "where": [
+     "src/copy/blockEditor.ts:218",
+     "src/copy/editor.ts:267"
+    ]
+   },
+   {
+    "text": "조건 ${String(n)}개",
+    "where": [
+     "src/copy/editor.ts:136",
+     "src/copy/editor.ts:283"
+    ]
+   },
+   {
+    "text": "진입 경로 ${String(entry)} · 매도 경로 ${String(sell)}",
+    "where": [
+     "src/copy/blockEditor.ts:122",
+     "src/copy/strategyV2.ts:54"
+    ]
+   },
+   {
+    "text": "진입 경로 ${String(n)}개",
+    "where": [
+     "src/copy/blockEditor.ts:72",
+     "src/copy/editor.ts:117"
+    ]
+   },
+   {
+    "text": "큰 주문 보내기",
+    "where": [
+     "src/copy/live.ts:104",
+     "src/copy/live.ts:105"
+    ]
+   },
+   {
+    "text": "편집은 창을 넓혀서 해요",
+    "where": [
+     "src/copy/blockEditor.ts:117",
+     "src/copy/editor.ts:281"
+    ]
+   },
+   {
+    "text": "하나라도 맞으면",
+    "where": [
+     "src/copy/blockEditor.ts:34",
+     "src/copy/blockEditor.ts:77",
+     "src/copy/editor.ts:128"
+    ]
+   },
+   {
+    "text": "할 일 · 알림",
+    "where": [
+     "src/copy.ts:43",
+     "src/copy/live.ts:91"
+    ]
+   }
+  ]
+ },
+ "summary": {
+  "boundary_violations": 42,
+  "boundary_violations_kept": 32,
+  "custom_vars": 38,
+  "custom_vars_without_block_editor": 22,
+  "feature_pairs": 5,
+  "feature_to_shell": 16,
+  "files": 128,
+  "files_deleted": 29,
+  "files_kept": 99,
+  "jscpd_clones": 40,
+  "jscpd_clones_without_block_editor": 28,
+  "jscpd_pct_lines": 2.243,
+  "jscpd_pct_lines_without_block_editor": 1.832,
+  "lib_charts_cycle": true,
+  "lib_to_copy": 2,
+  "lines": 19593,
+  "lines_deleted": 3440,
+  "lines_kept": 16153,
+  "px_literals": 9,
+  "px_literals_without_block_editor": 1,
+  "raw_token_uses": 447,
+  "raw_token_uses_without_block_editor": 264,
+  "same_css_groups": 24,
+  "same_css_groups_without_block_editor": 21,
+  "same_text_dist": 4,
+  "same_text_server_web": 36,
+  "same_text_web": 36,
+  "shell_to_api": 1,
+  "tokens_alias_mismatch": 0,
+  "tokens_css": 180,
+  "tokens_export": 223,
+  "tokens_json": 180,
+  "tokens_unused_export_only": 43,
+  "tokens_value_mismatch": 0
+ },
+ "token_crosscheck": {
+  "alias_mismatch": [],
+  "css_count": 180,
+  "css_not_in_json": [],
+  "export_by_layer": {
+   "component": 40,
+   "primitive": 70,
+   "semantic": 113
+  },
+  "export_count": 223,
+  "export_text_styles": 10,
+  "font_rename_rule": "'Pretendard Variable' → 'Pretendard'",
+  "json_by_layer": {
+   "component": 36,
+   "primitive": 66,
+   "semantic": 78
+  },
+  "json_count": 180,
+  "json_not_in_css": [],
+  "json_not_in_export": [],
+  "layer_mismatch": [],
+  "unused_export_only": 43,
+  "unused_export_only_names": [
+   "bg/inverse",
+   "chart/exposure",
+   "chart/principal",
+   "chart/random-band",
+   "chart/random-median",
+   "flow/canvas",
+   "flow/dot",
+   "flow/line",
+   "flow/line-taken",
+   "font/line/16",
+   "font/size/12",
+   "lab/excess/above",
+   "lab/excess/below",
+   "lab/luck-line",
+   "lab/luck-zone",
+   "lab/map/above",
+   "lab/map/above-strong",
+   "lab/map/above-weak",
+   "lab/map/below",
+   "lab/map/below-strong",
+   "lab/map/current",
+   "lab/mask-bg",
+   "lab/mask-hatch",
+   "lab/period/visible",
+   "lab/ref/bg",
+   "lab/ref/fg",
+   "lab/ref/line",
+   "lab/sealed-hatch",
+   "release/stage-1",
+   "release/stage-1-subtle",
+   "release/stage-2",
+   "release/stage-2-subtle",
+   "release/stage-3",
+   "release/stage-3-subtle",
+   "release/stage-4",
+   "release/stage-4-subtle",
+   "space/40",
+   "space/80",
+   "space/board",
+   "space/canvas",
+   "text/dim",
+   "type/micro-12/line-height",
+   "type/micro-12/size"
+  ],
+  "used_in_json": 180,
+  "value_mismatch": []
+ },
+ "tokens": {
+  "custom_var_hits": [
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 4,
+    "name": "--metric-bg"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 5,
+    "name": "--warn-bg"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 4,
+    "name": "--stage-universe"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 5,
+    "name": "--stage-universe-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 6,
+    "name": "--stage-signal"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 7,
+    "name": "--stage-signal-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 8,
+    "name": "--stage-filter"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 9,
+    "name": "--stage-filter-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 10,
+    "name": "--stage-select"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 11,
+    "name": "--stage-select-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 12,
+    "name": "--stage-buy"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 13,
+    "name": "--stage-buy-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 14,
+    "name": "--stage-sell"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 15,
+    "name": "--stage-sell-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 16,
+    "name": "--stage-weight"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 17,
+    "name": "--stage-weight-ink"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 18,
+    "name": "--summary-ok"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 19,
+    "name": "--summary-bad"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 4,
+    "name": "--card-line"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 27,
+    "name": "--chip-bg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 4,
+    "name": "--paper-dash"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 5,
+    "name": "--chip-on-bg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 6,
+    "name": "--diff-bg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 16,
+    "name": "--diff-bg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 17,
+    "name": "--chip-warn-bg"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 4,
+    "name": "--bar-off"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 5,
+    "name": "--step-bg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 4,
+    "name": "--chip-live-bg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 5,
+    "name": "--chip-live-ink"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 6,
+    "name": "--chip-paper-bg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 7,
+    "name": "--chip-bad-bg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 8,
+    "name": "--chip-bad-ink"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 9,
+    "name": "--chip-warn-bg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 19,
+    "name": "--chip-warn-bg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 20,
+    "name": "--chip-bad-bg"
+   },
+   {
+    "file": "src/components/Badges.module.css",
+    "line": 15,
+    "name": "--edge"
+   },
+   {
+    "file": "src/components/Box.module.css",
+    "line": 14,
+    "name": "--box-icon"
+   },
+   {
+    "file": "src/components/Header.module.css",
+    "line": 72,
+    "name": "--live-chip-bg"
+   }
+  ],
+  "custom_vars": {
+   "all": 38,
+   "by_file_without_block_editor": {
+    "src/components/Badges.module.css": 1,
+    "src/components/Box.module.css": 1,
+    "src/components/Header.module.css": 1,
+    "src/screens/BacktestV2/BacktestV2.module.css": 2,
+    "src/screens/Live/Live.module.css": 2,
+    "src/screens/PaperV2/PaperV2.module.css": 5,
+    "src/screens/Setup/Wizard.module.css": 2,
+    "src/screens/StrategiesV2/StrategiesV2.module.css": 8
+   },
+   "without_block_editor": 22
+  },
+  "primitive_tokens": 66,
+  "px_literal_hits": [
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 364,
+    "prop": "top",
+    "value": "14px"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 374,
+    "prop": "left",
+    "value": "-7px"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 378,
+    "prop": "right",
+    "value": "-7px"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 601,
+    "prop": "top",
+    "value": "56px"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditorScreen.tsx",
+    "line": 581,
+    "prop": "left",
+    "value": "152"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditorScreen.tsx",
+    "line": 581,
+    "prop": "top",
+    "value": "156"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditorScreen.tsx",
+    "line": 588,
+    "prop": "left",
+    "value": "608"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditorScreen.tsx",
+    "line": 588,
+    "prop": "top",
+    "value": "156"
+   },
+   {
+    "file": "src/components/Controls.module.css",
+    "line": 30,
+    "prop": "border-radius",
+    "value": "6px"
+   }
+  ],
+  "px_literals": {
+   "all": 9,
+   "by_file_without_block_editor": {
+    "src/components/Controls.module.css": 1
+   },
+   "without_block_editor": 1
+  },
+  "raw_token_hits": [
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 5,
+    "token": "--color-amber-0"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 8,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 9,
+    "token": "--size-1200"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 11,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 11,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 17,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 24,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 28,
+    "token": "--font-size-24"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 29,
+    "token": "--font-line-32"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 30,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 36,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 37,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 37,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 38,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 45,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 52,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 53,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 54,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 61,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 67,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 72,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 73,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 74,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 82,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 88,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 92,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 92,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 94,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 110,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 111,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 112,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 119,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 131,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 137,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 138,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 139,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 152,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 153,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 159,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 171,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 172,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 177,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 177,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 179,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 194,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 195,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 196,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 207,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 208,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 209,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BacktestV2/BacktestV2.module.css",
+    "line": 215,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 4,
+    "token": "--color-teal-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 5,
+    "token": "--color-teal-2"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 6,
+    "token": "--color-teal-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 7,
+    "token": "--color-teal-2"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 8,
+    "token": "--color-neutral-2"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 9,
+    "token": "--color-neutral-7"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 10,
+    "token": "--color-neutral-2"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 11,
+    "token": "--color-neutral-7"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 12,
+    "token": "--color-accent-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 13,
+    "token": "--color-accent-1"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 14,
+    "token": "--color-accent-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 15,
+    "token": "--color-accent-1"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 16,
+    "token": "--color-orange-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 17,
+    "token": "--color-orange-2"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 18,
+    "token": "--color-green-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 19,
+    "token": "--color-red-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 30,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 31,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 31,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 38,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 45,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 52,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 56,
+    "token": "--font-size-24"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 57,
+    "token": "--font-line-32"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 58,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 64,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 65,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 65,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 67,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 73,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 80,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 86,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 87,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 87,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 88,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 113,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 114,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 114,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 122,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 123,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 123,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 123,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 123,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 124,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 141,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 156,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 157,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 162,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 167,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 173,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 174,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 174,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 176,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 187,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 188,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 188,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 190,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 214,
+    "token": "--color-neutral-5"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 231,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 232,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 248,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 250,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 251,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 251,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 258,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 259,
+    "token": "--font-size-17"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 260,
+    "token": "--font-weight-semibold"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 265,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 266,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 267,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 269,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 275,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 276,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 276,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 276,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 283,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 284,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 285,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 299,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 300,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 300,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 301,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 303,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 308,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 310,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 313,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 319,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 320,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 321,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 323,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 329,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 335,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 336,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 336,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 338,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 340,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 346,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 347,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 347,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 349,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 350,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 351,
+    "token": "--font-weight-semibold"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 357,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 358,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 358,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 367,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 368,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 387,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 390,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 391,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 397,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 398,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 402,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 403,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 403,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 405,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 412,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 413,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 413,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 418,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 418,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 423,
+    "token": "--font-size-17"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 424,
+    "token": "--font-weight-semibold"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 430,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 431,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 441,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 442,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 443,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 450,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 451,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 452,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 464,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 469,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 470,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 472,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 483,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 484,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 484,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 485,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 486,
+    "token": "--color-amber-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 493,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 494,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 504,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 506,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 512,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 512,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 514,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 522,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 523,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 535,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 535,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 535,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 535,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 549,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 551,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 558,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 560,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 560,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 567,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 568,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 569,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 570,
+    "token": "--color-amber-0"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 580,
+    "token": "--color-overlay-1"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 586,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 588,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 589,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 596,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 606,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 608,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 610,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 617,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 623,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 632,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 635,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 641,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 646,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 651,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 653,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 660,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 661,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 667,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 668,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/BlockEditor/BlockEditor.module.css",
+    "line": 670,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 7,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 8,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 10,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 14,
+    "token": "--font-size-32"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 15,
+    "token": "--font-line-40"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 16,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 23,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 27,
+    "token": "--color-neutral-3"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 30,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 30,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 31,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 44,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 44,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 45,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 63,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 69,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 75,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 81,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 87,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 98,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 99,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 117,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 119,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 131,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 131,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 133,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 147,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 148,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Live/Live.module.css",
+    "line": 155,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 4,
+    "token": "--color-accent-2"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 5,
+    "token": "--color-neutral-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 6,
+    "token": "--color-neutral-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 9,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 10,
+    "token": "--size-1200"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 12,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 12,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 16,
+    "token": "--color-neutral-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 17,
+    "token": "--color-amber-0"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 24,
+    "token": "--color-overlay-1"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 30,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 32,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 33,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 38,
+    "token": "--font-size-24"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 39,
+    "token": "--font-line-32"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 40,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 58,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 64,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 65,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 67,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 74,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 80,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 84,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 84,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 85,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 99,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 99,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 101,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 108,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 113,
+    "token": "--font-size-24"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 114,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 118,
+    "token": "--font-size-32"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 119,
+    "token": "--font-line-40"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 120,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 125,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 132,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 133,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 134,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 141,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 142,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 143,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 150,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 157,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 158,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 158,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 159,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 164,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 164,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 166,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 178,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 184,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 190,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 191,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 192,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 197,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 199,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 205,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 211,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 216,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 218,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 225,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 226,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 227,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/PaperV2/PaperV2.module.css",
+    "line": 237,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 4,
+    "token": "--color-neutral-3"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 5,
+    "token": "--color-accent-0"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 8,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 10,
+    "token": "--size-1200"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 12,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 12,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 18,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 23,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 34,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 38,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 39,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 50,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 64,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 71,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 78,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 79,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 80,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 87,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 88,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 90,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 98,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 104,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 113,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 120,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 121,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 129,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 146,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 156,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 162,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 163,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 165,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 178,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 188,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 194,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 203,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 208,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 208,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 208,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/Setup/Wizard.module.css",
+    "line": 215,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 4,
+    "token": "--color-green-0"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 5,
+    "token": "--color-green-1"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 6,
+    "token": "--color-neutral-4"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 7,
+    "token": "--color-red-0"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 8,
+    "token": "--color-red-1"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 9,
+    "token": "--color-amber-0"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 12,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 13,
+    "token": "--size-1200"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 15,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 15,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 19,
+    "token": "--color-amber-0"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 20,
+    "token": "--color-red-0"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 23,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 26,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 26,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 33,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 39,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 43,
+    "token": "--font-size-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 44,
+    "token": "--font-line-32"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 45,
+    "token": "--font-weight-bold"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 54,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 60,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 66,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 72,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 73,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 75,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 82,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 88,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 89,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 89,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 90,
+    "token": "--radius-full"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 116,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 117,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 118,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 129,
+    "token": "--color-overlay-1"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 135,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 137,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 138,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 146,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 147,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 149,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 163,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 175,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 176,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 177,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 186,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 187,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 195,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 201,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 202,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 203,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 205,
+    "token": "--font-size-13"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 211,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 212,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 213,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 225,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 226,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 226,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 232,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 233,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 234,
+    "token": "--color-neutral-6"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 235,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 242,
+    "token": "--space-24"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 248,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 254,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 255,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 256,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 263,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 269,
+    "token": "--space-16"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 275,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 276,
+    "token": "--space-20"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 278,
+    "token": "--radius-lg"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 285,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 285,
+    "token": "--space-12"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 290,
+    "token": "--radius-sm"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 296,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/screens/StrategiesV2/StrategiesV2.module.css",
+    "line": 313,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/components/Header.module.css",
+    "line": 72,
+    "token": "--color-neutral-3"
+   },
+   {
+    "file": "src/components/Header.module.css",
+    "line": 73,
+    "token": "--space-4"
+   },
+   {
+    "file": "src/components/Header.module.css",
+    "line": 73,
+    "token": "--space-8"
+   },
+   {
+    "file": "src/components/Header.module.css",
+    "line": 74,
+    "token": "--radius-full"
+   }
+  ],
+  "raw_token_uses": {
+   "all": 447,
+   "by_file_without_block_editor": {
+    "src/components/Header.module.css": 4,
+    "src/screens/BacktestV2/BacktestV2.module.css": 51,
+    "src/screens/Live/Live.module.css": 29,
+    "src/screens/PaperV2/PaperV2.module.css": 64,
+    "src/screens/Setup/Wizard.module.css": 39,
+    "src/screens/StrategiesV2/StrategiesV2.module.css": 77
+   },
+   "without_block_editor": 264
+  }
+ }
+}

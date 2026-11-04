@@ -1,0 +1,24 @@
+{
+ "dist_count": 0,
+ "dist_files": [
+  "dist/assets/icons-CGOhyes9.js",
+  "dist/assets/index-DdVTMihe.js",
+  "dist/assets/rolldown-runtime-CbXtAM7H.js",
+  "dist/assets/vendor-DGaVXaZu.js",
+  "dist/index.html"
+ ],
+ "dist_hits": [],
+ "rules": {
+  "chips": [
+   "예시"
+  ],
+  "headerChips": [
+   "모의투자"
+  ],
+  "source": "web/tests/forbiddenWords.json",
+  "words": 77
+ },
+ "screen_count": 0,
+ "screen_hits": [],
+ "screens": 67
+}
