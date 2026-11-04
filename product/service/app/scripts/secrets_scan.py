@@ -5,7 +5,8 @@
 찾는 꼴(거짓 경보가 적게 좁게):
 - key: 제공사 키 꼴(`sk-…` · `AKIA…` · GitHub `ghp_…` · `github_pat_…` · Slack `xox?-…` · Google `AIza…`) · PEM 개인 키 머리.
 - token: 텔레그램 봇 토큰(`숫자:35자`) · JWT(`eyJ….….…`).
-- account: 10 ~ 12자리 숫자 덩어리(계좌번호 꼴 · 앞뒤에 글자 · 점 · 빗금이 붙은 것은 뺌 · 13자리 ms 시각 · 14자리 DART 접수번호는 안 걸려요).
+- account: 10 ~ 12자리 숫자 덩어리(계좌번호 꼴 · 앞뒤에 글자 · 점 · 빗금이 붙은 것은 뺌 · 13자리 ms 시각 · 14자리 DART 접수번호는 안 걸려요)
+  · 하이픈 꼴(`987-12-345601` · `12345678-01` · 묶음 2 ~ 4개 · 숫자만 세어 10 ~ 14자리 · 날짜 `2026-11-04`(8자리)는 안 걸려요).
 - ip: 공인 IPv4(127/8 · 10/8 · 172.16/12 · 192.168/16 · 169.254/16 · 100.64/10 · 0/8 · 224 이상 · 문서용 192.0.2 · 198.51.100 ·
   203.0.113은 뺌).
 
@@ -54,7 +55,10 @@ PATTERNS: dict[str, re.Pattern[str]] = {
         r"(?<![0-9A-Za-z_-])[0-9]{8,10}:[A-Za-z0-9_-]{35}(?![0-9A-Za-z_-])"
         r"|(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])"
     ),
-    "account": re.compile(r"(?<![0-9A-Za-z_.\-/])[0-9]{10,12}(?![0-9A-Za-z_.\-/])"),
+    "account": re.compile(
+        r"(?<![0-9A-Za-z_.\-/])[0-9]{10,12}(?![0-9A-Za-z_.\-/])"
+        r"|(?<![0-9A-Za-z_.\-/])[0-9]{2,10}(?:-[0-9]{2,10}){1,3}(?![0-9A-Za-z_.\-/])"  # 하이픈 꼴 · 숫자 수는 아래에서 봐요
+    ),
     "ip": re.compile(r"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])"),
 }
 DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")]
@@ -91,6 +95,8 @@ def scan_text(rel: str, text: str) -> list[tuple[str, int, str, str]]:
             for m in pat.finditer(line):
                 value = m.group(0)
                 if kind == "ip" and not _public_ip(value):
+                    continue
+                if kind == "account" and "-" in value and not 10 <= sum(c.isdigit() for c in value) <= 14:
                     continue
                 hits.append((rel, no, kind, value))
     return hits

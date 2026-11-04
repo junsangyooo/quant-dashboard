@@ -5,6 +5,10 @@
 - 옛 경로를 import할 수 없어야 하고(`sys.modules`에 끼워 넣는 꼴도 잡혀요),
 - 앱 · 시험 코드 어디서도 옛 경로를 import하지 않아야 해요(시험의 막기(monkeypatch) 경로가 진짜 모듈에 닿게).
 - 옛 경로에 같은 이름을 내보내는 모듈을 만들면(`from app.새 import 이름` · `이름 = …`) 위 첫 둘에 걸려요.
+- 옛 경로의 부모 패키지 `__init__.py`가 새 경로를 import해 이름을 내보내는 꼴(`app/__init__.py`의 `from app.adapters.publicip
+  import fetch_ip` → `app.fetch_ip`)도 잡아요.
+장치는 **모듈 단위**예요: 옛 경로(모듈)가 있는지 · import되는지 · 쓰이는지를 봐요. 남는 다른 모듈이 새 경로의 이름을 import해 쓰는
+것은 정상이라 보지 않아요(그 모듈이 그 이름을 '다시 내보내는지'는 쓰임과 구별할 수 없어요 · 그런 꼴은 검토에서 봐요).
 목록이 비어 있어도 장치는 돌아요: 아래 `test_mechanism_catches_a_planted_reexport`가 임시 폴더에 옛 경로를 만들어 잡는 것을 보여요.
 """
 
@@ -70,6 +74,12 @@ def reexport_problems(moved: list[tuple[str, str]], root: Path = ROOT) -> list[s
             mods = _imports_of(src)
             if old in mods or any(m.startswith(old + ".") for m in mods):
                 problems.append(f"{src.relative_to(root).as_posix()}: 옛 경로 {old}를 import해요 · {new}를 써요")
+        # 옛 경로의 부모 패키지들(`app` · `app.x`)의 __init__.py가 새 경로를 import하면 패키지 이름으로 다시 내보내는 꼴
+        parts = old.split(".")
+        for i in range(1, len(parts)):
+            init = root / Path(*parts[:i]) / "__init__.py"
+            if init.exists() and any(m == new or m.startswith(new + ".") for m in _imports_of(init)):
+                problems.append(f"{init.relative_to(root).as_posix()}: 패키지가 {new}를 import해 다시 내보내요(옛 경로 {old} 자리)")
     return problems
 
 
@@ -105,3 +115,8 @@ def test_mechanism_catches_a_planted_reexport(tmp_path: Path) -> None:
     (app / "publicip.py").unlink()
     (tests / "test_ip.py").unlink()
     assert reexport_problems([("app.publicip", "app.adapters.publicip")], root=tmp_path) == []
+    # 부모 패키지 __init__.py로 다시 내보내는 꼴도 잡혀요
+    (app / "__init__.py").write_text("from app.adapters.publicip import fetch_ip\n", encoding="utf-8")
+    assert reexport_problems([("app.publicip", "app.adapters.publicip")], root=tmp_path) == [
+        "app/__init__.py: 패키지가 app.adapters.publicip를 import해 다시 내보내요(옛 경로 app.publicip 자리)",
+    ]

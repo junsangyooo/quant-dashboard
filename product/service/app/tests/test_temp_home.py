@@ -54,9 +54,11 @@ def test_keyfile_path_is_a_temp_folder(keyfile_path: Path) -> None:
 
 
 def test_real_config_dir_is_not_created_or_read() -> None:
-    """실제 `~/.config/quant-service/`는 시험 전과 같아요(없었으면 여전히 없음). 실제 전송 설정 파일 자리도 비워 둬요."""
+    """실제 `~/.config/quant-service/`는 conftest가 import될 때와 같아요(항목 · 크기 · 바뀐 시각 · 없었으면 여전히 없음 ·
+    끝날 때는 conftest `pytest_sessionfinish`가 한 번 더 봐요). 실제 전송 설정 파일 자리도 비워 둬요."""
     if conftest.REAL_CONFIG_DIR is not None:
         assert conftest.REAL_CONFIG_DIR.exists() == conftest.REAL_CONFIG_EXISTED_AT_START
+        assert conftest.config_tree(conftest.REAL_CONFIG_DIR) == conftest.REAL_CONFIG_TREE_AT_START
     import app.transport as transport
 
     assert transport.LIVE_CONFIG_PATHS == ()
@@ -130,8 +132,7 @@ def test_child_servers_keep_keyfile_under_temp_home(tmp_path: Path, server: str)
             keyfile = kf_dir / "keyfile"
             assert keyfile.exists() and keyfile.stat().st_mode & 0o777 == 0o600
             assert not (data / "keyfile").exists()
-            if conftest.REAL_CONFIG_DIR is not None:
-                assert conftest.REAL_CONFIG_DIR.exists() == conftest.REAL_CONFIG_EXISTED_AT_START
+            assert conftest.config_tree(conftest.REAL_CONFIG_DIR) == conftest.REAL_CONFIG_TREE_AT_START
             assert _tree(conftest.TEST_HOME / ".config") == test_home_before
             assert [p for p in home.rglob("*") if p.is_file()] == [keyfile]  # 임시 HOME 아래 파일은 키 파일 하나뿐
         finally:

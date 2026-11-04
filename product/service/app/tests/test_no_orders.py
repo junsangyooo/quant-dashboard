@@ -43,9 +43,12 @@ NETWORK_CALLS = re.compile(r"urlopen|create_connection|_urllib_transport|_urllib
 # 앱 코드 전체(transport.py 포함)에서 0건이어야 하는 것(P1-02 ②): AI 제공사 SDK(제품 기능인 금지 목록이라 이름을 적어요) ·
 # 전송 수단 둘 · 다른 프로그램 띄우기.
 AI_SDK_MODULES = {"anthropic", "openai", "google.generativeai", "google.genai", "mistralai", "cohere", "ollama",
-                  "litellm", "langchain", "langchain_openai", "langchain_anthropic", "vertexai", "boto3", "botocore",
-                  "groq", "together", "replicate", "huggingface_hub", "transformers"}
-FORBIDDEN_MODULES = AI_SDK_MODULES | {"urllib3", "websockets", "subprocess", "asyncio.subprocess"}
+                  "litellm", "xai_sdk", "vertexai", "boto3", "botocore", "groq", "together", "replicate",
+                  "huggingface_hub", "transformers"}
+FORBIDDEN_MODULES = AI_SDK_MODULES | {"urllib3", "websockets", "websocket", "subprocess", "asyncio.subprocess"}
+FORBIDDEN_PREFIXES = ("langchain",)  # 첫 이름이 이걸로 시작하면 모두(langchain · langchain_openai · langchain_core …)
+# import 문이 아닌 길로 모듈을 들이거나 다른 프로그램을 띄우는 꼴(글 검사 · AST가 못 보는 것 · QUALITY E1).
+DYNAMIC_CALLS = re.compile(r"import_module\(|__import__\(|create_subprocess_|os\.(?:system|popen|exec\w*|spawn\w*)\(|\bpty\b")
 
 
 def _label(path: Path) -> str:
@@ -65,8 +68,10 @@ def _imports(tree: ast.AST) -> set[str]:
 
 
 def _forbidden_in(mods: set[str]) -> list[str]:
-    """금지 모듈과 그 하위 모듈(`openai.types` · `subprocess.run` 꼴)이 import됐는지."""
-    return sorted({f for f in FORBIDDEN_MODULES for m in mods if m == f or m.startswith(f + ".")})
+    """금지 모듈과 그 하위 모듈(`openai.types` · `subprocess.run` 꼴) · 금지 머리말(`langchain*`)이 import됐는지."""
+    out = {f for f in FORBIDDEN_MODULES for m in mods if m == f or m.startswith(f + ".")}
+    out |= {m.split(".")[0] for m in mods if m.split(".")[0].startswith(FORBIDDEN_PREFIXES)}
+    return sorted(out)
 
 
 def network_hits(paths: list[Path]) -> list[str]:
@@ -89,11 +94,15 @@ def network_hits(paths: list[Path]) -> list[str]:
 
 
 def forbidden_hits(paths: list[Path]) -> list[str]:
-    """앱 코드 전체(transport.py 포함)에서 AI 제공사 SDK · urllib3 · websockets · subprocess import를 찾아요(P1-02 ②)."""
+    """앱 코드 전체(transport.py 포함)에서 AI 제공사 SDK · urllib3 · websocket(s) · subprocess import와
+    동적 import · 셸 호출 꼴(`import_module(` · `__import__(` · `create_subprocess_*` · `os.system` 등 · `pty`)을 찾아요(P1-02 ②)."""
     hits = []
     for path in paths:
-        mods = _imports(ast.parse(path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")
+        mods = _imports(ast.parse(text))
         hits += [f"{_label(path)}: import {mod}" for mod in _forbidden_in(mods)]
+        for m in DYNAMIC_CALLS.finditer(text):
+            hits.append(f"{_label(path)}:{text[: m.start()].count(chr(10)) + 1}: {m.group()}")
     return hits
 
 
@@ -283,6 +292,30 @@ def test_planted_sdk_in_subfolder_is_caught_by_source_scan(tmp_path: Path) -> No
         "x.py: import subprocess", "x.py: import urllib3", "x.py: import websockets",
     ]
     assert network_hits(found) == ["x.py: import urllib.request"]
+
+
+def test_planted_dynamic_import_and_shell_calls_are_caught(tmp_path: Path) -> None:
+    """import 문 없이 들이는 꼴(`importlib.import_module` · `__import__`) · 셸 · 자식 프로세스(`asyncio.create_subprocess_exec` ·
+    `os.system` · `os.popen` · `os.execv` · `os.spawnl` · `pty`) · `langchain*` · `xai_sdk` · `websocket`도 잡혀요."""
+    planted = tmp_path / "y.py"
+    planted.write_text(
+        "import importlib\nimport os\nimport langchain_core.runnables\nimport xai_sdk\nimport websocket\n"
+        "from asyncio import create_subprocess_exec\n\n"
+        "def run():\n"
+        "    importlib.import_module('anthropic')\n"
+        "    __import__('openai')\n"
+        "    os.system('ls')\n"
+        "    os.popen('ls')\n"
+        "    os.execv('/bin/ls', ['ls'])\n"
+        "    os.spawnl(0, '/bin/ls')\n"
+        "    import pty\n",
+        encoding="utf-8",
+    )
+    assert forbidden_hits([planted]) == [
+        "y.py: import langchain_core", "y.py: import websocket", "y.py: import xai_sdk",
+        "y.py:6: create_subprocess_", "y.py:9: import_module(", "y.py:10: __import__(", "y.py:11: os.system(",
+        "y.py:12: os.popen(", "y.py:13: os.execv(", "y.py:14: os.spawnl(", "y.py:15: pty",
+    ]
 
 
 def test_planted_real_call_fails_a_test_run() -> None:

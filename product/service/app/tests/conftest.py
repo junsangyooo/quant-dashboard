@@ -23,6 +23,16 @@ from fastapi.testclient import TestClient
 REAL_HOME = os.environ.get("HOME", "")
 REAL_CONFIG_DIR = Path(REAL_HOME) / ".config" / "quant-service" if REAL_HOME else None
 REAL_CONFIG_EXISTED_AT_START = bool(REAL_CONFIG_DIR and REAL_CONFIG_DIR.exists())
+
+
+def config_tree(root: Path | None) -> list[tuple[str, int, int]]:
+    """폴더 아래 모든 항목의 (상대 경로 · 크기 · 바뀐 시각) · 없으면 빈 목록(실제 설정 폴더를 건드리지 않았는지 전후 비교용)."""
+    if root is None or not root.exists():
+        return []
+    return sorted((p.relative_to(root).as_posix(), p.stat().st_size, p.stat().st_mtime_ns) for p in root.rglob("*"))
+
+
+REAL_CONFIG_TREE_AT_START = config_tree(REAL_CONFIG_DIR)
 # pytest 프로세스에서만 바꿔요(pytest가 `PYTEST_VERSION`을 둬요). 이 모듈을 가짜 서버(`tests/e2e_server.py` ·
 # `tests/baseline/screen_server.py`)가 도우미로 import할 때는 띄우는 쪽이 준 HOME · 키 파일 폴더를 그대로 써요(빈 폴더가 남지 않게).
 UNDER_PYTEST = "PYTEST_VERSION" in os.environ
@@ -123,6 +133,9 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
     if UNDER_PYTEST:
         shutil.rmtree(TEST_HOME, ignore_errors=True)  # 임시 HOME(키 파일이 남지 않게)
+    if config_tree(REAL_CONFIG_DIR) != REAL_CONFIG_TREE_AT_START:  # 실제 설정 폴더(S1)를 시험이 건드리면 전체 실패
+        print(f"\n실제 설정 폴더가 바뀌었어요: {REAL_CONFIG_DIR}")
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 @pytest.fixture(autouse=True)

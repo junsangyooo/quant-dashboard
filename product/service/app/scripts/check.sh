@@ -24,6 +24,17 @@ case "$node_v" in
      exit 2 ;;
 esac
 [ -x "$PY" ] || { echo "파이썬이 없어요: $PY (python3.12 -m venv .venv && .venv/bin/pip install --require-hashes -r requirements-dev.lock)" >&2; exit 2; }
+# 아무 실행 파일(`/bin/true` 같은 것)을 QUANT_PYTHON에 주면 파이썬 단계가 소리 없이 통과하므로, 판과 도구 import 결과를 **출력으로** 확인해요.
+py_v=$("$PY" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null)
+case "$py_v" in
+  3.*) ;;
+  *) echo "파이썬이 아니거나 돌지 않아요: $PY (판 출력: '${py_v}') · QUANT_PYTHON은 requirements-dev.lock을 설치한 venv의 python이어야 해요" >&2; exit 2 ;;
+esac
+tools=$("$PY" -c 'import pytest, ruff, mypy, pip_audit; print("tools-ok")' 2>/dev/null)
+[ "$tools" = "tools-ok" ] || {
+  echo "파이썬 $PY($py_v)에 pytest · ruff · mypy · pip-audit이 없어요 · 파이썬 단계가 소리 없이 통과하지 않게 멈춰요(.venv/bin/pip install --require-hashes -r requirements-dev.lock)" >&2
+  exit 2
+}
 [ -x "$PW_CHROMIUM" ] || echo "주의: 화면 찍기 브라우저가 없어요: PW_CHROMIUM=$PW_CHROMIUM (e2e-vault · compare 단계가 실패해요)" >&2
 
 names=(); codes=(); secs=()
@@ -47,7 +58,7 @@ compare_step() {
   "$PY" -m tests.baseline.compare --keep "$OUT/compare"
 }
 
-echo "check.sh · $(date '+%Y-%m-%d %H:%M:%S') · node $node_v · 출력 $OUT"
+echo "check.sh · $(date '+%Y-%m-%d %H:%M:%S') · node $node_v · python $PY ($py_v) · 출력 $OUT"
 run_step secrets        "$PY" scripts/secrets_scan.py
 run_step commit         scripts/commit_hygiene.sh
 run_step ruff           "$PY" scripts/lint_allow.py ruff

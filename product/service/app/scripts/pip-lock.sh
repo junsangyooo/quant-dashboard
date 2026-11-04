@@ -11,7 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=${QUANT_PYTHON:-.venv/bin/python}
-tmp=$(mktemp)
+# 제약 파일은 저장소 상대 경로(pip-compile이 `# via -c <경로>` 주석에 적어요 · VM 경로가 lock에 남지 않게) · 끝나면 지워요.
+tmp=tests/.tmp/pip-constraints.txt
+mkdir -p tests/.tmp
 trap 'rm -f "$tmp"' EXIT
 awk '/^# pip freeze --all/{f=1;next} /^$/{f=0} f' tests/baseline/server/versions.txt > "$tmp"
 for pair in "requirements.txt requirements.lock" "requirements-dev.txt requirements-dev.lock"; do
