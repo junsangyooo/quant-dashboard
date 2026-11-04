@@ -1,16 +1,13 @@
 """P1-01a 기준선: 얼린 시험 입력 · 정답(`tests/baseline/frozen/`)이 지금 값과 같고, v3 엔진만으로 다시 돌아요.
 
-이 파일은 두 부분이에요(P1-03이 지울 때 헷갈리지 않게 머리 글로 나눠요).
-
-1부 **v3만 쓰는 시험**(P1-03 뒤에도 그대로 남음 · 예외 하나: `test_frozen_legacy_body_through_api`가 본문을 넣는 길
-   `/api/strategies`는 P1-03이 지우는 MVP 라우트라 그때 v2 라우트나 DB 직접 넣기로 **넣는 길만** 바뀜 · 정답은 얼린 값 그대로):
-   `app.engine` · `app.copytext` · `app.blocks`와 얼린 파일만 써요.
-   - 얼린 326개를 v3 엔진으로 다시 돌려 거래 · 건너뜀 · 값 없음 기록 · 끝 자산 · 남은 보유가 모두 같음(다 됐다 A).
-   - 재생 코드 경로가 지울 모듈을 가져오지 않음(새 프로세스에서 `sys.modules` 검사).
-   - v1에서 나온 시험 입력(얼린 것)이 v3 변환으로 얼린 정답을 내줌(다 됐다 B의 v3 쪽).
-2부 **v1 코드와 대조하는 시험**(P1-03이 이 부분만 지움): 지울 모듈(`app.v1` · `app.engine_v1` · `app.strategy` ·
-   `tests.regression` · `tests.helpers.legacy`)이 지금 만드는 값이 얼린 값과 같음을 보여요(다 됐다 B의 v1 쪽).
-   함수 이름이 `test_v1_`로 시작하고 import는 함수 안에서만 해요.
+`app.engine` · `app.copytext` · `app.blocks`와 얼린 파일만 써요(P1-03 뒤 · 지운 v1 · MVP 모듈은 가져오지 않음).
+- 얼린 326개를 v3 엔진으로 다시 돌려 거래 · 건너뜀 · 값 없음 기록 · 끝 자산 · 남은 보유가 모두 같음(다 됐다 A).
+- 재생 코드 경로가 지운 모듈을 가져오지 않음(새 프로세스에서 `sys.modules` 검사).
+- v1에서 나온 시험 입력(얼린 것)이 v3 변환으로 얼린 정답을 내줌(다 됐다 B의 v3 쪽).
+- `test_frozen_legacy_body_through_api`는 본문을 DB에 직접 넣고 v2 라우트로 읽어요(P1-03 전에는 지운 MVP 라우트
+  `/api/strategies`로 넣었음 · 정답은 얼린 값 그대로).
+P1-03 전에는 2부(`test_v1_*` 6건)가 지울 v1 코드가 지금 만드는 값이 얼린 값과 같음을 보였고(다 됐다 B의 v1 쪽 · P1-01a 5절),
+v1 코드와 함께 지웠어요(얼린 파일은 `f232bdf`에서 만든 것이 기준).
 """
 
 from __future__ import annotations
@@ -35,11 +32,6 @@ FORBIDDEN = ("app.v1", "app.engine_v1", "app.strategy", "app.engine_mvp", "app.p
 CASES = replay.load_cases()
 BARS = replay.load_bars()
 FX = replay.load_v1_fixtures()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 1부. v3만 쓰는 시험 — P1-03 뒤에도 남아요
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def test_frozen_counts() -> None:
@@ -170,85 +162,3 @@ def test_frozen_R_B3_v1_trades_match_v3_engine() -> None:
     r2 = run_backtest(ct.convert_v1(body), BARS[rb["bars"]], None, rb["start"], rb["end"], rb["cash"], check=False)
     assert [[t[k] for k in rb["keys"]] for t in r2["trades"]] == rb["v1_trades"]
     assert rb["v1_trades"]  # 거래가 있어요
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 2부. v1 코드와 대조하는 시험 — P1-03이 지울 모듈과 함께 이 부분만 지워요
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def test_v1_bars_match_frozen() -> None:
-    from tests.regression.cases import SEEDS, bar_set
-    from tests.regression.v1_inputs import example_bars, random_bars
-
-    assert SEEDS == [11, 23, 47]
-    for s in SEEDS:
-        assert bar_set(s) == BARS[f"seed-{s}"]
-    assert example_bars() == BARS["example-big10"]
-    for case in CASES:
-        if case["source"] == "random":
-            assert random_bars(case["seed"]) == BARS[case["bars"]]
-
-
-def test_v1_bodies_match_frozen() -> None:
-    from app.v1 import strategy as st1
-    from tests.regression.cases import bodies
-
-    slots = bodies()
-    assert len(slots) == len(FX["bodies"])
-    for b, row in zip(slots, FX["bodies"], strict=True):
-        assert b == row["slots"]
-        norm = st1.normalize(b)
-        assert norm == row["normalized"]
-        assert st1.mode_of(norm) == row["mode"]
-
-
-def test_v1_examples_match_frozen() -> None:
-    from app.v1 import strategy as st1
-
-    assert [e["id"] for e in st1.EXAMPLES] == [e["id"] for e in FX["examples"]]
-    for e in FX["examples"]:
-        body = st1.example_body(e["id"])
-        assert body == e["body"]
-        assert st1.mode_of(body) == e["mode"]
-        assert st1.to_copy_text(body) == e["copy_text"]
-
-
-def test_v1_legacy_helper_matches_frozen() -> None:
-    from tests.helpers import legacy
-
-    for row in FX["legacy"]:
-        assert legacy(row["template"], row["name"]) == row["body"]
-
-
-def test_v1_threshold_inputs_match_frozen() -> None:
-    """문턱 사례의 v1 본문 · 기간 · v1 거래는 `v1_trades.json`과 같고, v3 본문은 `convert_v1(st1.normalize(v1))`이에요."""
-    from app.v1 import strategy as st1
-    from tests.regression import threshold as th
-    from tests.regression.cases import bodies
-
-    v1 = th.V1
-    slots = bodies()
-    fixed = [*v1["backtests"], *v1["papers"], *v1["examples"], *v1["randoms"]]
-    assert len(fixed) == len(CASES)
-    cal = th._calendar(BARS["seed-11"])
-    for f, case in zip(fixed, CASES, strict=True):
-        body = f["body"] if "body" in f else slots[f["case"]]
-        assert case["v1_body"] == body
-        assert case["v1_trades"] == f["trades"] and case["v1_final"] == f["final"]
-        assert case["cash"] == float(v1["cash"])
-        start, end = (cal[f["first"]], cal[f["last"]]) if "first" in f else (f["start"], f["end"])
-        assert (case["start"], case["end"]) == (start, end)
-        assert case["v3_body"] == ct.convert_v1(st1.normalize(body))
-        assert th.compare(case["v1_trades"], [th.trade_key(t) for t in case["trades"]],
-                          th._calendar(BARS[case["bars"]]))["kind"] == case["threshold"]["kind"]
-
-
-def test_v1_run_v1_matches_frozen_R_B3() -> None:
-    from app.engine_v1 import run_v1
-    from tests.regression.cases import bar_set, bodies
-
-    rb = FX["R_B3"]
-    data = bar_set(11)
-    r1 = run_v1(bodies()[rb["body_index"]], data, rb["start"], rb["end"], rb["cash"])
-    assert [[t[k] for k in rb["keys"]] for t in r1["trades"]] == rb["v1_trades"]

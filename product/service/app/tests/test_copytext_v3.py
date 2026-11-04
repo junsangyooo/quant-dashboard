@@ -10,11 +10,17 @@ import pytest
 from app import blocks as bk
 from app import copytext as ct
 from app.copytext import FormatError
-from app.v1 import strategy as st1
-from tests.regression.cases import bodies
+from tests.baseline import replay
 from tests.test_blocks import big_breakout
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "copy-v3-example.txt"
+# v1 쪽 입력 · 기대값은 P1-01a가 얼린 `tests/baseline/frozen/v1_fixtures.json`(P1-03 전에는 `app.v1` · `tests.regression.cases`가
+# 만들던 값 · 같음을 `test_v1_*`로 확인한 뒤 v1 코드를 지움). 값은 그대로예요.
+FX = replay.load_v1_fixtures()
+
+
+def _example(eid: str) -> dict:  # type: ignore[type-arg]
+    return next(e for e in FX["examples"] if e["id"] == eid)
 
 
 def example_text() -> str:
@@ -91,7 +97,7 @@ def test_v1_and_v2_texts_become_v3() -> None:
                     ("sell", "ma", "below"), ("weight", "equal", "fixed"), ("weight", "max_per_stock", "fixed")]
     assert all(r["value"] is None for b in body["graph"]["blocks"] for r in b["rows"] if r["item"] != "next_open")
     # v2(graph 노드) 글: v1 예시
-    v2 = st1.to_copy_text(st1.example_body("either"))
+    v2 = _example("either")["copy_text"]  # 얼린 v2 복사 글(st1.to_copy_text(st1.example_body("either")))
     body2, _ = ct.parse_copy_text(v2)
     assert [b["stage"] for b in body2["graph"]["blocks"]].count("signal") == 2
     assert "converted" not in body2  # 복사 글로 받은 전략은 새 전략(⑤ = 1)
@@ -155,7 +161,7 @@ def test_R_C7_strategy_file_roundtrip() -> None:
 
 
 def test_R_C8_aliases_and_v1_cooldown_zero() -> None:
-    v1 = st1.example_body("breakout")
+    v1 = _example("breakout")["body"]  # 얼린 옛 예시(st1.example_body("breakout"))
     body = ct.convert_v1(v1)
     assert body["converted"] == "v1"
     by_item = {r["item"]: r for b in body["graph"]["blocks"] for r in b["rows"]}
@@ -173,15 +179,15 @@ def test_R_C8_aliases_and_v1_cooldown_zero() -> None:
 
 def test_R_C9_block_count() -> None:
     """블록 수 = 노드 수 − (⑦ 노드 수 − 1). 회귀 사례 전부와 옛 예시 4개."""
-    samples = [st1.normalize(b) for b in bodies()] + [st1.example_body(e["id"]) for e in st1.EXAMPLES]
-    for v1 in samples:
+    samples = [(r["normalized"], r["mode"]) for r in FX["bodies"]] + [(e["body"], e["mode"]) for e in FX["examples"]]
+    for v1, mode in samples:  # 얼린 (st1.normalize(본문) · st1.mode_of) · 옛 예시 4개
         nodes = v1["graph"]["nodes"]
         weights = sum(1 for n in nodes if n["piece"] in ("equal", "max_per_stock", "rebalance_every"))
         body = ct.convert_v1(v1)
         assert len(body["graph"]["blocks"]) == len(nodes) - (weights - 1)
         assert all(b["match"] == "all" for b in body["graph"]["blocks"])
         assert bk.analyze(body["graph"])["problems"] == []
-        assert bk.mode_of(body["graph"]) == st1.mode_of(v1)
+        assert bk.mode_of(body["graph"]) == mode
         w = [e for e in body["graph"]["edges"] if any(b["id"] == e["from"] and b["stage"] == "weight"
                                                      for b in body["graph"]["blocks"])]
         assert len(w) == 1  # ⑦ 블록으로 들어가는 선은 하나
@@ -189,6 +195,6 @@ def test_R_C9_block_count() -> None:
 
 def test_stored_v1_body_reads_as_v3() -> None:
     """저장된 v1 본문(일곱 칸 · 그래프 노드)도 읽을 때 v3로(T-13 format 열과 함께 써요)."""
-    slots = bodies()[0]
+    slots = FX["bodies"][0]["slots"]  # 얼린 bodies()[0]
     body = ct.read_body(slots)
     assert body["converted"] == "v1" and bk.analyze(body["graph"])["problems"] == []
