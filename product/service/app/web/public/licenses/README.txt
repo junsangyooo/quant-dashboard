@@ -8,11 +8,6 @@ fonts/pretendard/PretendardVariable.subset.{0..91}.woff2 (dynamic subset, 92 fil
   @font-face rules: src/styles/pretendard.css (family renamed to 'Pretendard', local URLs)
   License: SIL Open Font License 1.1 — Pretendard-OFL-1.1.txt
 
-flags/kr.svg, flags/us.svg
-  flag-icons 7.5.0, flags/4x3/ (unmodified)
-  https://github.com/lipis/flag-icons
-  License: MIT — flag-icons-MIT.txt
-
 UI icons (bundled into the JavaScript)
   lucide-react 1.53.0
   https://github.com/lucide-icons/lucide
