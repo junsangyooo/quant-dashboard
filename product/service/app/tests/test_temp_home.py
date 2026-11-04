@@ -115,6 +115,8 @@ def test_temp_home_env_for_children(tmp_path: Path) -> None:
 def test_child_servers_keep_keyfile_under_temp_home(tmp_path: Path, server: str) -> None:
     """가짜 전송 서버 둘을 임시 HOME · 임시 키 파일 폴더로 띄워 계정을 만들면 키 파일이 그 아래에만 생겨요."""
     port = _free_port()
+    # 시험 HOME(`conftest.TEST_HOME`)은 다른 시험이 기본 키 파일 경로로 쓸 수 있어요 → 자식이 거기에 손대지 않았는지는 전후 비교로.
+    test_home_before = _tree(conftest.TEST_HOME / ".config")
     with capture.temp_home() as env:
         home = Path(env["HOME"])
         kf_dir = home / "kf"
@@ -130,7 +132,12 @@ def test_child_servers_keep_keyfile_under_temp_home(tmp_path: Path, server: str)
             assert not (data / "keyfile").exists()
             if conftest.REAL_CONFIG_DIR is not None:
                 assert conftest.REAL_CONFIG_DIR.exists() == conftest.REAL_CONFIG_EXISTED_AT_START
-            assert not (conftest.TEST_HOME / ".config").exists()
+            assert _tree(conftest.TEST_HOME / ".config") == test_home_before
+            assert [p for p in home.rglob("*") if p.is_file()] == [keyfile]  # 임시 HOME 아래 파일은 키 파일 하나뿐
         finally:
             _stop(proc)
     assert not home.exists()
+
+
+def _tree(root: Path) -> list[tuple[str, int]]:
+    return sorted((p.relative_to(root).as_posix(), p.stat().st_mtime_ns) for p in root.rglob("*")) if root.exists() else []

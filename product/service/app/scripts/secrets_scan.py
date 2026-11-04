@@ -41,6 +41,7 @@ EXCLUDED_PARTS = [
     ("/tests/baseline/server/", "기준선 기록(P1-01b · 시험이 보낸 지어낸 값이 섞여 있음)"),
     ("/tests/baseline/web/", "기준선 기록(P1-01c · 화면 글 · PNG sha256)"),
     ("/web/src/styles/pretendard.css", "생성된 글꼴 CSS"),
+    ("/tests/allow/secrets.txt", "이 검사의 허용 목록 자체(지어낸 값이 적혀 있음)"),
 ]
 
 PATTERNS: dict[str, re.Pattern[str]] = {
