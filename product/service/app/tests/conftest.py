@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import shutil
@@ -22,8 +23,13 @@ from fastapi.testclient import TestClient
 REAL_HOME = os.environ.get("HOME", "")
 REAL_CONFIG_DIR = Path(REAL_HOME) / ".config" / "quant-service" if REAL_HOME else None
 REAL_CONFIG_EXISTED_AT_START = bool(REAL_CONFIG_DIR and REAL_CONFIG_DIR.exists())
-TEST_HOME = Path(tempfile.mkdtemp(prefix="quant-test-home-"))
-os.environ["HOME"] = str(TEST_HOME)
+# pytest 프로세스에서만 바꿔요(pytest가 `PYTEST_VERSION`을 둬요). 이 모듈을 가짜 서버(`tests/e2e_server.py` ·
+# `tests/baseline/screen_server.py`)가 도우미로 import할 때는 띄우는 쪽이 준 HOME · 키 파일 폴더를 그대로 써요(빈 폴더가 남지 않게).
+UNDER_PYTEST = "PYTEST_VERSION" in os.environ
+TEST_HOME = Path(tempfile.mkdtemp(prefix="quant-test-home-")) if UNDER_PYTEST else Path(REAL_HOME)
+if UNDER_PYTEST:
+    os.environ["HOME"] = str(TEST_HOME)
+    atexit.register(shutil.rmtree, TEST_HOME, ignore_errors=True)  # sessionfinish가 못 돌아도 지워요
 
 from app.main import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요)
 from app.market import KST  # noqa: E402
@@ -115,7 +121,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     if OUTBOUND_ATTEMPTS:
         print("\n바깥으로 나가려 한 시도:", *OUTBOUND_ATTEMPTS, sep="\n  ")
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
-    shutil.rmtree(TEST_HOME, ignore_errors=True)  # 임시 HOME(키 파일이 남지 않게)
+    if UNDER_PYTEST:
+        shutil.rmtree(TEST_HOME, ignore_errors=True)  # 임시 HOME(키 파일이 남지 않게)
 
 
 @pytest.fixture(autouse=True)

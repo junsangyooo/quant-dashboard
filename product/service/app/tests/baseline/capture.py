@@ -66,6 +66,7 @@ def temp_home() -> Iterator[dict[str, str]]:
     real_home = os.environ.get("HOME", "")
     with tempfile.TemporaryDirectory(prefix="quant-baseline-home-") as d:
         env = dict(os.environ, HOME=d)
+        env.pop("PYTEST_VERSION", None)  # 자식 서버는 pytest가 아니에요(conftest가 또 임시 HOME을 만들지 않게 · 자식 pytest는 스스로 둬요)
         npm_cache = Path(real_home) / ".npm" if real_home else None
         if "npm_config_cache" not in env and npm_cache is not None and npm_cache.is_dir():
             env["npm_config_cache"] = str(npm_cache)
