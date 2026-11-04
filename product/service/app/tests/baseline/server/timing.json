@@ -1,60 +1,66 @@
 {
  "captured_on": "2026-11-04",
- "dayflow_seconds": 9.37,
- "engine_cases_seconds": 1.08,
+ "dayflow_seconds": 8.59,
+ "engine_cases_seconds": 0.98,
  "note": "두 번 같을 수 없음 · 본체 대조에서 뺌 · 규칙: 20% 넘게 느려지지 않음(QUALITY T7)",
- "pytest_reported_seconds": 85.13,
- "pytest_seconds": 87.41,
+ "npm_seconds": {
+  "build": 2.86,
+  "lint": 27.51,
+  "test": 7.2,
+  "typecheck": 0.24
+ },
+ "pytest_reported_seconds": 88.58,
+ "pytest_seconds": 90.85,
  "replay_326_cases": 326,
  "replay_326_diff_cases": 0,
- "replay_326_seconds": 7.69,
+ "replay_326_seconds": 7.48,
  "screen_api": {
   "/api/about": {
    "bytes": 124,
-   "max_ms": 11.32,
+   "max_ms": 8.02,
    "n": 30,
-   "p50_ms": 4.14,
-   "p95_ms": 7.16,
+   "p50_ms": 3.95,
+   "p95_ms": 5.1,
    "status": 200
   },
   "/api/history/csv": {
    "bytes": 172,
-   "max_ms": 11.08,
+   "max_ms": 5.1,
    "n": 30,
-   "p50_ms": 5.18,
-   "p95_ms": 7.39,
+   "p50_ms": 3.87,
+   "p95_ms": 4.76,
    "status": 200
   },
   "/api/live/screen": {
    "bytes": 1909,
-   "max_ms": 34.12,
+   "max_ms": 11.79,
    "n": 30,
-   "p50_ms": 6.98,
-   "p95_ms": 9.23,
+   "p50_ms": 5.9,
+   "p95_ms": 9.66,
    "status": 200
   },
   "/api/state": {
    "bytes": 128,
-   "max_ms": 9.35,
+   "max_ms": 6.32,
    "n": 30,
-   "p50_ms": 4.4,
-   "p95_ms": 8.87,
+   "p50_ms": 4.35,
+   "p95_ms": 6.22,
    "status": 200
   },
   "/api/v2/paper": {
    "bytes": 11,
-   "max_ms": 9.04,
+   "max_ms": 5.94,
    "n": 30,
-   "p50_ms": 4.82,
-   "p95_ms": 7.55,
+   "p50_ms": 4.28,
+   "p95_ms": 5.56,
    "status": 200
   },
   "/api/v2/strategies": {
    "bytes": 279,
-   "max_ms": 96.98,
+   "max_ms": 129.62,
    "n": 30,
-   "p50_ms": 4.81,
-   "p95_ms": 7.49,
+   "p50_ms": 4.89,
+   "p95_ms": 6.66,
    "status": 200
   }
  },
@@ -73,5 +79,7 @@
   "plan_rows": 1,
   "recent": 1,
   "running": true
- }
+ },
+ "screens_seconds": 233.27,
+ "webcounts_seconds": 2.37
 }

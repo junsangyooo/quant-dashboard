@@ -58,3 +58,11 @@ quant-mvp-web@0.0.0
 ├── typescript@6.0.3
 ├── vite@8.3.4
 └── vitest@5.0.3
+
+# playwright (web/node_modules)
+playwright 1.64.0
+@playwright/test 1.64.0
+
+# browser (PW_CHROMIUM --version · DEVELOPING 4절)
+PW_CHROMIUM=/opt/pw-browsers/chromium
+Google Chrome for Testing 153.0.8010.12

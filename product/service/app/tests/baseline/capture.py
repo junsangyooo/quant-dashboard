@@ -1,17 +1,25 @@
-"""P1-01b 서버 관측 기준선 만들기(명령 하나 · 두 번 돌려 본체가 바이트 단위로 같아요).
+"""P1-01 기준선 만들기(명령 하나 · 두 번 돌려 본체가 바이트 단위로 같아요 · 서버 P1-01b + 화면 · 웹 숫자 P1-01c).
 
-    cd product/service/app && .venv/bin/python -m tests.baseline.capture [--out DIR] [--skip-pytest]
+    cd product/service/app && .venv/bin/python -m tests.baseline.capture [--out DIR] [--web-out DIR] [--skip-pytest] [--skip-web]
 
 `tests/baseline/server/`에 적는 것(본체 · 대조 대상):
 - `clock.json` · `mask.json`: 고정 시각 · 씨앗 · 패치 자리 · 가릴 필드.
 - `api_shapes.json`: pytest 전체(`-p tests.baseline.plugin`)에서 오간 응답의 라우트 × 상태 코드 → 키 · 타입 구조 ·
   라우트마다 남는/지울 · 관측 없음 표시.
 - `engine_cases.json`: 엔진 거래 사례(백테스트 · 규칙 층 · 모의투자 흐름 · 실전 아침 흐름).
-- `dayflow.json`: 하루 흐름 5가지 날.
+- `dayflow.json`: 하루 흐름 6가지 날.
 - `counts.json`: 숫자(ARCHITECTURE 7절 셈 규칙).
 - `pytest.json`: pytest 통과 · 실패 수와 실패 목록(시간은 뺌).
 - `versions.txt`: `pip freeze --all` · `node -v` · `npm ls --depth=0 --unicode`(경로는 지움). Node 24가 아니면 까닭을 적고 실패해요.
-본체 밖(두 번 같을 수 없음 · 대조에서 뺌): `timing.json`(pytest · 백테스트 사례(326 재생 포함) · 화면 API p50 · p95).
+본체 밖(두 번 같을 수 없음 · 대조에서 뺌): `timing.json`(pytest · 백테스트 사례(326 재생 포함) · 화면 API p50 · p95 · 화면 찍기 ·
+npm 검사 · 웹 숫자).
+
+`tests/baseline/web/`에 적는 것(P1-01c · 본체 · Node 24 + Playwright + `PW_CHROMIUM` 브라우저가 필요 · 없으면 까닭을 적고 실패):
+- `npm_checks.json`: `npm run typecheck · lint · test · build`의 종료 코드 · 요약 수(`build`가 `web/dist`를 다시 만듦).
+- `screens/*.png` · `screens/screens.json` · `screens/screen_texts.json`: 화면 그림(상태 36 × 1440 · 390) · 목록 · 화면 글(`screens.py`).
+- `web_counts.json`: 웹 숫자(화면 경계 · jscpd · 같은 CSS · 원시 토큰 · 토큰 대조 · 같은 글 · 줄 · 파일 · `webcounts.py`).
+- `forbidden_words.json`: 금지어(빌드 결과 · 화면 글 · `webchecks.py`).
+`versions.txt`에는 Playwright · 브라우저 판을 더해요.
 """
 
 from __future__ import annotations
@@ -30,8 +38,11 @@ from typing import Any
 
 APP = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = Path(__file__).resolve().parent / "server"
+DEFAULT_WEB_OUT = Path(__file__).resolve().parent / "web"
 BODY_FILES = ("clock.json", "mask.json", "api_shapes.json", "engine_cases.json", "dayflow.json", "counts.json",
               "pytest.json", "versions.txt")
+WEB_BODY_FILES = ("npm_checks.json", "web_counts.json", "forbidden_words.json", "screens/screens.json",
+                  "screens/screen_texts.json")  # + screens/*.png
 TIMING_FILE = "timing.json"
 
 
@@ -106,6 +117,26 @@ def versions_text() -> str:
     return "\n".join(["# pip freeze --all", pip, "", "# node -v", node, "", "# npm ls --depth=0 --unicode (web)", *npm_lines, ""])
 
 
+def screen_versions_text() -> str:
+    """화면 찍기 도구 판(P1-01c): `web/node_modules`의 playwright · @playwright/test 판과 `PW_CHROMIUM` 브라우저의 `--version`."""
+    def pkg_version(name: str) -> str:
+        p = APP / "web" / "node_modules" / name / "package.json"
+        try:
+            return str(json.loads(p.read_text(encoding="utf-8"))["version"])
+        except (OSError, KeyError, ValueError):
+            return "(not installed)"
+
+    chromium = os.environ.get("PW_CHROMIUM") or "/opt/pw-browsers/chromium"
+    try:
+        p = subprocess.run([chromium, "--version"], capture_output=True, text=True)
+        browser = (p.stdout or p.stderr).strip()
+    except OSError as exc:
+        browser = f"(not available: {type(exc).__name__})"
+    return "\n".join(["# playwright (web/node_modules)", f"playwright {pkg_version('playwright')}",
+                      f"@playwright/test {pkg_version('@playwright/test')}", "",
+                      "# browser (PW_CHROMIUM --version · DEVELOPING 4절)", f"PW_CHROMIUM={chromium}", browser, ""])
+
+
 def require_node_24() -> str:
     """DEVELOPING 4절: Node 24가 아니면 `versions.txt`가 달라져 두 번 같음 · 대조가 깨져요. 까닭을 적고 실패해요."""
     try:
@@ -117,9 +148,45 @@ def require_node_24() -> str:
     return v
 
 
-def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False) -> dict[str, Any]:
+def run_web(web_out: Path, timing: dict[str, Any], *, quiet: bool = False) -> None:
+    """화면 · 웹 숫자(P1-01c): npm 검사(build가 dist를 만듦) → 화면 찍기 → 웹 숫자 → 금지어."""
+    from tests.baseline import screens, webchecks, webcounts
+
+    web_out.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+    npm, npm_timing, outputs = webchecks.npm_checks()
+    _dump(web_out / "npm_checks.json", npm)
+    timing["npm_seconds"] = npm_timing
+    if os.environ.get("QUANT_BASELINE_KEEP_PYTEST_OUTPUT"):
+        for k, v in outputs.items():
+            (web_out / f"npm_{k}_output.txt").write_text(v, encoding="utf-8")
+    if not quiet:
+        print("npm:", {k: v["exit"] for k, v in npm.items()}, f"({time.perf_counter() - t0:.1f}s)")
+
+    t0 = time.perf_counter()
+    idx = screens.capture(web_out, quiet=True)
+    timing["screens_seconds"] = round(time.perf_counter() - t0, 2)
+    if not quiet:
+        print("screens:", idx["summary"], f"({timing['screens_seconds']}s)")
+
+    t0 = time.perf_counter()
+    wc = webcounts.run_all()
+    timing["webcounts_seconds"] = round(time.perf_counter() - t0, 2)
+    _dump(web_out / "web_counts.json", wc)
+    if not quiet:
+        print("web counts:", wc["summary"])
+
+    fw = webchecks.forbidden_words(web_out / "screens" / "screen_texts.json")
+    _dump(web_out / "forbidden_words.json", fw)
+    if not quiet:
+        print(f"forbidden words: dist {fw['dist_count']} · screens {fw['screen_count']}")
+
+
+def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False, skip_web: bool = False,
+        web_out: Path | None = None) -> dict[str, Any]:
     from tests.baseline import clock, counts, dayflow, engine_cases, mask, replay, screen_api
 
+    web_out = web_out or DEFAULT_WEB_OUT
     require_node_24()
     clock.freeze_plain()
     out.mkdir(parents=True, exist_ok=True)
@@ -176,18 +243,23 @@ def run(out: Path, *, skip_pytest: bool = False, quiet: bool = False) -> dict[st
     if not quiet:
         print("screen api p95 ms:", {k: v["p95_ms"] for k, v in sc["timing"].items()})
 
-    (out / "versions.txt").write_text(versions_text(), encoding="utf-8")
+    if not skip_web:
+        run_web(web_out, timing, quiet=quiet)
+
+    (out / "versions.txt").write_text(versions_text() + "\n" + screen_versions_text(), encoding="utf-8")
     _dump(out / TIMING_FILE, timing)
-    return {"out": str(out), "timing": timing}
+    return {"out": str(out), "web_out": str(web_out), "timing": timing}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--web-out", default=str(DEFAULT_WEB_OUT))
     ap.add_argument("--skip-pytest", action="store_true", help="API 모양 · pytest 수를 다시 만들지 않음(빠른 확인용)")
+    ap.add_argument("--skip-web", action="store_true", help="화면 · 웹 숫자(P1-01c)를 다시 만들지 않음(빠른 확인용)")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args(argv)
-    run(Path(a.out), skip_pytest=a.skip_pytest, quiet=a.quiet)
+    run(Path(a.out), skip_pytest=a.skip_pytest, quiet=a.quiet, skip_web=a.skip_web, web_out=Path(a.web_out))
     return 0
 
 

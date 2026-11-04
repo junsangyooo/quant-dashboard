@@ -225,7 +225,7 @@ def test_dayflow_precheck_fail_then_retry_then_recover(tmp_path: Path) -> None:
 
 
 def test_dayflow_precheck_exhausted_stops_at_the_window_end(tmp_path: Path) -> None:
-    """08:30 ~ 08:50 창(`<=` 경계): 5번 모두 실패 → 08:55부터는 점검하지 않음 · 그날 시가 주문 0 · 장중 감시 멈춤."""
+    """08:30 ~ 08:50 창(`<=` 경계): 5번 모두 실패 → 08:55부터는 점검하지 않음 · 그날 시가 주문 0 · 보유가 없어 장중 감시할 것이 없음."""
     from tests.baseline import dayflow
 
     day = dayflow.run_day("precheck_exhausted", tmp_path / "exhausted")
