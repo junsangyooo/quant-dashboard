@@ -1,0 +1,12 @@
+# npm audit 허용 목록(QUALITY S7 · P1-02 ⑦). 한 줄 = `GHSA번호 패키지  # 까닭`. `scripts/audit_allow.py npm`가 봐요.
+# 1단계는 판을 올리지 않아요(`package-lock.json` 그대로 · TASKS P1-02 ⑦). 모두 개발 의존성(빌드 결과 `web/dist`에 들어가지 않음).
+GHSA-g3hv-75wg-m249 minimatch  # 개발 도구(eslint · typescript-eslint · jsx-a11y)의 글롭 DoS · 빌드 결과에 없음
+GHSA-4qv8-2p9j-2685 undici  # jsdom(vitest 시험 환경)의 HTTP 클라이언트 · 시험은 바깥에 안 나감 · 빌드 결과에 없음
+GHSA-f72v-6w45-q472 undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-xjj6-f33q-929c undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-4w7w-5xrc-9h26 undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-2m5v-pch6-74hx undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-qrxm-fqhp-jwvm undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-9fm3-97px-rjf6 undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-55wc-3pg8-jfw6 undici  # jsdom(vitest 시험 환경) · 위와 같음
+GHSA-mrhx-c7xc-m3w5 zod  # eslint-plugin-react-hooks의 설정 검사용 · 빌드 결과에 없음

@@ -1,3 +1,8 @@
 -r requirements.txt
 pytest>=8
 httpx>=0.27
+# 개발 도구(P1-02 ③ · ⑥ · ⑦ · 판은 P1-00 ③에서 확인한 것 · check.sh가 써요). 까닭 한 줄씩(QUALITY S7):
+ruff==0.17.3        # 정적 검사(정의 안 된 이름 F821 포함 · ruff.toml)
+mypy==2.4.1         # 타입 검사(mypy.ini · 대상 app/)
+pip-audit==2.10.1   # 파이썬 의존성 취약점 검사(lock 기준)
+pip-tools==7.6.2    # 해시 lock 파일 만들기(pip-compile --generate-hashes)
