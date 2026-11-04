@@ -2,8 +2,8 @@
 
 구조 버전은 `PRAGMA user_version`이에요(TASKS T-13).
 - 0 + 표 없음: 새 파일 → v2 구조를 바로 만들어요.
-- 0 + v1 표(MVP 0.2): 옛 파일 → `app.db.v1-backup`으로 복사해 두고 v2로 옮겨요(전략 · 버전 · 모의투자 기록은 그대로).
 - 2: 지금 구조.
+- 그 밖(0 + 옛 표 · 모르는 번호): '알 수 없는 데이터 구조 버전' 오류예요(v1 파일 옮기기는 P1-02 ①에서 지웠어요 · 설치본 없음).
 """
 
 from __future__ import annotations
@@ -210,7 +210,7 @@ class DB:
             self._add_v2_columns()
             self.conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             return
-        self._migrate_v1()
+        raise RuntimeError(f"알 수 없는 데이터 구조 버전이에요 · {version}")
 
     def _add_v2_columns(self) -> None:
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(versions)")}
@@ -219,35 +219,6 @@ class DB:
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(bar_meta)")}
         if "yahoo" in cols:
             self.conn.execute("ALTER TABLE bar_meta RENAME COLUMN yahoo TO source")
-
-    def _migrate_v1(self) -> None:
-        """MVP 0.2 파일 → v2. 먼저 파일을 복사해 두고, 한 묶음(트랜잭션)으로 옮겨요."""
-        if str(self.path) != ":memory:":
-            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            backup = self.path.with_name(self.path.name + ".v1-backup")
-            if not backup.exists():
-                dst = sqlite3.connect(str(backup))
-                try:
-                    self.conn.backup(dst)
-                finally:
-                    dst.close()
-                with contextlib.suppress(OSError):
-                    os.chmod(backup, 0o600)
-        self.conn.executescript(SCHEMA_V1)  # v1 표가 일부 빠진 옛 파일도 받아요
-        self.conn.execute("BEGIN")
-        try:
-            self._add_v2_columns()
-            for r in self.conn.execute("SELECT id, body FROM versions").fetchall():
-                self.conn.execute("UPDATE versions SET format=? WHERE id=?", (body_format(r["body"]), r["id"]))
-            for stmt in SCHEMA_V2.split(";"):
-                if stmt.strip():
-                    self.conn.execute(stmt)
-            self.conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-            self.conn.execute("COMMIT")
-        except Exception:
-            self.conn.execute("ROLLBACK")
-            raise
-        self.migrated_from = 0
 
     def all(self, sql: str, args: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         with self.lock:
