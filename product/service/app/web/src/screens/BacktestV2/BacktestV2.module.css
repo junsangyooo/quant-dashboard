@@ -129,7 +129,8 @@
   gap: var(--space-row);
 }
 
-.metric {
+.metric,
+.liveCard {
   display: flex;
   flex-direction: column;
   gap: var(--space-tight);
@@ -197,15 +198,6 @@
 
 .plainLine {
   color: var(--text-muted);
-}
-
-.liveCard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-tight);
-  padding: var(--space-block);
-  border-radius: var(--radius-control);
-  background: var(--bg-subtle);
 }
 
 .buttons {
