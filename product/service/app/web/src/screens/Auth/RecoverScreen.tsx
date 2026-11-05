@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { CircleCheck } from 'lucide-react';
 import { api, isApiError } from '../../api/client';
+import type { RecoveryOut } from '../../api/state';
 import { Box } from '../../components/Box';
 import { Button } from '../../components/Buttons';
 import { TextField } from '../../components/Field';
@@ -56,7 +57,7 @@ export function RecoverScreen() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.post<{ recovery_code: string }>('/api/recover', {
+      const r = await api.post<RecoveryOut>('/api/recover', {
         recovery_code: code,
         password: pw,
         password2: pw2,

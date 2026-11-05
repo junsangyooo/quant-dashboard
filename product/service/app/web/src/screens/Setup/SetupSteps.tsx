@@ -8,6 +8,7 @@ import { Monitor, Server } from 'lucide-react';
 import { api, isApiError } from '../../api/client';
 import { useConnect } from '../../api/connect';
 import { keys } from '../../api/query';
+import type { RecoveryOut } from '../../api/state';
 import {
   findTelegramChat,
   saveDartKey,
@@ -72,7 +73,7 @@ export function SetupScreen() {
             setBusy(true);
             setError(null);
             api
-              .post<{ recovery_code: string }>('/api/setup', {
+              .post<RecoveryOut>('/api/setup', {
                 password: pw,
                 password2: pw2,
                 adult,
