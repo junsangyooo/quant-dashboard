@@ -20,7 +20,9 @@ from typing import Any
 
 from .domain import blocks as bk
 from .domain.copytext import read_body
+from .store import paper as paper_store
 from .store import strategies as strategy_store
+from .store import todos as todo_store
 from .store.db import DB
 from .domain.engine import Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
@@ -68,7 +70,7 @@ class PaperV2:
     # ── 읽기 ────────────────────────────────────────────────────────────────
 
     def _run(self, rid: int) -> Any:
-        r = self.db.one("SELECT * FROM paper_runs WHERE id=? AND status IN (?,?)", (rid, RUNNING, ENDED))
+        r = paper_store.paper_run(self.db, rid, (RUNNING, ENDED))
         if r is None:
             raise PaperError("그 모의투자가 없어요", 404)
         return r
@@ -80,9 +82,7 @@ class PaperV2:
         return read_body(json.loads(v["body"])), v
 
     def running_for(self, strategy_id: int) -> Any:
-        return self.db.one(
-            "SELECT r.* FROM paper_runs r JOIN versions v ON v.id=r.version_id "
-            "WHERE v.strategy_id=? AND r.status=?", (strategy_id, RUNNING))
+        return paper_store.paper_run_for(self.db, strategy_id, RUNNING)
 
     # ── 시작 · 끝 ───────────────────────────────────────────────────────────
 
@@ -102,24 +102,21 @@ class PaperV2:
         cal = self.market.calendar
         today = now.astimezone(KST).date()
         state = {"cash": amount, "pos": {}, "plans": [], "day_no": 0, "sold": {}}
-        rid = self.db.run(
-            "INSERT INTO paper_runs(version_id,cash0,state,status,started_at,last_date) VALUES(?,?,?,?,?,?)",
-            (version_id, amount, json.dumps(state), RUNNING, _now_iso(now), None),
-        )
+        rid = paper_store.add_paper_run(self.db, version_id, amount, json.dumps(state), RUNNING, _now_iso(now), None)
         if cal.is_open(today) and now.astimezone(KST).time() < CHECK_AT:
             # 거래일 20:10 전에 시작: 그날 20:10이 첫 확인(R-L11과 같은 꼴)
             first = cal.prev_open(today)
-            self.db.run("UPDATE paper_runs SET last_date=? WHERE id=?", (first.isoformat(), rid))
+            paper_store.set_paper_last_date(self.db, rid, first.isoformat())
             self._equity(rid, first.isoformat(), amount, amount)
         else:
             last = complete_until(now - timedelta(minutes=10), cal)
-            self.db.run("UPDATE paper_runs SET last_date=? WHERE id=?", ((last - timedelta(days=1)).isoformat(), rid))
+            paper_store.set_paper_last_date(self.db, rid, (last - timedelta(days=1)).isoformat())
             self._advance(rid, upto=last, first_judge_only=True)
         return self.view(rid)
 
     def stop(self, rid: int) -> dict[str, Any]:
         self._run(rid)
-        self.db.run("UPDATE paper_runs SET status=?, ended_at=? WHERE id=?", (ENDED, _now_iso(self.now()), rid))
+        paper_store.end_paper_run(self.db, rid, ENDED, _now_iso(self.now()))
         return self.view(rid)
 
     # ── 20:10 확인 ──────────────────────────────────────────────────────────
@@ -129,7 +126,7 @@ class PaperV2:
         # 20:10 확인: 일봉 확정(20:00)에서 10분 뒤
         target = complete_until(self.now() - timedelta(minutes=10), self.market.calendar)
         done = []
-        for r in self.db.all("SELECT * FROM paper_runs WHERE status=? ORDER BY id", (RUNNING,)):
+        for r in paper_store.paper_runs_with(self.db, RUNNING):
             if r["last_date"] is None or r["last_date"] < target.isoformat():
                 self._advance(int(r["id"]), upto=target)
                 done.append(int(r["id"]))
@@ -160,27 +157,21 @@ class PaperV2:
             if not first_judge_only:
                 trades = eng.fill(d)
                 for t in trades:
-                    self.db.run(
-                        "INSERT INTO paper_trades(run_id,d,symbol,side,qty,price,amount,cost,pnl,reason) "
-                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                        (rid, t["d"], t["sym"], t["side"], int(t["qty"]), float(t["price"]), float(t["amount"]),
-                         float(t["cost"]), t["pnl"], json.dumps(t["reason"], ensure_ascii=False)))
+                    paper_store.add_paper_trade(self.db, rid, t["d"], t["sym"], t["side"], int(t["qty"]), float(t["price"]),
+                                                float(t["amount"]), float(t["cost"]), t["pnl"],
+                                                json.dumps(t["reason"], ensure_ascii=False))
                 new_trades += trades
             self._equity(rid, d, eng.equity(d), eng.cash)
             plans = eng.judge(d)
-            self.db.run("INSERT INTO paper_judgements(run_id,d,made_at,plans,how) VALUES(?,?,?,?,?)",
-                        (rid, d, _now_iso(self.now()), json.dumps(plans, ensure_ascii=False),
-                         "start" if first_judge_only else "auto"))
-        self.db.run("UPDATE paper_runs SET state=?, last_date=? WHERE id=?",
-                    (json.dumps(eng.state), (days[-1] if days else upto.isoformat()), rid))
+            paper_store.add_paper_judgement(self.db, rid, d, _now_iso(self.now()), json.dumps(plans, ensure_ascii=False),
+                                            "start" if first_judge_only else "auto")
+        paper_store.save_paper_state(self.db, rid, json.dumps(eng.state), (days[-1] if days else upto.isoformat()))
         if new_trades:
-            self.db.run("INSERT INTO alerts(at, live, kind, title, body) VALUES(?,?,?,?,?)",
-                        (_now_iso(self.now()), 0, "paper_fill", f"모의 · 모의 체결 {len(new_trades)}건", None))
+            todo_store.add_alert(self.db, _now_iso(self.now()), 0, "paper_fill", f"모의 · 모의 체결 {len(new_trades)}건",
+                                 None)
 
     def _equity(self, rid: int, d: str, equity: float, cash: float) -> None:
-        self.db.run("INSERT INTO paper_equity(run_id,d,equity,cash) VALUES(?,?,?,?) "
-                    "ON CONFLICT(run_id,d) DO UPDATE SET equity=excluded.equity, cash=excluded.cash",
-                    (rid, d, equity, cash))
+        paper_store.put_paper_equity(self.db, rid, d, equity, cash)
 
     # ── 화면 ────────────────────────────────────────────────────────────────
 
@@ -188,10 +179,8 @@ class PaperV2:
         r = self._run(rid)
         state = json.loads(r["state"])
         v = strategy_store.version_summary(self.db, r["version_id"])
-        curve = [(x["d"], x["equity"]) for x in self.db.all(
-            "SELECT d, equity FROM paper_equity WHERE run_id=? ORDER BY d", (rid,))]
-        trades = [dict(x) | {"reason": json.loads(x["reason"])} for x in self.db.all(
-            "SELECT * FROM paper_trades WHERE run_id=? ORDER BY id", (rid,))]
+        curve = [(x["d"], x["equity"]) for x in paper_store.paper_curve(self.db, rid)]
+        trades = [dict(x) | {"reason": json.loads(x["reason"])} for x in paper_store.paper_trades(self.db, rid)]
         total = curve[-1][1] if curve else float(r["cash0"])
         return {
             "id": rid, "status": "running" if r["status"] == RUNNING else "ended",
@@ -241,5 +230,5 @@ class PaperV2:
                 "check": ft["check"], "fill": ft["fill"], "first_line": ft["line"]}
 
     def list(self) -> list[dict[str, Any]]:
-        rows = self.db.all("SELECT id FROM paper_runs WHERE status IN (?,?) ORDER BY id DESC", (RUNNING, ENDED))
+        rows = paper_store.paper_run_ids(self.db, (RUNNING, ENDED))
         return [self.view(int(x["id"])) for x in rows]

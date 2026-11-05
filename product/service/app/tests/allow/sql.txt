@@ -4,9 +4,7 @@ app/backtest_v2.py sql 2  # [P1-07] SQL을 app/store/로
 app/dart.py sql 19  # [P1-07] SQL을 app/store/로
 app/datamgmt.py sql 17  # [P1-07] SQL을 app/store/로
 app/datamgmt.py sqlite3 2  # [P1-07] SQL을 app/store/로
-app/live.py sql 78  # [P1-07] SQL을 app/store/로
 app/main.py sql 9  # [P1-07] SQL을 app/store/로
 app/market.py sql 5  # [P1-07] SQL을 app/store/로
-app/paper_v2.py sql 15  # [P1-07] SQL을 app/store/로
 app/telegram.py sql 4  # [P1-07] SQL을 app/store/로
 app/vault.py sql 18  # [P1-07] SQL을 app/store/로

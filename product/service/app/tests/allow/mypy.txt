@@ -13,5 +13,5 @@ app/domain/engine.py operator 4  # None과 연산 가능성 · v3 엔진 · 동�
 app/domain/engine.py unused-ignore 2  # 필요 없는 `type: ignore` · v3 엔진
 app/live.py arg-type 2  # P1-08 run/live.py로 옮길 때 정리
 app/live.py assignment 1  # P1-08 run/live.py로 옮길 때 정리
-app/live.py index 11  # sqlite3.Row | None을 바로 색인 · P1-07 저장 층에서 정리
+app/live.py index 8  # sqlite3.Row | None을 바로 색인(방금 쓴 주문 행 · 모음 셈 3곳은 P1-07에서 `one_row`로) · P1-08 run/live.py로 옮길 때 정리
 app/vault.py no-untyped-call 5  # 타입 없는 함수 호출(cryptography 도우미) · P1-06 뒤 정리

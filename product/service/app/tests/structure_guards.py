@@ -327,7 +327,7 @@ def _token_reason(key: Key) -> str:
 # P1-04 시작 숫자(지운 뒤 · 서버는 P1-03a 보고 · 웹은 P1-03b 보고 5절 '지운 뒤' 열과 같음 · 빌드 결과 같은 글만 토큰 셈 20)
 GUARDS: tuple[Guard, ...] = (
     Guard("layers", "파이썬 층 어긋남(ARCHITECTURE 2절 · 하위 폴더 · 함수 안 import 포함)", 9, found_layers),
-    Guard("sql", "SQL 위치(`db.py` · `store/` 밖)", 169, found_sql),
+    Guard("sql", "SQL 위치(`db.py` · `store/` 밖)", 76, found_sql),
     Guard("time-literals", "시각 숫자(`domain/markets/kr.py` · `run/scheduler.py` 밖 · 서버)", 23, found_time_literals),
     Guard("same-text", "같은 글(서버 · 8자 이상 한글)", 38, found_same_text, text_key=True, unit="keys"),
     Guard("py-duplicates", "중복 · 파이썬(같은 본문 · 모듈 사이 같은 이름)", 0, found_py_duplicates, has_list=False),

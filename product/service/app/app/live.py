@@ -22,7 +22,9 @@ from typing import Any
 from .domain import blocks as bk
 from .domain.catalog import CATALOG
 from .domain.copytext import read_body
+from .store import runs as run_store
 from .store import strategies as strategy_store
+from .store import todos as todo_store
 from .store.db import DB
 from .domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
@@ -113,14 +115,14 @@ class Live:
 
     def run(self, rid: int | None = None) -> Any:
         if rid is None:
-            return self.db.one("SELECT * FROM runs WHERE status=? ORDER BY id DESC LIMIT 1", (RUNNING,))
-        r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
+            return run_store.run_with_status(self.db, RUNNING)
+        r = run_store.run_by_id(self.db, rid)
         if r is None:
             raise LiveError("그 실전 운용이 없어요", 404)
         return r
 
     def state(self, rid: int) -> dict[str, Any]:
-        row = self.db.one("SELECT state FROM live_state WHERE run_id=?", (rid,))
+        row = run_store.state_row(self.db, rid)
         st = json.loads(row["state"]) if row else {}
         st.setdefault("manual", [])  # 직접 관리 종목(R-O10)
         st["blocked"] = json.loads(self.meta(rid, "blocked") or "{}")  # 그 종목 주문 0(결과 모름 · 불일치 · 권리 변동)
@@ -141,13 +143,7 @@ class Live:
 
     def save(self, rid: int, st: dict[str, Any]) -> None:
         keep = {k: v for k, v in st.items() if k != "blocked"}
-        self.db.run("INSERT INTO live_state(run_id,state,updated_at) VALUES(?,?,?) ON CONFLICT(run_id) DO UPDATE "
-                    "SET state=excluded.state, updated_at=excluded.updated_at",
-                    (rid, json.dumps(keep, ensure_ascii=False), _iso(self.now())))
-        self.db.run("DELETE FROM positions WHERE run_id=?", (rid,))
-        for sym, p in st.get("pos", {}).items():
-            self.db.run("INSERT INTO positions(run_id,symbol,qty,avg_price,first_d,peak) VALUES(?,?,?,?,?,?)",
-                        (rid, sym, int(p["qty"]), float(p["avg"]), p.get("entry_d"), p.get("peak")))
+        run_store.save_state(self.db, rid, json.dumps(keep, ensure_ascii=False), _iso(self.now()), st.get("pos", {}))
 
     def meta(self, rid: int, key: str) -> str | None:
         return self.db.get_meta(f"live.{rid}.{key}")
@@ -162,19 +158,16 @@ class Live:
     def todo(self, rid: int | None, kind: str, symbol: str | None = None, body: str = "",
              data: dict[str, Any] | None = None) -> int:
         """같은 종류 · 종목의 열린 할 일이 있으면 그대로 둬요."""
-        open_ = self.db.one("SELECT id FROM todos WHERE kind=? AND IFNULL(symbol,'')=? AND status='open'",
-                            (kind, symbol or ""))
-        if open_:
-            return int(open_["id"])
+        open_ = todo_store.open_todo_id(self.db, kind, symbol)
+        if open_ is not None:
+            return open_
         sev, title = TODO[kind]
         name = self.info().get(symbol or "", {}).get("name") or symbol or ""
         d = data or {}
         amount = f"{round(float(d['qty']) * float(d['cap'])):,}원" if "qty" in d and "cap" in d else ""
         text = title.format(name=name, why=body or "원인 모름", amount=amount)
-        tid = self.db.run("INSERT INTO todos(run_id,kind,severity,symbol,title,body,data,status,created_at) "
-                          "VALUES(?,?,?,?,?,?,?, 'open', ?)",
-                          (rid, kind, sev, symbol, text, SCOPE.get(kind, body),
-                           json.dumps(d, ensure_ascii=False), _iso(self.now())))
+        tid = todo_store.add_todo(self.db, rid, kind, sev, symbol, text, SCOPE.get(kind, body),
+                                  json.dumps(d, ensure_ascii=False), _iso(self.now()))
         plain = re.sub(r"\s*·?\s*\[[^\]]*\]", "", text).strip()  # 텔레그램은 [종목] · [금액]을 빼요
         self.notify("todo_red" if sev == "red" else "todo_yellow", f"{plain} · 앱에서 보기")
         return tid
@@ -229,13 +222,10 @@ class Live:
             raise LiveError("운용 금액이 토스 매수 가능 금액보다 커요")
         acc = c.credentials.account_no or ""
         now = self.now()
-        rid = self.db.run("INSERT INTO runs(strategy_id,version_id,status,amount,settings,account_tail,started_at) "
-                          "VALUES(?,?,?,?,?,?,?)", (v["strategy_id"], version_id, RUNNING, float(amount),
-                                                    json.dumps(settings or {}), acc[-4:], _iso(now)))
-        self.db.run("INSERT INTO run_versions(run_id,version_id,from_d) VALUES(?,?,?)",
-                    (rid, version_id, now.astimezone(KST).date().isoformat()))
-        self.db.run("INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?,?,?,?,?)",
-                    (rid, now.astimezone(KST).date().isoformat(), "start", float(amount), None, _iso(now)))
+        rid = run_store.add_run(self.db, v["strategy_id"], version_id, RUNNING, float(amount), json.dumps(settings or {}),
+                                acc[-4:], _iso(now))
+        run_store.add_run_version(self.db, rid, version_id, now.astimezone(KST).date().isoformat())
+        run_store.add_cash(self.db, rid, now.astimezone(KST).date().isoformat(), "start", float(amount), None, _iso(now))
         # 시작할 때 계좌에 있던 보유는 모두 직접 관리 종목(R-O10)
         manual = sorted(h.symbol for h in c.holdings())
         self.save(rid, {"cash": float(amount), "pos": {}, "plans": [], "day_no": 0, "sold": {}, "manual": manual,
@@ -304,9 +294,7 @@ class Live:
         self.save(rid, st)
         self.set_meta(rid, "last_check", upto.isoformat())
         self.set_meta(rid, "check_failed", None)
-        self.db.run("INSERT INTO run_equity(run_id,d,equity,cash) VALUES(?,?,?,?) ON CONFLICT(run_id,d) DO UPDATE "
-                    "SET equity=excluded.equity, cash=excluded.cash",
-                    (rid, upto.isoformat(), eng.equity(upto.isoformat()), float(st["cash"])))
+        run_store.put_equity(self.db, rid, upto.isoformat(), eng.equity(upto.isoformat()), float(st["cash"]))
         self.notify("check_done", f"확인 끝 · 내일 주문 {len(plans)}건")
         return {"plans": plans, "for_d": for_d}
 
@@ -326,7 +314,7 @@ class Live:
             c.buying_power()
             why = "미체결"
             opened, _ = c.orders("OPEN")
-            mine = {o["toss_order_id"] for o in self.db.all("SELECT toss_order_id FROM orders WHERE run_id=?", (rid,))}
+            mine = run_store.run_toss_ids(self.db, rid)
             strange = [o for o in opened if o.order_id not in mine]
             ok = True
             if strange and any(o.symbol in {p["sym"] for p in nxt.get("plans", [])} for o in strange):
@@ -346,8 +334,7 @@ class Live:
                 self.todo(rid, "toss_down")
         if ok:
             self.set_meta(rid, "watch_off", None)
-            self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE kind IN ('precheck','toss_down') "
-                        "AND status='open'", (_iso(self.now()),))
+            todo_store.resolve_open(self.db, _iso(self.now()), "precheck", "toss_down")
         self.set_meta(rid, "precheck", json.dumps({"at": _iso(self.now()), "ok": ok}))
         n = len(nxt.get("plans", []))
         self.notify("precheck", f"장 시작 전 점검 · {'통과' if ok else '실패'} · "
@@ -403,10 +390,9 @@ class Live:
         return out
 
     def _cancel_conds(self, rid: int, c: Broker, sym: str) -> None:
-        for co in self.db.all("SELECT * FROM cond_orders WHERE run_id=? AND symbol=? AND status='watching'",
-                              (rid, sym)):
+        for co in run_store.watching_conds(self.db, rid, sym):
             c.cancel_conditional_order(co["toss_cond_id"])
-            self.db.run("UPDATE cond_orders SET status='canceled' WHERE id=?", (co["id"],))
+            run_store.set_cond_status(self.db, co["id"], "canceled")
 
     def _open_sell(self, rid: int, st: dict[str, Any], c: Broker, p: dict[str, Any], holdings: dict[str, Any],
                    today: str) -> dict[str, Any]:
@@ -464,35 +450,29 @@ class Live:
               reason: list[str], *, order_type: str = "LIMIT", rnd: int | None = None) -> dict[str, Any]:
         c = self._need()
         if rnd is None:
-            last = self.db.one("SELECT MAX(round) AS r FROM orders WHERE run_id=? AND d=? AND symbol=? AND side=?",
-                               (rid, d, sym, side.lower()))
-            rnd = int(last["r"] or 0) + 1
+            rnd = run_store.last_round(self.db, rid, d, sym, side.lower()) + 1
         cid = self.client_id(rid, d, sym, side, rnd)
-        oid = self.db.run("INSERT INTO orders(run_id,d,symbol,side,round,client_order_id,kind,qty,price,tif,status,"
-                          "reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                          (rid, d, sym, side.lower(), rnd, cid, kind, qty, price, "DAY", "sending",
-                           json.dumps({"why": reason, "step": 1}, ensure_ascii=False), _iso(self.now())))
+        oid = run_store.add_order(self.db, rid, d, sym, side.lower(), rnd, cid, None, kind, qty, price, "DAY", "sending",
+                                  json.dumps({"why": reason, "step": 1}, ensure_ascii=False), _iso(self.now()))
         try:
             toss_id = c.create_order(symbol=sym, side=side, quantity=qty, order_type=order_type,
                                      price=None if order_type == "MARKET" else Decimal(str(int(price or 0))),
                                      client_order_id=cid)
         except BrokerBadAnswer:
             self._halt(rid, "응답 이상")
-            self.db.run("UPDATE orders SET status='unknown' WHERE id=?", (oid,))
+            run_store.set_order_status(self.db, oid, "unknown")
             return {"sym": sym, "status": "unknown", "order": oid}
         except (NoAnswer, BrokerUnreachable, BrokerRejected) as exc:
             if isinstance(exc, BrokerRejected) and exc.status < 500:
-                self.db.run("UPDATE orders SET status='failed', updated_at=? WHERE id=?", (_iso(self.now()), oid))
+                run_store.set_order_status_at(self.db, oid, "failed", _iso(self.now()))
                 return {"sym": sym, "status": "failed", "order": oid}
             return self._unknown(rid, oid)
-        self.db.run("UPDATE orders SET toss_order_id=?, status='sent', updated_at=? WHERE id=?",
-                    (toss_id, _iso(self.now()), oid))
+        run_store.mark_order_sent(self.db, oid, toss_id, _iso(self.now()))
         return {"sym": sym, "status": "sent", "order": oid, "qty": qty, "price": price}
 
     def _find(self, c: Broker, o: Any) -> str | None:
         """같은 날 · 종목 · 방향 · 수량 · 가격의 토스 주문 가운데 이 앱 기록에 없는 것."""
-        known = {x["toss_order_id"] for x in self.db.all("SELECT toss_order_id FROM orders WHERE toss_order_id "
-                                                           "IS NOT NULL")}
+        known = run_store.known_toss_ids(self.db)
         for status in ("OPEN", "CLOSED"):
             rows, _ = c.orders(status, symbol=o["symbol"])
             for t in rows:
@@ -503,7 +483,7 @@ class Live:
 
     def _unknown(self, rid: int, oid: int) -> dict[str, Any]:
         """R-O12: 내역에서 3번 찾기 → 있으면 기록 · 없으면 회차 +1 · 그래도 모르면 그 종목 0 + 할 일."""
-        o = self.db.one("SELECT * FROM orders WHERE id=?", (oid,))
+        o = run_store.order(self.db, oid)
         c = self._need()
         for _ in range(LOOKUPS):
             try:
@@ -511,35 +491,33 @@ class Live:
             except (NoAnswer, BrokerError):
                 continue
             if found:
-                self.db.run("UPDATE orders SET toss_order_id=?, status='sent', updated_at=? WHERE id=?",
-                            (found, _iso(self.now()), oid))
+                run_store.mark_order_sent(self.db, oid, found, _iso(self.now()))
                 return {"sym": o["symbol"], "status": "sent", "order": oid, "found": True}
-            self.db.run("UPDATE orders SET status='absent', updated_at=? WHERE id=?", (_iso(self.now()), oid))
+            run_store.set_order_status_at(self.db, oid, "absent", _iso(self.now()))
             if int(o["round"]) >= 2:
                 break
             reason = json.loads(o["reason"] or "{}").get("why", [])
             return self._send(rid, o["d"], o["symbol"], o["side"].upper(), int(o["qty"]), o["price"], o["kind"],
                               reason, rnd=int(o["round"]) + 1)
-        self.db.run("UPDATE orders SET status='unknown', updated_at=? WHERE id=?", (_iso(self.now()), oid))
+        run_store.set_order_status_at(self.db, oid, "unknown", _iso(self.now()))
         self.block(rid, o["symbol"], "결과 모르는 주문")
         self.todo(rid, "unknown", o["symbol"], data={"order": oid})
         return {"sym": o["symbol"], "status": "unknown", "order": oid}
 
     def resolve_unknown(self, rid: int, order_id: int, *, filled_qty: int = 0, price: float = 0.0) -> None:
         """사람이 정해요: '체결됐어요(수량 · 가격)' / '주문이 없어요'(비밀번호 · 결과 모르는 주문 기록)."""
-        o = self.db.one("SELECT * FROM orders WHERE id=? AND run_id=?", (order_id, rid))
+        o = run_store.run_order(self.db, order_id, rid)
         if o is None or o["status"] != "unknown":
             raise LiveError("결과 모르는 주문이 아니에요")
         st = self.state(rid)
         if filled_qty > 0:
             self._apply_fill(rid, st, o, filled_qty, price, 0.0, 0.0, note="사람이 기록")
-            self.db.run("UPDATE orders SET status='filled' WHERE id=?", (order_id,))
+            run_store.set_order_status(self.db, order_id, "filled")
         else:
-            self.db.run("UPDATE orders SET status='absent' WHERE id=?", (order_id,))
+            run_store.set_order_status(self.db, order_id, "absent")
         self.unblock(rid, o["symbol"])
         self.save(rid, st)
-        self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE kind='unknown' AND symbol=? AND "
-                    "status='open'", (_iso(self.now()), o["symbol"]))
+        todo_store.resolve_open_for(self.db, _iso(self.now()), "unknown", o["symbol"])
 
     # ── 체결 대조(R-O13) ───────────────────────────────────────────────────
 
@@ -548,8 +526,7 @@ class Live:
         if qty <= 0:
             return
         sym = o["symbol"]
-        self.db.run("INSERT INTO fills(order_id,qty,price,commission,tax,filled_at,note) VALUES(?,?,?,?,?,?,?)",
-                    (o["id"], qty, price, commission, tax, _iso(self.now()), note))
+        run_store.add_fill(self.db, o["id"], qty, price, commission, tax, _iso(self.now()), note)
         cost = commission + tax
         if not commission and not tax:
             cost = qty * price * (FEE + (SELL_TAX if o["side"] == "sell" else 0))
@@ -561,8 +538,7 @@ class Live:
             p["peak"] = max(float(p.get("peak") or price), price)
             st["pos"][sym] = p
             st["cash"] = float(st["cash"]) - qty * price - cost
-            self.db.run("INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?,?,?,?,?)",
-                        (rid, o["d"], "buy", -(qty * price + cost), str(o["id"]), _iso(self.now())))
+            run_store.add_cash(self.db, rid, o["d"], "buy", -(qty * price + cost), str(o["id"]), _iso(self.now()))
         else:
             p = st["pos"].get(sym)
             if p:
@@ -571,14 +547,13 @@ class Live:
                     del st["pos"][sym]
                     st["sold"][sym] = o["d"]
             st["cash"] = float(st["cash"]) + qty * price - cost
-            self.db.run("INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?,?,?,?,?)",
-                        (rid, o["d"], "sell", qty * price - cost, str(o["id"]), _iso(self.now())))
+            run_store.add_cash(self.db, rid, o["d"], "sell", qty * price - cost, str(o["id"]), _iso(self.now()))
 
     def sync_fills(self, rid: int) -> dict[str, int]:
         c = self._need()
         st = self.state(rid)
         done = {"filled": 0, "partial": 0, "failed": 0}
-        for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND status IN ('sent','partial')", (rid,)):
+        for o in run_store.open_orders(self.db, rid):
             try:
                 t = c.order(o["toss_order_id"])
             except BrokerBadAnswer:
@@ -588,27 +563,26 @@ class Live:
                 continue
             ex = t.execution
             filled = int(ex.filled_qty or 0)
-            before = int(self.db.one("SELECT IFNULL(SUM(qty),0) AS q FROM fills WHERE order_id=?", (o["id"],))["q"])
+            before = run_store.filled_qty(self.db, o["id"])
             new_qty = filled - before
             if new_qty > 0:
                 self._apply_fill(rid, st, o, new_qty, float(ex.avg_price or o["price"] or 0),
                                  float(ex.commission or 0) * new_qty / max(filled, 1),
                                  float(ex.tax or 0) * new_qty / max(filled, 1))
             if t.status == "FILLED":
-                self.db.run("UPDATE orders SET status='filled', updated_at=? WHERE id=?", (_iso(self.now()), o["id"]))
+                run_store.set_order_status_at(self.db, o["id"], "filled", _iso(self.now()))
                 done["filled"] += 1
                 if o["side"] == "sell":
                     st["sell_fail"].pop(o["symbol"], None)
             elif t.status in ("REJECTED", "CANCELED", "EXPIRED"):
                 status = "partial" if filled else "failed"
-                self.db.run("UPDATE orders SET status=?, updated_at=? WHERE id=?",
-                            (f"{status}_closed" if filled else "failed", _iso(self.now()), o["id"]))
+                run_store.set_order_status_at(self.db, o["id"], f"{status}_closed" if filled else "failed",
+                                              _iso(self.now()))
                 done["failed"] += 1
                 if o["side"] == "sell":
                     self._sell_failed(rid, st, o)
             elif t.status == "PARTIAL_FILLED":
-                self.db.run("UPDATE orders SET status='partial', updated_at=? WHERE id=?",
-                            (_iso(self.now()), o["id"]))
+                run_store.set_order_status_at(self.db, o["id"], "partial", _iso(self.now()))
                 done["partial"] += 1
         self.save(rid, st)
         if done["filled"] or done["partial"]:
@@ -632,19 +606,17 @@ class Live:
         self.sync_fills(rid)
         c = self._need()
         today = self.now().astimezone(KST).date().isoformat()
-        for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND d=? AND side='buy' AND status IN "
-                             "('sent','partial')", (rid, today)):
+        for o in run_store.open_buys_on(self.db, rid, today):
             try:
                 c.cancel_order(o["toss_order_id"])
             except BrokerError:
                 continue
-            filled = int(self.db.one("SELECT IFNULL(SUM(qty),0) AS q FROM fills WHERE order_id=?", (o["id"],))["q"])
+            filled = run_store.filled_qty(self.db, o["id"])
             note = f"일부 체결 {filled}/{o['qty']}주" if filled else "미체결 · 취소"
             reason = json.loads(o["reason"] or "{}")
             reason["note"] = note
-            self.db.run("UPDATE orders SET status=?, reason=?, updated_at=? WHERE id=?",
-                        ("partial_closed" if filled else "canceled", json.dumps(reason, ensure_ascii=False),
-                         _iso(self.now()), o["id"]))
+            run_store.close_order(self.db, o["id"], "partial_closed" if filled else "canceled",
+                                  json.dumps(reason, ensure_ascii=False), _iso(self.now()))
         self.place_conds(rid)
 
     # ── 응답 이상(R-O14) ──────────────────────────────────────────────────
@@ -711,8 +683,7 @@ class Live:
             price = float(q.price)
             pos = st["pos"][sym]
             pos["peak"] = max(float(pos.get("peak") or pos["avg"]), price)
-            if self.db.one("SELECT 1 FROM orders WHERE run_id=? AND symbol=? AND side='sell' AND status IN "
-                           "('sent','partial','sending')", (rid, sym)):
+            if run_store.has_pending_sell(self.db, rid, sym):
                 continue
             hits = [w for w in self.watch_levels(eng, sym) if w["exec"] == "intraday" and (
                 price <= w["trigger"] if w["side"] == "down" else price >= w["trigger"])]
@@ -736,8 +707,7 @@ class Live:
         c = self._need()
         now = self.now()
         moved = []
-        for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND kind IN ('intraday_protect','intraday_take',"
-                             "'stop_all') AND status IN ('sent','partial')", (rid,)):
+        for o in run_store.open_intraday(self.db, rid):
             last = datetime.fromisoformat(o["updated_at"] or o["created_at"])
             if now - last < STEP_WAIT:
                 continue
@@ -762,8 +732,7 @@ class Live:
             else:
                 continue
             reason["step"] = step + 1
-            self.db.run("UPDATE orders SET price=?, reason=?, updated_at=? WHERE id=?",
-                        (new_price, json.dumps(reason, ensure_ascii=False), _iso(now), o["id"]))
+            run_store.move_order(self.db, o["id"], new_price, json.dumps(reason, ensure_ascii=False), _iso(now))
             moved.append(int(o["id"]))
         return moved
 
@@ -790,7 +759,7 @@ class Live:
             levels = [w for w in self.watch_levels(eng, sym) if w["exec"] == "broker"]
             stop = next((w["trigger"] for w in levels if w["item"] == "stop_loss"), None)
             take = next((w["trigger"] for w in levels if w["item"] == "take_profit"), None)
-            cur = self.db.one("SELECT * FROM cond_orders WHERE run_id=? AND symbol=? AND status='watching'", (rid, sym))
+            cur = run_store.watching_cond(self.db, rid, sym)
             if stop is None and take is None:
                 if cur:
                     self._cancel_conds(rid, c, sym)
@@ -816,10 +785,8 @@ class Live:
             except (BrokerError, NoAnswer):
                 self.todo(rid, "cond_fail", sym)
                 continue
-            self.db.run("INSERT INTO cond_orders(run_id,symbol,toss_cond_id,kind,qty,stop_trigger,take_trigger,expire,"
-                        "status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                        (rid, sym, cid, kind, int(p["qty"]), stop_t, take_t, expire.isoformat(), "watching",
-                         _iso(self.now())))
+            run_store.add_cond(self.db, rid, sym, cid, kind, int(p["qty"]), stop_t, take_t, expire.isoformat(), "watching",
+                               _iso(self.now()))
             made.append(cid)
         return made
 
@@ -829,37 +796,34 @@ class Live:
         st = self.state(rid)
         now = self.now()
         out = []
-        for co in self.db.all("SELECT * FROM cond_orders WHERE run_id=? AND status IN ('watching','triggered')",
-                              (rid,)):
+        for co in run_store.live_conds(self.db, rid):
             t = c.conditional_order(co["toss_cond_id"])
             legs = [x for x in (t.first, t.second) if x is not None]
             fired = [x for x in legs if x.status in ("ORDERING", "ORDERED", "COMPLETED")]
             if not fired:
                 continue
             if co["status"] == "watching":
-                self.db.run("UPDATE cond_orders SET status='triggered', triggered_at=? WHERE id=?", (_iso(now), co["id"]))
-                co = self.db.one("SELECT * FROM cond_orders WHERE id=?", (co["id"],))
+                run_store.trigger_cond(self.db, co["id"], _iso(now))
+                co = run_store.cond(self.db, co["id"])
             leg = fired[0]
             filled = 0
             if leg.triggered_order_id:
                 o = c.order(leg.triggered_order_id)
                 filled = int(o.execution.filled_qty or 0)
                 if filled:
-                    oid = self.db.run(
-                        "INSERT INTO orders(run_id,d,symbol,side,round,client_order_id,toss_order_id,kind,qty,price,tif,"
-                        "status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (rid, now.astimezone(KST).date().isoformat(), co["symbol"], "sell", 1,
-                         f"cond-{co['toss_cond_id']}", leg.triggered_order_id, "cond", filled,
-                         float(o.execution.avg_price or 0), "DAY", "filled",
-                         json.dumps({"why": ["조건주문 체결"]}, ensure_ascii=False), _iso(now)))
-                    row = self.db.one("SELECT * FROM orders WHERE id=?", (oid,))
+                    oid = run_store.add_order(
+                        self.db, rid, now.astimezone(KST).date().isoformat(), co["symbol"], "sell", 1,
+                        f"cond-{co['toss_cond_id']}", leg.triggered_order_id, "cond", filled,
+                        float(o.execution.avg_price or 0), "DAY", "filled",
+                        json.dumps({"why": ["조건주문 체결"]}, ensure_ascii=False), _iso(now))
+                    row = run_store.order(self.db, oid)
                     self._apply_fill(rid, st, row, filled, float(o.execution.avg_price or 0), 0, 0)
-                    self.db.run("UPDATE cond_orders SET status='filled' WHERE id=?", (co["id"],))
+                    run_store.set_cond_status(self.db, co["id"], "filled")
                     out.append(co["symbol"])
                     continue
             if now - datetime.fromisoformat(co["triggered_at"]) > TRIGGER_WAIT:
                 c.cancel_conditional_order(co["toss_cond_id"])
-                self.db.run("UPDATE cond_orders SET status='canceled' WHERE id=?", (co["id"],))
+                run_store.set_cond_status(self.db, co["id"], "canceled")
                 st.setdefault("retry_protect", {})[co["symbol"]] = True
                 out.append(co["symbol"])
         self.save(rid, st)
@@ -882,14 +846,14 @@ class Live:
             if acct > app and ratio == int(ratio) and ratio >= 2:  # 분할 · 무상증자 꼴(R-L8)
                 self.block(rid, sym, "권리 변동"); st["blocked"][sym] = "권리 변동"
                 self.todo(rid, "corp", sym, data={"ratio": ratio, "qty": acct, "avg": p["avg"] / ratio})
-                self.db.run("INSERT INTO corp_actions(run_id,symbol,kind,ratio,detected_at,data) VALUES(?,?,?,?,?,?)",
-                            (rid, sym, "split", ratio, _iso(self.now()), json.dumps({"from": app, "to": acct})))
+                run_store.add_corp_action(self.db, rid, sym, "split", ratio, _iso(self.now()),
+                                          json.dumps({"from": app, "to": acct}))
                 out["corp"].append(sym)
             elif acct < app:
                 self.block(rid, sym, "계좌 불일치"); st["blocked"][sym] = "계좌 불일치"
                 self.todo(rid, "mismatch", sym, data={"app": app, "account": acct})
                 out["mismatch"].append(sym)
-        mine = {o["toss_order_id"] for o in self.db.all("SELECT toss_order_id FROM orders WHERE toss_order_id IS NOT NULL")}
+        mine = run_store.known_toss_ids(self.db)
         opened, _ = c.orders("OPEN")
         for t in opened:
             if t.order_id not in mine and t.symbol in st["pos"]:
@@ -906,9 +870,8 @@ class Live:
             if inc > 0 and div > 0 and abs(inc - div) <= max(1.0, div * 0.01):
                 st["cash"] = float(st["cash"]) + div
                 out["dividend"] = div
-                self.db.run("INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?,?,?,?,?)",
-                            (rid, self.now().astimezone(KST).date().isoformat(), "dividend", div, None,
-                             _iso(self.now())))
+                run_store.add_cash(self.db, rid, self.now().astimezone(KST).date().isoformat(), "dividend", div, None,
+                                   _iso(self.now()))
                 self.notify("info", "배당 입금 · 앱에서 보기")
         if float(st["cash"]) > acct_cash:
             out["cut"] = float(st["cash"]) - acct_cash
@@ -921,8 +884,7 @@ class Live:
     def apply_corp(self, rid: int, sym: str) -> None:
         """사람이 맞추면(비밀번호) 새 수량 · 단가 · 감시가로 바꾸고 조건주문을 다시 걸어요(R-L8)."""
         st = self.state(rid)
-        ca = self.db.one("SELECT * FROM corp_actions WHERE run_id=? AND symbol=? AND applied_at IS NULL "
-                         "ORDER BY id DESC LIMIT 1", (rid, sym))
+        ca = run_store.pending_corp_action(self.db, rid, sym)
         if ca is None:
             raise LiveError("맞출 권리 변동이 없어요")
         ratio = float(ca["ratio"])
@@ -933,9 +895,8 @@ class Live:
             p["peak"] = p["peak"] / ratio
         self.unblock(rid, sym)
         self.save(rid, st)
-        self.db.run("UPDATE corp_actions SET applied_at=? WHERE id=?", (_iso(self.now()), ca["id"]))
-        self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE kind='corp' AND symbol=? AND "
-                    "status='open'", (_iso(self.now()), sym))
+        run_store.apply_corp_action(self.db, ca["id"], _iso(self.now()))
+        todo_store.resolve_open_for(self.db, _iso(self.now()), "corp", sym)
         self.place_conds(rid)
 
     # ── 멈추기 셋 · 전략 변경 · 계좌번호(R-L9 · R-L10) ──────────────────────
@@ -948,14 +909,13 @@ class Live:
         r = self.run()
         if r is not None:  # 미체결 매수 취소 · 오늘 계획의 매수 빼기
             c = self.client()
-            for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND side='buy' AND status IN ('sent','partial')",
-                                 (r["id"],)):
+            for o in run_store.open_buys(self.db, r["id"]):
                 if c is not None:
                     try:
                         c.cancel_order(o["toss_order_id"])
                     except BrokerError:
                         continue
-                self.db.run("UPDATE orders SET status='canceled' WHERE id=?", (o["id"],))
+                run_store.set_order_status(self.db, o["id"], "canceled")
             st = self.state(int(r["id"]))
             if st.get("next"):
                 st["next"]["plans"] = [p for p in st["next"]["plans"] if p["side"] == "sell"]
@@ -974,16 +934,15 @@ class Live:
         st = self.state(rid)
         for sym in list(st["pos"]):
             self._cancel_conds(rid, c, sym)
-        for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND status IN ('sent','partial')", (rid,)):
+        for o in run_store.open_orders(self.db, rid):
             try:
                 c.cancel_order(o["toss_order_id"])
             except BrokerError:
                 pass
-            self.db.run("UPDATE orders SET status='canceled' WHERE id=?", (o["id"],))
+            run_store.set_order_status(self.db, o["id"], "canceled")
         st["manual"] = sorted(set(st["manual"]) | set(st["pos"]))
         self.save(rid, st)
-        self.db.run("UPDATE runs SET status=?, ended_at=?, end_kind=? WHERE id=?",
-                    (ENDED, _iso(self.now()), "keep", rid))
+        run_store.end_run(self.db, rid, ENDED, _iso(self.now()), "keep")
         self.notify("info", "운용을 끝냈어요 · 보유는 직접 관리 종목이 돼요")
 
     def sell_all_and_end(self, rid: int) -> list[dict[str, Any]]:
@@ -1027,8 +986,7 @@ class Live:
         st = self.state(rid)
         if any(s not in st["blocked"] for s in st["pos"]):
             return False
-        self.db.run("UPDATE runs SET status=?, ended_at=?, end_kind=? WHERE id=?",
-                    (ENDED, _iso(self.now()), "sell_all", rid))
+        run_store.end_run(self.db, rid, ENDED, _iso(self.now()), "sell_all")
         return True
 
     def change_strategy(self, rid: int, version_id: int) -> str:
@@ -1038,9 +996,8 @@ class Live:
         cal = self.market.calendar
         now = self.now().astimezone(KST)
         from_d = now.date() if cal.is_open(now.date()) and now.time() < CHECK_AT else cal.next_open(now.date())
-        self.db.run("INSERT INTO run_versions(run_id,version_id,from_d) VALUES(?,?,?) ON CONFLICT(run_id,from_d) DO "
-                    "UPDATE SET version_id=excluded.version_id", (rid, version_id, from_d.isoformat()))
-        self.db.run("UPDATE runs SET version_id=? WHERE id=?", (version_id, rid))
+        run_store.put_run_version(self.db, rid, version_id, from_d.isoformat())
+        run_store.set_run_version(self.db, rid, version_id)
         self.place_conds(rid)
         return from_d.isoformat()
 
@@ -1053,10 +1010,9 @@ class Live:
         diff = float(amount) - float(r["amount"])
         st["cash"] = float(st["cash"]) + diff
         self.save(rid, st)
-        self.db.run("UPDATE runs SET amount=? WHERE id=?", (float(amount), rid))
-        self.db.run("INSERT INTO run_cash(run_id,d,kind,amount,ref,at) VALUES(?,?,?,?,?,?)",
-                    (rid, self.now().astimezone(KST).date().isoformat(), "amount_change", diff, None,
-                     _iso(self.now())))
+        run_store.set_run_amount(self.db, rid, float(amount))
+        run_store.add_cash(self.db, rid, self.now().astimezone(KST).date().isoformat(), "amount_change", diff, None,
+                           _iso(self.now()))
 
     def set_limits(self, rid: int, limits: dict[str, Any]) -> dict[str, Any]:
         r = self.run(rid)
@@ -1076,7 +1032,7 @@ class Live:
             if not 0 < v <= 99_990_000:
                 raise LiveError("주문 하나는 9,999만 원까지 정할 수 있어요")
             settings["order_max"] = v
-        self.db.run("UPDATE runs SET settings=? WHERE id=?", (json.dumps(settings), rid))
+        run_store.set_run_settings(self.db, rid, json.dumps(settings))
         return settings
 
     def match_account(self, rid: int, sym: str) -> None:
@@ -1091,24 +1047,22 @@ class Live:
             st["pos"][sym]["qty"] = acct
         self.unblock(rid, sym)
         self.save(rid, st)
-        self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE kind='mismatch' AND symbol=? AND "
-                    "status='open'", (_iso(self.now()), sym))
+        todo_store.resolve_open_for(self.db, _iso(self.now()), "mismatch", sym)
 
     def send_big(self, rid: int, todo_id: int) -> dict[str, Any]:
         """큰 주문 보내기(비밀번호): 할 일에 남긴 수량 · 상한 그대로 한 번에 보내요(1억 이상도 나눠 내지 않아요)."""
-        t = self.db.one("SELECT * FROM todos WHERE id=? AND kind IN ('huge','too_big') AND status='open'", (todo_id,))
+        t = todo_store.open_big_order(self.db, todo_id)
         if t is None:
             raise LiveError("보낼 큰 주문이 없어요")
         data = json.loads(t["data"] or "{}")
         res = self._send(rid, self.now().astimezone(KST).date().isoformat(), t["symbol"], "BUY", int(data["qty"]),
                          float(data["cap"]), "open_buy", ["큰 주문 · 사람이 보냄"])
-        self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE id=?", (_iso(self.now()), todo_id))
+        todo_store.resolve_todo(self.db, todo_id, _iso(self.now()))
         return res
 
     def view(self) -> dict[str, Any]:
         r = self.run()
-        todos = [dict(t) for t in self.db.all("SELECT id,kind,severity,symbol,title,body,created_at FROM todos "
-                                               "WHERE status='open' ORDER BY id DESC")]
+        todos = [dict(t) for t in todo_store.open_todos(self.db)]
         if r is None:
             return {"running": False, "paused": self.paused, "halted": self.halted, "todos": todos}
         rid = int(r["id"])
@@ -1143,10 +1097,10 @@ class Live:
                 account = None
         base["account"] = account
         base["names"] = names
-        alerts = [dict(a) for a in self.db.all("SELECT id,at,live,kind,title,read FROM alerts ORDER BY id DESC LIMIT 50")]
+        alerts = [dict(a) for a in todo_store.recent_alerts(self.db)]
         base["alerts"] = alerts
         if not base["running"]:
-            last = self.db.one("SELECT * FROM runs ORDER BY id DESC LIMIT 1")
+            last = run_store.latest_run(self.db)
             base["last_run"] = dict(last) if last else None
             return base
         rid = int(base["id"])
@@ -1164,8 +1118,7 @@ class Live:
         base["holdings"] = pos
         base["eval"] = value
         base["equity"] = value + float(base["cash"] or 0)
-        base["curve"] = [(x["d"], x["equity"]) for x in self.db.all(
-            "SELECT d, equity FROM run_equity WHERE run_id=? ORDER BY d", (rid,))]
+        base["curve"] = [(x["d"], x["equity"]) for x in run_store.equity_curve(self.db, rid)]
         plans = []
         for pl in (base.get("next") or {}).get("plans", []):
             row = {"sym": pl["sym"], "name": names.get(pl["sym"], pl["sym"]), "side": pl["side"],
@@ -1180,8 +1133,7 @@ class Live:
         base["plan_rows"] = plans
         hist = [h for h in history_rows(self.db, rid)]
         base["history"] = list(reversed(hist))
-        fills = self.db.all("SELECT o.d, o.symbol, o.side, f.qty, f.price FROM fills f JOIN orders o ON o.id=f.order_id "
-                            "WHERE o.run_id=? ORDER BY f.id DESC LIMIT 5", (rid,))
+        fills = run_store.recent_fills(self.db, rid)
         base["recent"] = [{"d": f["d"], "sym": f["symbol"], "name": names.get(f["symbol"], f["symbol"]),
                            "side": f["side"], "qty": int(f["qty"]), "price": float(f["price"])} for f in fills]
         base["realized"] = sum(h["pnl"] or 0 for h in hist)
