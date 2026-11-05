@@ -1,4 +1,4 @@
-"""조건 카탈로그(TASKS T-20): 문서 표(DATA-CATALOG 1절 · ENGINE-RULES 11-3)와 `app/catalog.py`가 같아요.
+"""조건 카탈로그(TASKS T-20): 문서 표(DATA-CATALOG 1절 · ENGINE-RULES 11-3)와 `app/catalog.py`가 같아요(1단계: 얼린 판 · Q-N18).
 
 항목 수 · 순서 · id · op · params 키 · 블록 열 · 강도 열 · 별칭, 그리고 DATA-CATALOG의 글자 열(항목 · 비교 ·
 값 범위 · 단위 · 출처 · 백테스트 · 블록)을 문서에서 읽어 비교해요.
