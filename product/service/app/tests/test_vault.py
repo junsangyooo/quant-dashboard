@@ -9,14 +9,14 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from app.store.db import DB
-from app.vault import (
+from app.security.vault import (
     LOCK_S,
     Vault,
     VaultError,
-    normalize_recovery_code,
     seal,
     unseal,
 )
+from app.vault import normalize_recovery_code
 
 N = 2**12
 PW = "first-password"

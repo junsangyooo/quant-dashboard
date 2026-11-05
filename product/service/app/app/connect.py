@@ -22,7 +22,7 @@ from .adapters.toss import (
     Transport,
     link_state,
 )
-from .vault import Vault, VaultError
+from .security.vault import Vault, VaultError
 
 TOSS_ID = "toss.client_id"
 TOSS_SECRET = "toss.client_secret"

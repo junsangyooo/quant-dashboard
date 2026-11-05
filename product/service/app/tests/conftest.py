@@ -73,7 +73,7 @@ class CsrfClient(TestClient):
 def keyfile_path(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     with tempfile.TemporaryDirectory(prefix="quant-test-kf-") as d:
         path = Path(d) / "keyfile"
-        monkeypatch.setattr("app.vault.KEYFILE_PATH", path)
+        monkeypatch.setattr("app.security.vault.KEYFILE_PATH", path)
         yield path
 
 

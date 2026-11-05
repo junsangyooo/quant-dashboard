@@ -66,8 +66,8 @@ from .adapters.telegram import TelegramError
 from .telegram import Telegram
 from .adapters.toss import TossSource
 from .adapters.transport import Transport, Transports, build_transports
-from . import vault as vault_mod
-from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
+from .security import vault as vault_mod
+from .security.vault import SCRYPT_N, SESSION_S, Vault, VaultError
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO = ROOT.parent.parent.parent  # 레포 뿌리(product/service/app → 레포)

@@ -20,7 +20,7 @@ from .adapters.telegram import Bot, TelegramError
 from .adapters.transport import Transport
 from .store import db as store_db, todos as todo_store  # 저장 층(SQL은 store/)
 from .ports import Clock
-from .vault import Vault, VaultError
+from .security.vault import Vault, VaultError
 
 log = logging.getLogger("quant-mvp")
 

@@ -1,6 +1,6 @@
 """시험 중 키 파일 · HOME은 임시 폴더(P1-02 ④ · QUALITY S1 · ARCHITECTURE 7절 '자식 프로세스는 HOME을 임시 폴더로').
 
-- conftest가 앱을 import하기 전에 HOME을 운영체제 임시 폴더로 바꿔요. 키 파일 경로(`app.vault.KEYFILE_PATH`)도 autouse
+- conftest가 앱을 import하기 전에 HOME을 운영체제 임시 폴더로 바꿔요. 키 파일 경로(`app.security.vault.KEYFILE_PATH`)도 autouse
   fixture가 임시 폴더로 바꿔요. 실제 `~/.config/quant-service/`는 만들지도 읽지도 않아요.
 - 임시 폴더가 `tests/.tmp`(basetemp)가 아니라 운영체제 임시 폴더인 까닭: 레포 안 키 파일은 앱이 거절해요(`Vault(forbidden_dirs=…)`).
 - 자식 프로세스: 시험이 띄우는 pytest(`test_no_orders.py`) · 기준선 도구가 띄우는 pytest · npm · node(`tests.baseline.capture`
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from app import vault as vault_mod
+from app.security import vault as vault_mod
 from tests import conftest
 from tests.baseline import capture
 from tests.test_install import _free_port, _http  # 루프백 소켓으로 직접(conftest가 create_connection을 막아요)
@@ -107,7 +107,7 @@ def test_temp_home_env_for_children(tmp_path: Path) -> None:
                              env=env, capture_output=True, text=True, check=True).stdout.split()
         assert out == [str(home), str(home)]
         # 자식 pytest도 같은 환경을 물려받아 HOME 아래에 키 파일 기본 경로를 둬요
-        out2 = subprocess.run([sys.executable, "-c", "from app import vault; print(vault.DEFAULT_KEYFILE_PATH)"],
+        out2 = subprocess.run([sys.executable, "-c", "from app.security import vault; print(vault.DEFAULT_KEYFILE_PATH)"],
                               env=env, cwd=APP, capture_output=True, text=True, check=True).stdout.strip()
         assert out2 == str(home / ".config" / "quant-service" / "keyfile")
     assert not home.exists()  # 끝나면 지워요
