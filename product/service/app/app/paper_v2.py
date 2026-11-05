@@ -25,6 +25,7 @@ from .domain.engine import Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
 from .domain.markets.kr import KST, complete_until
 from .market import Market
+from .ports import Clock
 from .domain.rules import RuleLayer
 
 MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
@@ -54,7 +55,7 @@ def _now_iso(now: datetime) -> str:
 
 
 class PaperV2:
-    def __init__(self, db: DB, market: Market, *, now: Callable[[], datetime],
+    def __init__(self, db: DB, market: Market, *, now: Clock,
                  info: Callable[[], dict[str, dict[str, Any]]] | None = None,
                  data_extra: Callable[[dict[str, Any], MarketData], None] | None = None) -> None:
         self.db = db

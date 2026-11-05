@@ -14,12 +14,12 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any
 
 from .adapters.telegram import Bot, TelegramError
 from .adapters.transport import Transport
 from .db import DB
+from .ports import Clock
 from .vault import Vault, VaultError
 
 log = logging.getLogger("quant-mvp")
@@ -101,7 +101,7 @@ HELP_REPLY = "명령은 /상태 · /멈춤 둘이에요"
 
 
 class Telegram:
-    def __init__(self, db: DB, vault: Vault, transport: Transport, *, now: Callable[[], datetime],
+    def __init__(self, db: DB, vault: Vault, transport: Transport, *, now: Clock,
                  status: Callable[[], dict[str, Any]], pause: Callable[[str], bool],
                  link: Callable[[], str | None] = lambda: None) -> None:
         self.db = db

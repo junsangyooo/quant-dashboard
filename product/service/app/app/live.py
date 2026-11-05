@@ -7,7 +7,7 @@
 - 결과 모르는 주문(R-O11 · R-O12) · 응답 이상(R-O14) · 대조 · 배당 · 기업 행동(R-L6 ~ R-L8) · 멈추기 셋(R-L9) ·
   전략 변경 · 계좌번호 잠금(R-L10).
 - 엔진 상태(현금 · 보유 · 계획)는 `live_state`에 두고, 진짜 체결이 올 때만 바꿔요. 주문 · 체결 · 조건주문 · 할 일은 표에.
-- 토스 전송은 `client()`가 주는 객체만 써요(기본 가짜 · T-00). 이 파일은 소켓을 쓰지 않아요.
+- 증권사는 `client()`가 주는 `Broker` 포트(`ports.py` · 조립이 토스 어댑터를 넣어 줌)만 써요(기본 가짜 · T-00). 이 파일은 소켓을 쓰지 않아요.
 """
 
 from __future__ import annotations
@@ -28,8 +28,16 @@ from .domain.indicators import Series
 from .domain.markets.kr import KST, complete_until, lower_limit, tick_round, ticks_below
 from .domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor
 from .market import Market
-from .adapters.toss import TossApiError, TossClient, TossError, TossShapeError, TossUnreachableError
-from .adapters.transport import TransportError
+from .ports import (
+    Broker,
+    BrokerBadAnswer,
+    BrokerError,
+    BrokerRejected,
+    BrokerUnreachable,
+    Clock,
+    NoAnswer,
+    Notifier,
+)
 
 DART_ITEMS = {i for i, it in CATALOG.items() if it.lock == "dart"}
 RUNNING = "running"
@@ -88,8 +96,8 @@ def _iso(dt: datetime) -> str:
 
 
 class Live:
-    def __init__(self, db: DB, market: Market, client: Callable[[], TossClient | None], *,
-                 now: Callable[[], datetime], notify: Callable[[str, str], object] | None = None,
+    def __init__(self, db: DB, market: Market, client: Callable[[], Broker | None], *,
+                 now: Clock, notify: Notifier | None = None,
                  info: Callable[[], dict[str, dict[str, Any]]] | None = None,
                  dps: Callable[[str], float | None] | None = None) -> None:
         self.db = db
@@ -238,7 +246,7 @@ class Live:
             self.check(rid)
         return rid
 
-    def _need(self) -> TossClient:
+    def _need(self) -> Broker:
         c = self.client()
         if c is None:
             raise LiveError("토스 연결이 필요해요 · 시세와 계좌를 토스에서 받아요 · 연결 ›")
@@ -322,7 +330,7 @@ class Live:
             ok = True
             if strange and any(o.symbol in {p["sym"] for p in nxt.get("plans", [])} for o in strange):
                 ok = False
-        except TossApiError as exc:
+        except BrokerRejected as exc:
             ok = False
             if exc.status == 403:
                 why = "허용 IP"
@@ -330,7 +338,7 @@ class Live:
                 self.set_meta(rid, "watch_off", self.now().astimezone(KST).date().isoformat())
             if exc.status == 401 and why != "토큰":
                 self.todo(rid, "other_user")
-        except (TossError, LiveError, TransportError):
+        except (BrokerError, LiveError, NoAnswer):
             ok = False
             if why == "토큰":
                 self.set_meta(rid, "watch_off", self.now().astimezone(KST).date().isoformat())
@@ -393,13 +401,13 @@ class Live:
         self.save(rid, st)
         return out
 
-    def _cancel_conds(self, rid: int, c: TossClient, sym: str) -> None:
+    def _cancel_conds(self, rid: int, c: Broker, sym: str) -> None:
         for co in self.db.all("SELECT * FROM cond_orders WHERE run_id=? AND symbol=? AND status='watching'",
                               (rid, sym)):
             c.cancel_conditional_order(co["toss_cond_id"])
             self.db.run("UPDATE cond_orders SET status='canceled' WHERE id=?", (co["id"],))
 
-    def _open_sell(self, rid: int, st: dict[str, Any], c: TossClient, p: dict[str, Any], holdings: dict[str, Any],
+    def _open_sell(self, rid: int, st: dict[str, Any], c: Broker, p: dict[str, Any], holdings: dict[str, Any],
                    today: str) -> dict[str, Any]:
         sym = p["sym"]
         if sym in st["blocked"]:
@@ -421,7 +429,7 @@ class Live:
         return self._send(rid, today, sym, "SELL", qty, price, "open_sell_protect" if protect else "open_sell",
                           p.get("reason") or [])
 
-    def _open_buy(self, rid: int, st: dict[str, Any], c: TossClient, p: dict[str, Any], cash: float, today: str,
+    def _open_buy(self, rid: int, st: dict[str, Any], c: Broker, p: dict[str, Any], cash: float, today: str,
                   amount: float) -> dict[str, Any]:
         sym = p["sym"]
         if sym in st["blocked"] or sym in st["manual"]:
@@ -467,12 +475,12 @@ class Live:
             toss_id = c.create_order(symbol=sym, side=side, quantity=qty, order_type=order_type,
                                      price=None if order_type == "MARKET" else Decimal(str(int(price or 0))),
                                      client_order_id=cid)
-        except TossShapeError:
+        except BrokerBadAnswer:
             self._halt(rid, "응답 이상")
             self.db.run("UPDATE orders SET status='unknown' WHERE id=?", (oid,))
             return {"sym": sym, "status": "unknown", "order": oid}
-        except (TransportError, TossUnreachableError, TossApiError) as exc:
-            if isinstance(exc, TossApiError) and exc.status < 500:
+        except (NoAnswer, BrokerUnreachable, BrokerRejected) as exc:
+            if isinstance(exc, BrokerRejected) and exc.status < 500:
                 self.db.run("UPDATE orders SET status='failed', updated_at=? WHERE id=?", (_iso(self.now()), oid))
                 return {"sym": sym, "status": "failed", "order": oid}
             return self._unknown(rid, oid)
@@ -480,7 +488,7 @@ class Live:
                     (toss_id, _iso(self.now()), oid))
         return {"sym": sym, "status": "sent", "order": oid, "qty": qty, "price": price}
 
-    def _find(self, c: TossClient, o: Any) -> str | None:
+    def _find(self, c: Broker, o: Any) -> str | None:
         """같은 날 · 종목 · 방향 · 수량 · 가격의 토스 주문 가운데 이 앱 기록에 없는 것."""
         known = {x["toss_order_id"] for x in self.db.all("SELECT toss_order_id FROM orders WHERE toss_order_id "
                                                            "IS NOT NULL")}
@@ -499,7 +507,7 @@ class Live:
         for _ in range(LOOKUPS):
             try:
                 found = self._find(c, o)
-            except (TransportError, TossError):
+            except (NoAnswer, BrokerError):
                 continue
             if found:
                 self.db.run("UPDATE orders SET toss_order_id=?, status='sent', updated_at=? WHERE id=?",
@@ -572,10 +580,10 @@ class Live:
         for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND status IN ('sent','partial')", (rid,)):
             try:
                 t = c.order(o["toss_order_id"])
-            except TossShapeError:
+            except BrokerBadAnswer:
                 self._halt(rid, "응답 이상")
                 break
-            except (TransportError, TossError):
+            except (NoAnswer, BrokerError):
                 continue
             ex = t.execution
             filled = int(ex.filled_qty or 0)
@@ -627,7 +635,7 @@ class Live:
                              "('sent','partial')", (rid, today)):
             try:
                 c.cancel_order(o["toss_order_id"])
-            except TossError:
+            except BrokerError:
                 continue
             filled = int(self.db.one("SELECT IFNULL(SUM(qty),0) AS q FROM fills WHERE order_id=?", (o["id"],))["q"])
             note = f"일부 체결 {filled}/{o['qty']}주" if filled else "미체결 · 취소"
@@ -689,7 +697,7 @@ class Live:
         prev = {s: eng.data.series[s].close_on_or_before(today.isoformat()) for s in held if s in eng.data.series}
         try:
             checked = c.prices_checked(held, prev_close=prev)
-        except TossShapeError:
+        except BrokerBadAnswer:
             self._halt(rid, "응답 이상")
             return []
         out = []
@@ -804,7 +812,7 @@ class Live:
             try:
                 cid = c.create_conditional_order(symbol=sym, kind=kind, quantity=int(p["qty"]), expire=expire,
                                                  first=legs[0], second=legs[1] if len(legs) > 1 else None)
-            except (TossError, TransportError):
+            except (BrokerError, NoAnswer):
                 self.todo(rid, "cond_fail", sym)
                 continue
             self.db.run("INSERT INTO cond_orders(run_id,symbol,toss_cond_id,kind,qty,stop_trigger,take_trigger,expire,"
@@ -944,7 +952,7 @@ class Live:
                 if c is not None:
                     try:
                         c.cancel_order(o["toss_order_id"])
-                    except TossError:
+                    except BrokerError:
                         continue
                 self.db.run("UPDATE orders SET status='canceled' WHERE id=?", (o["id"],))
             st = self.state(int(r["id"]))
@@ -968,7 +976,7 @@ class Live:
         for o in self.db.all("SELECT * FROM orders WHERE run_id=? AND status IN ('sent','partial')", (rid,)):
             try:
                 c.cancel_order(o["toss_order_id"])
-            except TossError:
+            except BrokerError:
                 pass
             self.db.run("UPDATE orders SET status='canceled' WHERE id=?", (o["id"],))
         st["manual"] = sorted(set(st["manual"]) | set(st["pos"]))
@@ -1130,7 +1138,7 @@ class Live:
                 account = {"total": cash + sum(float(h.qty) * float(h.last_price) for h in hs), "cash": cash,
                            "holdings": [{"sym": h.symbol, "name": h.name, "qty": int(h.qty), "avg": float(h.avg_price),
                                          "price": float(h.last_price)} for h in hs]}
-            except (TossError, TransportError):
+            except (BrokerError, NoAnswer):
                 account = None
         base["account"] = account
         base["names"] = names

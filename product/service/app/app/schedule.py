@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from .db import DB
 from .domain.markets.kr import KST
 from .market import Calendar
+from .ports import Clock
 
 log = logging.getLogger("quant-mvp")
 
@@ -31,7 +32,7 @@ class Job:
 
 
 class Scheduler:
-    def __init__(self, db: DB, calendar: Calendar, now: Callable[[], datetime]) -> None:
+    def __init__(self, db: DB, calendar: Calendar, now: Clock) -> None:
         self.db = db
         self.calendar = calendar
         self.now = now

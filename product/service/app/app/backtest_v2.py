@@ -1,8 +1,8 @@
 """백테스트 v2(TASKS T-32 · SPEC 4-7 · 7-3 V2-26 · ENGINE-RULES 9절).
 
 - 시세는 토스(TossSource · Market), 비교 기준은 코스피(토스 지수 일봉).
-- 가치 · 재무 · 공시는 DART 저장(DartStore · 접수일 다음 거래일)에서, 시가총액은 수정 종가 × 주식 수(수정 계수는
-  수정 전 일봉을 따로 받기 전에는 1 · '주식 수 근사' 칩).
+- 가치 · 재무 · 공시는 `Disclosures` 포트(조립이 DART 저장 `DartStore`를 넣어 줌 · 접수일 다음 거래일)에서,
+  시가총액은 수정 종가 × 주식 수(수정 계수는 수정 전 일봉을 따로 받기 전에는 1 · '주식 수 근사' 칩).
 - 막는 것: 문제 있음 · 잠긴 조건(DART 없음) · 시작 가능 날짜보다 앞 · 토스 연결 없음 · DART 받는 중(R-P12).
 - 결과는 버전마다 남겨요(`backtest_runs` · 상세의 '백테스트 함').
 """
@@ -16,11 +16,11 @@ from typing import Any
 from .domain import blocks as bk
 from .domain import fundamentals as fu
 from .domain.catalog import CATALOG, start_date
-from .dart import DartStore
 from .db import DB
 from .domain.engine import FEE, SELL_TAX, BacktestError, MarketData, run_backtest, warmup_calendar_days
 from .domain.indicators import Series
 from .market import INDEX, Market, MarketDataError
+from .ports import Disclosures
 
 MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
 CHIPS = [
@@ -46,7 +46,7 @@ def default_range(body: dict[str, Any], today: date) -> dict[str, str]:
             "first": first[0].isoformat() if first else "", "reason": first[1] if first else ""}
 
 
-def make_data(body: dict[str, Any], market: Market, db: DB, dart: DartStore | None, *, has_dart: bool,
+def make_data(body: dict[str, Any], market: Market, db: DB, dart: Disclosures | None, *, has_dart: bool,
               start: date, end: date, info: dict[str, dict[str, Any]]) -> MarketData:
     from .domain.engine import universe_of
 
@@ -89,7 +89,7 @@ def make_data(body: dict[str, Any], market: Market, db: DB, dart: DartStore | No
                       dart=has_dart)
 
 
-def run(body: dict[str, Any], *, market: Market, db: DB, dart: DartStore | None, has_dart: bool,
+def run(body: dict[str, Any], *, market: Market, db: DB, dart: Disclosures | None, has_dart: bool,
         toss_ready: bool, start: date, end: date, cash: float, info: dict[str, dict[str, Any]],
         names: Callable[[str], str]) -> dict[str, Any]:
     a = bk.analyze(body["graph"], dart=has_dart)

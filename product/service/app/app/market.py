@@ -15,9 +15,10 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
-from typing import Any, Protocol
+from typing import Any
 
 from .db import DB
+from .ports import MarketFeed
 from .domain.markets.kr import KST, DayHours, weekday_hours
 from .adapters.toss import MarketCalendar, MarketDay, TossApiError, TossClient, TossError
 
@@ -41,10 +42,6 @@ class MarketDataError(Exception):
 
 class SymbolNotFound(Exception):
     pass
-
-
-class BarSource(Protocol):
-    def daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]: ...
 
 
 class TossSource:
@@ -142,7 +139,7 @@ class Market:
     def __init__(
         self,
         db: DB,
-        source: BarSource,
+        source: MarketFeed,
         *,
         clock: Callable[[], float] = time.time,
         calendar: Calendar | None = None,

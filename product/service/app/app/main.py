@@ -46,11 +46,12 @@ from .live import tick as live_tick
 from .schedule import Scheduler
 from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
+from .ports import Clock, MarketFeed
 from .connect import Connections
 from .db import DB
 from .domain.engine import BacktestError as BacktestErrorV2
 from .domain.markets.kr import KST, weekday_open
-from .market import BarSource, Market, MarketDataError, TossSource, now_kst
+from .market import Market, MarketDataError, TossSource, now_kst
 from .adapters.publicip import IpFetch, PublicIpError, public_ip
 from .domain.stock_names import stock_name
 from .adapters.telegram import TelegramError
@@ -110,7 +111,7 @@ def _date(text: Any, what: str) -> date:
 def create_app(
     data_dir: Path | str | None = None,
     *,
-    bars_source: BarSource | None = None,
+    bars_source: MarketFeed | None = None,
     toss_transport: Callable[[], Transport] | None = None,
     telegram_transport: Transport | None = None,
     ip_fetch: IpFetch | None = None,
@@ -118,7 +119,7 @@ def create_app(
     scrypt_n: int | None = None,
     scheduler: bool = True,
     port: int | None = None,
-    now: Callable[[], datetime] = now_kst,
+    now: Clock = now_kst,
     keyfile: Path | str | None | bool = True,
     ts_names: list[str] | None = None,
 ) -> FastAPI:
@@ -158,8 +159,11 @@ def create_app(
         row = db.one("SELECT dps FROM dart_div WHERE stock_code=? ORDER BY rcept_dt DESC LIMIT 1", (sym,))
         return float(row["dps"]) if row and row["dps"] else None
 
-    # 실전 운용(T-60 ~ T-63): 전송은 conns.client(기본 가짜 · 두 열쇠 · T-00)
-    live = Live(db, market, conns.client, now=now, notify=lambda event, text: telegram.notify(event, text),
+    def notify(event: str, text: str) -> bool:  # Notifier 포트(텔레그램 · 알림함) · telegram은 아래에서 만들어요
+        return telegram.notify(event, text)
+
+    # 실전 운용(T-60 ~ T-63): 증권사는 Broker 포트 · conns.client가 토스 어댑터를 줘요(기본 가짜 · 두 열쇠 · T-00)
+    live = Live(db, market, conns.client, now=now, notify=notify,
                 info=lambda: {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")}, dps=latest_dps)
 
     def pause_new_buys(source: str) -> bool:
