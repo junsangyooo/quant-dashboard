@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from app.adapters.dart import DartClient, DartError
-from app.dart import DartStore, disclosure_kind, rcept_date
+from app.run.dart import DartStore, disclosure_kind, rcept_date
 from app.store.db import DB
 from app.adapters.transport import HttpRequest, HttpResponse, TransportError
 

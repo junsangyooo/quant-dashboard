@@ -1,8 +1,7 @@
 # 파이썬 층 어긋남 허용 목록(ARCHITECTURE 2절 · 7절 · TASKS P1-04). 한 줄 = `모듈 대상층 수  # [꼬리표] 까닭`.
 # 1단계 셈은 지금 모듈을 ARCHITECTURE 2-1의 새 자리로 층에 붙여 세요(`tests/baseline/counts.py` `LAYER_OF` · 하위 폴더는 `LAYER_DIRS`).
-# 대상층 `ext:이름`은 바깥 패키지 금지(domain ← fastapi · sqlite3 등). `tests/test_layers.py`가 키마다 정확히 같은지 · 전체가 시작 숫자 12(P1-04) → 9(P1-06: `live` · `backtest_v2`가 포트를 받음) 이하인지 봐요.
+# 대상층 `ext:이름`은 바깥 패키지 금지(domain ← fastapi · sqlite3 등). `tests/test_layers.py`가 키마다 정확히 같은지 · 전체가 시작 숫자 12(P1-04) → 9(P1-06: `live` · `backtest_v2`가 포트를 받음) → 6(P1-08: 화면 모양을 `api/live.py`로 · 토스 일봉 원천을 `adapters/toss.py`로 · DART 큐를 포트로 받아 `run/dart.py`로) 이하인지 봐요.
 app/connect.py adapters 1  # [P1-09] 연결 확인(security 자리)이 토스 어댑터(`TossClient` 만들기 · `link_state` · 토스 오류)를 직접 · security 층은 ports도 못 가져와서(2절) 연결 확인 흐름을 services/connect.py로 나누며 포트로(P1-06 보고)
-app/dart.py store 1  # [P1-08] SQL은 P1-07에서 store/dart.py로 · 남은 `DartStore`(큐 돌리기 · 하루 한도 · R-J9 읽기)가 store를 부름 · 2-1 표에서 이 파일은 adapters 줄이지만 클라이언트는 P1-06에서 adapters/dart.py로 뗐고 남은 것은 '읽어 오며 저장하기'(run/data.py와 같은 꼴) · 큐 돌리기를 DART 클라이언트 포트로 받아 run/으로 옮길 때(P1-07 보고)
 app/install.py run 1  # [P1-09] 설치(입구)가 run/scheduler.py 한 줄에서 Calendar(저장된 토스 장 달력) · KST · 업데이트 창 시각(P1-08 시각 표)을 씀 · 입구는 조립 · 설정만 가져와서 kr.py로 바로 옮기면 입구 → domain 어긋남 · app.py(조립) 경유로(P1-05 · P1-08 보고)
 app/install.py services 1  # [P1-09] 설치(입구)가 updates를 함수 안에서 가져옴 · 조립 · 설정 경유로
 app/install.py store 1  # [P1-09] 설치(입구)가 저장된 장 달력을 읽으려 store/db.py를 함수 안에서 가져옴(SQL은 없음) · 입구는 조립 · 설정만 가져와서 같은 줄의 `run 1`(Calendar)과 함께 app.py(조립) 경유로(P1-07 보고)

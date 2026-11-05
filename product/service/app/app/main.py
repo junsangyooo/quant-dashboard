@@ -45,7 +45,7 @@ from .api import live as live_api
 from .run.live import Live, LiveError
 from .run.live import tick as live_tick
 from .run.scheduler import AUTO_CHECK, DAILY_CHECK, LOOP_EVERY_S, Scheduler
-from .dart import DartStore
+from .run.dart import DartStore
 from .run.paper import PaperError, PaperV2
 from .ports import Clock, MarketFeed
 from .connect import Connections

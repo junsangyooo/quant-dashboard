@@ -2,7 +2,8 @@
 
 - 꼴의 근거: `vendor/dart-samples/`(공개 개발 가이드의 필드 이름 · 값은 지어냄). 앱은 실행 중에 읽지 않아요.
 - 전송: `transport.py`의 문을 지나요(기본 가짜 · 응답 없음 · T-00). 키는 요청 주소에만 넣고 기록하지 않아요.
-- 받은 것을 담아 두는 큐 · 하루 한도 · 읽기는 `app/dart.py`(`DartStore` · 표 읽고 쓰기는 `store/dart.py`)예요.
+- 받은 것을 담아 두는 큐 · 하루 한도 · 읽기는 `run/dart.py`(`DartStore` · 표 읽고 쓰기는 `store/dart.py`)예요. 큐는 이 클라이언트를
+  `DisclosureSource` 포트로 받아요(`ports.py`).
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from collections.abc import Callable
 from datetime import date
 from typing import Any
 
+from ..ports import DisclosureSourceError
 from .fake import FakeTransport
 from .transport import HttpRequest, Transport, TransportError
 
@@ -29,17 +31,16 @@ LIMIT_ERROR = "020"
 NO_DATA = "013"
 
 
-class DartError(Exception):
-    def __init__(self, message: str, kind: str) -> None:
-        super().__init__(message)
-        self.message = message
-        self.kind = kind  # key · limit · network · bad
+class DartError(DisclosureSourceError):
+    """DART 오류(글 · 종류 key · limit · network · bad). 큐는 포트 쪽 이름(`DisclosureSourceError`)으로 잡아요."""
 
 
 # ── 클라이언트 ──────────────────────────────────────────────────────────────
 
 
 class DartClient:
+    multi_max = MULTI_MAX  # `DisclosureSource` 약속(큐가 재무 요청을 이 수로 나눠요)
+
     def __init__(self, api_key: str, *, transport: Transport | None = None, base: str = BASE,
                  on_request: Callable[[], None] | None = None) -> None:
         self._key = api_key

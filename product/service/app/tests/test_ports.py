@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -27,7 +28,7 @@ from app.main import create_app
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
 PORTS = APP / "ports.py"
-RUN_FLOWS = ("run/live.py", "run/paper.py", "backtest_v2.py", "run/scheduler.py", "run/data.py")
+RUN_FLOWS = ("run/live.py", "run/paper.py", "backtest_v2.py", "run/scheduler.py", "run/data.py", "run/dart.py")
 PROTOCOLS = ("Broker", "MarketFeed", "Disclosures", "Notifier", "Clock")
 # 포트 오류 → 그 오류를 이어받는 어댑터 오류(하나씩)
 ERROR_MAP: dict[type[BaseException], type[BaseException]] = {
@@ -150,7 +151,7 @@ def test_toss_client_matches_broker_signatures() -> None:
 
 
 def test_dart_store_matches_disclosures_signatures() -> None:
-    from app.dart import DartStore
+    from app.run.dart import DartStore
 
     for name in ("progress", "financial_rows", "disclosures_on"):
         assert _shape(getattr(DartStore, name)) == _shape(getattr(ports.Disclosures, name)), name
@@ -178,3 +179,32 @@ def test_app_default_fakes_answer_nothing(tmp_path: Path) -> None:
 def test_app_code_never_imports_test_fakes() -> None:
     for p in sorted(APP.rglob("*.py")):
         assert {m for m in _imports(p) if m == "tests" or m.startswith("tests.")} == set(), p
+
+
+# ── DART 받기 포트(P1-08 · 큐 돌리기를 run/dart.py로 옮기며) ───────────────────
+
+
+def test_dart_client_matches_disclosure_source_signatures() -> None:
+    members = [n for n, v in vars(ports.DisclosureSource).items() if callable(v) and not n.startswith("_")]
+    assert sorted(members) == ["corp_codes", "disclosures", "dividends", "financials", "share_count"]
+    for name in members:
+        assert _shape(getattr(dart_adapter.DartClient, name)) == _shape(getattr(ports.DisclosureSource, name)), name
+    client = dart_adapter.DartClient("k")
+    assert client.multi_max == dart_adapter.MULTI_MAX and callable(client.on_request)
+
+
+def test_dart_error_is_the_only_disclosure_source_error() -> None:
+    import app.main  # noqa: F401
+
+    assert issubclass(dart_adapter.DartError, ports.DisclosureSourceError)
+    assert {c for c in _all_subclasses(ports.DisclosureSourceError) if _adapter_side(c)} == {dart_adapter.DartError}
+    e = dart_adapter.DartError("x", "limit")
+    assert (e.message, e.kind, str(e)) == ("x", "limit", "x")
+
+
+def test_feed_errors_are_ports_and_the_toss_source_raises_them() -> None:
+    src = toss.TossSource(lambda: None)
+    with pytest.raises(ports.FeedNotConnected):
+        src.daily("005930", date(2026, 11, 2), date(2026, 11, 3))
+    assert not issubclass(ports.FeedNotConnected, ports.BrokerError)
+    assert not issubclass(ports.SymbolNotFound, ports.BrokerError)

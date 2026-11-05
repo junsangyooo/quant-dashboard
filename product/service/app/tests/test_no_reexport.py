@@ -43,6 +43,7 @@ MOVED: list[tuple[str, str]] = [
     ("app.schedule", "app.run.scheduler"),
     ("app.live", "app.run.live"),  # 화면 모양은 `api/live.py` · 주문 바꾸기는 `orders/transform.py`
     ("app.paper_v2", "app.run.paper"),
+    ("app.dart", "app.run.dart"),  # 클라이언트는 P1-06에서 adapters/dart.py · 남은 큐 · 하루 한도 · 읽기(포트로 받음)
 ]
 
 

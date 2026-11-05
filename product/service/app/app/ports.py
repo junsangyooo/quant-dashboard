@@ -5,7 +5,8 @@
 
 - `Broker`: 계좌 · 주문(토스 어댑터 `adapters.toss.TossClient`가 맞춰요 · 증권사는 토스만 · 기능표는 두 번째 증권사 때).
 - `MarketFeed`: 일봉 받기(`adapters.toss.TossSource` · 시험의 가짜 일봉).
-- `Disclosures`: 재무 · 공시 읽기(DART 저장 `dart.DartStore` · 접수일 다음 거래일부터 · R-J9).
+- `Disclosures`: 재무 · 공시 읽기(DART 저장 `run.dart.DartStore` · 접수일 다음 거래일부터 · R-J9).
+- `DisclosureSource`: DART 받기(큐 돌리기가 부름 · `adapters.dart.DartClient` · 요청마다 하루 한도를 먼저 셈).
 - `Notifier`: 알림 하나 보내기(`telegram.Telegram.notify` · 사건 이름 + 글).
 - `Clock`: 지금 시각(한국 시간이 붙은 datetime · 기본 `market.now_kst` · 시험은 고정 시각).
 - AI 제공사 포트(`AiProvider`)는 4단계예요.
@@ -69,6 +70,26 @@ class Disclosures(Protocol):
     def financial_rows(self, stock: str, on: date, next_open: Callable[[date], date]) -> list[dict[str, Any]]: ...
 
     def disclosures_on(self, stock: str, on: date, next_open: Callable[[date], date]) -> list[dict[str, Any]]: ...
+
+
+class DisclosureSource(Protocol):
+    """DART 받기(`run/dart.py`의 큐 돌리기가 불러요 · `adapters.dart.DartClient`).
+
+    요청마다 `on_request`를 먼저 불러요(큐가 하루 한도를 세고 넘으면 `DisclosureSourceError(…, "limit")`를 내요).
+    `multi_max`는 재무 한 요청에 넣는 회사 수(DART `fnlttMultiAcnt` 한도)예요."""
+
+    on_request: Callable[[], None]
+    multi_max: int
+
+    def corp_codes(self) -> dict[str, tuple[str, str]]: ...
+
+    def financials(self, corp_codes: list[str], year: int, reprt: str) -> list[dict[str, Any]]: ...
+
+    def disclosures(self, corp_code: str, start: date, end: date, page: int = 1) -> tuple[list[dict[str, Any]], int]: ...
+
+    def share_count(self, corp_code: str, year: int, reprt: str) -> list[dict[str, Any]]: ...
+
+    def dividends(self, corp_code: str, year: int) -> list[dict[str, Any]]: ...
 
 
 # ── 증권사 ──────────────────────────────────────────────────────────────────
@@ -301,3 +322,12 @@ class SymbolNotFound(Exception):
 
 class FeedNotConnected(Exception):
     """일봉 받기(`MarketFeed`): 받을 연결이 없음(토스 연결 전 · `adapters.toss.TossSource`)."""
+
+
+class DisclosureSourceError(Exception):
+    """DART 받기(`DisclosureSource`) 오류: 글과 종류(key · limit · network · bad · `adapters.dart.DartError`)."""
+
+    def __init__(self, message: str, kind: str) -> None:
+        super().__init__(message)
+        self.message = message
+        self.kind = kind  # key · limit · network · bad

@@ -1,7 +1,9 @@
 """DART OpenAPI: 재무 · 공시 · 주식 총수 · 배당을 받아 담아 둬요(TASKS T-12 · SPEC 11-1 순서 3 · DATA-CATALOG 2-2).
 
 - 요청 · 응답 꼴은 어댑터 `adapters/dart.py`(`DartClient` · 전송은 `transport.py`의 문 · 기본 가짜 · T-00)예요. 이 파일은 받은 것을
-  담아 두는 큐 · 하루 한도 · 읽기(`Disclosures` 포트 · `ports.py`)예요. 표 읽고 쓰기(SQL)는 저장 층 `store/dart.py`예요(P1-07).
+  담아 두는 큐 · 하루 한도 · 읽기(`Disclosures` 포트 · `ports.py`)예요. 큐는 클라이언트를 `DisclosureSource` 포트로 받아요(P1-08 ·
+  실행 흐름은 어댑터를 가져오지 않음). 표 읽고 쓰기(SQL)는 저장 층 `store/dart.py`예요(P1-07).
+- 하루 한도 날짜(`DartStore.today` 기본값)는 1단계 예외로 지금 시계 그대로예요(ARCHITECTURE 6절 · 옛 `dart.py:231`).
 - 받는 순서(큐): ① corpCode(종목 ↔ 회사 번호) → ② 재무 주요계정 `fnlttMultiAcnt`(100개 회사씩 · 2015년~ ·
   1분기 · 반기 · 3분기 · 사업) → ③ 공시 목록 `list.json`(회사마다) → ④ 주식 총수 `stockTotqySttus`(사업 · 반기) ·
   배당 `alotMatter`(사업). ①~③은 첫날 안에, ④는 회사 × 연도 × 보고서라 약 4일 걸려요(SPEC 3 · V2-09).
@@ -20,9 +22,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from .adapters.dart import MULTI_MAX, DartClient, DartError
-from .store import db as store_db, dart as dart_store  # 저장 층(SQL은 store/)
-from .domain.markets.kr import KST
+from ..domain.markets.kr import KST
+from ..ports import DisclosureSource, DisclosureSourceError
+from ..store import dart as dart_store
+from ..store.db import DB
 
 DAILY_LIMIT = 20_000
 FIRST_YEAR = 2015  # DART 재무는 2015년 보고서부터
@@ -101,7 +104,7 @@ class Progress:
 
 
 class DartStore:
-    def __init__(self, db: store_db.DB, *, today: Callable[[], date] | None = None, daily_limit: int = DAILY_LIMIT) -> None:
+    def __init__(self, db: DB, *, today: Callable[[], date] | None = None, daily_limit: int = DAILY_LIMIT) -> None:
         self.db = db
         self.today = today or (lambda: datetime.now(KST).date())
         self.daily_limit = daily_limit
@@ -113,7 +116,7 @@ class DartStore:
 
     def _count(self) -> None:
         if self.used_today() >= self.daily_limit:
-            raise DartError("하루 20,000건을 넘었어요 · 내일 이어서 받아요", "limit")
+            raise DisclosureSourceError("하루 20,000건을 넘었어요 · 내일 이어서 받아요", "limit")
         dart_store.count_request(self.db, self.today().isoformat())
 
     def _limit_reached(self) -> None:
@@ -124,15 +127,15 @@ class DartStore:
     def _add(self, phase: int, kind: str, arg: dict[str, Any]) -> None:
         dart_store.add_job(self.db, phase, kind, json.dumps(arg, sort_keys=True))
 
-    def _plan(self) -> None:
-        """회사 목록을 받은 뒤 나머지 일을 큐에 넣어요(이미 있는 일은 그대로)."""
+    def _plan(self, multi_max: int) -> None:
+        """회사 목록을 받은 뒤 나머지 일을 큐에 넣어요(이미 있는 일은 그대로 · 재무는 `multi_max` 회사씩)."""
         corps = dart_store.corp_codes(self.db)
         last_year = self.today().year
         rows: list[tuple[int, str, str]] = []
         for year in range(FIRST_YEAR, last_year + 1):
             for reprt in REPORTS:
-                for i in range(0, len(corps), MULTI_MAX):
-                    rows.append((PHASE_FIN, "fin", json.dumps({"corps": corps[i:i + MULTI_MAX], "reprt": reprt,
+                for i in range(0, len(corps), multi_max):
+                    rows.append((PHASE_FIN, "fin", json.dumps({"corps": corps[i:i + multi_max], "reprt": reprt,
                                                                "year": year}, sort_keys=True)))
         for corp in corps:
             rows.append((PHASE_LIST, "list", json.dumps({"corp": corp}, sort_keys=True)))
@@ -157,7 +160,7 @@ class DartStore:
         self.db.set_meta("dart.state", state)
         self.db.set_meta("dart.message", message)
 
-    def run(self, client: DartClient, *, budget: int | None = None) -> Progress:
+    def run(self, client: DisclosureSource, *, budget: int | None = None) -> Progress:
         """큐를 앞에서부터 받아요. 한도 · 키 오류면 멈추고, 다음에 부르면 이어서 받아요."""
         client.on_request = self._count
         sent = 0
@@ -169,7 +172,7 @@ class DartStore:
                 self._do(client, job["kind"], json.loads(job["arg"]))
                 dart_store.job_done(self.db, job["id"])
                 sent += 1
-        except DartError as exc:
+        except DisclosureSourceError as exc:
             if exc.kind == "limit":
                 self._limit_reached()
                 self._state("limit", "하루 20,000건을 넘었어요 · 내일 이어서 받아요")
@@ -193,11 +196,11 @@ class DartStore:
     def _stock_of(self, corp: str) -> str | None:
         return dart_store.stock_of(self.db, corp)
 
-    def _do(self, client: DartClient, kind: str, arg: dict[str, Any]) -> None:
+    def _do(self, client: DisclosureSource, kind: str, arg: dict[str, Any]) -> None:
         if kind == "corp":
             codes = client.corp_codes()
             dart_store.put_corps(self.db, [(s, c, n) for s, (c, n) in codes.items()])
-            self._plan()
+            self._plan(client.multi_max)
         elif kind == "fin":
             self._save_fin(client.financials(arg["corps"], arg["year"], arg["reprt"]), arg["year"], arg["reprt"])
         elif kind == "list":
@@ -237,7 +240,7 @@ class DartStore:
         if out:
             dart_store.put_fin(self.db, out)
 
-    def _save_list(self, client: DartClient, corp: str) -> None:
+    def _save_list(self, client: DisclosureSource, corp: str) -> None:
         stock = self._stock_of(corp)
         start = date(FIRST_YEAR, 1, 1)
         end = self.today()
