@@ -8,6 +8,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from .markets.kr import tick_size
+
 DAILY_LOSS = -0.03  # 하루 손실 한도: 운용 자산(전날 평가액) 기준 −3%
 PER_STOCK = 0.40  # 종목당 한도: 운용 금액의 40%
 ORDER_MAX = 20_000_000  # 주문 하나 2,000만 원(최대 9,999만 원까지 바꿀 수 있어요)
@@ -15,23 +17,6 @@ ORDER_MAX_CEIL = 99_990_000
 ORDER_HUGE = 100_000_000  # 1억 원 이상은 나눠 내지 않고 할 일(R-O9)
 DAILY_ORDERS = 40
 PRICE_BAND = 0.10  # 지정가 상한 = 종가 × 1.1(매수) · 하한 = 종가 × 0.9(일반 매도)
-
-
-def tick_size(price: float) -> int:
-    """국내 주식 호가 단위(2023년 1월 개편 뒤 · 코스피 · 코스닥 같음)."""
-    if price < 2_000:
-        return 1
-    if price < 5_000:
-        return 5
-    if price < 20_000:
-        return 10
-    if price < 50_000:
-        return 50
-    if price < 200_000:
-        return 100
-    if price < 500_000:
-        return 500
-    return 1_000
 
 
 def buy_cap(close: float) -> float:

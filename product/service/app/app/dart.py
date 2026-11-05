@@ -21,14 +21,14 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from typing import Any
 
 from .db import DB
+from .domain.markets.kr import KST
 from .transport import FakeTransport, HttpRequest, Transport, TransportError
 
 BASE = "https://opendart.fss.or.kr/api"
-KST = timezone(timedelta(hours=9))
 DAILY_LIMIT = 20_000
 FIRST_YEAR = 2015  # DART 재무는 2015년 보고서부터
 MULTI_MAX = 100  # fnlttMultiAcnt 한 번에 100개 회사

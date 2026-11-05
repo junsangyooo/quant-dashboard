@@ -14,7 +14,7 @@ from app import datamgmt as dm
 from app import updates
 from app.db import DB
 from app.main import create_app
-from app.market import KST
+from app.domain.markets.kr import KST
 from tests.conftest import PASSWORD, CsrfClient, FakeToss, confirm, setup_owner
 from tests.fake_telegram import MY_CHAT, TOKEN, FakeTelegram
 from tests.test_blocks import B, G, R

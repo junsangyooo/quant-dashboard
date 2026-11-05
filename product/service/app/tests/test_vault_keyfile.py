@@ -16,7 +16,8 @@ from fastapi.testclient import TestClient
 from app import vault as vault_mod
 from app.db import DB
 from app.main import create_app
-from app.market import KST, MarketDataError
+from app.domain.markets.kr import KST
+from app.market import MarketDataError
 from app.vault import MONEY_ACTIONS, Vault, VaultError
 from tests.conftest import CsrfClient, PASSWORD, confirm, make_bars, setup_owner
 from tests.test_paper_v2 import body, save

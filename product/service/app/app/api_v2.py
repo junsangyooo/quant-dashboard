@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request
 from .domain import blocks as bk
 from .domain import catalog as cat
 from .domain import copytext as ct
+from .domain.markets.kr import KST
 from .db import DB
 
 
@@ -43,7 +44,6 @@ def catalog_view() -> dict[str, Any]:
             "categories": list(dict.fromkeys(i.category for i in cat.ITEMS))}
 
 
-KST = timezone(timedelta(hours=9))
 DAYS = "월화수목금토일"
 DELETE_BLOCKED = "실전 운용이나 모의투자 기록이 있는 전략은 삭제할 수 없어요"
 

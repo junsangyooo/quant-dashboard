@@ -22,7 +22,6 @@ from .domain.engine import FEE, SELL_TAX, BacktestError, MarketData, run_backtes
 from .domain.indicators import Series
 from .market import INDEX, Market, MarketDataError
 
-KST = timezone(timedelta(hours=9))
 MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
 CHIPS = [
     f"거래비용 반영 · 수수료 {FEE * 100:.3f}% · 매도 세금 {SELL_TAX * 100:.2f}%",

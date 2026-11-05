@@ -10,7 +10,8 @@ from typing import Any
 import pytest
 
 from app.db import DB
-from app.market import KST, Market
+from app.domain.markets.kr import KST
+from app.market import Market
 from app.paper_v2 import ALREADY, PaperError, PaperV2
 from app.domain.rules import buy_cap
 from tests.conftest import FakeBars, make_bars

@@ -1,5 +1,5 @@
 # 시각 숫자 허용 목록(ARCHITECTURE 7절 · TASKS P1-04). 한 줄 = `모듈 종류 수  # [꼬리표] 까닭`.
-# 종류: hh:mm(문자열) · time() · datetime() · replace(hour=) · .at(h,m) · (h,m)(모듈 맨 위 시각 튜플). `domain/markets/kr.py` · `run/scheduler.py` · 글 목록(`app/copy/`) 밖만 · 시작 숫자 26.
+# 종류: hh:mm(문자열) · time() · datetime() · replace(hour=) · .at(h,m) · (h,m)(모듈 맨 위 시각 튜플). `domain/markets/kr.py` · `run/scheduler.py` · 글 목록(`app/copy/`) 밖만 · 시작 숫자 26(P1-04) → 23(P1-05: `market.py` 장 시작 · 확정 시각 · `toss.py` 하루 끝을 `kr.py`로).
 # 시각 생성자는 별칭(`dtime`) · 모듈 속성(`datetime.time` · `dt.time`) · `hour=` · `minute=` · `datetime(y, mo, d, h, m)`까지 세요(P1-04 검토 뒤 · 25 → 26은 toss.py의 23:59 하나).
 app/install.py hh:mm 3  # [P1-08] 업데이트 창 시각(16:00 ~ 20:00) · run/scheduler.py 시각 표로(글은 P1-11)
 app/install.py time() 2  # [P1-08] 업데이트 창 시각(16:00 ~ 20:00) · run/scheduler.py 시각 표로(글은 P1-11)
@@ -8,8 +8,6 @@ app/live.py .at(h,m) 6  # [P1-08] 일 시각을 run/scheduler.py 시각 표 하�
 app/live.py hh:mm 1  # [P1-11] 점검 글 속 '08:35'(글 그대로 · 글 목록으로)
 app/live.py time() 1  # [P1-08] 일 시각을 run/scheduler.py 시각 표 하나로
 app/main.py (h,m) 1  # [P1-08] 일 시각을 run/scheduler.py 시각 표 하나로
-app/market.py (h,m) 2  # [P1-05] 장 시작 · 일봉 확정 시각 · domain/markets/kr.py로
 app/paper_v2.py hh:mm 2  # [P1-11] 모의투자 안내 글 속 '20:10'(글 그대로 · 글 목록으로)
 app/paper_v2.py time() 1  # [P1-08] 일 시각을 run/scheduler.py 시각 표 하나로
 app/telegram.py hh:mm 3  # [P1-11] 텔레그램 글 속 시각(08:30 · 20:10 · 08:35) · 글 목록으로(글은 그대로)
-app/toss.py datetime() 1  # [P1-05] 일봉 받기 커서 '그날 23:59:59 한국 시간' · 하루 끝 정의를 domain/markets/kr.py로

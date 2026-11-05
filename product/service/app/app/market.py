@@ -4,7 +4,8 @@
 - 확정: 그날 일봉은 **20:00 뒤**에 확정으로 봐요(20:10 확인이 써요). 그 전에는 앞 거래일까지만 써요.
 - 장 시간: 토스 market-calendar(KR)로 그날 열리는지 · 정규장 시작이 몇 시인지 알아요. 정규장이
   09:00보다 늦게 열리는 날(수능일 · 새해 첫 거래일)은 08:30 점검 · 08:35 주문도 같은 만큼 늦춰요(R-O1).
-  달력을 받지 못하면 평일 = 거래일로 보고 시각은 그대로예요.
+  달력을 받지 못하면 평일 = 거래일로 보고 시각은 그대로예요. 한국 시간 · 장 시간 · 확정 시각 · 휴장 규칙의 정의는
+  `domain/markets/kr.py` 한 곳이고, 이 파일은 받아서 담아 두는 일만 해요.
 """
 
 from __future__ import annotations
@@ -13,20 +14,16 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 
 from .db import DB
+from .domain.markets.kr import KST, DayHours, weekday_hours
 from .toss import MarketCalendar, MarketDay, TossApiError, TossClient, TossError
 
-KST = timezone(timedelta(hours=9))
 INDEX = "KOSPI"
 INDEXES = ("KOSPI", "KOSDAQ")
-# 그날 일봉을 확정으로 보는 시각(20:10 확인 바로 앞)
-BAR_FINAL_AT = (20, 0)
 REFRESH_S = 30 * 60
-BASE_OPEN = (9, 0)  # 평소 정규장 시작. 늦게 여는 날은 차이만큼 점검 · 주문을 옮겨요
 log = logging.getLogger("quant-market")
 
 
@@ -82,26 +79,6 @@ def now_kst() -> datetime:
 # ── 장 달력 ──────────────────────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
-class DayHours:
-    d: date
-    open: bool
-    start: datetime | None  # 정규장 시작(KST)
-    known: bool  # 토스 달력으로 안 값인가(False면 평일 규칙으로 짐작)
-
-    @property
-    def shift(self) -> timedelta:
-        """평소 09:00보다 얼마나 늦게 여는가(R-O1)."""
-        if not self.start:
-            return timedelta(0)
-        base = datetime.combine(self.d, datetime.min.time(), KST).replace(hour=BASE_OPEN[0], minute=BASE_OPEN[1])
-        return max(timedelta(0), self.start.astimezone(KST) - base)
-
-    def at(self, hh: int, mm: int) -> datetime:
-        """평소 hh:mm인 일정을 그날 장 시작에 맞춰 옮긴 시각(08:30 점검 · 08:35 주문)."""
-        return datetime.combine(self.d, datetime.min.time(), KST).replace(hour=hh, minute=mm) + self.shift
-
-
 class Calendar:
     """토스 market-calendar(KR)를 날짜마다 담아 두고 거래일 · 장 시작을 알려줘요."""
 
@@ -136,9 +113,7 @@ class Calendar:
                 got = self._load(d)
                 if got:
                     return got
-        weekday = d.weekday() < 5
-        start = datetime.combine(d, datetime.min.time(), KST).replace(hour=BASE_OPEN[0]) if weekday else None
-        return DayHours(d, weekday, start, False)
+        return weekday_hours(d)
 
     def is_open(self, d: date) -> bool:
         return self.day(d).open
@@ -158,21 +133,6 @@ class Calendar:
                 return d
             d += timedelta(days=1)
         return d
-
-
-def complete_until(now: datetime, calendar: Calendar | None = None) -> date:
-    """확인에 쓸 수 있는 마지막 일봉 날짜: 거래일 20:00 뒤면 그날, 아니면 앞 거래일."""
-    local = now.astimezone(KST)
-    today = local.date()
-    is_open = calendar.is_open if calendar else (lambda d: d.weekday() < 5)
-    if is_open(today) and (local.hour, local.minute) >= BAR_FINAL_AT:
-        return today
-    d = today - timedelta(days=1)
-    for _ in range(30):
-        if is_open(d):
-            return d
-        d -= timedelta(days=1)
-    return d
 
 
 # ── 일봉 캐시 ────────────────────────────────────────────────────────────────

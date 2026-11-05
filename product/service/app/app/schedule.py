@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from .db import DB
-from .market import KST, Calendar
+from .domain.markets.kr import KST
+from .market import Calendar
 
 log = logging.getLogger("quant-mvp")
 

@@ -49,7 +49,8 @@ from .paper_v2 import PaperError, PaperV2
 from .connect import Connections
 from .db import DB
 from .domain.engine import BacktestError as BacktestErrorV2
-from .market import KST, BarSource, Market, MarketDataError, TossSource, now_kst
+from .domain.markets.kr import KST, weekday_open
+from .market import BarSource, Market, MarketDataError, TossSource, now_kst
 from .publicip import IpFetch, PublicIpError, public_ip
 from .domain.stock_names import stock_name
 from .toss import Transport
@@ -813,7 +814,7 @@ def create_app(
 
     def auto_tick() -> str | None:
         local = now().astimezone(KST)
-        if local.weekday() >= 5 or (local.hour, local.minute) < AUTO_AT:
+        if not weekday_open(local.date()) or (local.hour, local.minute) < AUTO_AT:
             return None
         today = local.date().isoformat()
         if db.get_meta("auto.last") == today:

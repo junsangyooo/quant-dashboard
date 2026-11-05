@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from app.live import Live, tick
-from app.market import KST
+from app.domain.markets.kr import KST
 from app.paper_v2 import PaperV2
 from app.schedule import Scheduler
 from app.toss import RateLimiter

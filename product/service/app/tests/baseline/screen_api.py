@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.main import create_app
-from app.market import KST
+from app.domain.markets.kr import KST
 from app.toss import RateLimiter
 from tests.baseline.clock import FIXED_NOW
 from tests.conftest import CsrfClient, FakeIp, confirm, setup_owner

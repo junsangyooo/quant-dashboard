@@ -21,24 +21,23 @@ import time
 import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .domain.markets.kr import KST, PRICE_LIMIT, day_end
 from .transport import FakeTransport, HttpRequest, HttpResponse, Transport, TransportError
 
 __all__ = ["HttpRequest", "HttpResponse", "Transport", "TransportError"]
 
 BASE = "https://openapi.tossinvest.com"
 REFRESH_MARGIN_S = 600.0
-KST = timezone(timedelta(hours=9))
 CANDLE_PAGE = 200  # 명세: count 최대 200
 RETRY_429 = 2
 # 요청 한도(가정 · OPEN-QUESTIONS Q-T7): 명세는 그룹 이름과 헤더만 정하고 숫자는 응답 헤더로 알려 줘요.
 # 처음에는 초당 DEFAULT_RATE로 보내고, 응답의 X-RateLimit-Limit을 받으면 그 값으로 바꿔요.
 DEFAULT_RATE = 5.0
-# 응답 이상(R-O14): 전일 대비 이 비율을 넘는 가격은 이상으로 봐요(가격 제한폭 ±30%)
-MAX_DAILY_MOVE = Decimal("0.30")
+# 응답 이상(R-O14): 전일 대비 가격 제한폭(±30% · `kr.PRICE_LIMIT`)을 넘는 가격은 이상으로 봐요
 
 
 # ── 오류 ────────────────────────────────────────────────────────────────────
@@ -506,7 +505,7 @@ def price_anomaly(price: Decimal | None, prev_close: Decimal | float | None = No
         return "가격 0"
     if prev_close is not None:
         prev = Decimal(str(prev_close))
-        if prev > 0 and abs(price / prev - 1) > MAX_DAILY_MOVE:
+        if prev > 0 and abs(price / prev - 1) > PRICE_LIMIT:
             return "전일 대비 30% 넘음"
     return None
 
@@ -706,7 +705,7 @@ class TossClient:
     def daily_bars(self, symbol: str, start: date, end: date, *, index: bool = False, adjusted: bool = True,
                    max_pages: int = 60) -> list[dict[str, Any]]:
         """start ~ end 일봉(오래된 순 · 수정주가). `before`로 거슬러 올라가며 받아요."""
-        before: str | None = datetime(end.year, end.month, end.day, 23, 59, 59, tzinfo=KST).isoformat()
+        before: str | None = day_end(end).isoformat()
         seen: dict[str, dict[str, Any]] = {}
         for _ in range(max_pages):
             page = self.candles(symbol, before=before, adjusted=adjusted, index=index)

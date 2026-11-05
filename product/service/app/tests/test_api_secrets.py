@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.main import create_app
-from app.market import KST
+from app.domain.markets.kr import KST
 from tests.conftest import PASSWORD, CsrfClient, FakeBars, FakeIp, FakeToss, confirm, setup_owner
 
 SECRETS = [FakeToss.CLIENT_ID, FakeToss.SECRET, "DARTKEY-abcdef-998877"]

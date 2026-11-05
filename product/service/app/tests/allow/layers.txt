@@ -4,7 +4,7 @@
 app/backtest_v2.py adapters 1  # [P1-06] 백테스트(run)가 DART 어댑터를 직접 가져옴 · Disclosures 포트로
 app/connect.py adapters 1  # [P1-06] 연결 확인(security 자리)이 토스 어댑터를 직접 · services/connect.py로 나누며 포트로
 app/dart.py store 1  # [P1-07] DART 어댑터가 db를 직접 · 저장 부분은 store/로
-app/install.py run 1  # [P1-05] 설치(입구)가 market(run)의 장 시간 · KST를 씀 · domain/markets/kr.py로
+app/install.py run 1  # [P1-09] 설치(입구)가 market(run)의 Calendar(저장된 토스 장 달력)와 KST를 씀 · 입구는 조립 · 설정만 가져와서 kr.py로 바로 옮기면 입구 → domain 어긋남 · app.py(조립) 경유로(P1-05 보고)
 app/install.py services 1  # [P1-09] 설치(입구)가 updates를 함수 안에서 가져옴 · 조립 · 설정 경유로
 app/install.py store 1  # [P1-07] 설치(입구)가 db를 함수 안에서 가져옴 · store/ 경유 정리
 app/live.py adapters 2  # [P1-06] 실전 흐름이 toss · transport 어댑터를 직접 · Broker 포트로

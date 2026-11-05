@@ -328,7 +328,7 @@ def _token_reason(key: Key) -> str:
 GUARDS: tuple[Guard, ...] = (
     Guard("layers", "파이썬 층 어긋남(ARCHITECTURE 2절 · 하위 폴더 · 함수 안 import 포함)", 12, found_layers),
     Guard("sql", "SQL 위치(`db.py` · `store/` 밖)", 203, found_sql),
-    Guard("time-literals", "시각 숫자(`domain/markets/kr.py` · `run/scheduler.py` 밖 · 서버)", 26, found_time_literals),
+    Guard("time-literals", "시각 숫자(`domain/markets/kr.py` · `run/scheduler.py` 밖 · 서버)", 23, found_time_literals),
     Guard("same-text", "같은 글(서버 · 8자 이상 한글)", 38, found_same_text, text_key=True, unit="keys"),
     Guard("py-duplicates", "중복 · 파이썬(같은 본문 · 모듈 사이 같은 이름)", 0, found_py_duplicates, has_list=False),
     Guard("web-boundaries", "화면 경계(ARCHITECTURE 3절 · 지금 폴더로 셈 · ESLint와 같은 규칙)", 33, found_web_boundaries),

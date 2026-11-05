@@ -25,7 +25,8 @@ from app import backtest_v2 as bt2
 from app.db import DB
 from app.domain.engine import Engine, MarketData, live_note, run_backtest
 from app.domain.indicators import Series
-from app.market import KST, Market
+from app.domain.markets.kr import KST
+from app.market import Market
 from app.paper_v2 import PaperV2
 from app.domain.rules import RuleLayer
 from app.toss import RateLimiter

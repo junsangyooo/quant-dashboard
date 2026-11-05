@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
@@ -26,8 +25,9 @@ from .domain.copytext import read_body
 from .db import DB
 from .domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
-from .market import KST, Market, complete_until
-from .domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor, tick_size
+from .domain.markets.kr import KST, complete_until, lower_limit, tick_round, ticks_below
+from .domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor
+from .market import Market
 from .toss import TossApiError, TossClient, TossError, TossShapeError, TossUnreachableError
 from .transport import TransportError
 
@@ -85,20 +85,6 @@ class LiveError(Exception):
 
 def _iso(dt: datetime) -> str:
     return dt.astimezone(KST).isoformat(timespec="seconds")
-
-
-def lower_limit(close: float) -> float:
-    """하한가(전일 종가 × 0.7, 호가 올림): 보호 매도 '가격 하한 없음' 지정가(R-O5)."""
-    raw = close * 0.7
-    t = tick_size(raw)
-    return math.ceil(raw / t) * t
-
-
-def ticks_below(price: float, n: int) -> float:
-    p = price
-    for _ in range(n):
-        p -= tick_size(p - 1)
-    return max(p, tick_size(price))
 
 
 class Live:
@@ -800,8 +786,8 @@ class Live:
                 if cur:
                     self._cancel_conds(rid, c, sym)
                 continue
-            stop_t = _tick_round(stop) if stop else None
-            take_t = _tick_round(take) if take else None
+            stop_t = tick_round(stop) if stop else None
+            take_t = tick_round(take) if take else None
             renew = cur and cur["expire"] and date.fromisoformat(cur["expire"]) - today <= timedelta(days=COND_RENEW_DAYS)
             if cur and int(cur["qty"]) == int(p["qty"]) and cur["stop_trigger"] == stop_t and \
                     cur["take_trigger"] == take_t and not renew:
@@ -810,7 +796,7 @@ class Live:
                 self._cancel_conds(rid, c, sym)
             legs = []
             if stop_t:
-                legs.append({"side": "SELL", "trigger": int(stop_t), "price": int(_tick_round(stop_t * (1 - COND_STOP_GAP)))})
+                legs.append({"side": "SELL", "trigger": int(stop_t), "price": int(tick_round(stop_t * (1 - COND_STOP_GAP)))})
             if take_t:
                 legs.append({"side": "SELL", "trigger": int(take_t), "price": int(take_t)})
             kind = "OCO" if len(legs) == 2 else "SINGLE"
@@ -1214,11 +1200,6 @@ class Live:
 def _prev(d: str, cal: list[str]) -> str:
     before = [x for x in cal if x < d]
     return before[-1] if before else d
-
-
-def _tick_round(price: float) -> float:
-    t = tick_size(price)
-    return float(round(price / t) * t)
 
 
 def tick(live: Live) -> list[str]:

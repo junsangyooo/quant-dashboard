@@ -1,6 +1,6 @@
 """모의투자 v2(TASKS T-40 · SPEC 6절 · ENGINE-RULES 8절 R-V1 ~ R-V5).
 
-- 확인 시각 20:10(그날 일봉이 확정된 뒤 · market.complete_until), 체결은 다음 거래일 일봉 시가(R-V2).
+- 확인 시각 20:10(그날 일봉이 확정된 뒤 · kr.complete_until), 체결은 다음 거래일 일봉 시가(R-V2).
 - 실전과 같은 규칙 층(`rules.RuleLayer`: 가격 상한 · 하한, 하루 손실 한도, 종목당 한도, 주문 크기, 하루 40건)과
   매도 대금 규칙(R-O2)을 써요(R-V1). 장중 감시 · 조건주문은 그날 고가 · 저가로 계산해요(엔진 R-X4).
 - 전략마다 하나(여러 전략을 함께 · R-V3). 가상 시작 금액 10만 원 ~ 100억 원. 직접 관리 종목 없음. 비밀번호 없음.
@@ -23,7 +23,8 @@ from .domain.copytext import read_body
 from .db import DB
 from .domain.engine import Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
-from .market import KST, Market, complete_until
+from .domain.markets.kr import KST, complete_until
+from .market import Market
 from .domain.rules import RuleLayer
 
 MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
