@@ -104,29 +104,55 @@ def test_eslint_with_the_allow_list_reports_nothing() -> None:
     assert eslint_boundaries(allow=True) == []
 
 
+def test_every_web_src_file_has_a_layer() -> None:
+    """층 표에 없는 자리('other' · 예: 새 `src/net/`)의 파일은 없어요(있으면 그 파일과 그 파일로의 import가 모두 어긋남 ·
+    다시 내보내기로 경계를 돌아가지 못하게 · 파이썬 `test_every_app_module_has_a_layer`와 짝)."""
+    files = [webcounts.rel(p) for p in webcounts.SRC.rglob("*") if p.is_file()]
+    assert files and [f for f in files if webcounts.layer_of(f)[0] == "other"] == []
+    assert webcounts.FORBIDDEN["other"] == webcounts.ALL_WEB_LAYERS
+    assert all("other" in v for k, v in webcounts.FORBIDDEN.items() if k not in ("assembly", "graph"))
+
+
 @pytest.mark.skipif(not _node24(), reason="Node 24가 필요해요(check.sh는 Node 24에서만 돌아요)")
 def test_eslint_catches_static_and_dynamic_imports_outside_the_list() -> None:
-    """일부러 넣은 어긋남(임시 파일 · 지운 뒤 확인): ds → api 정적 · features → 다른 features 동적 · features → shell."""
+    """일부러 넣은 어긋남(임시 파일 · 지운 뒤 확인): ds → api 정적 · features → 다른 features 동적 · features → shell ·
+    층 없는 자리를 거친 다시 내보내기(ds → other → api) · 템플릿 글 동적 import(식 없음 · 식 있음)."""
+    net = WEB / "src/net"
     planted = {
         WEB / "src/components/ZzPlanted.tsx": "import { api } from '../api/client';\nexport const z = api;\n",
         WEB / "src/screens/Live/ZzPlanted.ts": ("export const load = () => import('../Setup/Wizard');\n"
                                                 "export { pageTitle } from '../../shell/page';\n"),
+        net / "ZzRelay.ts": "export { api } from '../api/client';\n",
+        WEB / "src/components/ZzRelayUser.tsx": ("import { api } from '../net/ZzRelay';\nexport const r = api;\n"
+                                                 "export const t = () => import(`../api/client`);\n"
+                                                 "export const u = (x: string) => import(`../api/${x}`);\n"),
     }
     try:
+        net.mkdir(exist_ok=True)
         for p, text in planted.items():
             p.write_text(text, encoding="utf-8")
         rows = eslint_boundaries(allow=True, files=tuple(p.relative_to(WEB).as_posix() for p in planted))
         got = sorted((str(r["file"]), int(str(r["line"])), str(r["rule"])) for r in rows)
         assert got == [("src/components/ZzPlanted.tsx", 1, "no-restricted-imports"),
+                       ("src/components/ZzRelayUser.tsx", 1, "no-restricted-imports"),
+                       ("src/components/ZzRelayUser.tsx", 3, "no-restricted-syntax"),
+                       ("src/components/ZzRelayUser.tsx", 4, "no-restricted-syntax"),
+                       ("src/net/ZzRelay.ts", 1, "no-restricted-imports"),
                        ("src/screens/Live/ZzPlanted.ts", 1, "no-restricted-syntax"),
                        ("src/screens/Live/ZzPlanted.ts", 2, "no-restricted-imports")]
         assert all("화면 경계(ARCHITECTURE 3절" in str(r["message"]) for r in rows)
         _found, problems = sg.check(sg.BY_NAME["web-boundaries"])
         assert sorted(problems) == ["web-boundaries: 새 어긋남 src/components/ZzPlanted.tsx src/api/client.ts: 1",
+                                    "web-boundaries: 새 어긋남 src/components/ZzRelayUser.tsx src/api/client.ts: 1",
+                                    "web-boundaries: 새 어긋남 src/components/ZzRelayUser.tsx src/net/ZzRelay.ts: 1",
+                                    "web-boundaries: 새 어긋남 src/components/ZzRelayUser.tsx unresolved:../api/${x}: 1",
+                                    "web-boundaries: 새 어긋남 src/net/ZzRelay.ts src/api/client.ts: 1",
                                     "web-boundaries: 새 어긋남 src/screens/Live/ZzPlanted.ts src/screens/Setup/Wizard.tsx: 1",
                                     "web-boundaries: 새 어긋남 src/screens/Live/ZzPlanted.ts src/shell/page.ts: 1",
-                                    "web-boundaries: 지금 36 > P1-04 시작 숫자 33(줄어들기만)"]
+                                    "web-boundaries: 지금 40 > P1-04 시작 숫자 33(줄어들기만)"]
     finally:
         for p in planted:
             p.unlink(missing_ok=True)
-    assert not any(p.exists() for p in planted)
+        if net.exists() and not any(net.iterdir()):
+            net.rmdir()
+    assert not any(p.exists() for p in planted) and not net.exists()

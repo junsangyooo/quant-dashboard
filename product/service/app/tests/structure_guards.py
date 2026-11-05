@@ -1,6 +1,6 @@
 """구조 장치(ARCHITECTURE 7절 셈 규칙 · TASKS P1-04): 허용 목록(`tests/allow/*.txt`)과 '줄어들기만'.
 
-    cd product/service/app && .venv/bin/python -m tests.structure_guards            # 모두 대조(종료 0 · 1)
+    cd product/service/app && .venv/bin/python -m tests.structure_guards            # 모두 대조(종료 0 통과 · 1 어긋남 · 2 건너뜀)
     cd product/service/app && .venv/bin/python -m tests.structure_guards shrink     # 줄어든 수만 목록에 반영(늘리지 않음)
     cd product/service/app && .venv/bin/python -m tests.structure_guards retake web-same-css  # 합친 뒤 다시 재기(전체가 줄 때만)
 
@@ -14,7 +14,9 @@ JSON 문자열 하나로 적어요(`"그 전략이 없어요" 6  # …`). 꼬리
 판정(장치마다):
 1. 키마다 지금 수 == 목록의 수(늘면 '새 어긋남' · 줄면 '목록을 줄여요' · 목록에 없는 키는 '새 어긋남'). `scripts/lint_allow.py`와
    같은 '정확히 같음' 규칙이라 목록은 줄어들기만 해요.
-2. 목록 전체와 지금 전체(줄의 수를 더한 값 · 글 목록은 줄 수)가 P1-04 시작 숫자(`Guard.start`) 이하. 파일을 나눠 키가 갈라져도 전체 수로 막아요.
+2. 목록 전체(줄의 수를 더한 값 · 글 목록은 줄 수) == 시작 숫자(`Guard.start`) · 지금 전체 ≤ 시작 숫자. 파일을 나눠 키가 갈라져도
+   전체 수로 막고, 목록을 줄이면 같은 커밋에서 시작 숫자도 낮춰야 해요(`shrink` · `retake`가 `GUARDS`의 수를 함께 고침 ·
+   시작 숫자는 P1-04 기록보다 올릴 수 없음 · `test_structure.py`).
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
 ALLOW = APP / "tests" / "allow"
+SOURCE = Path(__file__)  # set_start가 시작 숫자를 고치는 파일(시험은 사본으로 바꿔 끼움)
 TAG = re.compile(r"^\[(P1-(0[5-9]|1[0-2])|1단계 예외)\]")
 
 Key = tuple[str, ...]
@@ -123,8 +126,10 @@ def compare(g: Guard, found: Counter[Key], allowed: dict[Key, Entry]) -> list[st
                             " (`python -m tests.structure_guards shrink`)")
     total_a = units({k: e.count for k, e in allowed.items()}, g.unit)
     total_f = units(dict(found), g.unit)
-    if total_a > g.start:
-        problems.append(f"{g.name}: 허용 목록 {total_a} > P1-04 시작 숫자 {g.start}(줄어들기만)")
+    if g.has_list and total_a != g.start:
+        # 목록을 줄이면 같은 커밋에서 시작 숫자도 낮춰요(남는 여유로 뒤 일감이 줄을 되살리지 못하게 · shrink · retake가 함께 고침)
+        problems.append(f"{g.name}: 허용 목록 전체 {total_a} ≠ 시작 숫자 {g.start} · 시작 숫자를 목록과 같게 낮춰요"
+                        " (tests/structure_guards.py GUARDS · shrink · retake가 함께 고침 · 올리기는 안 됨)")
     if total_f > g.start:
         problems.append(f"{g.name}: 지금 {total_f} > P1-04 시작 숫자 {g.start}(줄어들기만)")
     return problems
@@ -165,8 +170,8 @@ def found_sql() -> Counter[Key]:
 
 
 TIME_HOME = ("app/domain/markets/kr.py", "app/run/scheduler.py")
-TIME_KIND = {"hh:mm": "hh:mm", "time()": "time()", "replace(hour=)": "replace(hour=)", ".at(h, m)": ".at(h,m)",
-             "(h, m)": "(h,m)"}
+TIME_KIND = {"hh:mm": "hh:mm", "time()": "time()", "datetime()": "datetime()", "replace(hour=)": "replace(hour=)",
+             ".at(h, m)": ".at(h,m)", "(h, m)": "(h,m)"}
 
 
 def found_time_literals() -> Counter[Key]:
@@ -202,8 +207,11 @@ def found_web_boundaries() -> Counter[Key]:
     from tests.baseline import webcounts
 
     out: Counter[Key] = Counter()
-    for e in webcounts.boundary_violations()["edges"]:
+    bd = webcounts.boundary_violations()
+    for e in bd["edges"]:
         out[(e["from"], e["to"])] += 1
+    for u in bd["unresolved"]:  # 풀 수 없는 지정자(식이 든 템플릿 글 · 없는 파일)도 어긋남으로
+        out[(u["from"], "unresolved:" + u["spec"].replace(" ", ""))] += 1
     return out
 
 
@@ -320,7 +328,7 @@ def _token_reason(key: Key) -> str:
 GUARDS: tuple[Guard, ...] = (
     Guard("layers", "파이썬 층 어긋남(ARCHITECTURE 2절 · 하위 폴더 · 함수 안 import 포함)", 12, found_layers),
     Guard("sql", "SQL 위치(`db.py` · `store/` 밖)", 203, found_sql),
-    Guard("time-literals", "시각 숫자(`domain/markets/kr.py` · `run/scheduler.py` 밖 · 서버)", 25, found_time_literals),
+    Guard("time-literals", "시각 숫자(`domain/markets/kr.py` · `run/scheduler.py` 밖 · 서버)", 26, found_time_literals),
     Guard("same-text", "같은 글(서버 · 8자 이상 한글)", 38, found_same_text, text_key=True, unit="keys"),
     Guard("py-duplicates", "중복 · 파이썬(같은 본문 · 모듈 사이 같은 이름)", 0, found_py_duplicates, has_list=False),
     Guard("web-boundaries", "화면 경계(ARCHITECTURE 3절 · 지금 폴더로 셈 · ESLint와 같은 규칙)", 33, found_web_boundaries),
@@ -333,6 +341,20 @@ GUARDS: tuple[Guard, ...] = (
     Guard("web-px", "위치 · 모서리 px 리터럴(screens · components · charts)", 9, found_web_px, new_reason=_token_reason),
 )
 BY_NAME = {g.name: g for g in GUARDS}
+
+
+def set_start(g: Guard, new: int) -> str | None:
+    """`GUARDS`에 있는 장치면 이 파일의 시작 숫자를 `new`로 낮춰요(올리지 않음 · 시험의 가짜 장치는 건드리지 않음)."""
+    if BY_NAME.get(g.name) is not g or new >= g.start:
+        return None
+    src = SOURCE
+    text = src.read_text(encoding="utf-8")
+    pat = re.compile(r'(Guard\("' + re.escape(g.name) + r'", "[^"]*", )' + str(g.start) + r",")
+    text, n = pat.subn(lambda m: m.group(1) + f"{new},", text)
+    if n != 1:
+        return f"{g.name}: 시작 숫자를 고칠 자리를 못 찾았어요 · 손으로 {g.start} → {new}"
+    src.write_text(text, encoding="utf-8")
+    return f"{g.name}: 시작 숫자 {g.start} → {new}(tests/structure_guards.py)"
 
 
 def check(g: Guard) -> tuple[Counter[Key], list[str]]:
@@ -368,15 +390,16 @@ def shrink(g: Guard) -> list[str]:
     for key in sorted(set(found) - set(allowed)):
         notes.append(f"{g.name}: 새 어긋남은 목록에 더하지 않아요 {key}: {found[key]}")
     p.write_text("\n".join(out) + "\n", encoding="utf-8")
-    return notes
+    note = set_start(g, units({k: e.count for k, e in load(g).items()}, g.unit))
+    return notes + ([note] if note else [])
 
 
 def retake(g: Guard) -> list[str]:
     """다시 재기(다른 일감을 합친 뒤 · 예: P1-12 토큰 이름 바꿈으로 같은 CSS · 복제 묶음이 다른 파일 쌍으로 갈라짐).
 
     지금 셈으로 목록을 다시 써요. **지금 전체가 목록 전체 이하**일 때만(줄어들기만 · '수로 셈') · 있던 키의 까닭은 그대로 ·
-    새 키는 `new_reason`(장치마다 정한 꼬리표)으로. 새 시작 숫자로 낮출 값을 알려요(`GUARDS`의 수는 손으로 낮춤 · 올리면
-    `test_structure.py`가 실패). 목록 diff는 검토에서 봐요.
+    새 키는 `new_reason`(장치마다 정한 꼬리표)으로. `GUARDS`의 시작 숫자도 지금 전체로 낮춰요(`set_start`). 목록 diff는
+    검토에서 봐요.
     """
     if not g.has_list:
         return []
@@ -393,15 +416,16 @@ def retake(g: Guard) -> list[str]:
     body = [format_line(k, found[k], allowed[k].reason if k in allowed else g.new_reason(k), text_key=g.text_key)  # type: ignore[misc]
             for k in sorted(found)]
     p.write_text("\n".join(head + body) + "\n", encoding="utf-8")
-    return [f"{g.name}: 다시 잼 {total_a} → {total_f}(키 {len(allowed)} → {len(found)} · 새 키 {len(new)}) · "
-            f"시작 숫자를 {total_f}로 낮출 수 있어요"]
+    note = set_start(g, total_f)
+    return [f"{g.name}: 다시 잼 {total_a} → {total_f}(키 {len(allowed)} → {len(found)} · 새 키 {len(new)})"] + \
+        ([note] if note else [])
 
 
 def main(argv: list[str]) -> int:
     cmds = ("check", "shrink", "retake")
     cmd = argv[0] if argv and argv[0] in cmds else "check"
     names = [a for a in argv if a not in cmds] or [g.name for g in GUARDS]
-    bad = 0
+    bad = skipped = 0
     for name in names:
         g = BY_NAME[name]
         try:
@@ -412,11 +436,14 @@ def main(argv: list[str]) -> int:
                 print(f"{name}: 지금 {units(dict(found), g.unit)} · 시작 {g.start} · 어긋남 {len(lines)}")
                 bad += bool(lines)
         except RuntimeError as e:
-            print(f"{name}: 건너뜀 · {e}")
+            print(f"{name}: 건너뜀(셀 수 없음) · {e}")
+            skipped += 1
             continue
         for line in lines:
             print("  " + line)
-    return 1 if bad else 0
+    if skipped and not bad:
+        print(f"건너뛴 장치 {skipped}개 · 종료 2(통과로 보지 않아요)")
+    return 1 if bad else (2 if skipped else 0)
 
 
 if __name__ == "__main__":

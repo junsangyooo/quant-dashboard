@@ -115,22 +115,26 @@ def layer_of(r: str) -> tuple[str, str | None]:
     return "other", None
 
 
+# 'other'(층 표에 없는 자리 · 예: 새 `src/net/`)는 어느 층에서도 가져오면 안 되고 그 자리 파일도 아무것도 못 가져와요(P1-04 ·
+# 층을 정해야 들어옴 · 다시 내보내기로 경계를 돌아가지 못하게 · 지금 `src/`에 'other' 파일 0이라 숫자 변화 0).
+ALL_WEB_LAYERS = {"ds", "api", "copy", "lib", "features", "shell", "assembly", "tokens", "graph", "other"}
 FORBIDDEN: dict[str, set[str]] = {
-    "ds": {"features", "api", "copy", "shell"},
-    "api": {"ds", "features", "shell"},
-    "copy": {"ds", "api", "lib", "features", "shell", "assembly", "tokens", "graph"},
-    "lib": {"ds", "api", "copy", "features", "shell"},
-    "features": {"shell"},  # 다른 features는 아래에서 따로(같은 기능 안은 허용)
-    "shell": {"api"},
+    "ds": {"features", "api", "copy", "shell", "other"},
+    "api": {"ds", "features", "shell", "other"},
+    "copy": {"ds", "api", "lib", "features", "shell", "assembly", "tokens", "graph", "other"},
+    "lib": {"ds", "api", "copy", "features", "shell", "other"},
+    "features": {"shell", "other"},  # 다른 features는 아래에서 따로(같은 기능 안은 허용)
+    "shell": {"api", "other"},
     "assembly": set(),
-    "tokens": {"ds", "api", "copy", "lib", "features", "shell"},
+    "tokens": {"ds", "api", "copy", "lib", "features", "shell", "other"},
     "graph": set(),  # 지울 것 · 규칙 없음
-    "other": set(),
+    "other": ALL_WEB_LAYERS,
 }
 
 IMPORT_RE = re.compile(
     r"""(?:^|[^\w$])(?:import|export)\s+(?:type\s+)?(?:[\w$*{}\s,]+?\s+from\s+)?['"]([^'"]+)['"]"""
-    r"""|(?:^|[^\w$.])import\(\s*['"]([^'"]+)['"]\s*\)""",
+    r"""|(?:^|[^\w$.])import\(\s*['"]([^'"]+)['"]\s*\)"""
+    r"""|(?:^|[^\w$.])import\(\s*`([^`]+)`\s*\)""",  # 템플릿 글(P1-04 · 식이 들면 `resolve`가 못 풀어 unresolved)
     re.M,
 )
 
@@ -140,14 +144,16 @@ def imports_of(path: Path) -> list[tuple[str, int, bool]]:
     code = strip_comments(path.read_text(encoding="utf-8"))
     out = []
     for m in IMPORT_RE.finditer(code):
-        spec = m.group(1) or m.group(2)
+        spec = m.group(1) or m.group(2) or m.group(3)
         line = code.count("\n", 0, m.start()) + 1
-        out.append((spec, line, m.group(2) is not None))
+        out.append((spec, line, m.group(1) is None))
     return out
 
 
 def resolve(spec: str, from_file: Path) -> str | None:
-    """상대 지정자 → web/ 기준 경로(.ts · .tsx · .css · /index.ts). 바깥 패키지면 None."""
+    """상대 지정자 → web/ 기준 경로(.ts · .tsx · .css · /index.ts). 바깥 패키지면 None · 식이 든 템플릿 글은 못 풂(`(?)`)."""
+    if "${" in spec:
+        return f"{spec}(?)"
     if not spec.startswith("."):
         return None
     base = (from_file.parent / spec).resolve()

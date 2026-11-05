@@ -265,24 +265,67 @@ def duplicates() -> dict[str, Any]:
 # ── SQL 위치 ─────────────────────────────────────────────────────────────────
 
 
+SQL_HEAD = re.compile(r"^\s*(" + "|".join(SQL_WORDS) + r")(\s+)(.*)$", re.I | re.S)
+# 대문자가 아닌 SQL 낱말로 시작하는 글은 SQL 둘째 낱말이 같이 있어야 SQL로 봐요(영어 글 'Select a strategy' ·
+# 'update available' · 'with care'는 아님 · 'select id from runs'는 SQL · PRAGMA는 글에 안 쓰는 낱말이라 하나로도).
+SQL_SECOND = re.compile(r"\b(from|into|set|table|where|values|join|index|exists|view|trigger|transaction|returning|"
+                        r"order\s+by|group\s+by|limit)\b", re.I)
+
+
+def _is_sql(text: str, *, first_piece: bool = False) -> bool:
+    """SQL 낱말 + 공백(줄바꿈 포함) + 이어지는 글. f-string의 첫 조각이면 낱말 + 공백만으로도(뒤는 식)."""
+    m = SQL_HEAD.match(text)
+    if not m or (not m.group(3).strip() and not first_piece):
+        return False  # 단계 이름 'select' · HTTP 메서드 'DELETE' 같은 낱말 하나는 아님
+    word = m.group(1)
+    return word.isupper() or word.lower() == "pragma" or bool(SQL_SECOND.search(text))
+
+
+def _module_aliases(tree: ast.AST, module: str) -> tuple[set[str], dict[str, str]]:
+    """(`import module [as x]`의 이름들, `from module import a [as b]`의 b → a)."""
+    mods: set[str] = set()
+    names: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name == module:
+                    mods.add(a.asname or a.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == module and not node.level:
+            for a in node.names:
+                names[a.asname or a.name] = a.name
+    return mods, names
+
+
 def sql_locations(store_modules: tuple[str, ...] = ("app/db.py",)) -> dict[str, Any]:
+    """sqlite3 호출(`import sqlite3 as x` · `from sqlite3 import connect` 이름도 따라감) · SQL 글(독스트링 뺌 ·
+    f-string은 첫 조각으로 한 번 · 대소문자 규칙은 `_is_sql`)."""
     hits = []
     for p in app_files():
         if not is_kept(p):
             continue
         r = rel(p)
         tree = _parse(p)
+        mods, names = _module_aliases(tree, "sqlite3")
         for node in ast.walk(tree):
             # sqlite3 '호출'만(`except sqlite3.Error` 같은 이름 참조는 아님)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and \
-                    isinstance(node.func.value, ast.Name) and node.func.value.id == "sqlite3":
-                hits.append({"module": r, "line": node.lineno, "kind": "sqlite3",
-                             "text": f"sqlite3.{node.func.attr}()"})
-        for text, line in _strings(tree):
-            head = text.lstrip()
-            # 대문자 SQL 낱말 + 공백 + 이어지는 글(단계 이름 'select' · HTTP 메서드 'DELETE' 같은 낱말 하나는 아님)
-            if any(head.startswith(w + " ") and len(head) > len(w) + 1 for w in SQL_WORDS):
-                hits.append({"module": r, "line": line, "kind": "sql", "text": text.strip()[:60]})
+            if isinstance(node, ast.Call):
+                f = node.func
+                if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in mods:
+                    hits.append({"module": r, "line": node.lineno, "kind": "sqlite3", "text": f"sqlite3.{f.attr}()"})
+                elif isinstance(f, ast.Name) and f.id in names:
+                    hits.append({"module": r, "line": node.lineno, "kind": "sqlite3", "text": f"sqlite3.{names[f.id]}()"})
+        in_fstring = {id(v) for n in ast.walk(tree) if isinstance(n, ast.JoinedStr) for v in n.values}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.JoinedStr) and node.values and isinstance(node.values[0], ast.Constant) and \
+                    isinstance(node.values[0].value, str):
+                whole = "".join(v.value if isinstance(v, ast.Constant) else " ? " for v in node.values)
+                if _is_sql(node.values[0].value, first_piece=True) and _is_sql(whole):
+                    hits.append({"module": r, "line": node.lineno, "kind": "sql", "text": whole.strip()[:60]})
+        docs = _docstring_nodes(tree)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs and \
+                    id(node) not in in_fstring and _is_sql(node.value):
+                hits.append({"module": r, "line": node.lineno, "kind": "sql", "text": node.value.strip()[:60]})
     hits.sort(key=lambda h: (h["module"], h["line"]))
     outside = [h for h in hits if h["module"] not in store_modules]
     by_module: dict[str, int] = defaultdict(int)
@@ -309,13 +352,29 @@ def time_literals() -> dict[str, Any]:
         for text, line in _strings(tree):
             for m in HHMM.finditer(text):
                 hits.append({"module": r, "line": line, "kind": "hh:mm", "text": m.group(0)})
+        dt_mods, dt_names = _module_aliases(tree, "datetime")
+        time_names = {"time"} | {k for k, v in dt_names.items() if v == "time"}
+        datetime_names = {k for k, v in dt_names.items() if v == "datetime"}
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 f = node.func
-                if isinstance(f, ast.Name) and f.id == "time" and len(node.args) >= 2 and \
-                        all(isinstance(a, ast.Constant) for a in node.args):
-                    hits.append({"module": r, "line": node.lineno, "kind": "time()",
-                                 "text": "time(" + ", ".join(str(a.value) for a in node.args) + ")"})  # type: ignore[attr-defined]
+                # 시각 생성자: `time(h, m)` · `dtime(…)`(별칭) · `datetime.time(…)`(모듈 · 별칭) · `time(hour=…)` /
+                # `datetime(y, mo, d, h, m)` · `dt.datetime(…, hour=…)` — 시(hour)가 상수 정수면 셈
+                is_time = (isinstance(f, ast.Name) and f.id in time_names) or \
+                    (isinstance(f, ast.Attribute) and f.attr == "time" and isinstance(f.value, ast.Name) and f.value.id in dt_mods)
+                is_datetime = (isinstance(f, ast.Name) and f.id in datetime_names) or \
+                    (isinstance(f, ast.Attribute) and f.attr == "datetime" and isinstance(f.value, ast.Name) and
+                     f.value.id in dt_mods)
+                if is_time or is_datetime:
+                    at = 0 if is_time else 3
+                    kw = {k.arg: k.value for k in node.keywords}
+                    hour = node.args[at] if len(node.args) > at else kw.get("hour")
+                    minute = node.args[at + 1] if len(node.args) > at + 1 else kw.get("minute")
+                    if isinstance(hour, ast.Constant) and isinstance(hour.value, int) and not isinstance(hour.value, bool):
+                        mv = minute.value if isinstance(minute, ast.Constant) else ("…" if minute is not None else 0)
+                        kind = "time()" if is_time else "datetime()"
+                        hits.append({"module": r, "line": node.lineno, "kind": kind,
+                                     "text": f"{kind[:-2]}({hour.value}, {mv})"})
                 if isinstance(f, ast.Attribute) and f.attr == "replace" and \
                         any(k.arg == "hour" and isinstance(k.value, ast.Constant) for k in node.keywords):
                     hits.append({"module": r, "line": node.lineno, "kind": "replace(hour=)",

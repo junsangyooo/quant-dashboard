@@ -16,18 +16,39 @@ const WEB = import.meta.dirname;
 const SRC = path.join(WEB, 'src');
 export const ALLOW_FILE = path.join(WEB, '..', 'tests', 'allow', 'web-boundaries.txt');
 
-// webcounts.FORBIDDEN 그대로(features → 다른 features는 아래에서 따로 · 같은 기능 안은 허용)
+// webcounts.FORBIDDEN 그대로(features → 다른 features는 아래에서 따로 · 같은 기능 안은 허용).
+// 'other'(층 표에 없는 자리 · 예: 새 `src/net/`)는 어느 층에서도 가져오면 안 되고 그 자리 파일도 아무것도 못 가져와요
+// (층을 정해야 들어옴 · 다시 내보내기로 경계를 돌아가지 못하게 · P1-04 검토).
+const ALL = [
+  'ds',
+  'api',
+  'copy',
+  'lib',
+  'features',
+  'shell',
+  'assembly',
+  'tokens',
+  'graph',
+  'other',
+];
 const FORBIDDEN = {
-  ds: ['features', 'api', 'copy', 'shell'],
-  api: ['ds', 'features', 'shell'],
-  copy: ['ds', 'api', 'lib', 'features', 'shell', 'assembly', 'tokens', 'graph'],
-  lib: ['ds', 'api', 'copy', 'features', 'shell'],
-  features: ['shell'],
-  shell: ['api'],
+  ds: ['features', 'api', 'copy', 'shell', 'other'],
+  api: ['ds', 'features', 'shell', 'other'],
+  copy: ['ds', 'api', 'lib', 'features', 'shell', 'assembly', 'tokens', 'graph', 'other'],
+  lib: ['ds', 'api', 'copy', 'features', 'shell', 'other'],
+  features: ['shell', 'other'],
+  shell: ['api', 'other'],
   assembly: [],
-  tokens: ['ds', 'api', 'copy', 'lib', 'features', 'shell'],
+  tokens: ['ds', 'api', 'copy', 'lib', 'features', 'shell', 'other'],
   graph: [],
-  other: [],
+  other: ALL,
+};
+
+// 템플릿 글 동적 import(`import(\`../x/${a}\`)`)는 경로를 셀 수 없어 어디서든 금지 · 식 없는 템플릿 글은 아래 패턴으로 봐요
+const DYNAMIC_TEMPLATE = {
+  selector: 'ImportExpression[source.type="TemplateLiteral"][source.expressions.length>0]',
+  message:
+    '화면 경계(ARCHITECTURE 3절): 동적 import 경로는 글자 그대로 써요(식이 든 템플릿 글은 경계를 셀 수 없음)',
 };
 
 /** web/ 기준 경로 → [층, 기능 이름] (webcounts.layer_of와 같음). */
@@ -104,7 +125,12 @@ export function boundaryConfigs({ allow = true } = {}) {
   const allowed = allow ? readAllow() : new Set();
   const sources = walk(SRC, ['.ts', '.tsx']);
   const targets = walk(SRC, ['.ts', '.tsx', '.css']);
-  const configs = [];
+  const configs = [
+    {
+      files: ['src/**/*.{ts,tsx}'],
+      rules: { 'no-restricted-syntax': ['error', DYNAMIC_TEMPLATE] },
+    },
+  ];
   for (const file of sources) {
     const [layer, feature] = layerOf(file);
     const byWhy = new Map();
@@ -122,12 +148,16 @@ export function boundaryConfigs({ allow = true } = {}) {
       const re = `^(?:${alts.join('|')})$`;
       patterns.push({ regex: re, message, caseSensitive: true });
       selectors.push({ selector: `ImportExpression[source.value=/${re}/]`, message });
+      selectors.push({
+        selector: `ImportExpression[source.type="TemplateLiteral"][source.quasis.0.value.cooked=/${re}/]`,
+        message,
+      });
     }
     configs.push({
       files: [file],
       rules: {
         'no-restricted-imports': ['error', { patterns }],
-        'no-restricted-syntax': ['error', ...selectors],
+        'no-restricted-syntax': ['error', DYNAMIC_TEMPLATE, ...selectors],
       },
     });
   }
