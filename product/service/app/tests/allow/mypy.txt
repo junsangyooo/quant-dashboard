@@ -9,7 +9,6 @@ app/domain/engine.py assignment 2  # v3 엔진 · 동작 그대로
 app/domain/engine.py list-item 1  # v3 엔진 · 동작 그대로
 app/domain/engine.py operator 4  # None과 연산 가능성 · v3 엔진 · 동작 그대로
 app/domain/engine.py unused-ignore 2  # 필요 없는 `type: ignore` · v3 엔진
-app/live.py arg-type 2  # P1-08 run/live.py로 옮길 때 정리
-app/live.py assignment 1  # P1-08 run/live.py로 옮길 때 정리
-app/live.py index 8  # sqlite3.Row | None을 바로 색인(방금 쓴 주문 행 · 모음 셈 3곳은 P1-07에서 `one_row`로) · P1-08 run/live.py로 옮길 때 정리
+app/run/live.py assignment 1  # 조건주문 행을 다시 읽어 같은 이름에(`Row | None` → `Row`) · 방금 쓴 행이라 늘 있음 · 감추지 않고 동작 그대로 · 2단계 정리(P1-08에서 run/live.py로 옮김)
+app/run/live.py index 8  # sqlite3.Row | None을 바로 색인(결과 모르는 주문: 방금 쓴 주문 행) · 정말 None일 수 있는 꼴이라 감추지 않음 · 동작 그대로 · 2단계 정리(P1-08에서 run/live.py로 옮김 · 모음 셈 3곳은 P1-07에서 `one_row`로)
 app/vault.py no-untyped-call 5  # 타입 없는 함수 호출(cryptography 도우미) · P1-06 뒤 정리

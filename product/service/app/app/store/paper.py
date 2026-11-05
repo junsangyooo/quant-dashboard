@@ -1,6 +1,6 @@
-"""모의투자 v2 저장(paper_runs · paper_trades · paper_equity · paper_judgements). `paper_v2.py`가 써요.
+"""모의투자 v2 저장(paper_runs · paper_trades · paper_equity · paper_judgements). `run/paper.py`가 써요.
 
-상태 값(`v2-running` · `v2-ended`)은 부르는 쪽이 넘겨요(MVP 모의투자와 섞이지 않게 정한 값 · `paper_v2.py`).
+상태 값(`v2-running` · `v2-ended`)은 부르는 쪽이 넘겨요(MVP 모의투자와 섞이지 않게 정한 값 · `run/paper.py`).
 """
 
 from __future__ import annotations

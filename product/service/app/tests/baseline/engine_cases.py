@@ -27,7 +27,7 @@ from app.domain.engine import Engine, MarketData, live_note, run_backtest
 from app.domain.indicators import Series
 from app.domain.markets.kr import KST
 from app.run.data import Market
-from app.paper_v2 import PaperV2
+from app.run.paper import PaperV2
 from app.domain.rules import RuleLayer
 from app.adapters.toss import RateLimiter
 from tests.baseline.mask import mask_values

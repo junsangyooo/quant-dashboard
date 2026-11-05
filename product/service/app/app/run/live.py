@@ -19,29 +19,15 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from .domain import blocks as bk
-from .domain.catalog import CATALOG
-from .domain.copytext import read_body
-from .store import runs as run_store
-from .store import strategies as strategy_store
-from .store import todos as todo_store
-from .store.db import DB
-from .domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
-from .domain.indicators import Series
-from .domain.markets.kr import BASE_OPEN, KST, complete_until, lower_limit, tick_round, ticks_below
-from .domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor
-from .run.data import Market
-from .run.scheduler import (
-    DAILY_CHECK_TIME,
-    INTRADAY_FROM,
-    INTRADAY_UNTIL,
-    LATE_OPEN,
-    ORDER_AT,
-    PRECHECK_AT,
-    PRECHECK_EVERY,
-    RECONCILE_AT,
-)
-from .ports import (
+from ..domain import blocks as bk
+from ..domain.catalog import CATALOG
+from ..domain.copytext import read_body
+from ..domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
+from ..domain.indicators import Series
+from ..domain.markets.kr import BASE_OPEN, KST, complete_until
+from ..domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor
+from ..orders import transform as tf
+from ..ports import (
     Broker,
     BrokerBadAnswer,
     BrokerError,
@@ -51,15 +37,25 @@ from .ports import (
     NoAnswer,
     Notifier,
 )
+from ..store import runs as run_store
+from ..store import strategies as strategy_store
+from ..store import todos as todo_store
+from ..store.db import DB
+from .data import Market
+from .scheduler import (
+    DAILY_CHECK_TIME,
+    INTRADAY_FROM,
+    INTRADAY_UNTIL,
+    LATE_OPEN,
+    ORDER_AT,
+    PRECHECK_AT,
+    PRECHECK_EVERY,
+    RECONCILE_AT,
+)
 
 DART_ITEMS = {i for i, it in CATALOG.items() if it.lock == "dart"}
 RUNNING = "running"
 ENDED = "ended"
-STEP_WAIT = timedelta(minutes=3)  # R-O6
-TRIGGER_WAIT = timedelta(minutes=15)  # R-X9
-COND_RENEW_DAYS = 30  # R-X8
-COND_STOP_GAP = 0.03  # R-X6: 손절 지정가 = 감시가 −3%(가정)
-LOOKUPS = 3  # R-O12: 2분 동안 3번
 
 # 할 일 제목(SPEC 5-5 · 화면 · 텔레그램은 [종목] 뺌)
 TODO = {
@@ -200,8 +196,8 @@ class Live:
                 bars[sym] = [*(bars.get(sym) or []), b]
         data = MarketData(series={s: Series(b) for s, b in bars.items() if b}, info=info, live=True)
         st = self.state(int(r["id"]))
-        eng_state = {k: st[k] for k in ("cash", "pos", "plans", "day_no", "sold", "loss_block_d", "unsettled", "last_equity")
-                     if k in st}
+        eng_state: dict[str, Any] = {k: st[k] for k in ("cash", "pos", "plans", "day_no", "sold", "loss_block_d",
+                                                         "unsettled", "last_equity") if k in st}
         cal = sorted({d for s in data.series.values() for d in s.d})
         settings = json.loads(r["settings"] or "{}")
         rules = RuleLayer(amount=float(r["amount"]), **{k: settings[k] for k in
@@ -408,7 +404,8 @@ class Live:
         app_qty = int(st["pos"].get(sym, {}).get("qty", 0))
         acct = int(holdings[sym].qty) if sym in holdings else 0
         if acct < app_qty:  # R-O10 · 불일치: 팔지 않아요
-            self.block(rid, sym, "계좌 불일치"); st["blocked"][sym] = "계좌 불일치"
+            self.block(rid, sym, "계좌 불일치")
+            st["blocked"][sym] = "계좌 불일치"
             self.todo(rid, "mismatch", sym, data={"app": app_qty, "account": acct})
             return {"sym": sym, "skip": "계좌 불일치"}
         sellable = int(c.sellable_quantity(sym))
@@ -418,7 +415,7 @@ class Live:
         self._cancel_conds(rid, c, sym)  # R-X7
         close = float(p.get("close") or st["pos"][sym]["avg"])
         protect = p.get("kind") == "protect"
-        price = lower_limit(close) if protect else sell_floor(close)
+        price = tf.open_sell_price(close, protect)
         return self._send(rid, today, sym, "SELL", qty, price, "open_sell_protect" if protect else "open_sell",
                           p.get("reason") or [])
 
@@ -430,9 +427,7 @@ class Live:
         close = float(p["close"])
         cap = buy_cap(close)
         value = float(p["value"])
-        qty = int(value // cap)  # R-O3: 수량 = ⌊목표 ÷ 상한⌋
-        while qty > 0 and qty * cap * (1 + FEE) > cash:  # 묶이는 돈 ≤ 운용 현금
-            qty -= 1
+        qty = tf.buy_quantity(value, cap, cash)  # R-O3: 수량 = ⌊목표 ÷ 상한⌋ · 묶이는 돈 ≤ 운용 현금
         if qty <= 0:
             return {"sym": sym, "skip": "운용 현금 부족"}
         order_value = qty * cap
@@ -440,7 +435,7 @@ class Live:
             self.todo(rid, "huge", sym, data={"qty": qty, "cap": cap})
             return {"sym": sym, "skip": "큰 주문 · 할 일"}
         settings = json.loads(self.run(rid)["settings"] or "{}")
-        if order_value > float(settings.get("order_max", 20_000_000)):  # R-O8 주문 크기 한도
+        if order_value > float(settings.get("order_max", tf.ORDER_MAX_DEFAULT)):  # R-O8 주문 크기 한도
             self.todo(rid, "too_big", sym, data={"qty": qty, "cap": cap})
             return {"sym": sym, "skip": "주문 크기 한도"}
         res = self._send(rid, today, sym, "BUY", qty, cap, "open_buy", p.get("reason") or [])
@@ -450,7 +445,7 @@ class Live:
     # ── 보내기 · 결과 모름(R-O11 · R-O12) ──────────────────────────────────
 
     def client_id(self, rid: int, d: str, sym: str, side: str, rnd: int) -> str:
-        return f"q{rid}-{d.replace('-', '')}-{sym}-{side[0]}-{rnd}"
+        return tf.client_order_id(rid, d, sym, side, rnd)
 
     def _send(self, rid: int, d: str, sym: str, side: str, qty: int, price: float | None, kind: str,
               reason: list[str], *, order_type: str = "LIMIT", rnd: int | None = None) -> dict[str, Any]:
@@ -491,7 +486,7 @@ class Live:
         """R-O12: 내역에서 3번 찾기 → 있으면 기록 · 없으면 회차 +1 · 그래도 모르면 그 종목 0 + 할 일."""
         o = run_store.order(self.db, oid)
         c = self._need()
-        for _ in range(LOOKUPS):
+        for _ in range(tf.LOOKUPS):
             try:
                 found = self._find(c, o)
             except (NoAnswer, BrokerError):
@@ -581,9 +576,7 @@ class Live:
                 if o["side"] == "sell":
                     st["sell_fail"].pop(o["symbol"], None)
             elif t.status in ("REJECTED", "CANCELED", "EXPIRED"):
-                status = "partial" if filled else "failed"
-                run_store.set_order_status_at(self.db, o["id"], f"{status}_closed" if filled else "failed",
-                                              _iso(self.now()))
+                run_store.set_order_status_at(self.db, o["id"], tf.closed_status(filled), _iso(self.now()))
                 done["failed"] += 1
                 if o["side"] == "sell":
                     self._sell_failed(rid, st, o)
@@ -618,11 +611,10 @@ class Live:
             except BrokerError:
                 continue
             filled = run_store.filled_qty(self.db, o["id"])
-            note = f"일부 체결 {filled}/{o['qty']}주" if filled else "미체결 · 취소"
+            status, note = tf.unfilled_buy_close(filled, o["qty"])
             reason = json.loads(o["reason"] or "{}")
             reason["note"] = note
-            run_store.close_order(self.db, o["id"], "partial_closed" if filled else "canceled",
-                                  json.dumps(reason, ensure_ascii=False), _iso(self.now()))
+            run_store.close_order(self.db, o["id"], status, json.dumps(reason, ensure_ascii=False), _iso(self.now()))
         self.place_conds(rid)
 
     # ── 응답 이상(R-O14) ──────────────────────────────────────────────────
@@ -701,7 +693,7 @@ class Live:
             qty = min(int(pos["qty"]), int(c.sellable_quantity(sym)))
             if qty <= 0:
                 continue
-            res = self._send(rid, today.isoformat(), sym, "SELL", qty, ticks_below(price, 2),
+            res = self._send(rid, today.isoformat(), sym, "SELL", qty, tf.intraday_sell_price(price),
                              "intraday_protect" if stop else "intraday_take",
                              ["장중 감시 · " + ("손절" if stop else "익절")])
             out.append(res)
@@ -715,7 +707,7 @@ class Live:
         moved = []
         for o in run_store.open_intraday(self.db, rid):
             last = datetime.fromisoformat(o["updated_at"] or o["created_at"])
-            if now - last < STEP_WAIT:
+            if now - last < tf.STEP_WAIT:
                 continue
             reason = json.loads(o["reason"] or "{}")
             step = int(reason.get("step", 1))
@@ -723,20 +715,15 @@ class Live:
             if q is None:
                 continue
             price = float(q.price)
-            if o["kind"] == "intraday_take":
-                floor = sell_floor(float(self._prev_close(rid, o["symbol"]) or price))
-                if step >= 2:
-                    continue
-                new_price = max(ticks_below(price, 5), floor)
-                c.modify_order(o["toss_order_id"], order_type="LIMIT", price=Decimal(str(int(new_price))))
-            elif step == 1:
-                new_price = ticks_below(price, 5)
-                c.modify_order(o["toss_order_id"], order_type="LIMIT", price=Decimal(str(int(new_price))))
-            elif step == 2:
-                new_price = None
-                c.modify_order(o["toss_order_id"], order_type="MARKET")
-            else:
+            floor = sell_floor(float(self._prev_close(rid, o["symbol"]) or price)) if o["kind"] == "intraday_take" else 0.0
+            move = tf.widen_step(o["kind"], step, price, floor)
+            if move is None:
                 continue
+            order_type, new_price = move
+            if new_price is None:
+                c.modify_order(o["toss_order_id"], order_type=order_type)
+            else:
+                c.modify_order(o["toss_order_id"], order_type=order_type, price=Decimal(str(int(new_price))))
             reason["step"] = step + 1
             run_store.move_order(self.db, o["id"], new_price, json.dumps(reason, ensure_ascii=False), _iso(now))
             moved.append(int(o["id"]))
@@ -770,21 +757,15 @@ class Live:
                 if cur:
                     self._cancel_conds(rid, c, sym)
                 continue
-            stop_t = tick_round(stop) if stop else None
-            take_t = tick_round(take) if take else None
-            renew = cur and cur["expire"] and date.fromisoformat(cur["expire"]) - today <= timedelta(days=COND_RENEW_DAYS)
+            stop_t, take_t = tf.cond_triggers(stop, take)
+            renew = cur and tf.cond_renew_due(cur["expire"], today)
             if cur and int(cur["qty"]) == int(p["qty"]) and cur["stop_trigger"] == stop_t and \
                     cur["take_trigger"] == take_t and not renew:
                 continue
             if cur:
                 self._cancel_conds(rid, c, sym)
-            legs = []
-            if stop_t:
-                legs.append({"side": "SELL", "trigger": int(stop_t), "price": int(tick_round(stop_t * (1 - COND_STOP_GAP)))})
-            if take_t:
-                legs.append({"side": "SELL", "trigger": int(take_t), "price": int(take_t)})
-            kind = "OCO" if len(legs) == 2 else "SINGLE"
-            expire = today + timedelta(days=364)
+            kind, legs = tf.cond_legs(stop_t, take_t)
+            expire = tf.cond_expire(today)
             try:
                 cid = c.create_conditional_order(symbol=sym, kind=kind, quantity=int(p["qty"]), expire=expire,
                                                  first=legs[0], second=legs[1] if len(legs) > 1 else None)
@@ -827,7 +808,7 @@ class Live:
                     run_store.set_cond_status(self.db, co["id"], "filled")
                     out.append(co["symbol"])
                     continue
-            if now - datetime.fromisoformat(co["triggered_at"]) > TRIGGER_WAIT:
+            if now - datetime.fromisoformat(co["triggered_at"]) > tf.TRIGGER_WAIT:
                 c.cancel_conditional_order(co["toss_cond_id"])
                 run_store.set_cond_status(self.db, co["id"], "canceled")
                 st.setdefault("retry_protect", {})[co["symbol"]] = True
@@ -850,13 +831,15 @@ class Live:
                 continue
             ratio = acct / app if app else 0
             if acct > app and ratio == int(ratio) and ratio >= 2:  # 분할 · 무상증자 꼴(R-L8)
-                self.block(rid, sym, "권리 변동"); st["blocked"][sym] = "권리 변동"
+                self.block(rid, sym, "권리 변동")
+                st["blocked"][sym] = "권리 변동"
                 self.todo(rid, "corp", sym, data={"ratio": ratio, "qty": acct, "avg": p["avg"] / ratio})
                 run_store.add_corp_action(self.db, rid, sym, "split", ratio, _iso(self.now()),
                                           json.dumps({"from": app, "to": acct}))
                 out["corp"].append(sym)
             elif acct < app:
-                self.block(rid, sym, "계좌 불일치"); st["blocked"][sym] = "계좌 불일치"
+                self.block(rid, sym, "계좌 불일치")
+                st["blocked"][sym] = "계좌 불일치"
                 self.todo(rid, "mismatch", sym, data={"app": app, "account": acct})
                 out["mismatch"].append(sym)
         mine = run_store.known_toss_ids(self.db)
@@ -966,7 +949,8 @@ class Live:
         for sym, p in st["pos"].items():
             acct = int(holdings[sym].qty) if sym in holdings else 0
             if acct < int(p["qty"]):
-                self.block(rid, sym, "계좌 불일치"); st["blocked"][sym] = "계좌 불일치"
+                self.block(rid, sym, "계좌 불일치")
+                st["blocked"][sym] = "계좌 불일치"
                 self.todo(rid, "mismatch", sym, data={"app": int(p["qty"]), "account": acct})
                 out.append({"sym": sym, "skip": "계좌 불일치"})
                 continue
@@ -974,7 +958,7 @@ class Live:
             if in_session:
                 q = c.prices([sym]).get(sym)
                 price = float(q.price) if q else float(p["avg"])
-                out.append(self._send(rid, now.date().isoformat(), sym, "SELL", int(p["qty"]), ticks_below(price, 2),
+                out.append(self._send(rid, now.date().isoformat(), sym, "SELL", int(p["qty"]), tf.intraday_sell_price(price),
                                       "stop_all", ["전부 팔고 끝내기"]))
             else:
                 sells.append({"sym": sym, "side": "sell", "qty": int(p["qty"]), "kind": "protect",
@@ -1066,28 +1050,8 @@ class Live:
         todo_store.resolve_todo(self.db, todo_id, _iso(self.now()))
         return res
 
-    def view(self) -> dict[str, Any]:
-        r = self.run()
-        todos = [dict(t) for t in todo_store.open_todos(self.db)]
-        if r is None:
-            return {"running": False, "paused": self.paused, "halted": self.halted, "todos": todos}
-        rid = int(r["id"])
-        st = self.state(rid)
-        return {
-            "running": True, "id": rid, "version_id": r["version_id"], "amount": r["amount"],
-            "account_tail": r["account_tail"], "started_at": r["started_at"], "cash": st.get("cash"),
-            "positions": st.get("pos", {}), "manual": st["manual"], "blocked": st["blocked"],
-            "next": st.get("next"), "paused": self.paused, "halted": self.halted,
-            "settings": json.loads(r["settings"] or "{}"), "todos": todos,
-            "last_check": self.meta(rid, "last_check"),
-        }
-
-    def screen(self) -> dict[str, Any]:
-        """화면(V2-10 자산 · V2-11 계획 · V2-12 기록 · V2-13 할 일)이 한 번에 받는 값. 토스가 안 되면 저장한 값만."""
-        from .datamgmt import history_rows
-
-        base = self.view()
-        names = {k: v.get("name") or k for k, v in self.info().items()}
+    def account(self) -> tuple[dict[str, Any] | None, dict[str, float]]:
+        """화면이 보는 토스 계좌(총액 · 현금 · 보유)와 종목별 현재가. 토스가 안 되면 (None, {}) · 저장한 값만 보여요."""
         account: dict[str, Any] | None = None
         prices: dict[str, float] = {}
         c = self.client()
@@ -1101,57 +1065,7 @@ class Live:
                                          "price": float(h.last_price)} for h in hs]}
             except (BrokerError, NoAnswer):
                 account = None
-        base["account"] = account
-        base["names"] = names
-        alerts = [dict(a) for a in todo_store.recent_alerts(self.db)]
-        base["alerts"] = alerts
-        if not base["running"]:
-            last = run_store.latest_run(self.db)
-            base["last_run"] = dict(last) if last else None
-            return base
-        rid = int(base["id"])
-        r = self.run(rid)
-        v = strategy_store.version_no_name(self.db, r["version_id"])
-        base["strategy"] = {"name": v["name"] if v else "", "version_no": int(v["no"]) if v else 0}
-        pos = []
-        value = 0.0
-        for sym, p in base["positions"].items():
-            price = prices.get(sym) or float(p["avg"])
-            value += int(p["qty"]) * price
-            pos.append({"sym": sym, "name": names.get(sym, sym), "qty": int(p["qty"]), "avg": float(p["avg"]),
-                        "price": price, "value": int(p["qty"]) * price, "pnl": int(p["qty"]) * (price - float(p["avg"])),
-                        "entry_d": p.get("entry_d")})
-        base["holdings"] = pos
-        base["eval"] = value
-        base["equity"] = value + float(base["cash"] or 0)
-        base["curve"] = [(x["d"], x["equity"]) for x in run_store.equity_curve(self.db, rid)]
-        plans = []
-        for pl in (base.get("next") or {}).get("plans", []):
-            row = {"sym": pl["sym"], "name": names.get(pl["sym"], pl["sym"]), "side": pl["side"],
-                   "reason": pl.get("reason") or [], "close": pl.get("close"), "kind": pl.get("kind")}
-            if pl["side"] == "buy" and pl.get("close"):
-                cap = buy_cap(float(pl["close"]))
-                qty = int(float(pl["value"]) // cap)
-                row |= {"cap": cap, "qty": qty, "max": qty * cap, "est": qty * float(pl["close"])}
-            else:
-                row |= {"qty": int(pl.get("qty") or 0)}
-            plans.append(row)
-        base["plan_rows"] = plans
-        hist = [h for h in history_rows(self.db, rid)]
-        base["history"] = list(reversed(hist))
-        fills = run_store.recent_fills(self.db, rid)
-        base["recent"] = [{"d": f["d"], "sym": f["symbol"], "name": names.get(f["symbol"], f["symbol"]),
-                           "side": f["side"], "qty": int(f["qty"]), "price": float(f["price"])} for f in fills]
-        base["realized"] = sum(h["pnl"] or 0 for h in hist)
-        base["trades"] = len([h for h in hist if h["status"] in ("체결", "일부 체결")])
-        base["orders_n"] = len(hist)
-        try:
-            eng = self.engine(r, self.now().astimezone(KST).date())
-            base["watch"] = [{"sym": sym, "name": names.get(sym, sym), "levels": self.watch_levels(eng, sym),
-                              "price": prices.get(sym)} for sym in base["positions"]]
-        except Exception:
-            base["watch"] = []
-        return base
+        return account, prices
 
     def check_account_change(self, account_no: str | None) -> None:
         """운용 중 계좌번호 변경 거절(R-L10)."""

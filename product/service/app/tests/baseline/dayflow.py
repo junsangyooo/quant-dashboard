@@ -20,9 +20,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from app.live import Live, tick
+from app.run.live import Live, tick
 from app.domain.markets.kr import KST
-from app.paper_v2 import PaperV2
+from app.run.paper import PaperV2
 from app.run.scheduler import Scheduler
 from app.adapters.toss import RateLimiter
 from tests.baseline.mask import mask_values

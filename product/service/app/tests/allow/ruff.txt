@@ -3,7 +3,6 @@
 app/domain/blocks.py F401 1  # 안 쓰는 import · v3 모듈은 1단계 예외(ARCHITECTURE 6절) · P1-05 뒤 정리
 app/domain/copytext.py B905 1  # zip(strict=) 없음 · v3 모듈 · 동작 그대로 두고 P1-05 뒤 정리
 app/domain/engine.py B905 1  # zip(strict=) 없음 · v3 엔진 · 동작 그대로
-app/live.py E702 4  # 한 줄에 문장 둘(세미콜론) · P1-08 run/live.py로 옮길 때 정리
 tests/baseline/capture.py B904 1  # except 안 raise에 from 없음 · 기준선 도구(P1-01) · 메시지만 바꾸는 자리
 tests/baseline/screens.py B007 1  # 안 쓰는 루프 변수 · 기준선 도구(P1-01)
 tests/baseline/screens.py B904 1  # except 안 raise에 from 없음 · 기준선 도구(P1-01)

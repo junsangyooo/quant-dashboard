@@ -15,7 +15,8 @@ import pytest
 from app.store.db import DB
 from app.domain.markets.kr import KST, lower_limit, ticks_below
 from app.domain.rules import buy_cap, sell_floor
-from app.live import Live, LiveError
+from app.run.live import Live, LiveError
+from app.api import live as live_api
 from app.run.data import Market
 from app.adapters.toss import TossClient, TossCredentials, TossSource
 from app.adapters.transport import HttpRequest, HttpResponse, TransportError
@@ -654,7 +655,7 @@ def test_no_real_transport_used(tmp_path: Path) -> None:
 
 def test_tick_runs_the_day_in_order(tmp_path: Path) -> None:
     """앱 루프(30초): 08:20 대조 → 08:30 점검 → 08:35 주문 → 09:01 체결 대조 · 미체결 취소 → 장중 1분마다."""
-    from app.live import tick
+    from app.run.live import tick
 
     w = World(tmp_path)
     running(w, body(sell=[R("stop_loss", value=7, exec_="intraday")]))
@@ -697,7 +698,7 @@ def test_forty_orders_sells_first_then_buy_rank() -> None:
 def test_screen_view(tmp_path: Path) -> None:
     w = World(tmp_path)
     rid = running(w, body(sell=[R("stop_loss", value=7, exec_="intraday")]))
-    sc = w.live.screen()
+    sc = live_api.screen(w.live)
     assert sc["running"] and sc["strategy"]["version_no"] == 1 and sc["account"]["cash"] == 100_000_000
     row = sc["plan_rows"][0]
     assert row["side"] == "buy" and row["cap"] == 11_000 and row["max"] == row["qty"] * 11_000
@@ -706,6 +707,6 @@ def test_screen_view(tmp_path: Path) -> None:
     w.server.fill(o["toss_order_id"], str(o["qty"]), "10000")
     w.clock.at(date(2026, 11, 3), 9, 1)
     w.live.after_open(rid)
-    sc = w.live.screen()
+    sc = live_api.screen(w.live)
     assert sc["recent"][0]["side"] == "buy" and sc["holdings"][0]["sym"] == SYM
     assert sc["watch"][0]["levels"][0]["item"] == "stop_loss" and sc["history"][0]["status"] == "체결"

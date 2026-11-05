@@ -652,7 +652,7 @@ class TossClient:
     def prices(self, symbols: Sequence[str]) -> dict[str, Quote]:
         return self.prices_checked(symbols).items
 
-    def prices_checked(self, symbols: Sequence[str], prev_close: Mapping[str, float] | None = None) -> Checked:
+    def prices_checked(self, symbols: Sequence[str], prev_close: Mapping[str, float | None] | None = None) -> Checked:
         sh = _Shape("/api/v1/prices")
         rows = sh.arr(self.call("/api/v1/prices", params={"symbols": ",".join(symbols)}), "result")
         out = Checked({})

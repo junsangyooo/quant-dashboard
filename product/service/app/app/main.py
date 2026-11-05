@@ -41,11 +41,12 @@ from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
 from . import datamgmt as dm
 from . import updates
-from .live import Live, LiveError
-from .live import tick as live_tick
+from .api import live as live_api
+from .run.live import Live, LiveError
+from .run.live import tick as live_tick
 from .run.scheduler import AUTO_CHECK, DAILY_CHECK, LOOP_EVERY_S, Scheduler
 from .dart import DartStore
-from .paper_v2 import PaperError, PaperV2
+from .run.paper import PaperError, PaperV2
 from .ports import Clock, MarketFeed
 from .connect import Connections
 from .store import dart as store_dart
@@ -491,11 +492,11 @@ def create_app(
 
     @app.get("/api/live")
     def live_view() -> dict[str, Any]:
-        return live.view()
+        return live_api.summary(live)
 
     @app.get("/api/live/screen")
     async def live_screen() -> dict[str, Any]:
-        return await asyncio.to_thread(live.screen)
+        return await asyncio.to_thread(live_api.screen, live)
 
     @app.get("/api/live/preview")
     def live_preview(version_id: int) -> dict[str, Any]:
@@ -533,50 +534,50 @@ def create_app(
         except (TypeError, ValueError):
             raise LiveError("버전과 운용 금액을 정해 주세요") from None
         await asyncio.to_thread(live.start, vid, amount)
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/live/pause")
     def live_pause() -> dict[str, Any]:
         live.pause_new_buys("app")  # 로그인만(SPEC 7-4)
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/live/resume")
     def live_resume(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_resume_buys")
         live.resume_new_buys()
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/live/end")
     def live_end(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_end")
         live.end(_rid())
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/live/sell-all")
     def live_sell_all(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_sell_all_end")
-        return {"orders": live.sell_all_and_end(_rid()), **live.view()}
+        return {"orders": live.sell_all_and_end(_rid()), **live_api.summary(live)}
 
     @app.put("/api/live/amount")
     async def live_amount(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_amount")
         b = await _body(request)
         live.set_amount(_rid(), float(b.get("amount") or 0))
-        return live.view()
+        return live_api.summary(live)
 
     @app.put("/api/live/limits")
     async def live_limits(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_limits")
         b = await _body(request)
         live.set_limits(_rid(), b)
-        return live.view()
+        return live_api.summary(live)
 
     @app.put("/api/live/strategy")
     async def live_strategy(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_strategy")
         b = await _body(request)
         from_d = live.change_strategy(_rid(), int(b.get("version_id") or 0))
-        return {"from": from_d, **live.view()}
+        return {"from": from_d, **live_api.summary(live)}
 
     @app.post("/api/todos/{tid}/unknown")
     async def todo_unknown(tid: int, request: Request) -> dict[str, Any]:
@@ -587,7 +588,7 @@ def create_app(
             raise LiveError("그 할 일이 없어요", 404)
         live.resolve_unknown(_rid(), int(json.loads(t["data"])["order"]), filled_qty=int(b.get("filled_qty") or 0),
                              price=float(b.get("price") or 0))
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/todos/{tid}/corp")
     def todo_corp(tid: int, request: Request) -> dict[str, Any]:
@@ -596,7 +597,7 @@ def create_app(
         if t is None:
             raise LiveError("그 할 일이 없어요", 404)
         live.apply_corp(_rid(), t["symbol"])
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/todos/{tid}/match")
     def todo_match(tid: int, request: Request) -> dict[str, Any]:
@@ -605,12 +606,12 @@ def create_app(
         if t is None:
             raise LiveError("그 할 일이 없어요", 404)
         live.match_account(_rid(), t["symbol"])
-        return live.view()
+        return live_api.summary(live)
 
     @app.post("/api/todos/{tid}/big-order")
     def todo_big(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "todo_big_order")
-        return {"order": live.send_big(_rid(), tid), **live.view()}
+        return {"order": live.send_big(_rid(), tid), **live_api.summary(live)}
 
     # ── 설정 › 데이터(V2-53 · T-53) ───────────────────────────────────────
 

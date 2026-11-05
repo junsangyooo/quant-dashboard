@@ -10,7 +10,7 @@ import pytest
 
 from app import telegram as tg
 from app.adapters.toss import TossUnreachableError
-from app.live import SCOPE, TODO
+from app.run.live import SCOPE, TODO
 from tests.test_live import SYM, World, body, give_pos, morning, running
 from tests.test_blocks import R
 
@@ -147,7 +147,7 @@ def test_loss_limit_todo(tmp_path: Path) -> None:
 def test_dart_error_blocks_dart_strategy_buys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     w = World(tmp_path)
     rid = running(w)
-    monkeypatch.setattr("app.live.DART_ITEMS", {"price"})  # 이 전략의 줄을 재무 조건으로 셈
+    monkeypatch.setattr("app.run.live.DART_ITEMS", {"price"})  # 이 전략의 줄을 재무 조건으로 셈
     w.db.set_meta("dart.error", "key")
     w.clock.at(D, 21, 0)
     res = w.live.check(rid)

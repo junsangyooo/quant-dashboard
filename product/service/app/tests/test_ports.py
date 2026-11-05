@@ -27,7 +27,7 @@ from app.main import create_app
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
 PORTS = APP / "ports.py"
-RUN_FLOWS = ("live.py", "paper_v2.py", "backtest_v2.py", "run/scheduler.py", "run/data.py")
+RUN_FLOWS = ("run/live.py", "run/paper.py", "backtest_v2.py", "run/scheduler.py", "run/data.py")
 PROTOCOLS = ("Broker", "MarketFeed", "Disclosures", "Notifier", "Clock")
 # 포트 오류 → 그 오류를 이어받는 어댑터 오류(하나씩)
 ERROR_MAP: dict[type[BaseException], type[BaseException]] = {

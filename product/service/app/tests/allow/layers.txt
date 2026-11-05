@@ -6,6 +6,5 @@ app/dart.py store 1  # [P1-08] SQL은 P1-07에서 store/dart.py로 · 남은 `Da
 app/install.py run 1  # [P1-09] 설치(입구)가 run/scheduler.py 한 줄에서 Calendar(저장된 토스 장 달력) · KST · 업데이트 창 시각(P1-08 시각 표)을 씀 · 입구는 조립 · 설정만 가져와서 kr.py로 바로 옮기면 입구 → domain 어긋남 · app.py(조립) 경유로(P1-05 · P1-08 보고)
 app/install.py services 1  # [P1-09] 설치(입구)가 updates를 함수 안에서 가져옴 · 조립 · 설정 경유로
 app/install.py store 1  # [P1-09] 설치(입구)가 저장된 장 달력을 읽으려 store/db.py를 함수 안에서 가져옴(SQL은 없음) · 입구는 조립 · 설정만 가져와서 같은 줄의 `run 1`(Calendar)과 함께 app.py(조립) 경유로(P1-07 보고)
-app/live.py services 1  # [P1-08] 실전 흐름이 datamgmt(services)를 함수 안에서 · run/live.py 나눌 때
 app/telegram.py security 1  # [P1-09] 텔레그램 설정 · 명령 받기(남은 app/telegram.py)가 vault를 직접 · 보내기(`Bot`)는 P1-06에서 adapters/telegram.py로 뗌 · 명령 받기 · 설정을 services/로(services → security 허용 · 봇 오류 자리는 Q-N23 뒤)(P1-06 보고)
 app/telegram.py store 1  # [P1-09] SQL은 P1-07에서 store/todos.py로 · 남은 app/telegram.py(설정 · 알림 · 명령 받기)가 store를 부름 · 2-1 표에서 adapters 줄이지만 보내기는 P1-06에서 adapters/telegram.py로 뗐음 · 명령 받기 · 설정을 services/로 옮기면 services → store 허용(P1-07 보고)

@@ -1,5 +1,5 @@
 """실전 운용 저장(runs · live_state · positions · run_versions · run_cash · run_equity · orders · fills · cond_orders ·
-corp_actions). 실전 흐름(`live.py`)이 써요.
+corp_actions). 실전 흐름(`run/live.py`)이 써요.
 
 - 문장마다 자동 커밋(옮기기 전과 같은 경계). 주문은 'sending' 행을 먼저 쓰고(`add_order`) 그다음에 토스를 불러요(S9 ·
   부르는 쪽 `live.Live._send`가 그 순서를 지켜요).

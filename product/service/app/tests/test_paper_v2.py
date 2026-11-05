@@ -12,7 +12,7 @@ import pytest
 from app.store.db import DB
 from app.domain.markets.kr import KST
 from app.run.data import Market
-from app.paper_v2 import ALREADY, PaperError, PaperV2
+from app.run.paper import ALREADY, PaperError, PaperV2
 from app.domain.rules import buy_cap
 from tests.conftest import FakeBars, make_bars
 from tests.test_blocks import B, G, R

@@ -2,6 +2,6 @@
 # 종류: hh:mm(문자열) · time() · datetime() · replace(hour=) · .at(h,m) · (h,m)(모듈 맨 위 시각 튜플). `domain/markets/kr.py` · `run/scheduler.py` · 글 목록(`app/copy/`) 밖만 · 시작 숫자 26(P1-04) → 23(P1-05: `market.py` 장 시작 · 확정 시각 · `toss.py` 하루 끝을 `kr.py`로) → 9(P1-08: 일 시각을 `run/scheduler.py` 시각 표 하나로 · 남은 9는 글 속 시각 · P1-11).
 # 시각 생성자는 별칭(`dtime`) · 모듈 속성(`datetime.time` · `dt.time`) · `hour=` · `minute=` · `datetime(y, mo, d, h, m)`까지 세요(P1-04 검토 뒤 · 25 → 26은 toss.py의 23:59 하나).
 app/install.py hh:mm 3  # [P1-11] 업데이트 안내 글 속 시각(16:00~20:00 · 20:10) · 글 목록으로(글은 그대로 · 시각 값은 P1-08에서 run/scheduler.py 표로)
-app/live.py hh:mm 1  # [P1-11] 점검 글 속 '08:35'(글 그대로 · 글 목록으로)
-app/paper_v2.py hh:mm 2  # [P1-11] 모의투자 안내 글 속 '20:10'(글 그대로 · 글 목록으로)
+app/run/live.py hh:mm 1  # [P1-11] 점검 글 속 '08:35'(글 그대로 · 글 목록으로 · P1-08에서 app/live.py → run/live.py로 옮김 · 키만 바뀜)
+app/run/paper.py hh:mm 2  # [P1-11] 모의투자 안내 글 속 '20:10'(글 그대로 · 글 목록으로 · P1-08에서 app/paper_v2.py → run/paper.py로 옮김 · 키만 바뀜)
 app/telegram.py hh:mm 3  # [P1-11] 텔레그램 글 속 시각(08:30 · 20:10 · 08:35) · 글 목록으로(글은 그대로)
