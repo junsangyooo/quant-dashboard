@@ -20,6 +20,7 @@ from typing import Any
 
 from .domain import blocks as bk
 from .domain.copytext import read_body
+from .store import strategies as strategy_store
 from .store.db import DB
 from .domain.engine import Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
@@ -73,7 +74,7 @@ class PaperV2:
         return r
 
     def _body(self, version_id: int) -> tuple[dict[str, Any], Any]:
-        v = self.db.one("SELECT * FROM versions WHERE id=?", (version_id,))
+        v = strategy_store.version(self.db, version_id)
         if v is None:
             raise PaperError("그 버전이 없어요", 404)
         return read_body(json.loads(v["body"])), v
@@ -186,8 +187,7 @@ class PaperV2:
     def view(self, rid: int) -> dict[str, Any]:
         r = self._run(rid)
         state = json.loads(r["state"])
-        v = self.db.one("SELECT v.no, v.strategy_id, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id "
-                        "WHERE v.id=?", (r["version_id"],))
+        v = strategy_store.version_summary(self.db, r["version_id"])
         curve = [(x["d"], x["equity"]) for x in self.db.all(
             "SELECT d, equity FROM paper_equity WHERE run_id=? ORDER BY d", (rid,))]
         trades = [dict(x) | {"reason": json.loads(x["reason"])} for x in self.db.all(
@@ -233,7 +233,7 @@ class PaperV2:
 
     def preview(self, version_id: int) -> dict[str, Any]:
         _, v = self._body(version_id)
-        s = self.db.one("SELECT name FROM strategies WHERE id=?", (v["strategy_id"],))
+        s = strategy_store.strategy_name_row(self.db, v["strategy_id"])
         running = self.running_for(int(v["strategy_id"]))
         ft = self.first_times()
         return {"name": s["name"] if s else "", "version_no": v["no"], "limits": LIMITS_LINE, "line": START_LINE,

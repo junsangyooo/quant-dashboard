@@ -22,6 +22,7 @@ from typing import Any
 from .domain import blocks as bk
 from .domain.catalog import CATALOG
 from .domain.copytext import read_body
+from .store import strategies as strategy_store
 from .store.db import DB
 from .domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
@@ -181,7 +182,7 @@ class Live:
     # ── 엔진 ────────────────────────────────────────────────────────────────
 
     def _body(self, version_id: int) -> dict[str, Any]:
-        v = self.db.one("SELECT body FROM versions WHERE id=?", (version_id,))
+        v = strategy_store.version_body(self.db, version_id)
         if v is None:
             raise LiveError("그 버전이 없어요", 404)
         return read_body(json.loads(v["body"]))
@@ -214,10 +215,10 @@ class Live:
     def start(self, version_id: int, amount: float, *, settings: dict[str, Any] | None = None) -> int:
         if self.run() is not None:
             raise LiveError("이미 실전 운용 중이에요 · 하나만 운용해요", 409)
-        v = self.db.one("SELECT * FROM versions WHERE id=?", (version_id,))
+        v = strategy_store.version(self.db, version_id)
         if v is None:
             raise LiveError("그 버전이 없어요", 404)
-        if not self.db.one("SELECT 1 FROM backtest_runs WHERE version_id=?", (version_id,)):
+        if not strategy_store.was_backtested(self.db, version_id):
             raise LiveError("이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요")
         body = self._body(version_id)
         if bk.analyze(body["graph"])["problems"]:
@@ -1032,7 +1033,7 @@ class Live:
 
     def change_strategy(self, rid: int, version_id: int) -> str:
         """다음 20:10 확인부터 · 보유는 이어받고 · 조건주문은 새 규칙으로 다시 · 이 앱에서 백테스트한 버전만."""
-        if not self.db.one("SELECT 1 FROM backtest_runs WHERE version_id=?", (version_id,)):
+        if not strategy_store.was_backtested(self.db, version_id):
             raise LiveError("이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요")
         cal = self.market.calendar
         now = self.now().astimezone(KST)
@@ -1150,8 +1151,7 @@ class Live:
             return base
         rid = int(base["id"])
         r = self.run(rid)
-        v = self.db.one("SELECT v.no, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id WHERE v.id=?",
-                        (r["version_id"],))
+        v = strategy_store.version_no_name(self.db, r["version_id"])
         base["strategy"] = {"name": v["name"] if v else "", "version_no": int(v["no"]) if v else 0}
         pos = []
         value = 0.0

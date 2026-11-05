@@ -48,6 +48,7 @@ from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
 from .ports import Clock, MarketFeed
 from .connect import Connections
+from .store import strategies as strategy_store
 from .store.db import DB
 from .domain.engine import BacktestError as BacktestErrorV2
 from .domain.markets.kr import KST, weekday_open
@@ -497,8 +498,7 @@ def create_app(
         """V2-30 ① 확인할 것: 토스 연결 · 백테스트 함 · 다른 운용 없음 · 텔레그램 · 설치 위치 · 손절 없음(R-X10)."""
         from .domain import blocks as bkm
 
-        v = db.one("SELECT v.*, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id WHERE v.id=?",
-                   (version_id,))
+        v = strategy_store.version_with_name(db, version_id)
         if v is None:
             raise LiveError("그 버전이 없어요", 404)
         body = json.loads(v["body"])
@@ -512,7 +512,7 @@ def create_app(
         checks = [
             {"key": "toss", "ok": bool(view["saved"] and (view.get("last_check") or {}).get("ok"))},
             {"key": "account", "ok": bool(view.get("account_tail")), "tail": view.get("account_tail")},
-            {"key": "backtest", "ok": db.one("SELECT 1 FROM backtest_runs WHERE version_id=?", (version_id,)) is not None},
+            {"key": "backtest", "ok": strategy_store.was_backtested(db, version_id)},
             {"key": "single", "ok": live.run() is None},
             {"key": "telegram", "ok": bool(tg["saved"] and tg["chat"])},
             {"key": "place", "ok": bool(db.get_meta("access.place")), "place": db.get_meta("access.place")},
@@ -692,7 +692,7 @@ def create_app(
 
     def _unique_name(name: str, skip: int | None = None) -> tuple[str, bool]:
         """이름이 겹치면 끝에 ' (2)'처럼 숫자를 더한다(붙여 넣기 · 예시 복사 · 새 전략 모두)."""
-        taken = {r["name"] for r in db.all("SELECT id, name FROM strategies") if r["id"] != skip}
+        taken = {r["name"] for r in strategy_store.strategy_names(db) if r["id"] != skip}
         if name not in taken:
             return name, False
         n = 2
@@ -759,16 +759,14 @@ def create_app(
     def _running_v2(sid: int) -> dict[str, Any] | None:
         r2 = paper2.running_for(sid)
         if r2 is not None:
-            no = db.one("SELECT no FROM versions WHERE id=?", (r2["version_id"],))
+            no = strategy_store.version_no(db, r2["version_id"])
             return {"kind": "paper", "version_no": int(no["no"]) if no else 0, "run_id": int(r2["id"])}
         return None
 
     app.include_router(make_router(
         db, dart=lambda: bool(conns.view()["dart"]["saved"]), unique_name=lambda n: _unique_name(n)[0],
         now=_now, running=_running_v2,
-        used=lambda sid: db.one(
-            "SELECT r.id FROM paper_runs r JOIN versions v ON v.id=r.version_id WHERE v.strategy_id=? "
-            "UNION SELECT id FROM runs WHERE strategy_id=? LIMIT 1", (sid, sid)) is not None,
+        used=lambda sid: strategy_store.strategy_in_use(db, sid),
         backtester=_backtest_v2,
     ))
 

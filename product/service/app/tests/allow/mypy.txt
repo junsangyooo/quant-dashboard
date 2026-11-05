@@ -1,6 +1,5 @@
 # mypy 허용 목록(P1-02 ③). 한 줄 = `파일 오류번호 수  # 까닭`. `scripts/lint_allow.py mypy`가 지금 오류 수와 정확히 같은지 봐요
 # (늘면 실패 · 줄면 이 줄을 줄이거나 지워요). 1단계는 원래 있던 오류를 고치지 않아요(동작 변화 0).
-app/api_v2.py index 1  # sqlite3.Row | None을 바로 색인 · P1-07 저장 층에서 정리
 app/dart.py index 3  # sqlite3.Row | None을 바로 색인 · P1-06 어댑터 · P1-07 저장 층에서 정리
 app/datamgmt.py index 2  # sqlite3.Row | None을 바로 색인 · P1-07 저장 층에서 정리
 app/datamgmt.py no-untyped-call 2  # 타입 없는 함수 호출 · P1-09 services로 옮길 때 정리

@@ -18,6 +18,7 @@ from .domain import blocks as bk
 from .domain import catalog as cat
 from .domain import copytext as ct
 from .domain.markets.kr import KST
+from .store import strategies as sq
 from .store.db import DB
 
 
@@ -143,18 +144,12 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
 
     def save(sid: int, body: dict[str, Any]) -> dict[str, Any]:
         a = bk.analyze(body["graph"], dart=dart())
-        with db.tx():
-            row = db.one("SELECT COALESCE(MAX(no),0)+1 AS n FROM versions WHERE strategy_id=?", (sid,))
-            no = int(row["n"])
-            text = json.dumps(body, ensure_ascii=False)
-            vid = db.run("INSERT INTO versions(strategy_id,no,body,problems,created_at,format) VALUES(?,?,?,?,?,?)",
-                         (sid, no, text, len(a["problems"]), now(), "blocks"))
-            db.run("UPDATE strategies SET name=?, template=? WHERE id=?", (body["name"], a["mode"] or "", sid))
+        vid, no = sq.add_version(db, sid, json.dumps(body, ensure_ascii=False), len(a["problems"]), now(),
+                                 name=body["name"], template=a["mode"] or "")
         return {"version_id": vid, "no": no, "problems": len(a["problems"])}
 
     def backtested(vid: int) -> str | None:
-        row = db.one("SELECT ran_at FROM backtest_runs WHERE version_id=? ORDER BY id DESC LIMIT 1", (vid,))
-        return str(row["ran_at"]) if row else None
+        return sq.last_backtest_at(db, vid)
 
     def version_view(v: Any) -> dict[str, Any]:
         ran = backtested(int(v["id"]))
@@ -165,8 +160,8 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
     @r.get("/strategies")
     def strategies() -> dict[str, Any]:
         out = []
-        for s_ in db.all("SELECT * FROM strategies ORDER BY id"):
-            v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (s_["id"],))
+        for s_ in sq.list_strategies(db):
+            v = sq.latest_version(db, s_["id"])
             if v is None:
                 continue
             try:
@@ -199,14 +194,13 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
 
     def create_from(body: dict[str, Any], source: Any) -> dict[str, Any]:
         body["name"] = unique_name(body["name"])
-        sid = db.run("INSERT INTO strategies(name,template,source,created_at) VALUES(?,?,?,?)",
-                     (body["name"], bk.mode_of(body["graph"]) or "", json.dumps(source, ensure_ascii=False)
-                      if source else None, now()))
+        sid = sq.add_strategy(db, body["name"], bk.mode_of(body["graph"]) or "",
+                              json.dumps(source, ensure_ascii=False) if source else None, now())
         return {"id": sid, "name": body["name"], **save(sid, body)}
 
     @r.get("/strategies/{sid}/file")
     def export_file(sid: int) -> dict[str, Any]:
-        v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (sid,))
+        v = sq.latest_version(db, sid)
         if v is None:
             raise ApiError("그 전략이 없어요", 404)
         body = stored_body(v)
@@ -215,22 +209,20 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
 
     @r.delete("/strategies/{sid}")
     def delete(sid: int) -> dict[str, Any]:
-        if db.one("SELECT id FROM strategies WHERE id=?", (sid,)) is None:
+        if not sq.has_strategy(db, sid):
             raise ApiError("그 전략이 없어요", 404)
         if used is not None and used(sid):
             raise ApiError(DELETE_BLOCKED, 409)
-        with db.tx():
-            db.run("DELETE FROM versions WHERE strategy_id=?", (sid,))
-            db.run("DELETE FROM strategies WHERE id=?", (sid,))
+        sq.delete_strategy(db, sid)
         return {"ok": True}
 
     @r.get("/versions/{vid}/backtest")
     def backtest_input(vid: int) -> dict[str, Any]:
-        v = db.one("SELECT * FROM versions WHERE id=?", (vid,))
+        v = sq.version(db, vid)
         if v is None:
             raise ApiError("그 버전이 없어요", 404)
         body = stored_body(v)
-        s_ = db.one("SELECT name FROM strategies WHERE id=?", (v["strategy_id"],))
+        s_ = sq.strategy_name_row(db, v["strategy_id"])
         from .backtest_v2 import CHIPS, JUDGE_LINE, default_range
 
         return {"version": version_view(v), "strategy_id": v["strategy_id"], "name": s_["name"] if s_ else "",
@@ -245,7 +237,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
             vid = int(data.get("version_id"))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             raise ApiError("전략 버전을 골라 주세요") from None
-        v = db.one("SELECT * FROM versions WHERE id=?", (vid,))
+        v = sq.version(db, vid)
         if v is None:
             raise ApiError("그 버전이 없어요", 404)
         body = stored_body(v)
@@ -258,8 +250,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
         if backtester is None:
             raise ApiError("백테스트를 할 수 없어요", 503)
         res = await asyncio.to_thread(backtester, body, start, end, cash)
-        db.run("INSERT INTO backtest_runs(version_id, ran_at, start_d, end_d, cash) VALUES(?,?,?,?,?)",
-               (vid, now(), start.isoformat(), end.isoformat(), cash))
+        sq.add_backtest_run(db, vid, now(), start.isoformat(), end.isoformat(), cash)
         res["ran_day"] = md_day(res["ran_at"])
         res["ran_hm"] = hm(res["ran_at"])
         return res
@@ -276,16 +267,16 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
 
     @r.get("/strategies/{sid}")
     def strategy(sid: int) -> dict[str, Any]:
-        s = db.one("SELECT * FROM strategies WHERE id=?", (sid,))
+        s = sq.strategy(db, sid)
         if s is None:
             raise ApiError("그 전략이 없어요", 404)
-        v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (sid,))
+        v = sq.latest_version(db, sid)
         if v is None:
             raise ApiError("그 전략이 없어요", 404)
         body = stored_body(v)
         body["name"] = s["name"]
         versions = [version_view(x)
-                    for x in db.all("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC", (sid,))]
+                    for x in sq.versions_of(db, sid)]
         return {"id": sid, "name": s["name"], "version": version_view(v), "versions": versions,
                 "body": body, "running": running(sid), "deletable": not (used is not None and used(sid)),
                 **view(body, dart=dart())}
@@ -296,13 +287,12 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
         body = normalize(data.get("body"))
         body.pop("source", None)
         body["name"] = unique_name(body["name"])
-        sid = db.run("INSERT INTO strategies(name,template,source,created_at) VALUES(?,?,?,?)",
-                     (body["name"], bk.mode_of(body["graph"]) or "", None, now()))
+        sid = sq.add_strategy(db, body["name"], bk.mode_of(body["graph"]) or "", None, now())
         return {"id": sid, "name": body["name"], **save(sid, body)}
 
     @r.post("/strategies/{sid}/versions")
     async def new_version(sid: int, request: Request) -> dict[str, Any]:
-        if db.one("SELECT id FROM strategies WHERE id=?", (sid,)) is None:
+        if not sq.has_strategy(db, sid):
             raise ApiError("그 전략이 없어요", 404)
         data = await body_of(request)
         body = normalize(data.get("body"))
@@ -310,7 +300,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
 
     @r.get("/strategies/{sid}/copytext")
     def copytext(sid: int) -> dict[str, Any]:
-        v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (sid,))
+        v = sq.latest_version(db, sid)
         if v is None:
             raise ApiError("그 전략이 없어요", 404)
         body = stored_body(v)
