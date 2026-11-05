@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from app import blocks as bk
-from app.blocks import GraphError, new_block, new_row
+from app.domain import blocks as bk
+from app.domain.blocks import GraphError, new_block, new_row
 
 
 def B(bid: str, stage: str, rows: list[dict[str, Any]] | None = None, match: str | None = None) -> dict[str, Any]:

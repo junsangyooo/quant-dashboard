@@ -2,7 +2,7 @@
 경고 글). P1-01a가 얼린 v3 사례 326개 **밖의** 사례예요.
 
 네 가지:
-- `backtest`: `app.engine.run_backtest`(시험 `test_engine_v2.py`의 입력 꼴) · `app.backtest_v2.run`(API 백테스트가 쓰는
+- `backtest`: `app.domain.engine.run_backtest`(시험 `test_engine_v2.py`의 입력 꼴) · `app.backtest_v2.run`(API 백테스트가 쓰는
   길 · conftest의 가짜 일봉 파동). 경고 글(`notes` · 값 없음)이 실제로 나오는 사례와 건너뜀(`skipped`) · 실전 안내
   (`live_note`)가 나오는 사례를 넣었어요.
 - `engine_rules`: 실전 · 모의 규칙 층(`rules.RuleLayer`)을 끼운 엔진을 하루씩 돌려 규칙 층의 건너뜀 글(가격 상한 ·
@@ -23,11 +23,11 @@ from typing import Any
 
 from app import backtest_v2 as bt2
 from app.db import DB
-from app.engine import Engine, MarketData, live_note, run_backtest
-from app.indicators import Series
+from app.domain.engine import Engine, MarketData, live_note, run_backtest
+from app.domain.indicators import Series
 from app.market import KST, Market
 from app.paper_v2 import PaperV2
-from app.rules import RuleLayer
+from app.domain.rules import RuleLayer
 from app.toss import RateLimiter
 from tests.baseline.mask import mask_values
 from tests.conftest import FakeBars, make_bars, wave

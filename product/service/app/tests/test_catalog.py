@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app import catalog as cat
+from app.domain import catalog as cat
 
 SERVICE = Path(__file__).resolve().parents[2]
 

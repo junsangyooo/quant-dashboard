@@ -1,6 +1,6 @@
 """P1-01a 기준선: 얼린 시험 입력 · 정답(`tests/baseline/frozen/`)이 지금 값과 같고, v3 엔진만으로 다시 돌아요.
 
-`app.engine` · `app.copytext` · `app.blocks`와 얼린 파일만 써요(P1-03 뒤 · 지운 v1 · MVP 모듈은 가져오지 않음).
+`app.domain.engine` · `app.domain.copytext` · `app.domain.blocks`와 얼린 파일만 써요(P1-03 뒤 · 지운 v1 · MVP 모듈은 가져오지 않음).
 - 얼린 326개를 v3 엔진으로 다시 돌려 거래 · 건너뜀 · 값 없음 기록 · 끝 자산 · 남은 보유가 모두 같음(다 됐다 A).
 - 재생 코드 경로가 지운 모듈을 가져오지 않음(새 프로세스에서 `sys.modules` 검사).
 - v1에서 나온 시험 입력(얼린 것)이 v3 변환으로 얼린 정답을 내줌(다 됐다 B의 v3 쪽).
@@ -20,9 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from app import blocks as bk
-from app import copytext as ct
-from app.engine import run_backtest
+from app.domain import blocks as bk
+from app.domain import copytext as ct
+from app.domain.engine import run_backtest
 from tests.baseline import replay
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +56,7 @@ def test_replay_frozen_case_with_v3_engine_only(case: dict) -> None:  # type: ig
 
 
 def test_replay_module_imports_nothing_slated_for_deletion() -> None:
-    """재생 코드 경로(`tests/baseline/replay.py` + `app.engine`)는 지울 모듈을 가져오지 않아요.
+    """재생 코드 경로(`tests/baseline/replay.py` + `app.domain.engine`)는 지울 모듈을 가져오지 않아요.
 
     같은 프로세스에서는 다른 시험 파일이 이미 가져왔을 수 있어서 새 프로세스에서 `sys.modules`를 봐요."""
     src = (ROOT / "tests" / "baseline" / "replay.py").read_text(encoding="utf-8")

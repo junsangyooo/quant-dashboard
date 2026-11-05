@@ -1,6 +1,6 @@
 """얼린 v3 사례(`frozen/v3_cases.json` · `frozen/bars.json`)를 v3 엔진만으로 다시 돌려요(P1-01a).
 
-이 모듈은 `app.engine`과 표준 라이브러리만 가져와요. P1-03이 지운 모듈(옛 v1 · MVP 엔진 · 회귀 도구)에 기대지 않아서
+이 모듈은 `app.domain.engine`과 표준 라이브러리만 가져와요. P1-03이 지운 모듈(옛 v1 · MVP 엔진 · 회귀 도구)에 기대지 않아서
 P1-03 뒤에도 그대로 돌아요. 시험은 `tests/test_baseline_frozen.py`.
 """
 
@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.engine import run_backtest
+from app.domain.engine import run_backtest
 
 FROZEN = Path(__file__).resolve().parent / "frozen"
 CASES_FILE = FROZEN / "v3_cases.json"

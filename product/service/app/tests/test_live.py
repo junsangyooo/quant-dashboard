@@ -15,7 +15,7 @@ import pytest
 from app.db import DB
 from app.live import Live, LiveError, lower_limit, ticks_below
 from app.market import KST, Market, TossSource
-from app.rules import buy_cap, sell_floor
+from app.domain.rules import buy_cap, sell_floor
 from app.toss import TossClient, TossCredentials
 from app.transport import HttpRequest, HttpResponse, TransportError
 from tests.conftest import make_bars
@@ -680,9 +680,9 @@ def test_tick_runs_the_day_in_order(tmp_path: Path) -> None:
 
 def test_forty_orders_sells_first_then_buy_rank() -> None:
     """R-O9: 매도 10 + 매수 후보 35 → 매수 30건만(순위 순) · 나머지 '매수 안 함 · 하루 주문 40건'."""
-    from app.engine import Engine
-    from app.indicators import Series
-    from app.rules import RuleLayer
+    from app.domain.engine import Engine
+    from app.domain.indicators import Series
+    from app.domain.rules import RuleLayer
 
     eng = Engine(body(), {SYM: Series(make_bars([10_000.0] * 5))}, 10_000_000, rules=RuleLayer(amount=10_000_000))
     new = ([{"sym": f"S{i}", "side": "sell", "qty": 1} for i in range(10)]

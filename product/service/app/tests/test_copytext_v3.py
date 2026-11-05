@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from app import blocks as bk
-from app import copytext as ct
-from app.copytext import FormatError
+from app.domain import blocks as bk
+from app.domain import copytext as ct
+from app.domain.copytext import FormatError
 from tests.baseline import replay
 from tests.test_blocks import big_breakout
 

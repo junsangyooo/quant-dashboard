@@ -36,7 +36,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import APP_VERSION_TEXT
 from . import settings
-from . import copytext as ct
+from .domain import copytext as ct
 from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
 from . import datamgmt as dm
@@ -48,10 +48,10 @@ from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
 from .connect import Connections
 from .db import DB
-from .engine import BacktestError as BacktestErrorV2
+from .domain.engine import BacktestError as BacktestErrorV2
 from .market import KST, BarSource, Market, MarketDataError, TossSource, now_kst
 from .publicip import IpFetch, PublicIpError, public_ip
-from .stock_names import stock_name
+from .domain.stock_names import stock_name
 from .toss import Transport
 from .telegram import Telegram, TelegramError
 from .transport import Transports, build_transports
@@ -490,14 +490,14 @@ def create_app(
     @app.get("/api/live/preview")
     def live_preview(version_id: int) -> dict[str, Any]:
         """V2-30 ① 확인할 것: 토스 연결 · 백테스트 함 · 다른 운용 없음 · 텔레그램 · 설치 위치 · 손절 없음(R-X10)."""
-        from . import blocks as bkm
+        from .domain import blocks as bkm
 
         v = db.one("SELECT v.*, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id WHERE v.id=?",
                    (version_id,))
         if v is None:
             raise LiveError("그 버전이 없어요", 404)
         body = json.loads(v["body"])
-        from .copytext import read_body
+        from .domain.copytext import read_body
 
         g = read_body(body)["graph"]
         stop = any(r["item"] in ("stop_loss", "trailing_stop") and bkm.exec_of(g, b["id"], i) in ("intraday", "broker")

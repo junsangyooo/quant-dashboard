@@ -14,9 +14,9 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from . import blocks as bk
-from . import catalog as cat
-from . import copytext as ct
+from .domain import blocks as bk
+from .domain import catalog as cat
+from .domain import copytext as ct
 from .db import DB
 
 

@@ -34,6 +34,9 @@ HHMM = re.compile(r"(?<![\d:])([01]?\d|2[0-3]):[0-5]\d(?![\d:])")
 SQL_WORDS = ("SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "PRAGMA", "WITH", "DROP", "ALTER", "BEGIN", "COMMIT")
 
 # ARCHITECTURE 2-1: 지금 모듈 → 새 층(1단계 셈용 · `__init__`은 어디서나 가져와도 되는 공용 값)
+# 옮긴 모듈(P1-05: `catalog` · `indicators` · `fundamentals` · `rules` · `blocks` · `engine` · `copytext` · `stock_names` →
+# `app/domain/`)은 새 자리가 `LAYER_DIRS`로 층이 정해져요. 옛 줄은 2-1 표 그대로 남겨 둬요(옛 경로 파일은 없고 · 가져오는 곳 0은
+# `tests/test_no_reexport.py`가 봐요 · `tests/test_layers.py`가 이 표를 2-1 표로 읽어요).
 LAYER_OF: dict[str, str] = {
     "app/serve.py": "entry", "app/install.py": "entry", "app/main.py": "assembly", "app/__init__.py": "shared",
     "app/api_v2.py": "api", "app/updates.py": "services", "app/datamgmt.py": "services",

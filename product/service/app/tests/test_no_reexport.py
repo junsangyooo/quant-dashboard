@@ -1,6 +1,6 @@
 """옮긴 모듈을 옛 경로에서 다시 내보내지 않아요(ARCHITECTURE 5 · 6절 · P1-02 ④).
 
-`MOVED`는 '옛 경로 → 새 경로' 목록이에요(지금은 비어 있음 · P1-05 ~ P1-09가 모듈을 옮기며 채워요). 목록의 옛 경로마다:
+`MOVED`는 '옛 경로 → 새 경로' 목록이에요(P1-05 ~ P1-09가 모듈을 옮기며 채워요). 목록의 옛 경로마다:
 - 옛 경로의 파일(`app/옛.py` · `app/옛/__init__.py`)이 없어야 하고,
 - 옛 경로를 import할 수 없어야 하고(`sys.modules`에 끼워 넣는 꼴도 잡혀요),
 - 앱 · 시험 코드 어디서도 옛 경로를 import하지 않아야 해요(시험의 막기(monkeypatch) 경로가 진짜 모듈에 닿게).
@@ -22,7 +22,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # (옛 경로, 새 경로). 예: ("app.publicip", "app.adapters.publicip").
-MOVED: list[tuple[str, str]] = []
+MOVED: list[tuple[str, str]] = [
+    # P1-05: 순수 계산 · v3 모듈을 도메인 층으로(ARCHITECTURE 2-1)
+    ("app.catalog", "app.domain.catalog"),
+    ("app.indicators", "app.domain.indicators"),
+    ("app.fundamentals", "app.domain.fundamentals"),
+    ("app.rules", "app.domain.rules"),
+    ("app.blocks", "app.domain.blocks"),
+    ("app.engine", "app.domain.engine"),
+    ("app.copytext", "app.domain.copytext"),
+    ("app.stock_names", "app.domain.stock_names"),
+]
 
 
 def _module_files(root: Path, dotted: str) -> list[Path]:
