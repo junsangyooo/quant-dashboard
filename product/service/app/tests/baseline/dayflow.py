@@ -3,7 +3,7 @@
 
 - 가짜 토스 · 가짜 시계는 `tests/test_live.py`의 `World`(가짜 토스는 `tests/fake_toss.py`)를 그대로 써요.
 - 앱 루프(`main._auto_loop`)와 같은 차례로 돌려요: (켤 때 한 번 모의투자 v2 확인) → 스케줄러 `run_due` → `live.tick`.
-  스케줄러 일은 `main.py`와 같이 `paper_check`(20:10) · `live_check`(20:10)예요.
+  스케줄러 일은 조립(`app.py` · 옛 `main.py`)과 같이 `paper_check`(20:10) · `live_check`(20:10)예요.
 - 걸음마다 기록하는 것: 시각 · 스케줄러가 돈 일 · tick이 한 일 · 가짜 토스로 간 요청 · 텔레그램(가짜)로 간 글 ·
   DB 변화(orders · fills · todos · cond_orders · alerts · run_cash · run_equity · runs · live_state · meta).
   아무 일도 없는 걸음은 적지 않아요.

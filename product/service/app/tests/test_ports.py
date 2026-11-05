@@ -23,7 +23,7 @@ from app.adapters import telegram as tg_adapter
 from app.adapters import toss
 from app.adapters import transport as tp
 from app.adapters.fake import FakeFetch, FakeTransport
-from app.main import create_app
+from app.app import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
@@ -112,7 +112,7 @@ def test_run_flows_take_ports_not_adapters(name: str) -> None:
 
 
 def test_adapter_errors_subclass_port_errors_one_to_one() -> None:
-    import app.main  # noqa: F401  (앱 모듈을 모두 들여 이어받는 클래스가 다 보이게)
+    import app.app  # noqa: F401  (앱 모듈을 모두 들여 이어받는 클래스가 다 보이게)
 
     for port_error, adapter_error in ERROR_MAP.items():
         assert issubclass(adapter_error, port_error)
@@ -194,7 +194,7 @@ def test_dart_client_matches_disclosure_source_signatures() -> None:
 
 
 def test_dart_error_is_the_only_disclosure_source_error() -> None:
-    import app.main  # noqa: F401
+    import app.app  # noqa: F401
 
     assert issubclass(dart_adapter.DartError, ports.DisclosureSourceError)
     assert {c for c in _all_subclasses(ports.DisclosureSourceError) if _adapter_side(c)} == {dart_adapter.DartError}

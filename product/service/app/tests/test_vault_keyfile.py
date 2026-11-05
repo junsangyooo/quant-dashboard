@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.security import vault as vault_mod
 from app.store.db import DB
-from app.main import create_app
+from app.app import create_app
 from app.domain.markets.kr import KST
 from app.run.data import MarketDataError
 from app.security.vault import MONEY_ACTIONS, Vault, VaultError

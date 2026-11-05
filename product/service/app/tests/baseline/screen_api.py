@@ -13,7 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from app.main import create_app
+from app.app import create_app
 from app.domain.markets.kr import KST
 from app.adapters.toss import RateLimiter
 from tests.baseline.clock import FIXED_NOW

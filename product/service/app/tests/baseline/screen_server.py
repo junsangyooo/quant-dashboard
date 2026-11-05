@@ -32,7 +32,7 @@ def main(argv: list[str]) -> int:
 
     import uvicorn
 
-    from app.main import create_app
+    from app.app import create_app
     from tests.e2e_server import bars, seed_live
 
     given = os.environ.get("QUANT_BASELINE_KEYFILE_DIR")

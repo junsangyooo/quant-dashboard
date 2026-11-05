@@ -15,9 +15,10 @@ from typing import Any
 
 import pytest
 
+from app import app as assembly
 from app import connect, vault
 from app import main as main_mod
-from app.main import create_app
+from app.app import create_app
 from app.market import now_kst
 from tests.baseline import clock as bclock
 from tests.baseline.clock import FIXED_NOW, FIXED_NOW_UTC_ISO, RECOVERY_CODE
@@ -120,11 +121,11 @@ def test_auto_loop_runs_one_lap_in_order(frozen: None, tmp_path: Path, fake_bars
             return fn(*a, **k)
         return inner
 
-    monkeypatch.setattr(main_mod.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(assembly.asyncio, "sleep", fake_sleep)
     monkeypatch.setattr(app.state.paper2, "tick", wrap("paper2.tick", app.state.paper2.tick))
-    monkeypatch.setattr(main_mod.updates, "announce", wrap("updates.announce", main_mod.updates.announce))
+    monkeypatch.setattr(assembly.updates, "announce", wrap("updates.announce", assembly.updates.announce))
     monkeypatch.setattr(app.state.scheduler, "run_due", wrap("sched.run_due", app.state.scheduler.run_due))
-    monkeypatch.setattr(main_mod, "live_tick", wrap("live_tick", main_mod.live_tick))
+    monkeypatch.setattr(assembly, "live_tick", wrap("live_tick", assembly.live_tick))
     monkeypatch.setattr(app.state.telegram, "poll", wrap("telegram.poll", app.state.telegram.poll))
     with CsrfClient(app) as c:
         assert lap_done.wait(10), calls

@@ -1,6 +1,6 @@
 """설정 값 한 곳(ARCHITECTURE 2절 설정 층 · 6절 '설정' · QUALITY X5).
 
-환경 변수와 실제 전송 설정 파일은 **이 파일만** 읽어요. 조립(`main.create_app` · 입구 `serve.main`)이 `load()`를 한 번 불러
+환경 변수와 실제 전송 설정 파일은 **이 파일만** 읽어요. 조립(`app.create_app` · 입구 `serve.main`)이 `load()`를 한 번 불러
 값 묶음(`Settings`)을 받고, 그 값을 아래 층에 넘겨요. 다른 파일에서 `os.environ`은 0이에요(`tests/test_settings.py`).
 
 환경 값(모두 선택 · 이름은 바깥 약속 · ARCHITECTURE 5절):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.main import create_app
+from app.app import create_app
 from app.domain.markets.kr import KST
 from tests.conftest import PASSWORD, CsrfClient, FakeBars, FakeIp, FakeToss, confirm, setup_owner
 

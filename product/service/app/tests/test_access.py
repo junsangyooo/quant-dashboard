@@ -15,7 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.store.db import DB
-from app.main import create_app, ts_names_from
+from app.app import create_app
+from app.security.access import ts_names_from
 from app.domain.markets.kr import KST
 from app.run.data import Calendar
 from app.run.scheduler import Scheduler

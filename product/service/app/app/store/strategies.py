@@ -1,6 +1,7 @@
 """전략 · 버전 · 백테스트 기록(strategies · versions · backtest_runs).
 
-v2 전략 API(`api_v2.py`) · 실전(`run/live.py`) · 모의투자(`run/paper.py`) · 조립(`main.py`)이 같이 써요.
+v2 전략 API(`api/strategies.py` · 읽기) · 전략 저장(`services/strategies.py`) · 실전(`run/live.py`) · 모의투자(`run/paper.py`) ·
+조립(`app.py`)이 같이 써요.
 """
 
 from __future__ import annotations

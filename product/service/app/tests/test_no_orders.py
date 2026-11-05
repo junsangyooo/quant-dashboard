@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 from app.adapters import transport as tp
-from app.main import create_app
+from app.app import create_app
 from app.settings import live_enabled
 from app.adapters.fake import FakeTransport
 from app.adapters.toss import TossClient, TossCredentials, TossUnreachableError
@@ -98,7 +98,7 @@ def network_hits(paths: list[Path]) -> list[str]:
             hits.append(f"{_label(path)}: yfinance")
         for m in NETWORK_CALLS.finditer(text):
             hits.append(f"{_label(path)}:{text[: m.start()].count(chr(10)) + 1}: {m.group()}")
-        if path.name != "main.py" and re.search(r"\bbuild_transports\s*\(", text):
+        if path.name != "app.py" and re.search(r"\bbuild_transports\s*\(", text):
             hits.append(f"{_label(path)}: build_transports")
     return hits
 

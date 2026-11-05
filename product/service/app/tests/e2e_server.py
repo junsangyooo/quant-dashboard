@@ -16,7 +16,7 @@ from datetime import date
 
 import uvicorn
 
-from app.main import create_app
+from app.app import create_app
 from tests.conftest import FakeBars, make_bars, wave
 
 SYMS = ["005930", "000660", "373220", "005380", "035420"]

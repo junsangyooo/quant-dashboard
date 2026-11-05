@@ -1,7 +1,7 @@
 """포트: 바깥과의 약속(ARCHITECTURE 2절 포트 층 · 4절 확장 지점 · 6절 '바꿔 끼우기' · QUALITY E1 · E7).
 
 실행 흐름(`run/` · `backtest_v2`)은 어댑터 클래스(`adapters/`) 대신 이 약속을 받아요.
-어댑터를 고르고 넣어 주는 것은 조립(`main.create_app`)이에요(기본은 가짜 · 응답 없음 · `adapters/fake.py`).
+어댑터를 고르고 넣어 주는 것은 조립(`app.create_app`)이에요(기본은 가짜 · 응답 없음 · `adapters/fake.py`).
 
 - `Broker`: 계좌 · 주문(토스 어댑터 `adapters.toss.TossClient`가 맞춰요 · 증권사는 토스만 · 기능표는 두 번째 증권사 때).
 - `MarketFeed`: 일봉 받기(`adapters.toss.TossSource` · 시험의 가짜 일봉).

@@ -60,7 +60,7 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
     host = check_host(args.host)
 
-    from .main import ROOT, create_app
+    from .app import ROOT, create_app
 
     data = Path(args.data or ROOT / "data")
     try:

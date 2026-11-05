@@ -42,7 +42,7 @@ if UNDER_PYTEST:
     os.environ["HOME"] = str(TEST_HOME)
     atexit.register(shutil.rmtree, TEST_HOME, ignore_errors=True)  # sessionfinish가 못 돌아도 지워요
 
-from app.main import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요)
+from app.app import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요)
 from app.domain.markets.kr import KST  # noqa: E402
 from app.adapters.transport import HttpRequest, HttpResponse, TransportError  # noqa: E402
 

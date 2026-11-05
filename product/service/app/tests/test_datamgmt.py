@@ -13,7 +13,7 @@ from typing import Any
 from app.services import data_admin as dm
 from app.services import updates
 from app.store.db import DB
-from app.main import create_app
+from app.app import create_app
 from app.domain.markets.kr import KST
 from tests.conftest import PASSWORD, CsrfClient, FakeToss, confirm, setup_owner
 from tests.fake_telegram import MY_CHAT, TOKEN, FakeTelegram
