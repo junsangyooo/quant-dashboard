@@ -1,6 +1,6 @@
 """DART 저장(dart_corp · dart_jobs · dart_quota · dart_fin · dart_disc · dart_shares · dart_div).
 
-큐 · 하루 한도 · 읽기 흐름은 `app/dart.py`(`DartStore`)가, 백테스트 · 실전 배당 대조는 읽기만 써요. 접수일 다음 거래일부터
+큐 · 하루 한도 · 읽기 흐름은 `run/dart.py`(`DartStore`)가, 백테스트 · 실전 배당 대조는 읽기만 써요. 접수일 다음 거래일부터
 쓰는 규칙(R-J9)은 읽는 쪽이 정해요(여기는 행을 그대로 돌려줘요).
 """
 

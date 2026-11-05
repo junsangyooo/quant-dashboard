@@ -44,7 +44,8 @@ from . import updates
 from .api import live as live_api
 from .run.live import Live, LiveError
 from .run.live import tick as live_tick
-from .run.scheduler import AUTO_CHECK, DAILY_CHECK, LOOP_EVERY_S, Scheduler
+from .app import LoopSteps, auto_loop
+from .run.scheduler import AUTO_CHECK, DAILY_CHECK, Scheduler
 from .run.dart import DartStore
 from .run.paper import PaperError, PaperV2
 from .ports import Clock, MarketFeed
@@ -192,7 +193,7 @@ def create_app(
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-        task = asyncio.create_task(_auto_loop()) if scheduler else None
+        task = asyncio.create_task(auto_loop(loop_steps)) if scheduler else None
         try:
             yield
         finally:
@@ -801,23 +802,16 @@ def create_app(
     sched.add("live_check", *DAILY_CHECK, live_check)
     app.state.scheduler = sched
 
-    async def _auto_loop() -> None:
-        first = True
-        while True:
-            try:
-                # 세션이 만료됐으면 요청이 없어도 30초 안에 데이터 키와 연결 객체를 지운다
-                _ = vault.unlocked
-                await asyncio.to_thread(auto_tick)
-                if first:  # 켜질 때 한 번: 꺼져 있던 날을 이어서 채워요(R-V4) · 업데이트 끝 알림(5-10)
-                    first = False
-                    await asyncio.to_thread(paper2.tick)
-                    updates.announce(data, db, lambda text: telegram.notify("info", text))
-                await asyncio.to_thread(sched.run_due)
-                await asyncio.to_thread(live_tick, live)  # 08:30 점검 · 08:35 주문 · 장중 감시(R-O1)
-                await asyncio.to_thread(telegram.poll)  # `/상태` · `/멈춤`(등록 대화방만)
-            except Exception as exc:  # 루프는 멈추지 않는다
-                log.error("auto tick failed: %s", type(exc).__name__)
-            await asyncio.sleep(LOOP_EVERY_S)
+    # 앱 루프(`app.py` `auto_loop` · 30초마다): 일은 부를 때마다 이름을 찾아요(시험이 앱 상태의 객체를 바꿔 끼워도 같게)
+    loop_steps = LoopSteps(
+        touch=lambda: vault.unlocked,
+        auto_tick=lambda: auto_tick(),
+        catch_up=lambda: paper2.tick(),
+        announce=lambda: updates.announce(data, db, lambda text: telegram.notify("info", text)),
+        run_due=lambda: sched.run_due(),
+        live_tick=lambda: live_tick(live),
+        poll=lambda: telegram.poll(),
+    )
 
     def auto_tick() -> str | None:
         local = now().astimezone(KST)
