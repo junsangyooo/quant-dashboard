@@ -36,6 +36,8 @@ MOVED: list[tuple[str, str]] = [
     ("app.transport", "app.adapters.transport"),
     ("app.toss", "app.adapters.toss"),
     ("app.publicip", "app.adapters.publicip"),
+    # P1-07: 저장 층(ARCHITECTURE 2-1 · 흩어진 SQL은 `app/store/`의 표 묶음 모듈로)
+    ("app.db", "app.store.db"),
 ]
 
 

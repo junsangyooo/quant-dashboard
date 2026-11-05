@@ -13,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .db import DB
+from .store.db import DB
 
 FILE = "update.json"
 STEPS: list[tuple[str, str]] = [

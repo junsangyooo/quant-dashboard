@@ -13,7 +13,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from .db import DB
+from .store.db import DB
 from .adapters.toss import (
     TossApiError,
     TossClient,

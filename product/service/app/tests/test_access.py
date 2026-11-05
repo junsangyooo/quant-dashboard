@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db import DB
+from app.store.db import DB
 from app.main import create_app, ts_names_from
 from app.domain.markets.kr import KST
 from app.market import Calendar

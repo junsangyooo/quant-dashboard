@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from app.db import DB
+from app.store.db import DB
 from app.domain.markets.kr import KST
 from app.market import Market
 from app.paper_v2 import ALREADY, PaperError, PaperV2

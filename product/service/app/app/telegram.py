@@ -18,7 +18,7 @@ from typing import Any
 
 from .adapters.telegram import Bot, TelegramError
 from .adapters.transport import Transport
-from .db import DB
+from .store.db import DB
 from .ports import Clock
 from .vault import Vault, VaultError
 

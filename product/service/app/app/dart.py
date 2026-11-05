@@ -21,7 +21,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .adapters.dart import MULTI_MAX, DartClient, DartError
-from .db import DB
+from .store.db import DB
 from .domain.markets.kr import KST
 
 DAILY_LIMIT = 20_000

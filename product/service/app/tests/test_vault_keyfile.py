@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import vault as vault_mod
-from app.db import DB
+from app.store.db import DB
 from app.main import create_app
 from app.domain.markets.kr import KST
 from app.market import MarketDataError

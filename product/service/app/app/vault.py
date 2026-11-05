@@ -26,7 +26,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
-from .db import DB
+from .store.db import DB
 
 SCRYPT_N = 2**15
 SCRYPT_R = 8

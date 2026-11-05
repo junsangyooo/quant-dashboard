@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from app.db import DB
+from app.store.db import DB
 from app.domain.markets.kr import KST, complete_until
 from app.market import INDEX, Calendar, Market, MarketDataError, TossSource
 from app.adapters.toss import RateLimiter, TossClient, TossCredentials

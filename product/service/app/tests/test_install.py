@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from app import install, updates
-from app.db import DB
+from app.store.db import DB
 from app.domain.markets.kr import KST
 from app.market import Calendar
 

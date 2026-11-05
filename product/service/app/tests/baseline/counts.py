@@ -303,6 +303,9 @@ def _module_aliases(tree: ast.AST, module: str) -> tuple[set[str], dict[str, str
     return mods, names
 
 
+STORE_DIR = "app/store/"  # P1-07: 저장 층 폴더(ARCHITECTURE 2절 · 기준선 기록의 옛 자리 `app/db.py`는 그대로 셈)
+
+
 def sql_locations(store_modules: tuple[str, ...] = ("app/db.py",)) -> dict[str, Any]:
     """sqlite3 호출(`import sqlite3 as x` · `from sqlite3 import connect` 이름도 따라감) · SQL 글(독스트링 뺌 ·
     f-string은 첫 조각으로 한 번 · 대소문자 규칙은 `_is_sql`)."""
@@ -334,7 +337,7 @@ def sql_locations(store_modules: tuple[str, ...] = ("app/db.py",)) -> dict[str, 
                     id(node) not in in_fstring and _is_sql(node.value):
                 hits.append({"module": r, "line": node.lineno, "kind": "sql", "text": node.value.strip()[:60]})
     hits.sort(key=lambda h: (h["module"], h["line"]))
-    outside = [h for h in hits if h["module"] not in store_modules]
+    outside = [h for h in hits if h["module"] not in store_modules and not h["module"].startswith(STORE_DIR)]
     by_module: dict[str, int] = defaultdict(int)
     for h in outside:
         by_module[h["module"]] += 1

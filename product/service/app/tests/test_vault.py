@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from app.db import DB
+from app.store.db import DB
 from app.vault import (
     LOCK_S,
     Vault,

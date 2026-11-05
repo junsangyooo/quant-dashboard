@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from app.db import DB
+from app.store.db import DB
 from app.domain.markets.kr import KST, lower_limit, ticks_below
 from app.domain.rules import buy_cap, sell_floor
 from app.live import Live, LiveError

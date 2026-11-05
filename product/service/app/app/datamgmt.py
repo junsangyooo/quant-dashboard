@@ -16,7 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .db import SCHEMA_VERSION, DB
+from .store.db import SCHEMA_VERSION, DB
 
 MAX_BACKUP = 512 * 1024 * 1024
 BACKUP_PREFIX = "quant-backup"

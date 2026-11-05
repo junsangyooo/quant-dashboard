@@ -12,7 +12,7 @@ from typing import Any
 
 from app import datamgmt as dm
 from app import updates
-from app.db import DB
+from app.store.db import DB
 from app.main import create_app
 from app.domain.markets.kr import KST
 from tests.conftest import PASSWORD, CsrfClient, FakeToss, confirm, setup_owner

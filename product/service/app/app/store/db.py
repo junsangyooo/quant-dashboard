@@ -1,4 +1,4 @@
-"""SQLite 파일 하나(data/app.db). 연결 하나를 잠금으로 나눠 쓴다.
+"""SQLite 파일 하나(data/app.db). 연결 하나를 잠금으로 나눠 쓴다(저장 층 `app/store/` · 표 묶음별 SQL은 옆 모듈).
 
 구조 버전은 `PRAGMA user_version`이에요(TASKS T-13).
 - 0 + 표 없음: 새 파일 → v2 구조를 바로 만들어요.
@@ -14,7 +14,7 @@ import os
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
@@ -227,6 +227,10 @@ class DB:
     def one(self, sql: str, args: tuple[Any, ...] = ()) -> sqlite3.Row | None:
         with self.lock:
             return self.conn.execute(sql, args).fetchone()
+
+    def one_row(self, sql: str, args: tuple[Any, ...] = ()) -> sqlite3.Row:
+        """행이 늘 하나 나오는 모음 셈(COUNT · MAX · SUM)용 `one`(같은 쿼리 · 같은 잠금 · 타입만 `Row`)."""
+        return cast(sqlite3.Row, self.one(sql, args))
 
     def run(self, sql: str, args: tuple[Any, ...] = ()) -> int:
         with self.lock:

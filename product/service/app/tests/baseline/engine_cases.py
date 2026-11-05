@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from app import backtest_v2 as bt2
-from app.db import DB
+from app.store.db import DB
 from app.domain.engine import Engine, MarketData, live_note, run_backtest
 from app.domain.indicators import Series
 from app.domain.markets.kr import KST

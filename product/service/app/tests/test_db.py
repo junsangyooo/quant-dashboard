@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.db import DB, SCHEMA_VERSION, body_format
+from app.store.db import DB, SCHEMA_VERSION, body_format
 
 V2_TABLES = {
     "stock_info", "stock_warnings", "sectors", "sector_members", "investor",

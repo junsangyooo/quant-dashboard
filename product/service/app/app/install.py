@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "can-update":
         cal = None
         if a.data and (Path(a.data) / "app.db").exists():
-            from .db import DB
+            from .store.db import DB
 
             cal = Calendar(DB(Path(a.data) / "app.db"), None)  # 앱이 받아 둔 토스 장 달력(없으면 평일 규칙)
         ok, why = update_window(datetime.now(KST), cal)
