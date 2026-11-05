@@ -23,6 +23,21 @@ APP = Path(__file__).resolve().parent.parent
 WEB_BASE = APP / "tests" / "baseline" / "web"
 SCREENS = WEB_BASE / "screens"
 
+# P1-03b 보고(`tests/baseline/reports/P1-03b.md`) 5절 표의 '지운 뒤' 열(웹 숫자 · jscpd · 줄 · 파일 수는 빼고).
+# 지운 코드 때문에 기준선 기록(`web/web_counts.json` · 지우기 전 증거 · 그대로 둠)과 등식이 성립할 수 없는 두 시험이
+# 이 값과 '줄어들기만(≤)'으로 견줘요(Q-N21 답 (가) · 여유 없음 · 토큰 수와 참/거짓은 같음).
+AFTER_P1_03B: dict[str, int | bool] = {
+    "boundary_violations": 33,
+    "feature_pairs": 5, "feature_to_shell": 15, "shell_to_api": 1, "lib_to_copy": 1, "lib_charts_cycle": True,
+    "same_css_groups": 22, "same_css_groups_without_block_editor": 19,
+    "raw_token_uses": 447, "raw_token_uses_without_block_editor": 264,
+    "px_literals": 9, "px_literals_without_block_editor": 1,
+    "custom_vars": 37, "custom_vars_without_block_editor": 21,
+    "tokens_export": 223, "tokens_json": 180, "tokens_css": 180, "tokens_unused_export_only": 43,
+    "tokens_value_mismatch": 0, "tokens_alias_mismatch": 0,
+    "same_text_web": 20, "same_text_dist": 4, "same_text_server_web": 28,
+}
+
 
 def _node24() -> bool:
     try:
@@ -57,9 +72,10 @@ def test_boundary_violations_match_the_p1_13_line() -> None:
     assert g["feature_to_feature_pairs"] == ["Live → Setup", "Settings → Auth", "Settings → Setup", "Setup → Auth",
                                             "StrategiesV2 → BlockEditor"]
     kept_to_shell = [e for e in bd["edges"] if e["from_layer"] == "features" and e["to_layer"] == "shell" and e["kept"]]
-    assert len(kept_to_shell) == 15 and g["feature_to_shell_places"] == 15
+    # 지운 뒤 값(P1-03b 5절) 이하 · 줄어들기만(Q-N21 답 (가))
+    assert len(kept_to_shell) == 15 and g["feature_to_shell_places"] <= AFTER_P1_03B["feature_to_shell"]
     assert g["shell_to_api_places"] == 1
-    assert g["lib_to_copy_places"] == 1  # format.ts(지운 money.ts 몫 1은 P1-03b 뒤 빠짐)
+    assert g["lib_to_copy_places"] <= AFTER_P1_03B["lib_to_copy"]  # format.ts(지운 money.ts 몫 1은 P1-03b 뒤 빠짐)
     assert g["lib_charts_cycle"] is True
     assert bd["unresolved"] == []
     assert all("web/" not in e["from"] and not e["from"].startswith("/") for e in bd["edges"])
@@ -279,17 +295,19 @@ def test_web_counts_record_matches_recount_without_jscpd() -> None:
     rec = json.loads(p.read_text(encoding="utf-8"))["summary"]
     now = webcounts.run_all(with_jscpd=False)["summary"]
     # P1-03b가 지울 파일을 지운 뒤라 기록(지우기 전 표)과 같을 수 없어요. 기록은 그대로 두고(P1-01c) ARCHITECTURE 6절의
-    # '줄어들기만'으로 봐요: 어긋남 수는 기준선 이하 · 토큰 수는 같음 · 남는/지울 나눔은 모두 남는 쪽.
+    # '줄어들기만'으로 봐요: 어긋남 수는 지운 뒤 값(`AFTER_P1_03B` · P1-03b 5절) 이하 · 토큰 수는 같음 · 남는/지울 나눔은
+    # 모두 남는 쪽(Q-N21 답 (가)). 기록의 항목마다 같은 이름의 지운 뒤 값이 있어요(없으면 KeyError).
     assert now["files_deleted"] == 0 and now["lines_deleted"] == 0
     assert now["files_kept"] == now["files"] and now["lines_kept"] == now["lines"]
     assert now["boundary_violations_kept"] == now["boundary_violations"]
     for k, v in rec.items():
         if k.startswith("jscpd") or k.endswith(("_kept", "_deleted")) or k in ("files", "lines"):
             continue
+        after = AFTER_P1_03B[k]
         if isinstance(v, bool) or k in ("tokens_export", "tokens_json", "tokens_css"):
-            assert now[k] == v, k
+            assert now[k] == after == v, k
         else:
-            assert now[k] <= v, (k, v, now[k])
+            assert after <= v and now[k] <= after, (k, v, after, now[k])
     assert rec["tokens_unused_export_only"] == 43 and rec["feature_pairs"] == 5
 
 

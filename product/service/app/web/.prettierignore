@@ -12,6 +12,5 @@ src/styles/pretendard.css
 dist-e2e
 dist-e2e-*
 build
-# 서버가 만든 대조 파일(tests/regression/graph_cases.py --write) — 글자 하나까지 서버 출력 그대로
-tests/fixtures/graph_cases.json
+# 서버가 만든 대조 파일(app/tests/words_rules.py --write) — 글자 하나까지 서버 출력 그대로
 tests/forbiddenWords.json
