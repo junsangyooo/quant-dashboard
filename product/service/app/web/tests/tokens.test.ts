@@ -14,7 +14,7 @@ const items = JSON.parse(readFileSync(join(root, 'design/tokens.json'), 'utf8'))
 const css = readFileSync(join(root, 'src/styles/tokens.css'), 'utf8');
 const map = indexTokens(items);
 
-describe('design/tokens.json (copy of project.json tokens.items)', () => {
+describe('design/tokens.json (generated from the Figma export · tokens-pipeline.test.ts)', () => {
   it('has 180 tokens: 66 primitive, 78 semantic, 36 component', () => {
     expect(items).toHaveLength(180);
     expect(items.filter((i) => i.layer === 'primitive')).toHaveLength(66);

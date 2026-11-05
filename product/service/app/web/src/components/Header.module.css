@@ -69,10 +69,9 @@
 
 /* 머리 상태 칩(실전 운용이 있을 때만 · T-64) */
 .liveChip {
-  --live-chip-bg: var(--color-neutral-3);
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-full);
-  background: var(--live-chip-bg);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-pill);
+  background: var(--border-default);
   color: var(--status-success);
 }
 

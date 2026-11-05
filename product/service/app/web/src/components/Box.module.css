@@ -11,8 +11,7 @@
 
 .icon {
   margin-top: var(--space-tight);
-  --box-icon: var(--text-muted);
-  color: var(--box-icon);
+  color: var(--text-muted);
 }
 
 .text {
