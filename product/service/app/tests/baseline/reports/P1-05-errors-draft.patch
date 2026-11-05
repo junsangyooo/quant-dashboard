@@ -1,0 +1,865 @@
+diff --git a/product/service/app/app/api_v2.py b/product/service/app/app/api_v2.py
+index c85a231..00e67b8 100644
+--- a/product/service/app/app/api_v2.py
++++ b/product/service/app/app/api_v2.py
+@@ -17,18 +17,11 @@ from fastapi import APIRouter, Request
+ from .domain import blocks as bk
+ from .domain import catalog as cat
+ from .domain import copytext as ct
++from .domain.errors import ApiError, Code
+ from .domain.markets.kr import KST
+ from .db import DB
+ 
+ 
+-class ApiError(Exception):
+-    def __init__(self, message: str, status: int = 400, **extra: Any) -> None:
+-        super().__init__(message)
+-        self.message = message
+-        self.status = status
+-        self.extra = extra
+-
+-
+ def catalog_view() -> dict[str, Any]:
+     items = []
+     for d in cat.describe():
+@@ -208,7 +201,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+     def export_file(sid: int) -> dict[str, Any]:
+         v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (sid,))
+         if v is None:
+-            raise ApiError("그 전략이 없어요", 404)
++            raise ApiError("그 전략이 없어요", Code.NOT_FOUND)
+         body = stored_body(v)
+         body.pop("converted", None)
+         return {"name": f"{body['name']}.json", "text": ct.to_file(body)}
+@@ -216,9 +209,9 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+     @r.delete("/strategies/{sid}")
+     def delete(sid: int) -> dict[str, Any]:
+         if db.one("SELECT id FROM strategies WHERE id=?", (sid,)) is None:
+-            raise ApiError("그 전략이 없어요", 404)
++            raise ApiError("그 전략이 없어요", Code.NOT_FOUND)
+         if used is not None and used(sid):
+-            raise ApiError(DELETE_BLOCKED, 409)
++            raise ApiError(DELETE_BLOCKED, Code.CONFLICT)
+         with db.tx():
+             db.run("DELETE FROM versions WHERE strategy_id=?", (sid,))
+             db.run("DELETE FROM strategies WHERE id=?", (sid,))
+@@ -228,7 +221,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+     def backtest_input(vid: int) -> dict[str, Any]:
+         v = db.one("SELECT * FROM versions WHERE id=?", (vid,))
+         if v is None:
+-            raise ApiError("그 버전이 없어요", 404)
++            raise ApiError("그 버전이 없어요", Code.NOT_FOUND)
+         body = stored_body(v)
+         s_ = db.one("SELECT name FROM strategies WHERE id=?", (v["strategy_id"],))
+         from .backtest_v2 import CHIPS, JUDGE_LINE, default_range
+@@ -247,7 +240,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+             raise ApiError("전략 버전을 골라 주세요") from None
+         v = db.one("SELECT * FROM versions WHERE id=?", (vid,))
+         if v is None:
+-            raise ApiError("그 버전이 없어요", 404)
++            raise ApiError("그 버전이 없어요", Code.NOT_FOUND)
+         body = stored_body(v)
+         try:
+             start = datetime.strptime(str(data.get("start")), "%Y-%m-%d").date()
+@@ -256,7 +249,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+         except (TypeError, ValueError):
+             raise ApiError("기간과 시작 금액 형식이 맞지 않아요") from None
+         if backtester is None:
+-            raise ApiError("백테스트를 할 수 없어요", 503)
++            raise ApiError("백테스트를 할 수 없어요", Code.UNAVAILABLE)
+         res = await asyncio.to_thread(backtester, body, start, end, cash)
+         db.run("INSERT INTO backtest_runs(version_id, ran_at, start_d, end_d, cash) VALUES(?,?,?,?,?)",
+                (vid, now(), start.isoformat(), end.isoformat(), cash))
+@@ -278,10 +271,10 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+     def strategy(sid: int) -> dict[str, Any]:
+         s = db.one("SELECT * FROM strategies WHERE id=?", (sid,))
+         if s is None:
+-            raise ApiError("그 전략이 없어요", 404)
++            raise ApiError("그 전략이 없어요", Code.NOT_FOUND)
+         v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (sid,))
+         if v is None:
+-            raise ApiError("그 전략이 없어요", 404)
++            raise ApiError("그 전략이 없어요", Code.NOT_FOUND)
+         body = stored_body(v)
+         body["name"] = s["name"]
+         versions = [version_view(x)
+@@ -303,7 +296,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+     @r.post("/strategies/{sid}/versions")
+     async def new_version(sid: int, request: Request) -> dict[str, Any]:
+         if db.one("SELECT id FROM strategies WHERE id=?", (sid,)) is None:
+-            raise ApiError("그 전략이 없어요", 404)
++            raise ApiError("그 전략이 없어요", Code.NOT_FOUND)
+         data = await body_of(request)
+         body = normalize(data.get("body"))
+         return save(sid, body)
+@@ -312,7 +305,7 @@ def make_router(db: DB, *, dart: Callable[[], bool], unique_name: Callable[[str]
+     def copytext(sid: int) -> dict[str, Any]:
+         v = db.one("SELECT * FROM versions WHERE strategy_id=? ORDER BY no DESC LIMIT 1", (sid,))
+         if v is None:
+-            raise ApiError("그 전략이 없어요", 404)
++            raise ApiError("그 전략이 없어요", Code.NOT_FOUND)
+         body = stored_body(v)
+         body.pop("converted", None)
+         return {"text": ct.to_copy_text(body)}
+diff --git a/product/service/app/app/connect.py b/product/service/app/app/connect.py
+index a71e1d5..b5fc418 100644
+--- a/product/service/app/app/connect.py
++++ b/product/service/app/app/connect.py
+@@ -14,6 +14,7 @@ from datetime import datetime, timezone
+ from typing import Any
+ 
+ from .db import DB
++from .domain.errors import Code, VaultError
+ from .toss import (
+     TossApiError,
+     TossClient,
+@@ -22,7 +23,7 @@ from .toss import (
+     Transport,
+     link_state,
+ )
+-from .vault import Vault, VaultError
++from .vault import Vault
+ 
+ TOSS_ID = "toss.client_id"
+ TOSS_SECRET = "toss.client_secret"
+@@ -196,7 +197,7 @@ class Connections:
+         client = self.client()
+         if client is None:
+             if not self.vault.can_read:
+-                raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
++                raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", Code.LOCKED)
+             raise VaultError("API 키를 먼저 저장해 주세요")
+         step = "token"
+         try:
+diff --git a/product/service/app/app/datamgmt.py b/product/service/app/app/datamgmt.py
+index 61c661e..58d43d9 100644
+--- a/product/service/app/app/datamgmt.py
++++ b/product/service/app/app/datamgmt.py
+@@ -17,6 +17,7 @@ from pathlib import Path
+ from typing import Any
+ 
+ from .db import SCHEMA_VERSION, DB
++from .domain.errors import Code, DataError
+ 
+ MAX_BACKUP = 512 * 1024 * 1024
+ BACKUP_PREFIX = "quant-backup"
+@@ -29,13 +30,6 @@ STATUS = {"filled": "체결", "partial": "일부 체결", "failed": "실패", "r
+           "cancelled": "취소", "open": "미체결", "sent": "미체결", "unknown": "결과 모름", "skipped": "매수 안 함"}
+ 
+ 
+-class DataError(Exception):
+-    def __init__(self, message: str, status: int = 400) -> None:
+-        super().__init__(message)
+-        self.message = message
+-        self.status = status
+-
+-
+ def live_running(db: DB) -> bool:
+     return db.one("SELECT 1 FROM runs WHERE status != 'ended' LIMIT 1") is not None
+ 
+@@ -101,7 +95,7 @@ def restore(db: DB, raw: bytes, *, now_iso: str) -> None:
+ 
+ def delete_all(db: DB) -> None:
+     if live_running(db):
+-        raise DataError(RUNNING_LIVE, 409)
++        raise DataError(RUNNING_LIVE, Code.CONFLICT)
+     db.replace_with(None, keep=False)
+ 
+ 
+diff --git a/product/service/app/app/domain/errors.py b/product/service/app/app/domain/errors.py
+new file mode 100644
+index 0000000..fec3621
+--- /dev/null
++++ b/product/service/app/app/domain/errors.py
+@@ -0,0 +1,66 @@
++"""앱 오류 종류 한 곳(ARCHITECTURE 2-1 · 6절 '오류' · QUALITY E6 · TASKS P1-05).
++
++오류는 **번호(`Code`) + 화면에 보여도 되는 글 + 값**만 가져요. HTTP 상태는 모르고, API(지금은 `main.py`의 예외 처리 ·
++P1-09 뒤 `api/`)가 번호 → HTTP 상태 표(`main.HTTP_STATUS`) 하나로 붙여요. 글에는 비밀 값을 넣지 않아요(S2).
++모듈마다 따로이던 종류(`ApiError` · `DataError` · `LiveError` · `PaperError` · `VaultError` · `TelegramError`)는 이름 그대로 여기
++있어요(화면에 나가는 응답 모양 · 상태가 전과 같게 · 예외 처리가 종류마다 다른 값을 붙여요).
++"""
++
++from __future__ import annotations
++
++from enum import StrEnum
++from typing import Any
++
++
++class Code(StrEnum):
++    """앱 오류 번호(HTTP를 모름)."""
++
++    INPUT = "input"  # 보낸 값이 맞지 않아요
++    LOGIN = "login"  # 로그인 · 비밀번호 · 복구 코드가 맞지 않아요
++    CONFIRM = "confirm"  # 비밀번호를 다시 받아야 해요(돈이 움직이는 일 · S5)
++    NOT_FOUND = "not_found"  # 그것이 없어요
++    CONFLICT = "conflict"  # 지금 상태에서는 할 수 없어요
++    FORMAT = "format"  # 보낸 형식(JSON)이 아니에요
++    LOCKED = "locked"  # 잠겨 있어요(비밀번호를 넣으면 다시)
++    TOO_MANY = "too_many"  # 너무 많이 틀렸어요(잠시 잠금)
++    BROKEN = "broken"  # 앱 안에 둔 값을 풀지 못했어요
++    UPSTREAM = "upstream"  # 바깥(토스 · 텔레그램 · 공인 IP)에 닿지 않아요
++    UNAVAILABLE = "unavailable"  # 지금은 할 수 없어요(준비 안 됨)
++
++
++class AppError(Exception):
++    """화면에 그대로 보여도 되는 글만 담아요(비밀 값 없음)."""
++
++    def __init__(self, message: str, code: Code = Code.INPUT, **extra: Any) -> None:
++        super().__init__(message)
++        self.message = message
++        self.code = code
++        self.extra = extra
++
++
++class ApiError(AppError):
++    """전략 API(`api_v2`)."""
++
++
++class DataError(AppError):
++    """백업 · 복원 · 자료 관리(`datamgmt`)."""
++
++
++class LiveError(AppError):
++    """실전 운용(`live`)."""
++
++
++class PaperError(AppError):
++    """모의투자(`paper_v2`)."""
++
++
++class VaultError(AppError):
++    """금고 · 세션 · 키 · 연결(`vault` · `connect` · 요청 읽기)."""
++
++
++class TelegramError(AppError):
++    """텔레그램 연결. kind: token · chat · send · locked(화면이 칸을 고를 때 씀)."""
++
++    def __init__(self, message: str, kind: str = "send", code: Code = Code.INPUT) -> None:
++        super().__init__(message, code)
++        self.kind = kind
+diff --git a/product/service/app/app/live.py b/product/service/app/app/live.py
+index 349b54d..582f292 100644
+--- a/product/service/app/app/live.py
++++ b/product/service/app/app/live.py
+@@ -23,6 +23,7 @@ from .domain import blocks as bk
+ from .domain.catalog import CATALOG
+ from .domain.copytext import read_body
+ from .db import DB
++from .domain.errors import Code, LiveError
+ from .domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
+ from .domain.indicators import Series
+ from .domain.markets.kr import KST, complete_until, lower_limit, tick_round, ticks_below
+@@ -76,13 +77,6 @@ SCOPE = {
+ }
+ 
+ 
+-class LiveError(Exception):
+-    def __init__(self, message: str, status: int = 400) -> None:
+-        super().__init__(message)
+-        self.message = message
+-        self.status = status
+-
+-
+ def _iso(dt: datetime) -> str:
+     return dt.astimezone(KST).isoformat(timespec="seconds")
+ 
+@@ -107,7 +101,7 @@ class Live:
+             return self.db.one("SELECT * FROM runs WHERE status=? ORDER BY id DESC LIMIT 1", (RUNNING,))
+         r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
+         if r is None:
+-            raise LiveError("그 실전 운용이 없어요", 404)
++            raise LiveError("그 실전 운용이 없어요", Code.NOT_FOUND)
+         return r
+ 
+     def state(self, rid: int) -> dict[str, Any]:
+@@ -175,7 +169,7 @@ class Live:
+     def _body(self, version_id: int) -> dict[str, Any]:
+         v = self.db.one("SELECT body FROM versions WHERE id=?", (version_id,))
+         if v is None:
+-            raise LiveError("그 버전이 없어요", 404)
++            raise LiveError("그 버전이 없어요", Code.NOT_FOUND)
+         return read_body(json.loads(v["body"]))
+ 
+     def engine(self, r: Any, upto: date, *, extra_bar: dict[str, dict[str, float]] | None = None) -> Engine:
+@@ -205,10 +199,10 @@ class Live:
+ 
+     def start(self, version_id: int, amount: float, *, settings: dict[str, Any] | None = None) -> int:
+         if self.run() is not None:
+-            raise LiveError("이미 실전 운용 중이에요 · 하나만 운용해요", 409)
++            raise LiveError("이미 실전 운용 중이에요 · 하나만 운용해요", Code.CONFLICT)
+         v = self.db.one("SELECT * FROM versions WHERE id=?", (version_id,))
+         if v is None:
+-            raise LiveError("그 버전이 없어요", 404)
++            raise LiveError("그 버전이 없어요", Code.NOT_FOUND)
+         if not self.db.one("SELECT 1 FROM backtest_runs WHERE version_id=?", (version_id,)):
+             raise LiveError("이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요")
+         body = self._body(version_id)
+@@ -1194,7 +1188,7 @@ class Live:
+             return
+         digits = "".join(ch for ch in account_no if ch.isdigit())
+         if r["account_tail"] and not digits.endswith(r["account_tail"]):
+-            raise LiveError("실전 운용 중에는 계좌번호를 바꿀 수 없어요 · 먼저 운용을 끝내요", 409)
++            raise LiveError("실전 운용 중에는 계좌번호를 바꿀 수 없어요 · 먼저 운용을 끝내요", Code.CONFLICT)
+ 
+ 
+ def _prev(d: str, cal: list[str]) -> str:
+diff --git a/product/service/app/app/main.py b/product/service/app/app/main.py
+index ee4e8cc..b038917 100644
+--- a/product/service/app/app/main.py
++++ b/product/service/app/app/main.py
+@@ -38,26 +38,27 @@ from . import APP_VERSION_TEXT
+ from . import settings
+ from .domain import copytext as ct
+ from . import backtest_v2 as bt2
+-from .api_v2 import ApiError, make_router
++from .api_v2 import make_router
+ from . import datamgmt as dm
+ from . import updates
+-from .live import Live, LiveError
++from .live import Live
+ from .live import tick as live_tick
+ from .schedule import Scheduler
+ from .dart import DartStore
+-from .paper_v2 import PaperError, PaperV2
++from .paper_v2 import PaperV2
+ from .connect import Connections
+ from .db import DB
+ from .domain.engine import BacktestError as BacktestErrorV2
++from .domain.errors import ApiError, Code, DataError, LiveError, PaperError, TelegramError, VaultError
+ from .domain.markets.kr import KST, weekday_open
+ from .market import BarSource, Market, MarketDataError, TossSource, now_kst
+ from .publicip import IpFetch, PublicIpError, public_ip
+ from .domain.stock_names import stock_name
+ from .toss import Transport
+-from .telegram import Telegram, TelegramError
++from .telegram import Telegram
+ from .transport import Transports, build_transports
+ from . import vault as vault_mod
+-from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
++from .vault import SCRYPT_N, SESSION_S, Vault
+ 
+ ROOT = Path(__file__).resolve().parent.parent
+ REPO = ROOT.parent.parent.parent  # 레포 뿌리(product/service/app → 레포)
+@@ -84,13 +85,20 @@ log = logging.getLogger("quant-mvp")
+ PUBLIC_API = {"/api/health", "/api/state", "/api/setup", "/api/login", "/api/recover"}
+ 
+ 
++# 앱 오류 번호 → HTTP 상태(ARCHITECTURE 6절 '오류' · 오류는 HTTP를 모르고 API가 이 표 하나로 붙여요 · 전과 같은 상태)
++HTTP_STATUS: dict[Code, int] = {
++    Code.INPUT: 400, Code.LOGIN: 401, Code.CONFIRM: 403, Code.NOT_FOUND: 404, Code.CONFLICT: 409, Code.FORMAT: 415,
++    Code.LOCKED: 423, Code.TOO_MANY: 429, Code.BROKEN: 500, Code.UPSTREAM: 502, Code.UNAVAILABLE: 503,
++}
++
++
+ def _err(message: str, status: int = 400, **extra: Any) -> JSONResponse:
+     return JSONResponse({"error": message, **extra}, status_code=status)
+ 
+ 
+ async def _body(request: Request) -> dict[str, Any]:
+     if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
+-        raise VaultError("JSON으로 보내 주세요", 415)
++        raise VaultError("JSON으로 보내 주세요", Code.FORMAT)
+     try:
+         data = await request.json()
+     except ValueError:
+@@ -234,7 +242,7 @@ def create_app(
+ 
+     @app.exception_handler(ApiError)
+     async def on_api(_: Request, exc: ApiError) -> JSONResponse:
+-        return _err(exc.message, exc.status, **exc.extra)
++        return _err(exc.message, HTTP_STATUS[exc.code], **exc.extra)
+ 
+     @app.exception_handler(ct.FormatError)
+     async def on_format_v3(_: Request, exc: ct.FormatError) -> JSONResponse:
+@@ -242,21 +250,21 @@ def create_app(
+             return _err(exc.message, 400, kind="graph", title=ct.BAD_LINKS, detail=exc.detail)
+         return _err(exc.message, 400, kind=exc.kind)
+ 
+-    @app.exception_handler(dm.DataError)
+-    async def on_data(_: Request, exc: dm.DataError) -> JSONResponse:
+-        return _err(exc.message, exc.status)
++    @app.exception_handler(DataError)
++    async def on_data(_: Request, exc: DataError) -> JSONResponse:
++        return _err(exc.message, HTTP_STATUS[exc.code])
+ 
+     @app.exception_handler(LiveError)
+     async def on_live(_: Request, exc: LiveError) -> JSONResponse:
+-        return _err(exc.message, exc.status)
++        return _err(exc.message, HTTP_STATUS[exc.code])
+ 
+     @app.exception_handler(TelegramError)
+     async def on_telegram(_: Request, exc: TelegramError) -> JSONResponse:
+-        return _err(exc.message, exc.status, kind=exc.kind)
++        return _err(exc.message, HTTP_STATUS[exc.code], kind=exc.kind)
+ 
+     @app.exception_handler(VaultError)
+     async def on_vault(_: Request, exc: VaultError) -> JSONResponse:
+-        return _err(exc.message, exc.status, **exc.extra)
++        return _err(exc.message, HTTP_STATUS[exc.code], **exc.extra)
+ 
+     @app.exception_handler(MarketDataError)
+     async def on_market(_: Request, exc: MarketDataError) -> JSONResponse:
+@@ -371,7 +379,7 @@ def create_app(
+         try:
+             ip = await asyncio.to_thread(public_ip, ip_fetch)
+         except PublicIpError as exc:
+-            raise VaultError(exc.message, 502) from None
++            raise VaultError(exc.message, Code.UPSTREAM) from None
+         return {"ip": ip}
+ 
+     @app.post("/api/logout")
+@@ -477,7 +485,7 @@ def create_app(
+     def _rid() -> int:
+         r = live.run()
+         if r is None:
+-            raise LiveError("실전 운용 중이 아니에요", 409)
++            raise LiveError("실전 운용 중이 아니에요", Code.CONFLICT)
+         return int(r["id"])
+ 
+     @app.get("/api/live")
+@@ -496,7 +504,7 @@ def create_app(
+         v = db.one("SELECT v.*, s.name FROM versions v JOIN strategies s ON s.id=v.strategy_id WHERE v.id=?",
+                    (version_id,))
+         if v is None:
+-            raise LiveError("그 버전이 없어요", 404)
++            raise LiveError("그 버전이 없어요", Code.NOT_FOUND)
+         body = json.loads(v["body"])
+         from .domain.copytext import read_body
+ 
+@@ -576,7 +584,7 @@ def create_app(
+         b = await _body(request)
+         t = db.one("SELECT data FROM todos WHERE id=? AND kind='unknown'", (tid,))
+         if t is None:
+-            raise LiveError("그 할 일이 없어요", 404)
++            raise LiveError("그 할 일이 없어요", Code.NOT_FOUND)
+         live.resolve_unknown(_rid(), int(json.loads(t["data"])["order"]), filled_qty=int(b.get("filled_qty") or 0),
+                              price=float(b.get("price") or 0))
+         return live.view()
+@@ -586,7 +594,7 @@ def create_app(
+         need_confirm(request, "todo_corp_action")
+         t = db.one("SELECT symbol FROM todos WHERE id=? AND kind='corp'", (tid,))
+         if t is None:
+-            raise LiveError("그 할 일이 없어요", 404)
++            raise LiveError("그 할 일이 없어요", Code.NOT_FOUND)
+         live.apply_corp(_rid(), t["symbol"])
+         return live.view()
+ 
+@@ -595,7 +603,7 @@ def create_app(
+         need_confirm(request, "todo_match_account")
+         t = db.one("SELECT symbol FROM todos WHERE id=? AND kind='mismatch'", (tid,))
+         if t is None:
+-            raise LiveError("그 할 일이 없어요", 404)
++            raise LiveError("그 할 일이 없어요", Code.NOT_FOUND)
+         live.match_account(_rid(), t["symbol"])
+         return live.view()
+ 
+@@ -632,7 +640,7 @@ def create_app(
+     @app.delete("/api/data")
+     def data_delete(request: Request) -> Response:
+         if dm.live_running(db):
+-            raise dm.DataError(dm.RUNNING_LIVE, 409)  # 비밀번호 창보다 먼저 알려요
++            raise DataError(dm.RUNNING_LIVE, Code.CONFLICT)  # 비밀번호 창보다 먼저 알려요
+         need_confirm(request, "data_delete")
+         vault.forget_keyfile()
+         dm.delete_all(db)
+@@ -714,7 +722,7 @@ def create_app(
+ 
+     @app.exception_handler(PaperError)
+     async def on_paper2(_: Request, exc: PaperError) -> JSONResponse:
+-        return _err(exc.message, exc.status)
++        return _err(exc.message, HTTP_STATUS[exc.code])
+ 
+     @app.get("/api/v2/paper")
+     def paper2_list() -> dict[str, Any]:
+diff --git a/product/service/app/app/paper_v2.py b/product/service/app/app/paper_v2.py
+index ebe082c..868cdcc 100644
+--- a/product/service/app/app/paper_v2.py
++++ b/product/service/app/app/paper_v2.py
+@@ -21,6 +21,7 @@ from typing import Any
+ from .domain import blocks as bk
+ from .domain.copytext import read_body
+ from .db import DB
++from .domain.errors import Code, PaperError
+ from .domain.engine import Engine, MarketData, universe_of, warmup_calendar_days
+ from .domain.indicators import Series
+ from .domain.markets.kr import KST, complete_until
+@@ -42,13 +43,6 @@ def md(d: date) -> str:
+     return f"{d.month}/{d.day}({DAYS[d.weekday()]})"
+ 
+ 
+-class PaperError(Exception):
+-    def __init__(self, message: str, status: int = 400) -> None:
+-        super().__init__(message)
+-        self.message = message
+-        self.status = status
+-
+-
+ def _now_iso(now: datetime) -> str:
+     return now.astimezone(timezone.utc).isoformat(timespec="seconds")
+ 
+@@ -68,13 +62,13 @@ class PaperV2:
+     def _run(self, rid: int) -> Any:
+         r = self.db.one("SELECT * FROM paper_runs WHERE id=? AND status IN (?,?)", (rid, RUNNING, ENDED))
+         if r is None:
+-            raise PaperError("그 모의투자가 없어요", 404)
++            raise PaperError("그 모의투자가 없어요", Code.NOT_FOUND)
+         return r
+ 
+     def _body(self, version_id: int) -> tuple[dict[str, Any], Any]:
+         v = self.db.one("SELECT * FROM versions WHERE id=?", (version_id,))
+         if v is None:
+-            raise PaperError("그 버전이 없어요", 404)
++            raise PaperError("그 버전이 없어요", Code.NOT_FOUND)
+         return read_body(json.loads(v["body"])), v
+ 
+     def running_for(self, strategy_id: int) -> Any:
+@@ -95,7 +89,7 @@ class PaperV2:
+         if bk.analyze(body["graph"])["problems"]:
+             raise PaperError("문제가 있는 버전은 모의투자를 시작할 수 없어요")
+         if self.running_for(int(v["strategy_id"])) is not None:
+-            raise PaperError(ALREADY, 409)
++            raise PaperError(ALREADY, Code.CONFLICT)
+         now = self.now()
+         cal = self.market.calendar
+         today = now.astimezone(KST).date()
+diff --git a/product/service/app/app/telegram.py b/product/service/app/app/telegram.py
+index 764e81a..ba0fb25 100644
+--- a/product/service/app/app/telegram.py
++++ b/product/service/app/app/telegram.py
+@@ -17,8 +17,9 @@ from datetime import datetime
+ from typing import Any
+ 
+ from .db import DB
++from .domain.errors import Code, TelegramError, VaultError
+ from .transport import HttpRequest, Transport, TransportError
+-from .vault import Vault, VaultError
++from .vault import Vault
+ 
+ log = logging.getLogger("quant-mvp")
+ 
+@@ -46,16 +47,6 @@ _SYMBOL = re.compile(r"(?<!\d)\d{6}(?!\d)")
+ _MONEY = re.compile(r"\d[\d,]*\s*원|\d{1,3}(,\d{3})+")
+ 
+ 
+-class TelegramError(Exception):
+-    """화면에 그대로 보여도 되는 글(토큰 없음). kind: token · chat · send · locked."""
+-
+-    def __init__(self, message: str, kind: str = "send", status: int = 400) -> None:
+-        super().__init__(message)
+-        self.message = message
+-        self.kind = kind
+-        self.status = status
+-
+-
+ def safe_text(text: str) -> str:
+     """종목 · 금액이 섞이면 보내지 않아요(코드 실수를 시험이 잡게)."""
+     if _SYMBOL.search(text) or _MONEY.search(text):
+@@ -125,7 +116,7 @@ class Bot:
+         try:
+             res = self.transport(req)
+         except TransportError:
+-            raise TelegramError("텔레그램에 닿지 않아요 · 인터넷 연결을 확인해 주세요", "send", 502) from None
++            raise TelegramError("텔레그램에 닿지 않아요 · 인터넷 연결을 확인해 주세요", "send", Code.UPSTREAM) from None
+         try:
+             data = json.loads(res.body or b"{}")
+         except ValueError:
+@@ -135,7 +126,7 @@ class Bot:
+         if res.status == 403:
+             raise TelegramError("봇이 대화방에 보낼 수 없어요 · 봇에게 /start를 다시 보내 주세요", "chat")
+         if res.status >= 400 or not data.get("ok"):
+-            raise TelegramError("텔레그램이 요청을 받지 않았어요 · 잠시 뒤 다시 해 주세요", "send", 502)
++            raise TelegramError("텔레그램이 요청을 받지 않았어요 · 잠시 뒤 다시 해 주세요", "send", Code.UPSTREAM)
+         return data.get("result")
+ 
+ 
+@@ -246,7 +237,7 @@ class Telegram:
+         bot = self._bot()
+         if bot is None:
+             if self.vault.has_secret(TOKEN):
+-                raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
++                raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", Code.LOCKED)
+             raise TelegramError("봇 토큰을 먼저 입력해 주세요", "token")
+         return bot
+ 
+diff --git a/product/service/app/app/vault.py b/product/service/app/app/vault.py
+index b06e108..b14a17c 100644
+--- a/product/service/app/app/vault.py
++++ b/product/service/app/app/vault.py
+@@ -27,6 +27,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+ 
+ from .db import DB
++from .domain.errors import Code, VaultError
+ 
+ SCRYPT_N = 2**15
+ SCRYPT_R = 8
+@@ -77,16 +78,6 @@ MONEY_ACTIONS: dict[str, str] = {
+ }
+ 
+ 
+-class VaultError(Exception):
+-    """화면에 그대로 보여도 되는 글만 담는다(비밀 값 없음)."""
+-
+-    def __init__(self, message: str, status: int = 400, **extra: object) -> None:
+-        super().__init__(message)
+-        self.message = message
+-        self.status = status
+-        self.extra = extra
+-
+-
+ def _now_iso() -> str:
+     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+ 
+@@ -194,7 +185,7 @@ class Vault:
+         """(세션 토큰, 복구 코드). 복구 코드는 이때 한 번만 바깥에 나간다."""
+         with self._lock:
+             if self.is_setup():
+-                raise VaultError("이미 계정이 있어요", 409)
++                raise VaultError("이미 계정이 있어요", Code.CONFLICT)
+             if not adult:
+                 raise VaultError("만 19세 이상만 쓸 수 있어요")
+             if not terms:
+@@ -219,7 +210,7 @@ class Vault:
+     def _owner(self):  # type: ignore[no-untyped-def]
+         row = self.db.one("SELECT * FROM owner WHERE id=1")
+         if row is None:
+-            raise VaultError("아직 계정이 없어요 · 비밀번호를 먼저 만들어 주세요", 409)
++            raise VaultError("아직 계정이 없어요 · 비밀번호를 먼저 만들어 주세요", Code.CONFLICT)
+         return row
+ 
+     def _check_lock(self) -> None:
+@@ -227,7 +218,7 @@ class Vault:
+             left = self.locked_for()
+             raise VaultError(
+                 f"5번 맞지 않아 잠금 · {left // 60}분 {left % 60}초 남음",
+-                429,
++                Code.TOO_MANY,
+                 locked_for=left,
+             )
+ 
+@@ -238,11 +229,11 @@ class Vault:
+             self.db.run(
+                 "UPDATE owner SET fails=0, locked_until=? WHERE id=1", (self.clock() + LOCK_S,)
+             )
+-            raise VaultError("5번 맞지 않아 잠금 · 5분 0초 남음", 429, locked_for=LOCK_S)
++            raise VaultError("5번 맞지 않아 잠금 · 5분 0초 남음", Code.TOO_MANY, locked_for=LOCK_S)
+         self.db.run("UPDATE owner SET fails=? WHERE id=1", (fails,))
+         raise VaultError(
+             f"비밀번호가 맞지 않아요 · 남은 횟수 {MAX_FAILS - fails}번",
+-            401,
++            Code.LOGIN,
+             tries_left=MAX_FAILS - fails,
+         )
+ 
+@@ -278,9 +269,9 @@ class Vault:
+                 try:
+                     self._fail()
+                 except VaultError as exc:
+-                    if exc.status == 401:
++                    if exc.code is Code.LOGIN:
+                         raise VaultError(
+-                            exc.message.replace("비밀번호가", "복구 코드가"), 401, **exc.extra
++                            exc.message.replace("비밀번호가", "복구 코드가"), Code.LOGIN, **exc.extra
+                         ) from None
+                     raise
+                 raise
+@@ -318,9 +309,9 @@ class Vault:
+                 try:
+                     self._fail()
+                 except VaultError as exc:
+-                    if exc.status == 401:
++                    if exc.code is Code.LOGIN:
+                         raise VaultError(
+-                            exc.message.replace("비밀번호가", "지금 비밀번호가"), 401, **exc.extra
++                            exc.message.replace("비밀번호가", "지금 비밀번호가"), Code.LOGIN, **exc.extra
+                         ) from None
+                     raise
+                 raise
+@@ -427,7 +418,7 @@ class Vault:
+     def confirm(self, password: str, action: str) -> str:
+         """비밀번호가 맞으면 그 일 하나에만 쓰는 짧은 1회용 토큰. 틀린 횟수 · 잠금은 로그인과 같이 센다."""
+         if action not in MONEY_ACTIONS:
+-            raise VaultError("없는 일이에요", 400)
++            raise VaultError("없는 일이에요", Code.INPUT)
+         with self._lock:
+             row = self._owner()
+             self._check_lock()
+@@ -452,7 +443,7 @@ class Vault:
+             got = self._confirms.pop(self._hash(token), None) if token else None
+             if got is None or got[0] != action or got[1] <= self.clock():
+                 raise VaultError(
+-                    "비밀번호를 다시 입력해 주세요", 403, need_confirm=True, action=action,
++                    "비밀번호를 다시 입력해 주세요", Code.CONFIRM, need_confirm=True, action=action,
+                     title=MONEY_ACTIONS.get(action, ""),
+                 )
+ 
+@@ -508,7 +499,7 @@ class Vault:
+         self._purge()
+         key = self._key or self._runner_key
+         if key is None:
+-            raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
++            raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", Code.LOCKED)
+         return key
+ 
+     def put_secret(self, name: str, value: str) -> None:
+@@ -530,7 +521,7 @@ class Vault:
+             try:
+                 return unseal(key, bytes(row["blob"]), b"secret:" + name.encode()).decode("utf-8")
+             except InvalidTag:
+-                raise VaultError("저장한 API 키를 풀지 못했어요 · 삭제하고 다시 등록해 주세요", 500) from None
++                raise VaultError("저장한 API 키를 풀지 못했어요 · 삭제하고 다시 등록해 주세요", Code.BROKEN) from None
+ 
+     def has_secret(self, name: str) -> bool:
+         return self.db.one("SELECT 1 FROM secrets WHERE name=?", (name,)) is not None
+diff --git a/product/service/app/tests/test_live.py b/product/service/app/tests/test_live.py
+index 87d96e9..c4cf112 100644
+--- a/product/service/app/tests/test_live.py
++++ b/product/service/app/tests/test_live.py
+@@ -12,10 +12,12 @@ from typing import Any
+ 
+ import pytest
+ 
++from app.domain.errors import LiveError
++from app.main import HTTP_STATUS
+ from app.db import DB
+ from app.domain.markets.kr import KST, lower_limit, ticks_below
+ from app.domain.rules import buy_cap, sell_floor
+-from app.live import Live, LiveError
++from app.live import Live
+ from app.market import Market, TossSource
+ from app.toss import TossClient, TossCredentials
+ from app.transport import HttpRequest, HttpResponse, TransportError
+@@ -627,7 +629,7 @@ def test_change_strategy_and_account_lock(tmp_path: Path) -> None:
+     assert len(watching) == 1 and watching[0]["stop_trigger"] == 9_500  # 새 규칙으로 다시 걸었어요
+     with pytest.raises(LiveError) as e:
+         w.live.check_account_change("98765432109")
+-    assert e.value.status == 409
++    assert HTTP_STATUS[e.value.code] == 409
+     w.live.check_account_change(ACCOUNT_NO)  # 같은 계좌는 괜찮아요
+ 
+ 
+@@ -642,7 +644,7 @@ def test_start_guards(tmp_path: Path) -> None:
+     w.live.start(vid, 500_000)
+     with pytest.raises(LiveError) as e:
+         w.live.start(vid, 500_000)
+-    assert e.value.status == 409
++    assert HTTP_STATUS[e.value.code] == 409
+ 
+ 
+ def test_no_real_transport_used(tmp_path: Path) -> None:
+diff --git a/product/service/app/tests/test_paper_v2.py b/product/service/app/tests/test_paper_v2.py
+index b42620d..7dc4187 100644
+--- a/product/service/app/tests/test_paper_v2.py
++++ b/product/service/app/tests/test_paper_v2.py
+@@ -12,7 +12,8 @@ import pytest
+ from app.db import DB
+ from app.domain.markets.kr import KST
+ from app.market import Market
+-from app.paper_v2 import ALREADY, PaperError, PaperV2
++from app.domain.errors import PaperError
++from app.paper_v2 import ALREADY, PaperV2
+ from app.domain.rules import buy_cap
+ from tests.conftest import FakeBars, make_bars
+ from tests.test_blocks import B, G, R
+diff --git a/product/service/app/tests/test_vault.py b/product/service/app/tests/test_vault.py
+index e86d7be..886b260 100644
+--- a/product/service/app/tests/test_vault.py
++++ b/product/service/app/tests/test_vault.py
+@@ -9,10 +9,11 @@ import pytest
+ from cryptography.exceptions import InvalidTag
+ 
+ from app.db import DB
++from app.domain.errors import VaultError
++from app.main import HTTP_STATUS
+ from app.vault import (
+     LOCK_S,
+     Vault,
+-    VaultError,
+     normalize_recovery_code,
+     seal,
+     unseal,
+@@ -80,7 +81,7 @@ def test_secret_roundtrip_survives_restart(tmp_path: Path) -> None:
+     assert v2.tail("toss.client_secret") is None
+     with pytest.raises(VaultError) as e:
+         v2.get_secret("toss.client_secret")
+-    assert e.value.status == 423 and "잠금" in e.value.message
++    assert HTTP_STATUS[e.value.code] == 423 and "잠금" in e.value.message
+     v2.login(PW)
+     assert v2.get_secret("toss.client_secret") == "S3CRET-VALUE-1234"
+ 
+@@ -105,15 +106,15 @@ def test_five_fails_lock_five_minutes(tmp_path: Path) -> None:
+     for i in range(4):
+         with pytest.raises(VaultError) as e:
+             v.login("wrong-password")
+-        assert e.value.status == 401
++        assert HTTP_STATUS[e.value.code] == 401
+         assert e.value.extra["tries_left"] == 4 - i
+     with pytest.raises(VaultError) as e:
+         v.login("wrong-password")
+-    assert e.value.status == 429
++    assert HTTP_STATUS[e.value.code] == 429
+     # 잠긴 동안은 맞는 비밀번호도 안 된다
+     with pytest.raises(VaultError) as e:
+         v.login(PW)
+-    assert e.value.status == 429
++    assert HTTP_STATUS[e.value.code] == 429
+     assert 0 < v.locked_for() <= LOCK_S
+     clock.t += LOCK_S + 1
+     assert v.locked_for() == 0
+@@ -126,7 +127,7 @@ def test_recovery_code_resets_password(tmp_path: Path) -> None:
+     v.put_secret("dart.api_key", "dart-key-5678")
+     with pytest.raises(VaultError) as e:
+         v.recover("AAAA-BBBB-CCCC-DDDD", "new-password-1", "new-password-1")
+-    assert e.value.status == 401 and "복구 코드" in e.value.message
++    assert HTTP_STATUS[e.value.code] == 401 and "복구 코드" in e.value.message
+     token, new_code = v.recover(code.lower(), "new-password-1", "new-password-1")
+     assert new_code != code
+     assert v.session_ok(token)
+@@ -150,4 +151,4 @@ def test_recovery_failures_count_toward_lock(tmp_path: Path) -> None:
+             v.recover("0000-0000-0000-0000", "new-password-1", "new-password-1")
+     with pytest.raises(VaultError) as e:
+         v.login("nope-nope-nope")
+-    assert e.value.status == 429
++    assert HTTP_STATUS[e.value.code] == 429
+diff --git a/product/service/app/tests/test_vault_keyfile.py b/product/service/app/tests/test_vault_keyfile.py
+index 0019ff7..606f4c7 100644
+--- a/product/service/app/tests/test_vault_keyfile.py
++++ b/product/service/app/tests/test_vault_keyfile.py
+@@ -14,11 +14,13 @@ import pytest
+ from fastapi.testclient import TestClient
+ 
+ from app import vault as vault_mod
++from app.domain.errors import VaultError
++from app.main import HTTP_STATUS
+ from app.db import DB
+ from app.main import create_app
+ from app.domain.markets.kr import KST
+ from app.market import MarketDataError
+-from app.vault import MONEY_ACTIONS, Vault, VaultError
++from app.vault import MONEY_ACTIONS, Vault
+ from tests.conftest import CsrfClient, PASSWORD, confirm, make_bars, setup_owner
+ from tests.test_paper_v2 import body, save
+ from tests.fake_telegram import TOKEN as TG_TOKEN
+@@ -172,7 +174,7 @@ def test_confirm_token_is_one_shot_and_bound(tmp_path: Path) -> None:
+     t = v.confirm(PASSWORD, "live_start")
+     with pytest.raises(VaultError) as e:
+         v.use_confirm(t, "live_end")  # 다른 일
+-    assert e.value.status == 403 and e.value.extra["need_confirm"] is True
++    assert HTTP_STATUS[e.value.code] == 403 and e.value.extra["need_confirm"] is True
+     t = v.confirm(PASSWORD, "live_start")
+     v.use_confirm(t, "live_start")
+     with pytest.raises(VaultError):
+@@ -198,10 +200,10 @@ def test_confirm_shares_fail_count_with_login(tmp_path: Path) -> None:
+             v.confirm("wrong password", "live_start")
+     with pytest.raises(VaultError) as e:
+         v.confirm("wrong password", "live_start")
+-    assert e.value.status == 429  # 다섯 번째에 잠금(로그인 둘 + 확인 셋)
++    assert HTTP_STATUS[e.value.code] == 429  # 다섯 번째에 잠금(로그인 둘 + 확인 셋)
+     with pytest.raises(VaultError) as e:
+         v.login(PASSWORD)
+-    assert e.value.status == 429
++    assert HTTP_STATUS[e.value.code] == 429
+ 
+ 
+ # ── 비밀번호 없이 돈이 움직이는 길 0개 ───────────────────────────────────────
