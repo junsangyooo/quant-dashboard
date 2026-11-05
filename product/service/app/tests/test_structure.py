@@ -190,7 +190,9 @@ def f(cols, t):
     c = "select id from runs where x = 1"
     d = "Pragma user_version"
     e = f"UPDATE {t} SET a = 1"
-    return a, b, c, d, e
+    g = f"select {cols} from {t}"
+    h = f"{t}SELECT * FROM t"
+    return a, b, c, d, e, g, h
 """
 SQL_PROSE = """LABELS = ("select", "DELETE", "Select a strategy", "update available", "With care", "begin by reading",
           "Delete this row?", "선택 SELECT", f"select {1}")
@@ -206,7 +208,8 @@ def test_sql_count_follows_aliases_newlines_fstrings_and_lowercase(fake_app: Pat
     got = sorted((h["module"], h["line"], h["kind"]) for h in hits)
     assert got == [("app/planted.py", 5, "sqlite3"), ("app/planted.py", 6, "sqlite3"), ("app/planted.py", 7, "sqlite3"),
                    ("app/planted.py", 8, "sql"), ("app/planted.py", 10, "sql"), ("app/planted.py", 11, "sql"),
-                   ("app/planted.py", 12, "sql"), ("app/planted.py", 13, "sql")]
+                   ("app/planted.py", 12, "sql"), ("app/planted.py", 13, "sql"), ("app/planted.py", 14, "sql")]
+    # 15행 `f"{t}SELECT * FROM t"`(식으로 시작하는 f-string)은 세지 않아요(알려진 빈틈 · 보고 9절)
     assert [h["text"] for h in hits if h["kind"] == "sqlite3"] == ["sqlite3.connect()"] * 3
 
 

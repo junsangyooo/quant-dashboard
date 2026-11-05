@@ -273,10 +273,14 @@ SQL_SECOND = re.compile(r"\b(from|into|set|table|where|values|join|index|exists|
 
 
 def _is_sql(text: str, *, first_piece: bool = False) -> bool:
-    """SQL 낱말 + 공백(줄바꿈 포함) + 이어지는 글. f-string의 첫 조각이면 낱말 + 공백만으로도(뒤는 식)."""
+    """SQL 낱말 + 공백(줄바꿈 포함) + 이어지는 글. f-string의 첫 조각이면 낱말 + 공백만 봐요(뒤는 식 · 대소문자 ·
+    둘째 낱말 규칙은 이어 붙인 글 전체에 따로 · `f"select {cols} from {t}"`). 식으로 시작하는 f-string
+    (`f"{x}SELECT * FROM t"`)은 첫 조각이 글이 아니라 세지 않아요(알려진 빈틈 · 지금 `app/`에 0)."""
     m = SQL_HEAD.match(text)
     if not m or (not m.group(3).strip() and not first_piece):
         return False  # 단계 이름 'select' · HTTP 메서드 'DELETE' 같은 낱말 하나는 아님
+    if first_piece:
+        return True
     word = m.group(1)
     return word.isupper() or word.lower() == "pragma" or bool(SQL_SECOND.search(text))
 

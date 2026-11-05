@@ -332,12 +332,12 @@ GUARDS: tuple[Guard, ...] = (
     Guard("same-text", "같은 글(서버 · 8자 이상 한글)", 38, found_same_text, text_key=True, unit="keys"),
     Guard("py-duplicates", "중복 · 파이썬(같은 본문 · 모듈 사이 같은 이름)", 0, found_py_duplicates, has_list=False),
     Guard("web-boundaries", "화면 경계(ARCHITECTURE 3절 · 지금 폴더로 셈 · ESLint와 같은 규칙)", 33, found_web_boundaries),
-    Guard("web-duplication", "중복 · 웹(jscpd 복제 수 · 파일 쌍)", 33, found_web_duplication, new_reason=_dup_reason),
-    Guard("web-same-css", "같은 CSS 본문(선언 3개 이상 · 파일 묶음)", 22, found_web_same_css, new_reason=_css_reason),
+    Guard("web-duplication", "중복 · 웹(jscpd 복제 수 · 파일 쌍)", 29, found_web_duplication, new_reason=_dup_reason),
+    Guard("web-same-css", "같은 CSS 본문(선언 3개 이상 · 파일 묶음)", 20, found_web_same_css, new_reason=_css_reason),
     Guard("web-same-text", "같은 글(웹)", 20, found_web_same_text, text_key=True, unit="keys"),
     Guard("web-server-same-text", "같은 글(서버 ↔ 웹)", 28, found_web_server_same_text, text_key=True, unit="keys"),
     Guard("web-dist-same-text", "같은 글(빌드 결과 · JS 토큰으로 셈)", 20, found_web_dist_same_text, text_key=True, unit="keys"),
-    Guard("web-raw-tokens", "원시 토큰 직접 사용(screens · components · charts)", 447, found_web_raw_tokens, new_reason=_token_reason),
+    Guard("web-raw-tokens", "원시 토큰 직접 사용(screens · components · charts)", 183, found_web_raw_tokens, new_reason=_token_reason),
     Guard("web-px", "위치 · 모서리 px 리터럴(screens · components · charts)", 9, found_web_px, new_reason=_token_reason),
 )
 BY_NAME = {g.name: g for g in GUARDS}

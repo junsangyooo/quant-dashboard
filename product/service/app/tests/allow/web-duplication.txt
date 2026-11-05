@@ -1,20 +1,21 @@
 # 웹 중복(jscpd 5.4.2 · 50토큰 · 시험 · 생성 파일 뺌 · BlockEditor 포함) 허용 목록. 한 줄 = `파일 파일 복제수  # [꼬리표] 까닭`(src/ 기준 · 파일 쌍은 이름 순).
-# 시작 숫자 = 복제 33(2.308%) · 줄어들기만. 1% 문턱은 3단계(P1-13 · ARCHITECTURE 6절 '1단계 예외').
+# 시작 숫자 = 복제 33(2.308%) → P1-12를 합친 뒤 29(1.985% · `retake`) · 줄어들기만. 1% 문턱은 3단계(P1-13 · ARCHITECTURE 6절 '1단계 예외').
 src/charts/geometry/lineChart.ts src/charts/geometry/mvpAxis.ts 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/components/Field.tsx src/components/Field.tsx 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
+src/components/Tags.module.css src/screens/BacktestV2/BacktestV2.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/Auth/RecoverScreen.tsx src/screens/Settings/PasswordScreen.tsx 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
-src/screens/BacktestV2/BacktestV2.module.css src/screens/BacktestV2/BacktestV2.module.css 2  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
-src/screens/BacktestV2/BacktestV2.module.css src/screens/BlockEditor/BlockEditor.module.css 3  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기) · BlockEditor/*
+src/screens/BacktestV2/BacktestV2.module.css src/screens/BacktestV2/BacktestV2.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/BacktestV2/BacktestV2.module.css src/screens/PaperV2/PaperV2.module.css 3  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/BacktestV2/BacktestV2.module.css src/screens/Setup/Wizard.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
-src/screens/BacktestV2/BacktestV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 4  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
+src/screens/BacktestV2/BacktestV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 3  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/BacktestV2/BacktestV2Screen.tsx src/screens/PaperV2/PaperV2.tsx 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/BlockEditor/BlockCard.tsx src/screens/BlockEditor/BlockCard.tsx 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기) · BlockEditor/*
 src/screens/BlockEditor/BlockEditor.module.css src/screens/BlockEditor/BlockEditor.module.css 4  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기) · BlockEditor/*
-src/screens/BlockEditor/BlockEditor.module.css src/screens/PaperV2/PaperV2.module.css 2  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기) · BlockEditor/*
-src/screens/BlockEditor/BlockEditor.module.css src/screens/Setup/Wizard.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기) · BlockEditor/*
 src/screens/BlockEditor/SidePanel.tsx src/screens/BlockEditor/SidePanel.tsx 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기) · BlockEditor/*
 src/screens/Live/Live.module.css src/screens/PaperV2/PaperV2.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/Live/LiveScreens.tsx src/screens/Live/LiveScreens.tsx 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
+src/screens/PaperV2/PaperV2.module.css src/screens/Settings/Connect.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/PaperV2/PaperV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 3  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
+src/screens/Setup/Wizard.module.css src/screens/Setup/Wizard.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
 src/screens/Setup/Wizard.module.css src/screens/StrategiesV2/StrategiesV2.module.css 2  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)
+src/screens/Setup/Wizard.module.css src/shell/Layout.module.css 1  # [1단계 예외] 웹 중복 1% 문턱은 3단계(P1-13 · 부품 합치기)

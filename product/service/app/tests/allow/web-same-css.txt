@@ -1,20 +1,17 @@
 # 같은 CSS 본문(선언 3개 이상 · tokens.css 뺌 · BlockEditor 포함) 허용 목록. 한 줄 = `파일… 묶음수  # [꼬리표] 까닭`(같은 본문 묶음이 걸친 파일들).
-# 시작 숫자 = 묶음 22 · 줄어들기만. 0 문턱은 3단계(P1-13 · ARCHITECTURE 6절 '1단계 예외').
-src/charts/charts.module.css src/screens/Auth/Auth.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/components/Box.module.css src/screens/Auth/Auth.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/screens/Auth/Auth.module.css src/screens/Settings/Connect.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/screens/BacktestV2/BacktestV2.module.css src/screens/BlockEditor/BlockEditor.module.css src/screens/Live/Live.module.css src/screens/PaperV2/PaperV2.module.css src/screens/Setup/Wizard.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13) · BlockEditor/*
-src/screens/BacktestV2/BacktestV2.module.css src/screens/BlockEditor/BlockEditor.module.css src/screens/PaperV2/PaperV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 3  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13) · BlockEditor/*
-src/screens/BacktestV2/BacktestV2.module.css src/screens/BlockEditor/BlockEditor.module.css src/screens/Setup/Wizard.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13) · BlockEditor/*
+# 시작 숫자 = 묶음 22 → P1-12를 합친 뒤 20(`retake`) · 줄어들기만. 0 문턱은 3단계(P1-13 · ARCHITECTURE 6절 '1단계 예외').
+src/charts/charts.module.css src/screens/Auth/Auth.module.css src/screens/Setup/Wizard.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/components/Box.module.css src/screens/Auth/Auth.module.css src/screens/BacktestV2/BacktestV2.module.css src/screens/Live/Live.module.css src/screens/PaperV2/PaperV2.module.css src/screens/Setup/Wizard.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/Auth/Auth.module.css src/screens/BacktestV2/BacktestV2.module.css src/screens/PaperV2/PaperV2.module.css src/screens/Settings/Connect.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
 src/screens/BacktestV2/BacktestV2.module.css src/screens/PaperV2/PaperV2.module.css src/screens/Setup/Wizard.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/BacktestV2/BacktestV2.module.css src/screens/PaperV2/PaperV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 2  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/BacktestV2/BacktestV2.module.css src/screens/Setup/Wizard.module.css src/screens/StrategiesV2/StrategiesV2.module.css src/shell/Layout.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
 src/screens/BacktestV2/BacktestV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 2  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
 src/screens/BlockEditor/BlockEditor.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13) · BlockEditor/*
-src/screens/BlockEditor/BlockEditor.module.css src/screens/PaperV2/PaperV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13) · BlockEditor/*
-src/screens/BlockEditor/BlockEditor.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13) · BlockEditor/*
 src/screens/Live/Live.module.css src/screens/PaperV2/PaperV2.module.css 2  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
 src/screens/Live/Live.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
 src/screens/PaperV2/PaperV2.module.css src/screens/Setup/Wizard.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/screens/PaperV2/PaperV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/screens/Settings/Connect.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/screens/Setup/Wizard.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
-src/shell/Layout.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/PaperV2/PaperV2.module.css src/screens/StrategiesV2/StrategiesV2.module.css 2  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/PaperV2/PaperV2.module.css src/styles/mvp.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/Settings/Connect.module.css src/screens/Setup/Wizard.module.css 1  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
+src/screens/Setup/Wizard.module.css src/shell/Layout.module.css 2  # [1단계 예외] 같은 CSS 0 문턱은 3단계(P1-13)
