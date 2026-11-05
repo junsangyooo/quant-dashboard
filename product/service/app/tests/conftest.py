@@ -123,9 +123,9 @@ def pytest_configure(config: pytest.Config) -> None:
     socket.getaddrinfo = _guard_getaddrinfo  # type: ignore[assignment]
     # 실제 전송의 두 열쇠가 개발 컴퓨터에 있어도 시험은 늘 가짜(T-00 ②)
     os.environ.pop("QUANT_LIVE_TRANSPORT", None)
-    import app.transport as transport
+    import app.settings as settings
 
-    transport.LIVE_CONFIG_PATHS = ()
+    settings.LIVE_CONFIG_PATHS = ()
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:

@@ -2,9 +2,11 @@
 
 uvicorn --factory app.main:create_app
 
-환경 값(모두 선택):
+환경 값(모두 선택 · `settings.py`가 한 번 읽어 `create_app`이 받아요):
 - MVP_DATA_DIR: 데이터 폴더(기본 mvp/data)
 - MVP_PORT: 포트(기본 8765, Host 검사에 쓴다)
+- MVP_WEB_DIST: 화면 파일 폴더(기본 web/dist)
+- QUANT_TS_NAME: 등록한 Tailscale 이름(쉼표로 여럿)
 - QUANT_LIVE_TRANSPORT=1: 실제 전송을 켜는 두 열쇠 가운데 하나. 설치기 설정 파일도 있어야
   열린다(transport.py). 없으면 토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 모두 가짜다.
 
@@ -19,7 +21,6 @@ import hashlib
 import hmac
 import json
 import logging
-import os
 import re
 import secrets
 import traceback
@@ -34,6 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import APP_VERSION_TEXT
+from . import settings
 from . import copytext as ct
 from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
@@ -119,20 +121,21 @@ def create_app(
     keyfile: Path | str | None | bool = True,
     ts_names: list[str] | None = None,
 ) -> FastAPI:
-    data = Path(data_dir or os.environ.get("MVP_DATA_DIR") or ROOT / "data")
-    port = port or int(os.environ.get("MVP_PORT") or 8765)
+    cfg = settings.load()  # 환경 변수 · 실제 전송 설정 파일 자리를 한 번만 읽어요(아래는 이 값만 씀)
+    data = Path(data_dir or cfg.data_dir or ROOT / "data")
+    port = port or cfg.port
     db = DB(data / "app.db")
     # 컴퓨터 키 파일(T-50): 기본은 고정 경로(vault.KEYFILE_PATH), False면 안 써요. 레포 · 데이터 폴더 안은 거절.
     kf = vault_mod.KEYFILE_PATH if keyfile is True else (None if keyfile is False else keyfile)
     vault = Vault(db, scrypt_n=scrypt_n or SCRYPT_N, keyfile=kf, forbidden_dirs=(data, REPO))
     # 전송은 기본 가짜(T-00). 실제 전송은 transport.build_transports의 두 열쇠가 다 있을 때만.
     if transports is None:
-        transports = build_transports()
+        transports = build_transports(cfg.live_env, cfg.live_config_paths)
     if toss_transport is None:
         toss_transport = transports.toss_factory()
     if ip_fetch is None:
         ip_fetch = transports.ip_fetch
-    dist = Path(os.environ.get("MVP_WEB_DIST") or DIST)
+    dist = Path(cfg.web_dist or DIST)
     conns = Connections(db, vault, toss_transport)
     market = Market(db, bars_source or TossSource(conns.client))
 
@@ -143,7 +146,7 @@ def create_app(
     }
     allowed_origins = {f"http://{h}" for h in allowed_hosts}
     # Tailscale serve가 https로 받아 127.0.0.1로 넘겨요: 등록한 ts.net 이름만(T-51 · SPEC 10 main)
-    names = ts_names if ts_names is not None else ts_names_from(os.environ.get("QUANT_TS_NAME"))
+    names = ts_names if ts_names is not None else ts_names_from(cfg.ts_name)
     ts_ok = ts_names_from(",".join(names))
     for name in ts_ok:
         allowed_hosts |= {name, f"{name}:443"}

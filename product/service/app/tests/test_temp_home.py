@@ -59,9 +59,9 @@ def test_real_config_dir_is_not_created_or_read() -> None:
     if conftest.REAL_CONFIG_DIR is not None:
         assert conftest.REAL_CONFIG_DIR.exists() == conftest.REAL_CONFIG_EXISTED_AT_START
         assert conftest.config_tree(conftest.REAL_CONFIG_DIR) == conftest.REAL_CONFIG_TREE_AT_START
-    import app.transport as transport
+    import app.settings as settings
 
-    assert transport.LIVE_CONFIG_PATHS == ()
+    assert settings.LIVE_CONFIG_PATHS == ()
 
 
 # ── 자식 프로세스 ──────────────────────────────────────────────────────────────

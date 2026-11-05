@@ -29,8 +29,9 @@ import pytest
 
 from app import transport as tp
 from app.main import create_app
+from app.settings import live_enabled
 from app.toss import TossClient, TossCredentials, TossUnreachableError
-from app.transport import FakeTransport, HttpRequest, Transports, build_transports, live_enabled
+from app.transport import FakeTransport, HttpRequest, Transports, build_transports
 from tests import conftest
 
 ROOT = Path(__file__).resolve().parent.parent

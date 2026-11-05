@@ -4,7 +4,10 @@
 아래 두 가지가 **둘 다** 있을 때만, 이 파일 안에서만 만들어요.
 
 1. 환경 변수 `QUANT_LIVE_TRANSPORT=1`
-2. 설치기(T-56)가 쓰는 설정 파일(`LIVE_CONFIG_PATHS` 가운데 하나)에 `{"live_transport": true}`
+2. 설치기(T-56)가 쓰는 설정 파일(`settings.LIVE_CONFIG_PATHS` 가운데 하나)에 `{"live_transport": true}`
+
+두 열쇠를 읽는 것은 설정 층(`settings.live_enabled` · 환경 변수 · 설정 파일은 그 파일만 읽음)이고, 이 문은 그 판정으로만
+실제 전송 객체를 만들어요(조립이 `settings.load()`로 한 번 읽은 값을 넘겨요).
 
 개발 · 시험 · `./start.sh`는 이 둘을 만들지 않아요. 앱 코드의 다른 파일은 `urllib.request` ·
 `http.client` · `socket`을 쓰지 않아요(`tests/test_no_orders.py`가 소스를 훑어 막아요).
@@ -13,8 +16,6 @@
 from __future__ import annotations
 
 import http.client
-import json
-import os
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
@@ -22,13 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .settings import live_enabled
+
 REQUEST_TIMEOUT_S = 20.0
-LIVE_ENV = "QUANT_LIVE_TRANSPORT"
-# 설치기가 쓰는 자리: 서버(systemd)는 /etc, PC(launchd)는 사용자 설정 폴더. 레포 · 데이터 폴더 밖이에요.
-LIVE_CONFIG_PATHS: tuple[Path, ...] = (
-    Path("/etc/quant-service/live-transport.json"),
-    Path.home() / ".config" / "quant-service" / "live-transport.json",
-)
 
 
 @dataclass(frozen=True)
@@ -117,27 +114,6 @@ class FakeFetch:
 
 
 # ── 문 ──────────────────────────────────────────────────────────────────────
-
-
-def _config_says_live(paths: Iterable[Path]) -> bool:
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(data, dict) and data.get("live_transport") is True:
-            return True
-    return False
-
-
-def live_enabled(
-    env: Mapping[str, str] | None = None, config_paths: Iterable[Path] | None = None
-) -> bool:
-    """환경 변수 **과** 설정 파일이 둘 다 '켬'일 때만 True."""
-    env = os.environ if env is None else env
-    if env.get(LIVE_ENV) != "1":
-        return False
-    return _config_says_live(LIVE_CONFIG_PATHS if config_paths is None else config_paths)
 
 
 @dataclass

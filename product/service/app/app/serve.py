@@ -16,6 +16,8 @@ import os
 import sys
 from pathlib import Path
 
+from . import settings
+
 LOOPBACK = "127.0.0.1"
 LOCK_NAME = "app.lock"
 
@@ -50,10 +52,11 @@ def check_host(host: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
+    cfg = settings.load()  # MVP_PORT · MVP_DATA_DIR(환경 변수는 settings만 읽어요)
     p = argparse.ArgumentParser(prog="app.serve")
     p.add_argument("--host", default=LOOPBACK)
-    p.add_argument("--port", type=int, default=int(os.environ.get("MVP_PORT") or 8765))
-    p.add_argument("--data", default=os.environ.get("MVP_DATA_DIR"))
+    p.add_argument("--port", type=int, default=cfg.port)
+    p.add_argument("--data", default=cfg.data_dir)
     args = p.parse_args(argv)
     host = check_host(args.host)
 
