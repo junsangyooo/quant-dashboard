@@ -22,8 +22,15 @@ def _server_hits() -> list[str]:
     return out
 
 
-def test_forbidden_list_is_the_glossary() -> None:
+# 1단계 동안 이 대조 시험만 `f33e2a9` 전 판에서 얼린 표(지금 코드와 같은 옛 표)를 읽어요(Q-N18 답 (가)).
+# 지금 문서(GLOSSARY 5절 · SPEC 8-1)와의 대조는 3단계(글 고치기)에서 다시 켜요(Q-N18). 다른 시험 · `--write`는 지금 문서 그대로예요.
+FROZEN_DOCS = wr.APP / "tests" / "baseline" / "frozen" / "docs-before-f33e2a9"
+
+
+def test_forbidden_list_is_the_glossary(monkeypatch: pytest.MonkeyPatch) -> None:
     """화면 시험이 읽는 JSON이 GLOSSARY 5절 · SPEC 8-1 표와 같아요(문서를 바꾸면 --write로 다시 만들어요)."""
+    monkeypatch.setattr(wr, "GLOSSARY", FROZEN_DOCS / "GLOSSARY-5.md")
+    monkeypatch.setattr(wr, "SPEC", FROZEN_DOCS / "SPEC-8-1.md")
     rules = wr.load_rules()
     on_disk = json.loads(wr.JSON_PATH.read_text(encoding="utf-8"))
     assert on_disk == rules

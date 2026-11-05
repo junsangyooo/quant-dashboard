@@ -29,9 +29,12 @@ def _table(path: Path, start: str, stop: str) -> list[list[str]]:
     return rows[1:]
 
 
-CATALOG_ROWS = _table(SERVICE / "DATA-CATALOG.md", "## 1. 조건 카탈로그", "- **주식 수 맞춤")
-DICT_ROWS = _table(SERVICE / "ENGINE-RULES.md", "### 11-3.", "- 값 범위")
-SPEC_ROWS = _table(SERVICE / "SPEC.md", "### 4-9.", "---")
+# 1단계 동안은 `f33e2a9` 전 판에서 얼린 표(지금 코드와 같은 옛 표 · `tests/baseline/frozen/docs-before-f33e2a9/`)와 견줘요.
+# 지금 문서(SERVICE / "DATA-CATALOG.md" · "ENGINE-RULES.md" · "SPEC.md")와의 대조는 3단계(글 고치기)에서 다시 켜요(Q-N18 답 (가)).
+DOCS = Path(__file__).resolve().parent / "baseline" / "frozen" / "docs-before-f33e2a9"
+CATALOG_ROWS = _table(DOCS / "DATA-CATALOG-1.md", "## 1. 조건 카탈로그", "- **주식 수 맞춤")
+DICT_ROWS = _table(DOCS / "ENGINE-RULES-11-3.md", "### 11-3.", "- 값 범위")
+SPEC_ROWS = _table(DOCS / "SPEC-4-9.md", "### 4-9.", "---")
 
 
 def _code_list(cell: str) -> list[str]:

@@ -4,7 +4,8 @@
     cd product/service/app && .venv/bin/python -m tests.baseline.docs_compare
 
 `tests/test_catalog.py` · `tests/test_words.py`(P1-03 전에는 `tests/test_copytext.py`)를 가져와 문서 표만 얼린 판으로 바꿔 끼우고 시험 함수를 불러요.
-결과는 보고(`tests/baseline/reports/P1-01a.md`)에만 적고, 쓸지는 제품 주인의 답에 달렸어요.
+결과는 보고(`tests/baseline/reports/P1-01a.md`)에만 적었어요. 제품 주인의 답은 (가)라 1단계 동안 두 시험이 얼린 판을 직접 읽어요
+(3단계에서 지금 문서와의 대조를 다시 켜요 · 이 스크립트는 같은 결과를 보여 주는 덤으로 남겨 둠).
 """
 
 from __future__ import annotations
@@ -51,8 +52,11 @@ def main() -> None:
                  f"(낱말 {len(rules['words'])} ↔ {len(on_disk['words'])})")
     from tests import test_words as tw
 
-    lines.append(_run("test_forbidden_list_is_the_glossary(얼린 GLOSSARY 5절 · SPEC 8-1)",
-                      tw.test_forbidden_list_is_the_glossary))
+    import pytest
+
+    with pytest.MonkeyPatch.context() as mp:  # 시험이 얼린 판으로 바꿔 끼우는 데 쓰는 준비 값(Q-N18 답 (가))
+        lines.append(_run("test_forbidden_list_is_the_glossary(얼린 GLOSSARY 5절 · SPEC 8-1)",
+                          tw.test_forbidden_list_is_the_glossary, mp))
     print("\n".join(lines))
 
 

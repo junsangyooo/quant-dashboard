@@ -15,7 +15,9 @@
    v2 복사 글, 옛 빈 본문(`legacy`) 16개, `run_v1` 거래 한 건). 남는 시험(`test_copytext_v3.py` · `test_engine_v2.py` ·
    `test_api_v2.py` · `tests/helpers.py` · `test_baseline_frozen.py`)이 이 값을 읽어요.
 4. `frozen/docs-before-f33e2a9/`: `f33e2a9` 바로 전 판 문서의 표(DATA-CATALOG 1절 · GLOSSARY 5절, 그리고 그 비교 논리가 함께 읽는
-   SPEC 8-1 · ENGINE-RULES 11-3 · Q-N18). 이 부분은 지금도 다시 만들 수 있어요(`git show`로 같은 판을 읽음).
+   SPEC 8-1 · ENGINE-RULES 11-3 · SPEC 4-9 · Q-N18). 이 부분은 지금도 다시 만들 수 있어요(`git show`로 같은 판을 읽음).
+   1단계 동안 `tests/test_catalog.py` · `tests/test_words.py::test_forbidden_list_is_the_glossary`가 이 표와 견줘요(Q-N18 답 (가) ·
+   SPEC 4-9는 `test_same_count_and_order`가 DATA-CATALOG 1절과 같은지 보는 표라 Q-N18 답을 적용할 때 더함).
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ DOC_PARTS = [
     ("GLOSSARY.md", "## 5.", None, "GLOSSARY-5.md"),
     ("SPEC.md", "### 8-1.", "### 8-2.", "SPEC-8-1.md"),
     ("ENGINE-RULES.md", "### 11-3.", "### 11-4.", "ENGINE-RULES-11-3.md"),
+    ("SPEC.md", "### 4-9.", "## 5.", "SPEC-4-9.md"),
 ]
 
 
@@ -61,7 +64,8 @@ def write_docs() -> None:
     for name, start, stop, out in DOC_PARTS:
         text = subprocess.run(["git", "-C", root, "show", f"{DOC_COMMIT}:product/service/{name}"],
                               capture_output=True, text=True, check=True).stdout
-        head = f"<!-- product/service/{name} · {DOC_COMMIT} 판 · 이 부분만 · P1-01a가 떼어 둠(Q-N18) -->\n\n"
+        who = "Q-N18 답 (가)를 적용할 때 더함" if out == "SPEC-4-9.md" else "P1-01a가 떼어 둠(Q-N18)"
+        head = f"<!-- product/service/{name} · {DOC_COMMIT} 판 · 이 부분만 · {who} -->\n\n"
         _write(DOCS / out, head + _section(text, start, stop))
 
 
