@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from app import telegram as tg
+from app.services import telegram as tg
 from app.main import create_app
 from app.domain.markets.kr import KST
 from app.adapters.fake import FakeTransport

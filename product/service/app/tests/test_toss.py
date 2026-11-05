@@ -343,7 +343,7 @@ def test_order_list_missing_field_is_bad_answer(server: FakeTossServer, client: 
 
 
 def test_connection_check_names_bad_answer() -> None:
-    from app.connect import FAILURES
+    from app.services.connect import FAILURES
 
     assert FAILURES["shape"][0] == "토스 응답 이상이에요"
     assert {"auth", "ip", "unreachable", "account", "maintenance", "shape", "error"} == set(FAILURES)

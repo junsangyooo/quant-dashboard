@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app import telegram as tg
+from app.services import telegram as tg
 from app.adapters.toss import TossUnreachableError
 from app.run.live import SCOPE, TODO
 from tests.test_live import SYM, World, body, give_pos, morning, running

@@ -2,7 +2,8 @@
 
 - 전송은 `transport.Transports.telegram`(기본 가짜 · 응답 없음 · T-00). 이 파일은 소켓을 쓰지 않아요.
 - 봇 토큰은 요청 주소에만 넣고 글 · 예외 · 기록에 남기지 않아요(`Bot.__repr__`도 가림).
-- 설정 · 알림 · 명령 받기는 `app/telegram.py`(`Telegram`)예요.
+- 설정 · 알림은 `services/telegram.py`(`Telegram`) · 명령 받기는 `services/telegram_commands.py`예요. 봇 오류
+  `TelegramError`는 포트 파일(`ports.py`)에 있어요(쓰기 일도 내서).
 """
 
 from __future__ import annotations
@@ -10,19 +11,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..ports import TelegramError
 from .transport import HttpRequest, Transport, TransportError
 
 API = "https://api.telegram.org"
-
-
-class TelegramError(Exception):
-    """화면에 그대로 보여도 되는 글(토큰 없음). kind: token · chat · send · locked."""
-
-    def __init__(self, message: str, kind: str = "send", status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.kind = kind
-        self.status = status
 
 
 # ── 봇 API ───────────────────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ import traceback
 from collections.abc import Callable
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -49,7 +49,8 @@ from .run.scheduler import AUTO_CHECK, DAILY_CHECK, Scheduler
 from .run.dart import DartStore
 from .run.paper import PaperError, PaperV2
 from .ports import Clock, MarketFeed
-from .connect import Connections
+from . import connect as connect_clock
+from .services.connect import Connections
 from .store import dart as store_dart
 from .store import market as market_store
 from .store import strategies as strategy_store
@@ -62,9 +63,10 @@ from .market import now_kst
 from .run.data import Market, MarketDataError
 from .adapters.publicip import IpFetch, PublicIpError, public_ip
 from .domain.stock_names import stock_name
-from .adapters.telegram import TelegramError
-from .telegram import Telegram
-from .adapters.toss import TossSource
+from .ports import TelegramError
+from .adapters.telegram import Bot
+from .services.telegram_commands import TelegramCommands
+from .adapters.toss import TossClient, TossCredentials, TossSource, link_state
 from .adapters.transport import Transport, Transports, build_transports
 from .security import vault as vault_mod
 from .security.vault import SCRYPT_N, SESSION_S, Vault, VaultError
@@ -146,8 +148,11 @@ def create_app(
     if ip_fetch is None:
         ip_fetch = transports.ip_fetch
     dist = Path(cfg.web_dist or DIST)
-    conns = Connections(db, vault, toss_transport)
-    market = Market(db, bars_source or TossSource(conns.client))
+    conns = Connections(db, vault, toss_transport,
+                        client_for=lambda cid, sec, acc, t: TossClient(TossCredentials(cid, sec, acc), transport=t),
+                        link_state=link_state, now=connect_clock._now)
+    # 일봉 원천은 연결 객체가 만든 토스 클라이언트(쓰기 일은 `Broker` 포트로 알지만 조립은 토스 어댑터인 것을 알아요)
+    market = Market(db, bars_source or TossSource(lambda: cast(TossClient | None, conns.client())))
 
     allowed_hosts = {
         f"127.0.0.1:{port}",
@@ -182,8 +187,9 @@ def create_app(
                  else "운용 중" if live.run() is not None else "운용 전")
         return {"label": label, "todos": todos}
 
-    telegram = Telegram(
-        db, vault, telegram_transport or transports.telegram, now=now, status=tg_status, pause=pause_new_buys,
+    tg_transport = telegram_transport or transports.telegram
+    telegram = TelegramCommands(
+        db, vault, lambda token: Bot(token, tg_transport), now=now, status=tg_status, pause=pause_new_buys,
         link=lambda: f"https://{ts_ok[0]}" if ts_ok else None,
     )
     csrf_key = secrets.token_bytes(32)  # 프로세스마다 새로(세션도 메모리에만 있어요)

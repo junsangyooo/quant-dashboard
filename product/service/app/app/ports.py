@@ -7,7 +7,7 @@
 - `MarketFeed`: 일봉 받기(`adapters.toss.TossSource` · 시험의 가짜 일봉).
 - `Disclosures`: 재무 · 공시 읽기(DART 저장 `run.dart.DartStore` · 접수일 다음 거래일부터 · R-J9).
 - `DisclosureSource`: DART 받기(큐 돌리기가 부름 · `adapters.dart.DartClient` · 요청마다 하루 한도를 먼저 셈).
-- `Notifier`: 알림 하나 보내기(`telegram.Telegram.notify` · 사건 이름 + 글).
+- `Notifier`: 알림 하나 보내기(`services.telegram.Telegram.notify` · 사건 이름 + 글 · 봇 오류는 `TelegramError`).
 - `Clock`: 지금 시각(한국 시간이 붙은 datetime · 기본 `market.now_kst` · 시험은 고정 시각).
 - AI 제공사 포트(`AiProvider`)는 4단계예요.
 
@@ -36,7 +36,7 @@ class Clock(Protocol):
 
 
 class Notifier(Protocol):
-    """알림 하나: 사건 이름(`telegram.EVENTS`의 키)과 글. 보냈는지는 어댑터가 알아서 남겨요."""
+    """알림 하나: 사건 이름(`services.telegram.EVENTS`의 키)과 글. 보냈는지는 어댑터가 알아서 남겨요."""
 
     def __call__(self, event: str, text: str, /) -> object: ...
 
@@ -322,6 +322,19 @@ class SymbolNotFound(Exception):
 
 class FeedNotConnected(Exception):
     """일봉 받기(`MarketFeed`): 받을 연결이 없음(토스 연결 전 · `adapters.toss.TossSource`)."""
+
+
+class TelegramError(Exception):
+    """텔레그램 봇(알림 · 봇 설정) 오류: 화면에 그대로 보여도 되는 글(토큰 없음). kind: token · chat · send · locked.
+
+    봇 API를 부르는 어댑터(`adapters.telegram.Bot`)와 봇 설정 쓰기 일(`services.telegram`)이 같이 내요(P1-09에서 어댑터 파일에서
+    이 자리로 옮김 · 클래스 · 속성 그대로 · `status`는 API가 HTTP 상태로 써요 · 번호로 바꾸는 일은 Q-N23 답 뒤)."""
+
+    def __init__(self, message: str, kind: str = "send", status: int = 400) -> None:
+        super().__init__(message)
+        self.message = message
+        self.kind = kind
+        self.status = status
 
 
 class DisclosureSourceError(Exception):

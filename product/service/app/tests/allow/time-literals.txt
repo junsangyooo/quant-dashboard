@@ -4,4 +4,4 @@
 app/install.py hh:mm 3  # [P1-11] 업데이트 안내 글 속 시각(16:00~20:00 · 20:10) · 글 목록으로(글은 그대로 · 시각 값은 P1-08에서 run/scheduler.py 표로)
 app/run/live.py hh:mm 1  # [P1-11] 점검 글 속 '08:35'(글 그대로 · 글 목록으로 · P1-08에서 app/live.py → run/live.py로 옮김 · 키만 바뀜)
 app/run/paper.py hh:mm 2  # [P1-11] 모의투자 안내 글 속 '20:10'(글 그대로 · 글 목록으로 · P1-08에서 app/paper_v2.py → run/paper.py로 옮김 · 키만 바뀜)
-app/telegram.py hh:mm 3  # [P1-11] 텔레그램 글 속 시각(08:30 · 20:10 · 08:35) · 글 목록으로(글은 그대로)
+app/services/telegram.py hh:mm 3  # [P1-11] 텔레그램 글 속 시각(08:30 · 20:10 · 08:35) · 글 목록으로(글은 그대로 · P1-09에서 app/telegram.py → services/telegram.py로 옮김 · 키만 바뀜)

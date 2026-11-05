@@ -1,6 +1,3 @@
 # 파이썬 층 어긋남 허용 목록(ARCHITECTURE 2절 · 7절 · TASKS P1-04). 한 줄 = `모듈 대상층 수  # [꼬리표] 까닭`.
 # 1단계 셈은 지금 모듈을 ARCHITECTURE 2-1의 새 자리로 층에 붙여 세요(`tests/baseline/counts.py` `LAYER_OF` · 하위 폴더는 `LAYER_DIRS`).
-# 대상층 `ext:이름`은 바깥 패키지 금지(domain ← fastapi · sqlite3 등). `tests/test_layers.py`가 키마다 정확히 같은지 · 전체가 시작 숫자 12(P1-04) → 9(P1-06: `live` · `backtest_v2`가 포트를 받음) → 6(P1-08: 화면 모양을 `api/live.py`로 · 토스 일봉 원천을 `adapters/toss.py`로 · DART 큐를 포트로 받아 `run/dart.py`로) → 3(P1-09: 설치기가 조립 `app.py`를 거침) 이하인지 봐요.
-app/connect.py adapters 1  # [P1-09] 연결 확인(security 자리)이 토스 어댑터(`TossClient` 만들기 · `link_state` · 토스 오류)를 직접 · security 층은 ports도 못 가져와서(2절) 연결 확인 흐름을 services/connect.py로 나누며 포트로(P1-06 보고)
-app/telegram.py security 1  # [P1-09] 텔레그램 설정 · 명령 받기(남은 app/telegram.py)가 vault를 직접 · 보내기(`Bot`)는 P1-06에서 adapters/telegram.py로 뗌 · 명령 받기 · 설정을 services/로(services → security 허용 · 봇 오류 자리는 Q-N23 뒤)(P1-06 보고)
-app/telegram.py store 1  # [P1-09] SQL은 P1-07에서 store/todos.py로 · 남은 app/telegram.py(설정 · 알림 · 명령 받기)가 store를 부름 · 2-1 표에서 adapters 줄이지만 보내기는 P1-06에서 adapters/telegram.py로 뗐음 · 명령 받기 · 설정을 services/로 옮기면 services → store 허용(P1-07 보고)
+# 대상층 `ext:이름`은 바깥 패키지 금지(domain ← fastapi · sqlite3 등). `tests/test_layers.py`가 키마다 정확히 같은지 · 전체가 시작 숫자 12(P1-04) → 9(P1-06: `live` · `backtest_v2`가 포트를 받음) → 6(P1-08: 화면 모양을 `api/live.py`로 · 토스 일봉 원천을 `adapters/toss.py`로 · DART 큐를 포트로 받아 `run/dart.py`로) → 0(P1-09: 설치기가 조립 `app.py`를 거침 · 연결 확인 흐름을 `services/connect.py`로 나눠 증권사를 포트로 받음 · 텔레그램 설정 · 명령 받기를 `services/`로) 이하인지 봐요. 목록은 비었어요(새 어긋남은 늘 실패).

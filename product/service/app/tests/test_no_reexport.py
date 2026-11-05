@@ -47,6 +47,7 @@ MOVED: list[tuple[str, str]] = [
     # P1-09: 쓰기 일 층(ARCHITECTURE 2-1)
     ("app.updates", "app.services.updates"),
     ("app.datamgmt", "app.services.data_admin"),
+    ("app.telegram", "app.services.telegram"),  # 설정 · 알림 · 본문 · 명령 받기는 `services/telegram_commands.py`가 이어받아 더함
 ]
 
 

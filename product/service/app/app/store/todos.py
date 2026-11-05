@@ -1,4 +1,4 @@
-"""할 일 · 알림함(todos · alerts). 실전(`run/live.py`) · 모의투자(`run/paper.py`) · 텔레그램(`telegram.py`) · 조립이 같이 써요."""
+"""할 일 · 알림함(todos · alerts). 실전(`run/live.py`) · 모의투자(`run/paper.py`) · 텔레그램(`services/telegram.py`) · 조립이 같이 써요."""
 
 from __future__ import annotations
 

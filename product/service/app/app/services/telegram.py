@@ -1,7 +1,9 @@
 """텔레그램(T-52 · SPEC 5-6 · V2-08 · V2-52): 고객 자신의 봇 하나 · 등록한 대화방 하나 · 명령 둘.
 
 - 봇 API 보내기는 어댑터 `adapters/telegram.py`(`Bot` · 전송은 `transport.Transports.telegram` · 기본 가짜 · T-00)예요.
-  이 파일은 설정 · 알림(`Notifier` 포트 · `notify`) · 명령 받기예요(명령 받기는 P1-09에서 `services/`로). 소켓을 쓰지 않아요.
+  조립(`app.py`)이 토큰으로 봇을 만드는 함수(`bot`)를 넣어 줘요(쓰기 일은 어댑터를 몰라요).
+  이 파일은 설정 · 알림(`Notifier` 포트 · `notify`) · 본문 만들기예요. 명령 받기(`/상태` · `/멈춤`)는
+  `services/telegram_commands.py`예요. 소켓을 쓰지 않아요.
 - 봇 토큰은 금고(`vault`)에, 대화방 번호 · 봇 이름 · 마지막 보낸 시각은 meta에. 토큰은 글 · 예외 · 로그에 넣지 않아요.
 - 본문에는 종목 · 금액을 넣지 않아요(`safe_text`가 막아요). 종목은 앱 안 할 일 제목에만.
 - 명령은 `/상태`와 `/멈춤`(새 매수 멈춤) 둘뿐이고, 등록한 대화방에서 온 것만 받아요. 켜는 쪽 명령은 없어요.
@@ -11,18 +13,14 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from collections.abc import Callable
 from typing import Any
 
-from .adapters.telegram import Bot, TelegramError
-from .adapters.transport import Transport
-from .store import db as store_db, todos as todo_store  # 저장 층(SQL은 store/)
-from .ports import Clock
-from .security.vault import Vault, VaultError
-
-log = logging.getLogger("quant-mvp")
+from ..ports import Clock, TelegramError
+from ..security.vault import Vault, VaultError
+from ..store import todos as todo_store
+from ..store.db import DB
 
 TOKEN = "telegram_token"
 TOKEN_RE = re.compile(r"^\d{5,12}:[A-Za-z0-9_-]{30,64}$")
@@ -99,17 +97,19 @@ HELP_REPLY = "명령은 /상태 · /멈춤 둘이에요"
 
 # ── 서비스 ───────────────────────────────────────────────────────────────────
 
+# 봇 만들기: 토큰 → 봇(`call(method, params)` · 조립이 어댑터 `adapters.telegram.Bot`로 넣어 줘요)
+BotFor = Callable[[str], Any]
+
 
 class Telegram:
-    def __init__(self, db: store_db.DB, vault: Vault, transport: Transport, *, now: Clock,
-                 status: Callable[[], dict[str, Any]], pause: Callable[[str], bool],
+    """설정(V2-08 · V2-52) · 알림(`notify`) · 보내기. 명령 받기는 `telegram_commands.TelegramCommands`가 이어받아 더해요."""
+
+    def __init__(self, db: DB, vault: Vault, bot: BotFor, *, now: Clock,
                  link: Callable[[], str | None] = lambda: None) -> None:
         self.db = db
         self.vault = vault
-        self.transport = transport
+        self.bot = bot
         self.now = now
-        self.status = status
-        self.pause = pause  # 새 매수 멈춤을 켜요(이미 켜져 있으면 False). 끄는 길은 주지 않아요.
         self.link = link
 
     # 저장된 값
@@ -119,11 +119,11 @@ class Telegram:
     def _set(self, key: str, value: str | None) -> None:
         self.db.set_meta(f"tg.{key}", value)
 
-    def _bot(self) -> Bot | None:
+    def _bot(self) -> Any:
         if not self.vault.has_secret(TOKEN) or not self.vault.can_read:
             return None
         token = self.vault.get_secret(TOKEN)
-        return Bot(token, self.transport) if token else None
+        return self.bot(token) if token else None
 
     @property
     def chat_id(self) -> int | None:
@@ -153,7 +153,7 @@ class Telegram:
         t = (token or "").strip()
         if not TOKEN_RE.match(t):
             raise TelegramError("봇 토큰 꼴이 아니에요 · '숫자:글자' 모양 전체를 입력해요", "token")
-        me = Bot(t, self.transport).call("getMe")
+        me = self.bot(t).call("getMe")
         self.vault.put_secret(TOKEN, t)
         self._set("bot", f"@{me.get('username')}" if isinstance(me, dict) and me.get("username") else None)
         for k in ("chat", "chat_name", "offset", "last_sent", "last_error"):
@@ -200,7 +200,7 @@ class Telegram:
         self._set("events", json.dumps(saved))
         return self.view()
 
-    def _need(self) -> Bot:
+    def _need(self) -> Any:
         bot = self._bot()
         if bot is None:
             if self.vault.has_secret(TOKEN):
@@ -246,34 +246,3 @@ class Telegram:
         todo_store.add_alert(self.db, self.now().isoformat(timespec="seconds"), 1 if live else 0, event, title or text,
                              text, "sent" if sent else None)
         return sent
-
-    # 명령(`/상태` · `/멈춤`)
-    def poll(self) -> list[str]:
-        """새 메시지를 읽고 등록한 대화방의 두 명령만 처리해요. 처리한 명령 이름을 돌려줘요."""
-        bot = self._bot()
-        chat = self.chat_id
-        if bot is None or chat is None:
-            return []
-        offset = int(self._meta("offset") or 0)
-        try:
-            updates = bot.call("getUpdates", {"offset": offset, "timeout": 0, "allowed_updates": ["message"]}) or []
-        except TelegramError as exc:
-            log.info("telegram poll: %s", exc.kind)
-            return []
-        done: list[str] = []
-        for u in updates:
-            self._set("offset", str(int(u.get("update_id", offset)) + 1))
-            m = u.get("message") or {}
-            if int((m.get("chat") or {}).get("id") or 0) != chat:
-                continue  # 다른 대화방은 무시(회신도 안 해요)
-            cmd = str(m.get("text") or "").strip().split("@")[0].split(" ")[0]
-            if cmd == "/상태":
-                self._send(msg_status(self.status()))
-                done.append("status")
-            elif cmd == "/멈춤":
-                changed = self.pause("telegram")
-                self._send(PAUSED_REPLY if changed else ALREADY_PAUSED)
-                done.append("pause")
-            elif cmd.startswith("/"):
-                self._send(HELP_REPLY)
-        return done
