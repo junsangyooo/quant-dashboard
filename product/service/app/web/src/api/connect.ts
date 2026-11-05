@@ -11,6 +11,8 @@ export type CheckStep = Schemas['CheckStep'];
 export type StepState = CheckStep['state'];
 export type CheckResult = Schemas['CheckOk'] | Schemas['CheckFailed'];
 export type ConnectView = Schemas['ConnectView'];
+/** `POST /api/public-ip` 응답(`PublicIp` · types.gen.ts). */
+export type PublicIp = Schemas['PublicIp'];
 
 export const useConnect = () =>
   useQuery({ queryKey: keys.connect, queryFn: () => api.get<ConnectView>('/api/connect') });

@@ -49,6 +49,8 @@ HANGUL = re.compile(r"[가-힣]")
 JSCPD_VERSION = "5.4.2"
 COUNT_DIRS = ("src/screens", "src/components", "src/charts")  # 토큰 셈 범위(ARCHITECTURE 6절 · 1단계)
 BLOCK_EDITOR = "src/screens/BlockEditor/"
+# 글 목록(`copy/texts.json`)에서 만든 화면 쪽 글 모듈(TASKS P1-11). 같은 글은 '글 목록 밖'에서만 세요(ARCHITECTURE 7절).
+TEXT_LIST = "src/copy/texts.gen.ts"
 
 # P1-01a 8-4 · P1-03 웹 지울 목록(web/ 기준)
 DELETED_WEB: tuple[str, ...] = (
@@ -223,7 +225,7 @@ def boundary_violations() -> dict[str, Any]:
 
 def jscpd(include_block_editor: bool = True, env: dict[str, str] | None = None) -> dict[str, Any]:
     # 만든 파일은 셈에서 빼요(ARCHITECTURE 7절 '시험 · 생성 파일 뺌' · 토큰 CSS · 글꼴 · P1-09의 OpenAPI 타입)
-    ignore = ["**/src/styles/tokens.css", "**/src/styles/pretendard.css", "**/src/api/types.gen.ts"]
+    ignore = ["**/src/styles/tokens.css", "**/src/styles/pretendard.css", "**/src/api/types.gen.ts", "**/src/copy/texts.gen.ts"]
     if not include_block_editor:
         ignore.append("**/src/screens/BlockEditor/**")
     with tempfile.TemporaryDirectory(prefix="quant-baseline-jscpd-") as d:
@@ -437,6 +439,8 @@ def same_text() -> dict[str, Any]:
     web_texts: set[str] = set()
     for p in src_files():
         r = rel(p)
+        if r == TEXT_LIST:  # 글 목록은 셈 밖(P1-11)
+            continue
         for text, line in screen_strings(p.read_text(encoding="utf-8")):
             if _eligible(text):
                 where[text].append(f"{r}:{line}")
@@ -459,7 +463,7 @@ def same_text() -> dict[str, Any]:
     from tests.baseline import counts as server_counts
     server_texts: dict[str, list[str]] = defaultdict(list)
     for p in server_counts.app_files():
-        if not server_counts.is_kept(p):
+        if not server_counts.is_kept(p) or server_counts.rel(p) == server_counts.TEXT_LIST:  # 글 목록은 셈 밖(P1-11)
             continue
         for text, line in server_counts._strings(server_counts._parse(p)):
             if _eligible(text):

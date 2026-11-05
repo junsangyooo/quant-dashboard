@@ -15,6 +15,8 @@ export type ApiErrorBody = components['schemas']['ErrorBody'];
 
 /** What the password dialog needs from a 403 `need_confirm` answer. */
 export type ConfirmAsk = { [K in 'action' | 'title']: NonNullable<ApiErrorBody[K]> };
+/** `POST /api/confirm` 응답(1회용 토큰 · `ConfirmToken` · types.gen.ts · 비밀번호 창이 받아요). */
+export type ConfirmToken = components['schemas']['ConfirmToken'];
 
 export const CONFIRM_HEADER = 'X-Confirm-Token';
 export const CSRF_HEADER = 'X-CSRF-Token';

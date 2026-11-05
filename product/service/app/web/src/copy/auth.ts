@@ -1,14 +1,16 @@
 // 처음 열기 · 로그인 · 비밀번호 다시 만들기 (Figma MVP-01~04).
 
+import { texts } from './texts.gen';
+
 export const authCopy = {
   setup: {
     eyebrow: '처음 열기',
-    title: '비밀번호 만들기',
+    title: texts.password_create,
     lead: '이 컴퓨터에서만 열리는 앱이에요 · 앱을 열 때마다 이 비밀번호로 로그인해요',
     password: '비밀번호',
     passwordHint: '8자 이상',
     password2: '비밀번호 다시 입력',
-    mismatch: '두 비밀번호가 달라요 · 다시 입력해 주세요',
+    mismatch: texts.password_mismatch,
     adult: '만 19세 이상이에요',
     termsTitle: '사용 조건',
     terms: [
@@ -48,13 +50,13 @@ export const authCopy = {
   },
   recover: {
     back: '로그인',
-    title: '비밀번호 다시 만들기',
+    title: texts.password_recover,
     lead: '마지막으로 받은 복구 코드 16자로 새 비밀번호를 만들어요',
     code: '복구 코드',
     codeHint: '16자',
     password: '새 비밀번호',
     passwordHint: '8자 이상',
-    password2: '새 비밀번호 다시 입력',
+    password2: texts.new_password_again,
     note: '쓴 복구 코드는 버리고 새 코드를 드려요 · 복구 코드를 틀려도 비밀번호 틀린 횟수에 더해져요',
     submit: '새 비밀번호 만들기',
   },

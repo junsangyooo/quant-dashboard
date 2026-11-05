@@ -18,6 +18,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from ..copy import texts as T
 from ..domain import blocks as bk
 from ..domain.copytext import read_body
 from ..store import paper as paper_store
@@ -37,7 +38,7 @@ RUNNING, ENDED = "v2-running", "v2-ended"
 ALREADY = "이 전략은 이미 모의투자 중이에요"
 DIFF_LINE = ("실전과 다른 점 · 체결은 일봉 시가로 계산해요(실제로는 호가에 따라 달라요) · 앱이 꺼진 날도 이어서 "
              "채워요 · 장중 손절은 고가 · 저가로 계산해요")
-START_LINE = "평일 20:10에 확인하고 다음 거래일 시가로 모의 체결해요 · 실제 돈은 움직이지 않아요"
+START_LINE = T.paper_start_line
 LIMITS_LINE = "한도 · 기본값 · 하루 손실 −3% · 종목당 40% · 주문 크기 2,000만 원"
 DAYS = "월화수목금토일"
 
@@ -78,7 +79,7 @@ class PaperV2:
     def _body(self, version_id: int) -> tuple[dict[str, Any], Any]:
         v = strategy_store.version(self.db, version_id)
         if v is None:
-            raise PaperError("그 버전이 없어요", 404)
+            raise PaperError(T.version_missing, 404)
         return read_body(json.loads(v["body"])), v
 
     def running_for(self, strategy_id: int) -> Any:
@@ -214,7 +215,7 @@ class PaperV2:
             # 거래일: 20:10 전이면 그날 20:10, 뒤면 시작하자마자(그날 20:10 확인을 바로) · 체결은 다음 거래일
             fill = cal.next_open(today)
             return {"check": today.isoformat(), "fill": fill.isoformat(),
-                    "line": f"첫 확인 {md(today)} 20:10 · 첫 모의 체결 {md(fill)} 시가"}
+                    "line": T.paper_first_check.format(check=md(today), fill=md(fill))}
         # 휴장일: 시작하자마자 마지막 일봉으로 확인(R-L11과 같은 꼴) · 체결은 다음 거래일
         fill = cal.next_open(today)
         return {"check": today.isoformat(), "fill": fill.isoformat(),

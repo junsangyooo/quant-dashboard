@@ -1,4 +1,6 @@
 // 설정 v2(V2-50 · V2-52 · V2-53 · V2-55 · V2-56).
+import { texts } from './texts.gen';
+
 export const settingsV2 = {
   title: '설정',
   back: '설정',
@@ -22,7 +24,7 @@ export const settingsV2 = {
     dataNone: '토스 일봉 아직 없음',
     password: '비밀번호 변경',
     passwordLine: '화면에 들어올 때와 돈이 움직이는 설정을 바꿀 때 써요',
-    about: '사용 조건 · 앱 정보',
+    about: texts.terms_about,
     aboutLine: (v: string, place: string, d: string) =>
       `버전 ${v} · ${place} · Tailscale로만 열려요 · ${d} 동의`,
   },
@@ -69,12 +71,11 @@ export const settingsV2 = {
     backup: '백업 파일 받기',
     restore: '복원',
     restorePick: '백업 파일 고르기',
-    restoreLine:
-      '복원하면 새 매수를 멈춘 채 시작해요 · 토스 주문 내역과 맞는지 확인한 뒤 다시 켜요',
-    deleteTitle: '앱 데이터 삭제',
+    restoreLine: texts.restore_line,
+    deleteTitle: texts.data_delete,
     deleteLine: '전략 · 기록 · 받은 시세를 모두 삭제해요 · 토스 계좌와 주문 내역은 그대로예요',
-    deleteBlocked: '실전 운용 중에는 삭제할 수 없어요 · 먼저 운용을 끝내요',
-    delete: '앱 데이터 삭제',
+    deleteBlocked: texts.delete_while_live,
+    delete: texts.data_delete,
   },
 
   access: {
@@ -93,11 +94,11 @@ export const settingsV2 = {
     recheck: '다시 확인',
     doc: '설치 문서',
     howTitle: '기기 추가하는 법',
-    noPublic: '공개 인터넷에는 열지 않아요',
+    noPublic: texts.no_public_internet,
   },
 
   about: {
-    title: '사용 조건 · 앱 정보',
+    title: texts.terms_about,
     terms: '사용 조건',
     agreed: (d: string) => `${d} 동의`,
     app: '앱 정보',

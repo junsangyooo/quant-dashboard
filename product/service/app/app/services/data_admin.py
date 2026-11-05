@@ -15,14 +15,15 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from ..copy import texts as T
 from ..store import data_admin as admin_store
 from ..store import runs as run_store
 from ..store.db import DB
 
 MAX_BACKUP = 512 * 1024 * 1024
 BACKUP_PREFIX = "quant-backup"
-RUNNING_LIVE = "실전 운용 중에는 삭제할 수 없어요 · 먼저 운용을 끝내요"
-RESTORE_LINE = "복원하면 새 매수를 멈춘 채 시작해요 · 토스 주문 내역과 맞는지 확인한 뒤 다시 켜요"
+RUNNING_LIVE = T.delete_while_live
+RESTORE_LINE = T.restore_line
 NOT_BACKUP = "이 앱의 백업 파일이 아니에요"
 CSV_COLUMNS = ["날짜", "종목", "구분", "가격", "수량", "손익", "상태", "이유"]  # V2-12 주문 내역 열
 SIDE = {"buy": "매수", "sell": "매도"}

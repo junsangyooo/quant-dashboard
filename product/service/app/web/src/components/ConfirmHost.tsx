@@ -1,7 +1,13 @@
 // V2-33 비밀번호 확인 창. api/client가 403 need_confirm을 받으면 여기로 물어요: 맞는 비밀번호면
 // 서버가 내준 1회용 토큰으로 같은 요청을 한 번 더 보내요. 틀린 횟수 · 잠금 글은 서버 글 그대로.
 import { useEffect, useState } from 'react';
-import { api, configureClient, isApiError, type ConfirmAsk } from '../api/client';
+import {
+  api,
+  configureClient,
+  isApiError,
+  type ConfirmAsk,
+  type ConfirmToken,
+} from '../api/client';
 import { confirmCopy as t } from '../copy/confirm';
 import { Button } from './Buttons';
 import { TextField } from './Field';
@@ -50,7 +56,7 @@ export function ConfirmHost() {
           if (!password || busy) return;
           setBusy(true);
           api
-            .post<{ token: string }>('/api/confirm', { password, action: pending.action })
+            .post<ConfirmToken>('/api/confirm', { password, action: pending.action })
             .then((r) => {
               close(r.token);
             })

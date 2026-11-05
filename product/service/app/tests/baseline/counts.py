@@ -30,6 +30,8 @@ from tests.baseline.scope import DELETED_MODULES
 
 APP = Path(__file__).resolve().parents[2]  # product/service/app
 HANGUL = re.compile(r"[가-힣]")
+# 글 목록(`copy/texts.json`)에서 만든 서버 쪽 글 모듈(TASKS P1-11). 같은 글은 '글 목록 밖'에서만 세요(ARCHITECTURE 7절).
+TEXT_LIST = "app/copy/texts.py"
 HHMM = re.compile(r"(?<![\d:])([01]?\d|2[0-3]):[0-5]\d(?![\d:])")
 SQL_WORDS = ("SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "PRAGMA", "WITH", "DROP", "ALTER", "BEGIN", "COMMIT")
 
@@ -421,7 +423,7 @@ def time_literals() -> dict[str, Any]:
 def same_text() -> dict[str, Any]:
     where: dict[str, list[str]] = defaultdict(list)
     for p in app_files():
-        if not is_kept(p):
+        if not is_kept(p) or rel(p) == TEXT_LIST:  # 글 목록은 셈 밖(P1-11)
             continue
         r = rel(p)
         for text, line in _strings(_parse(p)):

@@ -4,6 +4,8 @@
   (`scripts/gen_api_types.py`). 응답 모델을 바꾸고 다시 만들지 않으면 여기서 실패해요.
 - `web/src/api/*.ts`(생성 파일 빼고)는 응답 타입을 생성 타입의 이름으로만 가리켜요: 객체 꼴을 손으로 적은 `interface` ·
   `type X = { … }` · 타입 인자 `<{ … }>` · 글자 값 나열(`'a' | 'b'`) 0. API 응답이 아닌 것(아래 `NOT_API`)만 까닭과 함께 뺌.
+- `web/src` 전부(화면 · 부품 · 시험 밖 · 생성 파일 빼고): API 부르기의 타입 인자에 객체 꼴을 손으로 적지 않아요(`api.post<{ … }>` ·
+  `.get<{ … }>` · `put` · `delete` 0 · P1-09 검토 심각도 1을 P1-11에서 · 화면은 `web/src/api/*.ts`의 생성 타입 별칭을 써요).
 """
 
 from __future__ import annotations
@@ -24,6 +26,8 @@ TYPE_ALIAS = re.compile(r"^\s*(?:export\s+)?type\s+(\w+)\s*=\s*(.+?);\s*$", re.M
 OBJECT_LITERAL = re.compile(r"\{\s*(?:readonly\s+)?[A-Za-z_]\w*\??\s*:")  # `{ name: …` · `{ name?: …`(꼴을 손으로 적음)
 STRING_UNION = re.compile(r"^\(?\s*'[^']*'\s*\|")  # `'a' | 'b'`(서버 값 나열을 손으로 적음)
 TYPE_ARG = re.compile(r"<\s*\{")  # `api.get<{ … }>`
+CALL_TYPE_ARG = re.compile(r"\.(?:get|post|put|delete)\s*<\s*\{")  # 화면 파일의 `api.post<{ token: string }>(…)`
+WEB_SRC = API_DIR.parent
 
 
 def hand_written(text: str) -> list[str]:
@@ -56,6 +60,30 @@ def test_hand_written_check_catches_planted_types() -> None:
         "interface ClientConfig {\n  fetch: typeof fetch;\n}\n"
     )
     assert hand_written(planted) == ["interface LiveTodo", "type Card", "type Side", "type argument at line 6"]
+
+
+def call_type_args(text: str) -> list[int]:
+    """API 부르기 타입 인자에 손으로 적은 객체 꼴이 있는 줄."""
+    return [text[: m.start()].count(chr(10)) + 1 for m in CALL_TYPE_ARG.finditer(text)]
+
+
+def test_no_hand_written_api_type_args_in_web_src() -> None:
+    files = sorted(p for p in WEB_SRC.rglob("*") if p.suffix in (".ts", ".tsx") and p != GENERATED)
+    assert len(files) > 50
+    problems = {p.relative_to(WEB_SRC).as_posix(): lines for p in files
+                if (lines := call_type_args(p.read_text(encoding="utf-8")))}
+    assert problems == {}
+
+
+def test_call_type_arg_check_catches_planted_calls() -> None:
+    planted = (
+        "const r = await api.post<{ token: string }>('/api/confirm', b);\n"
+        "api\n  .get<{\n    ip: string }>('/api/x');\n"
+        "const ok = api.post<ConfirmToken>('/api/confirm', b);\n"
+        "const m = new Map<{ a: number }, string>();\n"
+        "api.put< { a: 1 } >('/x'); api.delete<{ ok: boolean }>('/y');\n"
+    )
+    assert call_type_args(planted) == [1, 3, 7, 7]
 
 
 def test_generated_api_types_are_up_to_date() -> None:

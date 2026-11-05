@@ -16,6 +16,7 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
+from ..copy import texts as T
 from ..ports import Broker, BrokerError, BrokerRejected
 from ..security.vault import Vault, VaultError
 from ..store.db import DB
@@ -28,7 +29,7 @@ CHECK_META = "toss.last_check"
 PROBE_SYMBOL = "005930"
 PROBE_NAME = "삼성전자"
 
-STEP_NAMES = {"token": "액세스 토큰 받기", "account": "계좌 찾기", "price": "삼성전자 현재가"}
+STEP_NAMES = {"token": T.step_token, "account": "계좌 찾기", "price": T.step_price}
 STEP_ORDER = ["token", "account", "price"]
 
 # kind -> (제목, 원인, 다음)
@@ -61,12 +62,12 @@ FAILURES: dict[str, tuple[str, str, str]] = {
     "shape": (
         "토스 응답 이상이에요",
         "토스가 보낸 응답의 형식이 맞지 않아요",
-        "잠시 뒤 다시 확인해요",
+        T.check_again_later,
     ),
     "error": (
         "연결을 확인하지 못했어요",
         "토스가 알 수 없는 답을 보냈어요",
-        "잠시 뒤 다시 확인해요",
+        T.check_again_later,
     ),
 }
 
@@ -194,7 +195,7 @@ class Connections:
         client = self.client()
         if client is None:
             if not self.vault.can_read:
-                raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
+                raise VaultError(T.locked_retry, 423)
             raise VaultError("API 키를 먼저 저장해 주세요")
         step = "token"
         kind = code = ""

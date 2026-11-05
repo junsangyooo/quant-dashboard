@@ -21,6 +21,8 @@ export default defineConfig(
       'scripts/figma/dump.js',
       // Generated from the server's OpenAPI (product/service/app/scripts/gen_api_types.py) · not edited by hand.
       'src/api/types.gen.ts',
+      // Generated from the text list copy/texts.json (product/service/app/scripts/gen_texts.py) · not edited by hand.
+      'src/copy/texts.gen.ts',
     ],
   },
   js.configs.recommended,

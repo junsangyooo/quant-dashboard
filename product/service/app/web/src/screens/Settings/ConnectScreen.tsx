@@ -4,7 +4,13 @@ import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { CircleCheck, CircleX, Clock, Hourglass, Circle, Info } from 'lucide-react';
 import { api, isApiError } from '../../api/client';
-import { useConnect, type CheckResult, type CheckStep, type ConnectView } from '../../api/connect';
+import {
+  useConnect,
+  type CheckResult,
+  type CheckStep,
+  type ConnectView,
+  type PublicIp,
+} from '../../api/connect';
 import { usePost } from '../../api/query';
 import { Box } from '../../components/Box';
 import { Button, ExpandButton, CollapseButton } from '../../components/Buttons';
@@ -32,7 +38,7 @@ function usePublicIp() {
     setBusy(true);
     setError(null);
     try {
-      setIp((await api.post<{ ip: string }>('/api/public-ip')).ip);
+      setIp((await api.post<PublicIp>('/api/public-ip')).ip);
     } catch (e) {
       setError(isApiError(e) ? e.message : copy.common.noConnection);
     } finally {

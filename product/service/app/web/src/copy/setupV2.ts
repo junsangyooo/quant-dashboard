@@ -1,11 +1,13 @@
 // 처음 실행 마법사(V2-01 · V2-02 · V2-05 ~ V2-09) · 로그인(V2-03).
+import { texts } from './texts.gen';
+
 export const setupV2 = {
   eyebrow: '처음 실행',
   prev: '이전',
   next: '다음',
   skip: '건너뛰기',
   steps: [
-    '비밀번호 만들기',
+    texts.password_create,
     '복구 코드',
     '설치 위치',
     'Tailscale',
@@ -16,7 +18,7 @@ export const setupV2 = {
   stepOf: (n: number) => `${String(n)}/7`,
 
   password: {
-    title: '비밀번호 만들기',
+    title: texts.password_create,
     lead: '비밀번호는 8자 이상이에요 · 화면에 들어올 때와 돈이 움직이는 설정을 바꿀 때 써요',
     termsTitle: '사용 조건',
     full: '전문 보기',
@@ -24,7 +26,7 @@ export const setupV2 = {
       '개인 사용이에요 · 내 계좌로 내가 정해서 써요',
       '투자 판단과 손익은 내 몫이에요',
       '있는 그대로 제공해요 · 업데이트와 지원은 약속하지 않아요',
-      '앱 오류 · 연결 · 컴퓨터 꺼짐으로 주문이 늦거나 안 나갈 수 있어요',
+      texts.order_risk,
       '데이터는 토스 · DART에서 받아요 · 상장폐지 종목은 없어요',
     ],
   },
@@ -39,10 +41,10 @@ export const setupV2 = {
   place: {
     title: '설치 위치',
     lead: '이 앱은 늘 켜져 있는 컴퓨터 하나에서 실행돼요 · 주문과 손절도 그 컴퓨터가 내요',
-    server: '서버(클라우드 · 고정 IP)',
+    server: texts.place_server,
     serverLine: '허용 IP에 이 서버의 고정 IP를 그대로 등록해요',
     serverNotes: ['서울 리전을 권해요', '화면은 Tailscale로만 열어요 · 필수예요'],
-    pc: '늘 켜 둔 PC',
+    pc: texts.place_pc,
     pcLine: '집 인터넷의 공인 IP가 바뀔 수 있어요 · 바뀌면 할 일로 알려요',
     pcNotes: ['절전 모드를 꺼 두어요', '휴대폰으로 보려면 Tailscale을 써요 · 선택이에요'],
     laptop: '노트북은 권하지 않아요 · 덮개를 닫거나 와이파이를 바꾸면 주문과 손절이 멈춰요',
@@ -70,7 +72,7 @@ export const setupV2 = {
       '이 컴퓨터와 같은 계정으로 로그인해요',
       '브라우저에서 화면 주소를 열어요',
     ],
-    noPublic: '공개 인터넷에는 열지 않아요',
+    noPublic: texts.no_public_internet,
   },
 
   toss: {

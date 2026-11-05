@@ -17,6 +17,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from ..copy import texts as T
 from ..ports import Clock, TelegramError
 from ..security.vault import Vault, VaultError
 from ..store import todos as todo_store
@@ -30,8 +31,8 @@ LINK_TAIL = "앱에서 보기"
 
 # 사건 스위치(V2-52). locked = 끌 수 없음(SPEC 5-6), default = 처음 값.
 EVENTS: dict[str, dict[str, Any]] = {
-    "precheck": {"title": "08:30 장 시작 전 점검", "locked": True, "default": True},
-    "check_done": {"title": "20:10 확인 끝", "locked": False, "default": True},
+    "precheck": {"title": T.event_precheck, "locked": True, "default": True},
+    "check_done": {"title": T.event_check_done, "locked": False, "default": True},
     "fills": {"title": "체결", "locked": False, "default": True},
     "order_failed": {"title": "주문 실패", "locked": True, "default": True},
     "todo_red": {"title": "급한 할 일", "locked": True, "default": True},
@@ -57,20 +58,20 @@ def safe_text(text: str) -> str:
 
 def msg_precheck(passed: bool, orders: int) -> str:
     if passed:
-        return f"장 시작 전 점검 · 통과 · 08:35 주문 {orders}건"
-    return f"장 시작 전 점검 · 실패 · 오늘 주문 멈춤 · {LINK_TAIL}"
+        return T.precheck_passed.format(n=orders)
+    return T.precheck_failed
 
 
 def msg_check_done(orders: int) -> str:
-    return f"확인 끝 · 내일 주문 {orders}건"
+    return T.notify_check_done.format(n=orders)
 
 
 def msg_fills(n: int, live: bool = True) -> str:
-    return f"{'실전' if live else '모의'} · 체결 {n}건 · {LINK_TAIL}"
+    return T.notify_fills.format(mode='실전' if live else '모의', n=n)
 
 
 def msg_order_failed(n: int) -> str:
-    return f"실전 · 주문 실패 {n}건 · {LINK_TAIL}"
+    return T.notify_order_failed.format(n=n)
 
 
 def msg_todo(title: str) -> str:
@@ -204,7 +205,7 @@ class Telegram:
         bot = self._bot()
         if bot is None:
             if self.vault.has_secret(TOKEN):
-                raise VaultError("잠금 · 비밀번호를 입력하면 다시 실행돼요", 423)
+                raise VaultError(T.locked_retry, 423)
             raise TelegramError("봇 토큰을 먼저 입력해 주세요", "token")
         return bot
 

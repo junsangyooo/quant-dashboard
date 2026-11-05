@@ -19,6 +19,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Request
 from pydantic import Field
 
+from ..copy import texts as T
 from ..domain import blocks as bk
 from ..domain import catalog as cat
 from ..domain import copytext as ct
@@ -457,9 +458,9 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         try:
             data = await request.json()
         except ValueError:
-            raise ApiError("요청 형식이 맞지 않아요") from None
+            raise ApiError(T.bad_request) from None
         if not isinstance(data, dict):
-            raise ApiError("요청 형식이 맞지 않아요")
+            raise ApiError(T.bad_request)
         return data
 
     def normalize(raw: Any) -> dict[str, Any]:
@@ -516,7 +517,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
     def export_file(sid: int) -> dict[str, Any]:
         v = strategy_store.latest_version(db, sid)
         if v is None:
-            raise ApiError("그 전략이 없어요", 404)
+            raise ApiError(T.strategy_missing, 404)
         body = stored_body(v)
         body.pop("converted", None)
         return {"name": f"{body['name']}.json", "text": ct.to_file(body)}
@@ -524,7 +525,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
     @r.delete("/strategies/{sid}", response_model=OkOut, response_model_exclude_unset=True)
     def delete(sid: int) -> dict[str, Any]:
         if not strategy_store.has_strategy(db, sid):
-            raise ApiError("그 전략이 없어요", 404)
+            raise ApiError(T.strategy_missing, 404)
         if used is not None and used(sid):
             raise ApiError(DELETE_BLOCKED, 409)
         strategy_jobs.delete(db, sid)
@@ -534,7 +535,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
     def backtest_input(vid: int) -> dict[str, Any]:
         v = strategy_store.version(db, vid)
         if v is None:
-            raise ApiError("그 버전이 없어요", 404)
+            raise ApiError(T.version_missing, 404)
         body = stored_body(v)
         s_ = strategy_store.strategy_name_row(db, v["strategy_id"])
         from ..backtest_v2 import CHIPS, JUDGE_LINE, default_range
@@ -550,10 +551,10 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         try:
             vid = int(data.get("version_id"))  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            raise ApiError("전략 버전을 골라 주세요") from None
+            raise ApiError(T.pick_version) from None
         v = strategy_store.version(db, vid)
         if v is None:
-            raise ApiError("그 버전이 없어요", 404)
+            raise ApiError(T.version_missing, 404)
         body = stored_body(v)
         try:
             start = datetime.strptime(str(data.get("start")), "%Y-%m-%d").date()
@@ -562,7 +563,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         except (TypeError, ValueError):
             raise ApiError("기간과 시작 금액 형식이 맞지 않아요") from None
         if backtester is None:
-            raise ApiError("백테스트를 할 수 없어요", 503)
+            raise ApiError(T.backtest_unavailable, 503)
         res = await asyncio.to_thread(backtester, body, start, end, cash)
         strategy_jobs.record_backtest(db, vid, now(), start, end, cash)
         res["ran_day"] = md_day(res["ran_at"])
@@ -583,10 +584,10 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
     def strategy(sid: int) -> dict[str, Any]:
         s = strategy_store.strategy(db, sid)
         if s is None:
-            raise ApiError("그 전략이 없어요", 404)
+            raise ApiError(T.strategy_missing, 404)
         v = strategy_store.latest_version(db, sid)
         if v is None:
-            raise ApiError("그 전략이 없어요", 404)
+            raise ApiError(T.strategy_missing, 404)
         body = stored_body(v)
         body["name"] = s["name"]
         versions = [version_view(x)
@@ -605,7 +606,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
     @r.post("/strategies/{sid}/versions", response_model=SavedVersion, response_model_exclude_unset=True)
     async def new_version(sid: int, request: Request) -> dict[str, Any]:
         if not strategy_store.has_strategy(db, sid):
-            raise ApiError("그 전략이 없어요", 404)
+            raise ApiError(T.strategy_missing, 404)
         data = await body_of(request)
         body = normalize(data.get("body"))
         return strategy_jobs.save_version(db, sid, body, dart=dart(), now=now)
@@ -614,7 +615,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
     def copytext(sid: int) -> dict[str, Any]:
         v = strategy_store.latest_version(db, sid)
         if v is None:
-            raise ApiError("그 전략이 없어요", 404)
+            raise ApiError(T.strategy_missing, 404)
         body = stored_body(v)
         body.pop("converted", None)
         return {"text": ct.to_copy_text(body)}

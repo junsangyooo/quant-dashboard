@@ -1,14 +1,16 @@
 // 백테스트(그림 V2-26 · SPEC 7-3 · 8-2 · ENGINE-RULES R-O7).
+import { texts } from './texts.gen';
+
 export const backtestV2 = {
   title: '백테스트',
-  version: (n: number) => `버전 ${String(n)}`,
+  version: (n: number) => texts.version({ n }),
   inputTitle: '기간 · 시작 금액',
   start: '시작',
   end: '끝',
   firstLine: (d: string, reason: string) => `이 전략은 ${d}부터 볼 수 있어요 · ${reason}`,
   cash: '시작 금액',
   won: '원',
-  cashRange: '10만 원 ~ 100억 원',
+  cashRange: texts.cash_range,
   run: '백테스트 실행',
   running: '실행 중',
   emptyTitle: '기간과 시작 금액을 정하고 실행해요',
@@ -21,7 +23,7 @@ export const backtestV2 = {
   trades: '거래 횟수',
   tradesValue: (n: number) => `${n.toLocaleString()}회`,
   winRate: '승률',
-  bench: '같은 기간 코스피',
+  bench: texts.same_period_kospi,
   moneyLine: (from: string, to: string, cost: string) =>
     `${from}원 → ${to}원 · 거래비용 ${cost}원 반영`,
   legendMine: '전략',

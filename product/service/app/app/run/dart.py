@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
+from ..copy import texts as T
 from ..domain.markets.kr import KST
 from ..ports import DisclosureSource, DisclosureSourceError
 from ..store import dart as dart_store
@@ -116,7 +117,7 @@ class DartStore:
 
     def _count(self) -> None:
         if self.used_today() >= self.daily_limit:
-            raise DisclosureSourceError("하루 20,000건을 넘었어요 · 내일 이어서 받아요", "limit")
+            raise DisclosureSourceError(T.dart_daily_limit, "limit")
         dart_store.count_request(self.db, self.today().isoformat())
 
     def _limit_reached(self) -> None:
@@ -175,7 +176,7 @@ class DartStore:
         except DisclosureSourceError as exc:
             if exc.kind == "limit":
                 self._limit_reached()
-                self._state("limit", "하루 20,000건을 넘었어요 · 내일 이어서 받아요")
+                self._state("limit", T.dart_daily_limit)
             elif exc.kind == "key":
                 self._state("key", exc.message)
             else:

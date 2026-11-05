@@ -18,6 +18,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Request
 from pydantic import Field, create_model
 
+from ..copy import texts as T
 from ..domain import blocks as bkm
 from ..domain.copytext import read_body
 from ..domain.markets.kr import KST
@@ -339,7 +340,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         """V2-30 ① 확인할 것: 토스 연결 · 백테스트 함 · 다른 운용 없음 · 텔레그램 · 설치 위치 · 손절 없음(R-X10)."""
         v = strategy_store.version_with_name(db, version_id)
         if v is None:
-            raise LiveError("그 버전이 없어요", 404)
+            raise LiveError(T.version_missing, 404)
         body = json.loads(v["body"])
         g = read_body(body)["graph"]
         stop = any(r["item"] in ("stop_loss", "trailing_stop") and bkm.exec_of(g, b["id"], i) in ("intraday", "broker")
@@ -417,7 +418,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         b = await json_body(request)
         t = todo_store.todo_of_kind(db, tid, "unknown")
         if t is None:
-            raise LiveError("그 할 일이 없어요", 404)
+            raise LiveError(T.todo_missing, 404)
         live.resolve_unknown(_rid(), int(json.loads(t["data"])["order"]), filled_qty=int(b.get("filled_qty") or 0),
                              price=float(b.get("price") or 0))
         return summary(live)
@@ -427,7 +428,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         need_confirm(request, "todo_corp_action")
         t = todo_store.todo_of_kind(db, tid, "corp")
         if t is None:
-            raise LiveError("그 할 일이 없어요", 404)
+            raise LiveError(T.todo_missing, 404)
         live.apply_corp(_rid(), t["symbol"])
         return summary(live)
 
@@ -436,7 +437,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         need_confirm(request, "todo_match_account")
         t = todo_store.todo_of_kind(db, tid, "mismatch")
         if t is None:
-            raise LiveError("그 할 일이 없어요", 404)
+            raise LiveError(T.todo_missing, 404)
         live.match_account(_rid(), t["symbol"])
         return summary(live)
 

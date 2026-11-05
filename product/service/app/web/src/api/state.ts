@@ -6,6 +6,8 @@ import type { components } from './types.gen';
 
 /** 서버 응답 모델 `AppState`(types.gen.ts) · `restarted`: 서버가 다시 켜진 뒤 아직 한 번도 로그인하지 않았다('앱을 다시 켰어요' 안내). */
 export type AppState = components['schemas']['AppState'];
+/** `POST /api/setup` · `POST /api/recover` 응답(새 복구 코드 · `RecoveryOut` · types.gen.ts). */
+export type RecoveryOut = components['schemas']['RecoveryOut'];
 
 export const useAppState = () =>
   useQuery({ queryKey: keys.state, queryFn: () => api.get<AppState>('/api/state') });
