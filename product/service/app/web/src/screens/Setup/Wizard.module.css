@@ -1,26 +1,24 @@
 /* 처음 실행 마법사 · 설정 v2 두 칸 틀(그림 V2-01 ~ V2-09 · V2-52 · V2-53 · V2-55 · V2-56). 토큰만 써요. */
 
 .page {
-  --bar-off: var(--color-neutral-3);
-  --step-bg: var(--color-accent-0);
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
+  gap: var(--space-block);
   width: 100%;
-  max-width: var(--size-1200);
+  max-width: var(--layout-content-max);
   margin: 0 auto;
-  padding: var(--space-24) var(--space-16);
+  padding: var(--space-grid) var(--space-block);
 }
 
 .steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .stepLabel {
   display: flex;
-  gap: var(--space-8);
+  gap: var(--space-inline);
   color: var(--text-muted);
 }
 
@@ -31,13 +29,13 @@
 .bar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-tight);
 }
 
 .seg {
-  height: var(--space-4);
-  border-radius: var(--radius-full);
-  background: var(--bar-off);
+  height: var(--space-tight);
+  border-radius: var(--radius-pill);
+  background: var(--chart-track);
 }
 
 .segOn {
@@ -47,7 +45,7 @@
 .head {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-tight);
 }
 
 .eyebrow {
@@ -61,33 +59,33 @@
 .cols {
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
+  gap: var(--space-block);
 }
 
 .main,
 .side {
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
+  gap: var(--space-block);
   min-width: 0;
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
-  border-radius: var(--radius-lg);
+  gap: var(--space-row);
+  padding: var(--space-section);
+  border-radius: var(--radius-card);
   background: var(--bg-subtle);
 }
 
 .outline {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
+  gap: var(--space-row);
+  padding: var(--space-section);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--bg-default);
 }
 
@@ -95,13 +93,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .howList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--space-row);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -110,23 +108,23 @@
 .howItem {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--space-24);
-  border-radius: var(--radius-full);
-  background: var(--step-bg);
+  min-width: var(--space-grid);
+  border-radius: var(--radius-pill);
+  background: var(--chart-band);
   color: var(--accent-default);
 }
 
 .status {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .statusBad {
@@ -143,7 +141,7 @@
 
 .buttons {
   display: flex;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 .grow {
@@ -153,16 +151,16 @@
 .choices {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-16);
+  gap: var(--space-block);
 }
 
 .choice {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-20);
+  gap: var(--space-inline);
+  padding: var(--space-section);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--bg-default);
   text-align: left;
   cursor: pointer;
@@ -175,7 +173,7 @@
 .notes {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-tight);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -185,13 +183,13 @@
 .kv {
   display: flex;
   justify-content: space-between;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 .link {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-tight);
   align-self: flex-start;
   color: var(--accent-default);
 }
@@ -200,19 +198,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 @media (min-width: 900px) {
   .page {
-    padding: var(--space-24) var(--space-24) calc(2 * var(--space-24));
+    padding: var(--space-grid) var(--space-grid) calc(2 * var(--space-grid));
   }
 
   .cols {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 400px;
     align-items: start;
-    gap: var(--space-24);
+    gap: var(--space-grid);
   }
 
   .choices {

@@ -1,35 +1,33 @@
 /* 실전 화면(그림 V2-10 ~ V2-14 · V2-30 · V2-32). 토큰만 써요. */
 
 .runCard {
-  --card-line: var(--text-primary);
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
-  padding: var(--space-24);
-  border: 2px solid var(--card-line);
-  border-radius: var(--radius-lg);
+  gap: var(--space-block);
+  padding: var(--space-grid);
+  border: 2px solid var(--text-primary);
+  border-radius: var(--radius-card);
 }
 
 .big {
-  font-size: var(--font-size-32);
-  line-height: var(--font-line-40);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line-height);
+  font-weight: var(--type-display-weight);
 }
 
 .chips {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .chip {
-  --chip-bg: var(--color-neutral-3);
   display: inline-flex;
   align-items: center;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-full);
-  background: var(--chip-bg);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-pill);
+  background: var(--border-default);
 }
 
 .chipOk {
@@ -41,8 +39,8 @@
 }
 
 .chipDark {
-  padding: var(--space-4) var(--space-12);
-  border-radius: var(--radius-full);
+  padding: var(--space-tight) var(--space-row);
+  border-radius: var(--radius-pill);
   background: var(--text-primary);
   color: var(--text-inverse);
 }
@@ -60,31 +58,31 @@
 }
 
 .dot {
-  margin-right: var(--space-8);
+  margin-right: var(--space-inline);
 }
 
 .kv {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-tight);
 }
 
 .grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 .grid4 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 .steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-inline);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -95,8 +93,8 @@
 .histRow {
   display: grid;
   align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-12) 0;
+  gap: var(--space-row);
+  padding: var(--space-row) 0;
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -114,9 +112,9 @@
 
 .side {
   display: inline-flex;
-  padding: 0 var(--space-8);
+  padding: 0 var(--space-inline);
   border: 1px solid currentcolor;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 .buy {
@@ -128,9 +126,9 @@
 }
 
 .filter {
-  padding: var(--space-4) var(--space-12);
+  padding: var(--space-tight) var(--space-row);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   background: var(--bg-default);
   cursor: pointer;
 }
@@ -144,15 +142,15 @@
 .todo {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-8) 0;
+  gap: var(--space-inline);
+  padding: var(--space-inline) 0;
   border-bottom: 1px solid var(--border-default);
 }
 
 .todoHead {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-inline);
   padding: 0;
   border: 0;
   background: none;

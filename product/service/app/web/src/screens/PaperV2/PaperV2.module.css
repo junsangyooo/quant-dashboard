@@ -1,43 +1,38 @@
 /* 모의투자 탭(그림 V2-40 ~ V2-42). 토큰만 써요. */
 
 .page {
-  --paper-dash: var(--color-accent-2);
-  --chip-on-bg: var(--color-neutral-4);
-  --diff-bg: var(--color-neutral-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
-  max-width: var(--size-1200);
+  gap: var(--space-block);
+  max-width: var(--layout-content-max);
   margin: 0 auto;
-  padding: var(--space-24) var(--space-16);
+  padding: var(--space-grid) var(--space-block);
 }
 
 .back2 {
-  --diff-bg: var(--color-neutral-4);
-  --chip-warn-bg: var(--color-amber-0);
   position: fixed;
   inset: 0;
   z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-overlay-1);
+  background: var(--bg-scrim);
 }
 
 .sheet {
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
+  gap: var(--space-block);
   width: 560px;
-  padding: var(--space-24);
-  border-radius: var(--radius-lg);
+  padding: var(--space-grid);
+  border-radius: var(--radius-card);
   background: var(--bg-default);
 }
 
 .title {
-  font-size: var(--font-size-24);
-  line-height: var(--font-line-32);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line-height);
+  font-weight: var(--type-display-weight);
 }
 
 .muted {
@@ -55,38 +50,38 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
-  gap: var(--space-20);
+  gap: var(--space-section);
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
-  border: 1.5px dashed var(--paper-dash);
-  border-radius: var(--radius-lg);
+  gap: var(--space-row);
+  padding: var(--space-section);
+  border: 1.5px dashed var(--chart-paper);
+  border-radius: var(--radius-card);
 }
 
 .rowBetween {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 .chips {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .chip {
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-full);
+  padding: var(--space-tight) var(--space-inline);
+  border-radius: var(--radius-pill);
 }
 
 .chipOn {
-  background: var(--chip-on-bg);
+  background: var(--mode-paper-bg);
   color: var(--accent-default);
 }
 
@@ -96,74 +91,74 @@
 }
 
 .chipVirtual {
-  padding: var(--space-4) var(--space-8);
+  padding: var(--space-tight) var(--space-inline);
   border: 1px solid var(--accent-default);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   color: var(--accent-default);
 }
 
 .link {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-tight);
   color: var(--accent-default);
 }
 
 .amount {
-  font-size: var(--font-size-24);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-title-size);
+  font-weight: var(--type-display-weight);
 }
 
 .big {
-  font-size: var(--font-size-32);
-  line-height: var(--font-line-40);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line-height);
+  font-weight: var(--type-display-weight);
 }
 
 .legend {
   display: flex;
-  gap: var(--space-16);
+  gap: var(--space-block);
   color: var(--text-muted);
 }
 
 .empty {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-20);
-  border-radius: var(--radius-lg);
+  gap: var(--space-tight);
+  padding: var(--space-section);
+  border-radius: var(--radius-card);
   background: var(--bg-subtle);
 }
 
 .past {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
-  border-radius: var(--radius-lg);
+  gap: var(--space-row);
+  padding: var(--space-section);
+  border-radius: var(--radius-card);
   background: var(--bg-subtle);
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-tight);
   color: var(--text-muted);
 }
 
 .diff {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-12) var(--space-16);
-  border-radius: var(--radius-sm);
-  background: var(--diff-bg);
+  gap: var(--space-inline);
+  padding: var(--space-row) var(--space-block);
+  border-radius: var(--radius-control);
+  background: var(--mode-paper-bg);
 }
 
 .tab {
-  padding: var(--space-4) var(--space-12);
+  padding: var(--space-tight) var(--space-row);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 .tabOn {
@@ -175,57 +170,57 @@
 .cols {
   display: grid;
   grid-template-columns: 400px 1fr;
-  gap: var(--space-20);
+  gap: var(--space-section);
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 .kvCard {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
-  border-radius: var(--radius-lg);
+  gap: var(--space-row);
+  padding: var(--space-section);
+  border-radius: var(--radius-card);
   background: var(--bg-subtle);
 }
 
 .side {
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-tight);
   border: 1px solid currentcolor;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-tight);
 }
 
 .cashBox {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-inline);
 }
 
 .input {
   width: 100%;
-  padding: var(--space-12);
+  padding: var(--space-row);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   font: inherit;
 }
 
 .warn {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-12);
-  border-radius: var(--radius-sm);
-  background: var(--chip-warn-bg);
+  gap: var(--space-tight);
+  padding: var(--space-row);
+  border-radius: var(--radius-control);
+  background: var(--status-warning-subtle);
 }
 
 .error {
@@ -234,7 +229,7 @@
 
 .buttons {
   display: flex;
-  gap: var(--space-12);
+  gap: var(--space-row);
 }
 
 @media (max-width: 1023px) {
