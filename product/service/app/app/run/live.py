@@ -24,7 +24,8 @@ from typing import Any
 from ..domain import blocks as bk
 from ..domain.catalog import CATALOG
 from ..domain.copytext import read_body
-from ..domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
+from ..domain.costs import DIVIDEND_WITHHOLDING, FEE, SELL_TAX
+from ..domain.engine import PROTECT_ITEMS, Engine, MarketData, universe_of, warmup_calendar_days
 from ..domain.indicators import Series
 from ..domain.markets.kr import BASE_OPEN, KST, complete_until
 from ..domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor
@@ -866,7 +867,7 @@ class Live:
         last_cash = self.meta(rid, "acct_cash")
         if last_cash is not None:
             inc = acct_cash - float(last_cash)
-            div = sum(int(p["qty"]) * (self.dps(s) or 0) * (1 - 0.154) for s, p in st["pos"].items())
+            div = sum(int(p["qty"]) * (self.dps(s) or 0) * (1 - DIVIDEND_WITHHOLDING) for s, p in st["pos"].items())
             if inc > 0 and div > 0 and abs(inc - div) <= max(1.0, div * 0.01):
                 st["cash"] = float(st["cash"]) + div
                 out["dividend"] = div

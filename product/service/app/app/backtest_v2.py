@@ -16,9 +16,10 @@ from typing import Any
 from .domain import blocks as bk
 from .domain import fundamentals as fu
 from .domain.catalog import CATALOG, start_date
+from .domain.costs import FEE, SELL_TAX
 from .store import dart as dart_store
 from .store.db import DB
-from .domain.engine import FEE, SELL_TAX, BacktestError, MarketData, run_backtest, warmup_calendar_days
+from .domain.engine import BacktestError, MarketData, run_backtest, warmup_calendar_days
 from .domain.indicators import Series
 from .run.data import INDEX, Market, MarketDataError
 from .ports import Disclosures

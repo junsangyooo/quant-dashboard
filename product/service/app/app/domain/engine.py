@@ -9,7 +9,7 @@
    시가 · 같은 날 손절과 익절이 둘 다 닿으면 손절 · R-X4 · R-J8).
 3. 종가: 자산을 평가하고, 확인해서 다음 거래일 시가 계획을 만들어요.
 
-비용 · 수량은 v1 식 그대로(R-B1 · R-B3): 수수료 0.015%, 매도 세금 0.18%, 수량 = ⌊min(목표, 쓸 수 있는 현금) ÷
+비용 · 수량은 v1 식 그대로(R-B1 · R-B3): 수수료 · 매도 세금은 `costs.py` 표(P1-10), 수량 = ⌊min(목표, 쓸 수 있는 현금) ÷
 (시가 × (1 + 수수료))⌋. 변환한 v1 전략은 동점 · 강도를 v1 규칙으로 셈해요(R-J6 · R-M5).
 """
 
@@ -25,12 +25,11 @@ from typing import Any
 from . import blocks as bk
 from .catalog import CATALOG, STAGE_CIRCLE, start_date
 from .copytext import V1_MARK, read_body
+from .costs import FEE, SELL_TAX
 from .indicators import Series
 
 __all__ = ["Series", "Engine", "MarketData", "run_backtest", "universe_of", "warmup_calendar_days", "BacktestError"]
 
-FEE = 0.00015
-SELL_TAX = 0.0018
 PLAN_TRIES = 3  # 그 종목 일봉이 없는 날(거래 정지 등)은 계획을 넘기되, 세 번까지(v1)
 GAP_LIMIT = 0.10  # 실전 지정가 상한 · 하한 ±10%(R-O3 · R-O5 · R-O7)
 PROTECT_ITEMS = ("stop_loss", "trailing_stop", "disclosure")  # 보호 줄(R-O4)
