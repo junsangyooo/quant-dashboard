@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from app.transport import HttpRequest, HttpResponse, TransportError
+from app.adapters.transport import HttpRequest, HttpResponse, TransportError
 from tests import openapi_check as oc
 
 KST = timezone(timedelta(hours=9))

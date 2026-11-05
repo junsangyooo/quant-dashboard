@@ -1,6 +1,7 @@
 """텔레그램(T-52 · SPEC 5-6 · V2-08 · V2-52): 고객 자신의 봇 하나 · 등록한 대화방 하나 · 명령 둘.
 
-- 전송은 `transport.Transports.telegram`(기본 가짜 · T-00). 이 파일은 소켓을 쓰지 않아요.
+- 봇 API 보내기는 어댑터 `adapters/telegram.py`(`Bot` · 전송은 `transport.Transports.telegram` · 기본 가짜 · T-00)예요.
+  이 파일은 설정 · 알림(`Notifier` 포트 · `notify`) · 명령 받기예요(명령 받기는 P1-09에서 `services/`로). 소켓을 쓰지 않아요.
 - 봇 토큰은 금고(`vault`)에, 대화방 번호 · 봇 이름 · 마지막 보낸 시각은 meta에. 토큰은 글 · 예외 · 로그에 넣지 않아요.
 - 본문에는 종목 · 금액을 넣지 않아요(`safe_text`가 막아요). 종목은 앱 안 할 일 제목에만.
 - 명령은 `/상태`와 `/멈춤`(새 매수 멈춤) 둘뿐이고, 등록한 대화방에서 온 것만 받아요. 켜는 쪽 명령은 없어요.
@@ -16,13 +17,13 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from .adapters.telegram import Bot, TelegramError
+from .adapters.transport import Transport
 from .db import DB
-from .transport import HttpRequest, Transport, TransportError
 from .vault import Vault, VaultError
 
 log = logging.getLogger("quant-mvp")
 
-API = "https://api.telegram.org"
 TOKEN = "telegram_token"
 TOKEN_RE = re.compile(r"^\d{5,12}:[A-Za-z0-9_-]{30,64}$")
 FAIL_TITLE = "텔레그램 보내기 실패"
@@ -44,16 +45,6 @@ EVENTS: dict[str, dict[str, Any]] = {
 # 본문에 들어가면 안 되는 것: 종목 코드(6자리) · 금액(원 · 쉼표 숫자)
 _SYMBOL = re.compile(r"(?<!\d)\d{6}(?!\d)")
 _MONEY = re.compile(r"\d[\d,]*\s*원|\d{1,3}(,\d{3})+")
-
-
-class TelegramError(Exception):
-    """화면에 그대로 보여도 되는 글(토큰 없음). kind: token · chat · send · locked."""
-
-    def __init__(self, message: str, kind: str = "send", status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.kind = kind
-        self.status = status
 
 
 def safe_text(text: str) -> str:
@@ -104,39 +95,6 @@ def msg_status(state: dict[str, Any]) -> str:
 PAUSED_REPLY = "새 매수를 멈췄어요 · 매도 · 손절은 그대로 나가요 · 다시 켜기는 앱에서 비밀번호로"
 ALREADY_PAUSED = "이미 새 매수 멈춤이에요 · 다시 켜기는 앱에서 비밀번호로"
 HELP_REPLY = "명령은 /상태 · /멈춤 둘이에요"
-
-
-# ── 봇 API ───────────────────────────────────────────────────────────────────
-
-
-class Bot:
-    def __init__(self, token: str, transport: Transport) -> None:
-        self._token = token
-        self.transport = transport
-
-    def __repr__(self) -> str:  # 토큰을 남기지 않아요
-        return "Bot(<token hidden>)"
-
-    def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
-        req = HttpRequest(
-            "POST", f"{API}/bot{self._token}/{method}", {"Content-Type": "application/json"},
-            json.dumps(params or {}).encode(),
-        )
-        try:
-            res = self.transport(req)
-        except TransportError:
-            raise TelegramError("텔레그램에 닿지 않아요 · 인터넷 연결을 확인해 주세요", "send", 502) from None
-        try:
-            data = json.loads(res.body or b"{}")
-        except ValueError:
-            data = {}
-        if res.status in (401, 404):
-            raise TelegramError("봇 토큰이 맞지 않아요 · BotFather에서 받은 토큰을 확인해요", "token")
-        if res.status == 403:
-            raise TelegramError("봇이 대화방에 보낼 수 없어요 · 봇에게 /start를 다시 보내 주세요", "chat")
-        if res.status >= 400 or not data.get("ok"):
-            raise TelegramError("텔레그램이 요청을 받지 않았어요 · 잠시 뒤 다시 해 주세요", "send", 502)
-        return data.get("result")
 
 
 # ── 서비스 ───────────────────────────────────────────────────────────────────

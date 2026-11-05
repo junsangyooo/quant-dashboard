@@ -9,7 +9,7 @@
 두 열쇠를 읽는 것은 설정 층(`settings.live_enabled` · 환경 변수 · 설정 파일은 그 파일만 읽음)이고, 이 문은 그 판정으로만
 실제 전송 객체를 만들어요(조립이 `settings.load()`로 한 번 읽은 값을 넘겨요).
 
-개발 · 시험 · `./start.sh`는 이 둘을 만들지 않아요. 앱 코드의 다른 파일은 `urllib.request` ·
+둘 중 하나라도 없으면 `fake.py`의 '응답 없음' 가짜만 만들어요(앱의 기본). 개발 · 시험 · `./start.sh`는 이 둘을 만들지 않아요. 앱 코드의 다른 파일은 `urllib.request` ·
 `http.client` · `socket`을 쓰지 않아요(`tests/test_no_orders.py`가 소스를 훑어 막아요).
 """
 
@@ -19,11 +19,11 @@ import http.client
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from .settings import live_enabled
+from ..ports import NoAnswer
+from ..settings import live_enabled
 
 REQUEST_TIMEOUT_S = 20.0
 
@@ -46,8 +46,8 @@ class HttpResponse:
 Transport = Callable[[HttpRequest], HttpResponse]
 
 
-class TransportError(Exception):
-    """응답 없음: 연결 실패나 시간 초과(가짜 전송이 나가지 않을 때도)."""
+class TransportError(NoAnswer):
+    """응답 없음: 연결 실패나 시간 초과(가짜 전송이 나가지 않을 때도) · 포트 쪽 이름은 `ports.NoAnswer`."""
 
 
 # ── 실제 전송 (이 파일 밖에서 부르지 않아요) ─────────────────────────────────
@@ -78,41 +78,6 @@ def _urllib_fetch(url: str) -> bytes:
         return bytes(resp.read(256))
 
 
-# ── 가짜 전송 (기본) ────────────────────────────────────────────────────────
-
-
-@dataclass
-class FakeTransport:
-    """나가지 않는 전송. 받은 요청을 적어 두고, 답이 없으면 '응답 없음'으로 끝나요.
-
-    `responder`를 주면 그 함수가 가짜 응답을 만들어요(시험 · 가짜 토스 서버).
-    """
-
-    name: str
-    responder: Transport | None = None
-    calls: list[HttpRequest] = field(default_factory=list)
-
-    is_live = False
-
-    def __call__(self, request: HttpRequest) -> HttpResponse:
-        self.calls.append(request)
-        if self.responder is None:
-            raise TransportError("fake-transport")
-        return self.responder(request)
-
-
-@dataclass
-class FakeFetch:
-    """공인 IP 보기의 가짜. 나가지 않아요."""
-
-    calls: list[str] = field(default_factory=list)
-    is_live = False
-
-    def __call__(self, url: str) -> bytes:
-        self.calls.append(url)
-        raise OSError("fake-transport")
-
-
 # ── 문 ──────────────────────────────────────────────────────────────────────
 
 
@@ -131,6 +96,9 @@ class Transports:
 
 
 def fake_transports() -> Transports:
+    """앱의 기본: 모두 '응답 없음' 가짜(`fake.py`)."""
+    from .fake import FakeFetch, FakeTransport
+
     return Transports(
         toss=FakeTransport("toss"),
         dart=FakeTransport("dart"),
@@ -156,5 +124,7 @@ def build_transports(
 
 
 def is_fake(transport: object) -> bool:
+    from .fake import FakeFetch, FakeTransport
+
     return isinstance(transport, FakeTransport | FakeFetch)
 

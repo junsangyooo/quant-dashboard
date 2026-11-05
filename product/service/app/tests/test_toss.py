@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from app import toss
-from app.toss import RateLimiter, TossApiError, TossClient, TossCredentials, TossShapeError, link_state, rate_group
+from app.adapters import toss
+from app.adapters.toss import RateLimiter, TossApiError, TossClient, TossCredentials, TossShapeError, link_state, rate_group
 from tests import openapi_check as oc
 from tests.conftest import make_bars
 from tests.fake_toss import (

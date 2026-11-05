@@ -32,6 +32,10 @@ MOVED: list[tuple[str, str]] = [
     ("app.engine", "app.domain.engine"),
     ("app.copytext", "app.domain.copytext"),
     ("app.stock_names", "app.domain.stock_names"),
+    # P1-06: 바깥 연결을 어댑터 층으로(ARCHITECTURE 2-1 · `dart` · `telegram`은 클라이언트 · 보내기만 떼어 옮겨 옛 모듈이 남아요)
+    ("app.transport", "app.adapters.transport"),
+    ("app.toss", "app.adapters.toss"),
+    ("app.publicip", "app.adapters.publicip"),
 ]
 
 

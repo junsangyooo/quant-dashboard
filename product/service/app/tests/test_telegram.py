@@ -12,7 +12,8 @@ import pytest
 from app import telegram as tg
 from app.main import create_app
 from app.domain.markets.kr import KST
-from app.transport import FakeTransport, build_transports
+from app.adapters.fake import FakeTransport
+from app.adapters.transport import build_transports
 from tests.conftest import PASSWORD, CsrfClient, confirm, setup_owner
 from tests.fake_telegram import MY_CHAT, OTHER_CHAT, TOKEN, FakeTelegram
 

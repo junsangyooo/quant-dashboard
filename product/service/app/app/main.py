@@ -8,7 +8,7 @@ uvicorn --factory app.main:create_app
 - MVP_WEB_DIST: 화면 파일 폴더(기본 web/dist)
 - QUANT_TS_NAME: 등록한 Tailscale 이름(쉼표로 여럿)
 - QUANT_LIVE_TRANSPORT=1: 실제 전송을 켜는 두 열쇠 가운데 하나. 설치기 설정 파일도 있어야
-  열린다(transport.py). 없으면 토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 모두 가짜다.
+  열린다(adapters/transport.py). 없으면 토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 모두 가짜다.
 
 화면은 web/dist(npm run build 결과)를 '/'에서 내준다.
 """
@@ -51,11 +51,11 @@ from .db import DB
 from .domain.engine import BacktestError as BacktestErrorV2
 from .domain.markets.kr import KST, weekday_open
 from .market import BarSource, Market, MarketDataError, TossSource, now_kst
-from .publicip import IpFetch, PublicIpError, public_ip
+from .adapters.publicip import IpFetch, PublicIpError, public_ip
 from .domain.stock_names import stock_name
-from .toss import Transport
-from .telegram import Telegram, TelegramError
-from .transport import Transports, build_transports
+from .adapters.telegram import TelegramError
+from .telegram import Telegram
+from .adapters.transport import Transport, Transports, build_transports
 from . import vault as vault_mod
 from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
 

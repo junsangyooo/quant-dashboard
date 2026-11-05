@@ -1,6 +1,6 @@
 """주문은 가짜 전송에서만(TASKS T-00 · DEVELOPING 3절).
 
-- 실제 전송 객체(urllib · http.client · socket · 바깥 라이브러리)는 `app/transport.py` 한 곳에서만,
+- 실제 전송 객체(urllib · http.client · socket · 바깥 라이브러리)는 `app/adapters/transport.py` 한 곳에서만,
   `QUANT_LIVE_TRANSPORT=1` **과** 설치기 설정 파일이 둘 다 있을 때만 만들어요.
 - 아무 설정 없이 켠 앱의 토스 · DART · 텔레그램 · 공인 IP · 시세 전송은 모두 가짜예요.
 - 주문은 토스 전송을 지나가요. 기본 전송으로 주문을 보내면 가짜 전송에 적히고 바깥으로 0건이에요.
@@ -27,11 +27,12 @@ from pathlib import Path
 
 import pytest
 
-from app import transport as tp
+from app.adapters import transport as tp
 from app.main import create_app
 from app.settings import live_enabled
-from app.toss import TossClient, TossCredentials, TossUnreachableError
-from app.transport import FakeTransport, HttpRequest, Transports, build_transports
+from app.adapters.fake import FakeTransport
+from app.adapters.toss import TossClient, TossCredentials, TossUnreachableError
+from app.adapters.transport import HttpRequest, Transports, build_transports
 from tests import conftest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +44,7 @@ def app_sources(root: Path) -> list[Path]:
 
 
 APP_SOURCES = app_sources(ROOT)
-GATE = ROOT / "app" / "transport.py"
+GATE = ROOT / "app" / "adapters" / "transport.py"
 
 # 바깥으로 나가는 수단. transport.py 밖의 앱 코드에서는 0건이어야 해요.
 NETWORK_MODULES = {"urllib.request", "http.client", "socket", "ssl", "requests", "httpx", "aiohttp"}
@@ -353,7 +354,7 @@ def test_planted_real_call_fails_a_test_run() -> None:
     planted.write_text(
         textwrap.dedent(
             """
-            from app.transport import HttpRequest, _urllib_transport
+            from app.adapters.transport import HttpRequest, _urllib_transport
 
             def test_sends_real_order():
                 req = HttpRequest("POST", "https://openapi.tossinvest.com/api/v1/orders", {}, b"{}")

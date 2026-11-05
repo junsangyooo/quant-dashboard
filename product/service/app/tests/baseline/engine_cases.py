@@ -29,7 +29,7 @@ from app.domain.markets.kr import KST
 from app.market import Market
 from app.paper_v2 import PaperV2
 from app.domain.rules import RuleLayer
-from app.toss import RateLimiter
+from app.adapters.toss import RateLimiter
 from tests.baseline.mask import mask_values
 from tests.conftest import FakeBars, make_bars, wave
 from tests.test_blocks import B, G, R

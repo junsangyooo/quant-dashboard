@@ -17,8 +17,8 @@ from app.domain.markets.kr import KST, lower_limit, ticks_below
 from app.domain.rules import buy_cap, sell_floor
 from app.live import Live, LiveError
 from app.market import Market, TossSource
-from app.toss import TossClient, TossCredentials
-from app.transport import HttpRequest, HttpResponse, TransportError
+from app.adapters.toss import TossClient, TossCredentials
+from app.adapters.transport import HttpRequest, HttpResponse, TransportError
 from tests.conftest import make_bars
 from tests.fake_toss import ACCOUNT_NO, CLIENT_ID, CLIENT_SECRET, FakeTossServer, holiday, regular_day, stock_row
 from tests.test_blocks import B, G, R

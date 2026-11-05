@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 # ── 시험 중 HOME은 임시 폴더(P1-02 ④) ─────────────────────────────────────────
-# 앱은 import할 때 `Path.home()`으로 키 파일 · 실제 전송 설정 파일의 기본 경로를 정해요(`app/vault.py` · `app/transport.py`).
+# 앱은 import할 때 `Path.home()`으로 키 파일 · 실제 전송 설정 파일의 기본 경로를 정해요(`app/vault.py` · `app/settings.py`).
 # 그래서 앱을 import하기 **전에** HOME을 운영체제 임시 폴더로 바꿔 두어, 시험(과 시험이 띄우는 자식 프로세스 · 환경을 물려받음)이
 # 실제 `~/.config/quant-service/`를 만들거나 읽지 않게 해요. 레포 안(tests/.tmp)이 아닌 까닭: 레포 안 키 파일은 앱이 거절해요.
 REAL_HOME = os.environ.get("HOME", "")
@@ -44,7 +44,7 @@ if UNDER_PYTEST:
 
 from app.main import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요)
 from app.domain.markets.kr import KST  # noqa: E402
-from app.toss import HttpRequest, HttpResponse, TransportError  # noqa: E402
+from app.adapters.transport import HttpRequest, HttpResponse, TransportError  # noqa: E402
 
 
 # ── 화면처럼 CSRF 값을 되돌려 보내는 시험 클라이언트(T-51) ─────────────────

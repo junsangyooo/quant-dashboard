@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.transport import HttpRequest, HttpResponse, TransportError
+from app.adapters.transport import HttpRequest, HttpResponse, TransportError
 
 TOKEN = "1234567890:AAFakeFakeFakeFakeFakeFakeFakeFake0"
 MY_CHAT = 555000111

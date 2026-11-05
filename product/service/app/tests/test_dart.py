@@ -17,9 +17,10 @@ from typing import Any
 
 import pytest
 
-from app.dart import DartClient, DartError, DartStore, disclosure_kind, rcept_date
+from app.adapters.dart import DartClient, DartError
+from app.dart import DartStore, disclosure_kind, rcept_date
 from app.db import DB
-from app.transport import HttpRequest, HttpResponse, TransportError
+from app.adapters.transport import HttpRequest, HttpResponse, TransportError
 
 SAMPLES = Path(__file__).resolve().parents[2] / "vendor" / "dart-samples"
 KEY = "fake-dart-key-0000"

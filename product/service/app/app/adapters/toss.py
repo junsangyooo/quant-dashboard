@@ -25,8 +25,10 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from .domain.markets.kr import KST, PRICE_LIMIT, day_end
-from .transport import FakeTransport, HttpRequest, HttpResponse, Transport, TransportError
+from ..domain.markets.kr import KST, PRICE_LIMIT, day_end
+from ..ports import BrokerBadAnswer, BrokerError, BrokerRejected, BrokerUnreachable
+from .fake import FakeTransport
+from .transport import HttpRequest, HttpResponse, Transport, TransportError
 
 __all__ = ["HttpRequest", "HttpResponse", "Transport", "TransportError"]
 
@@ -43,15 +45,15 @@ DEFAULT_RATE = 5.0
 # ── 오류 ────────────────────────────────────────────────────────────────────
 
 
-class TossError(Exception):
+class TossError(BrokerError):
+    """포트 쪽 이름은 `ports.BrokerError`(실행 흐름은 그 이름으로 잡아요)."""
+
+
+class TossUnreachableError(TossError, BrokerUnreachable):
     pass
 
 
-class TossUnreachableError(TossError):
-    pass
-
-
-class TossShapeError(TossError):
+class TossShapeError(TossError, BrokerBadAnswer):
     """응답 이상: 성공 응답의 꼴이 명세와 달라요(R-O14 · 머리 칩 '주문 멈춤 · 응답 이상')."""
 
     def __init__(self, path: str, what: str) -> None:
@@ -62,7 +64,7 @@ class TossShapeError(TossError):
 
 
 @dataclass
-class TossApiError(TossError):
+class TossApiError(TossError, BrokerRejected):
     status: int
     code: str
     message: str = ""
@@ -163,7 +165,7 @@ def rate_group(method: str, path: str) -> str:
     parts = path.strip("/").split("/")
     for m, pattern, group in RATE_GROUPS:
         p = pattern.strip("/").split("/")
-        if m == method and len(p) == len(parts) and all(a == b or a.startswith("{") for a, b in zip(p, parts)):
+        if m == method and len(p) == len(parts) and all(a == b or a.startswith("{") for a, b in zip(p, parts, strict=False)):
             return group
     return "OTHER"
 

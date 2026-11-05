@@ -15,7 +15,7 @@ from typing import Any
 
 from app.main import create_app
 from app.domain.markets.kr import KST
-from app.toss import RateLimiter
+from app.adapters.toss import RateLimiter
 from tests.baseline.clock import FIXED_NOW
 from tests.conftest import CsrfClient, FakeIp, confirm, setup_owner
 from tests.fake_toss import ACCOUNT_NO, CLIENT_ID, CLIENT_SECRET, FakeTossServer, stock_row
