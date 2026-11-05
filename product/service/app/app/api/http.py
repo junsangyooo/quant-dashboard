@@ -15,7 +15,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 
 from ..security.vault import SESSION_S, Vault, VaultError
-from .models import ApiModel, Bool, Int, Str
+from .models import ApiModel, Bool, Int, Str, opt
 
 COOKIE = "qm_session"
 CSRF_COOKIE = "qm_csrf"  # 화면 스크립트가 읽어 X-CSRF-Token 머리글로 되돌려 보내요(두 번 보내기)
@@ -29,16 +29,16 @@ class ErrorBody(ApiModel):
     """오류 응답(4xx · 5xx): 화면에 보여도 되는 글 한 줄 + 오류마다 덧붙는 값(받은 값은 되돌려 보내지 않음)."""
 
     error: Str
-    need_login: Bool | None = None  # 401 세션 없음 · 만료(로그인 화면으로)
-    csrf: Bool | None = None  # 403 CSRF 값이 맞지 않음
-    tries_left: Int | None = None  # 401 비밀번호 틀림(남은 횟수)
-    locked_for: Int | None = None  # 429 잠금(남은 초)
-    need_confirm: Bool | None = None  # 403 비밀번호 다시 받기(SPEC 7-4)
-    action: Str | None = None
-    title: Str | None = None
-    kind: Str | None = None  # 형식 · 시세 · 텔레그램 오류의 종류
-    detail: Any = None
-    symbols: list[Str] | None = None  # 일봉이 없는 종목 코드
+    need_login: Bool = opt()  # 401 세션 없음 · 만료(로그인 화면으로)
+    csrf: Bool = opt()  # 403 CSRF 값이 맞지 않음
+    tries_left: Int = opt()  # 401 비밀번호 틀림(남은 횟수)
+    locked_for: Int = opt()  # 429 잠금(남은 초)
+    need_confirm: Bool = opt()  # 403 비밀번호 다시 받기(SPEC 7-4)
+    action: Str = opt()
+    title: Str = opt()
+    kind: Str = opt()  # 형식 · 시세 · 텔레그램 오류의 종류
+    detail: Str = opt()  # 형식 오류의 자세한 글
+    symbols: list[Str] = opt()  # 일봉이 없는 종목 코드
 
 
 ERRORS: dict[int | str, dict[str, Any]] = {"default": {"model": ErrorBody, "description": "error"}}

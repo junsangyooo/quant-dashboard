@@ -47,8 +47,7 @@ const errorText = (e: unknown) => (isApiError(e) ? e.message : copy.common.noCon
 
 export function SettingsV2Screen() {
   useDocumentTitle(copy.pages.settings);
-  const conn = useConnect().data as
-    (ReturnType<typeof useConnect>['data'] & { dart?: { saved: boolean } }) | undefined;
+  const conn = useConnect().data;
   const access = useAccess().data;
   const tg = useTelegram().data;
   const data = useDataView().data;
@@ -58,7 +57,7 @@ export function SettingsV2Screen() {
   const r = t.rows;
   const toss = conn?.toss;
   const tossLine = toss?.last_check?.ok ? r.tossOk : toss?.saved ? r.tossSaved : r.tossNone;
-  const dartLine = conn?.dart?.saved ? r.dartSaved : r.dartNone;
+  const dartLine = conn?.dart.saved ? r.dartSaved : r.dartNone;
   const place = access?.place ? t.placeShort[access.place] : r.placeNone;
   return (
     <Page width="narrow" gutter="block">

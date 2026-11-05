@@ -1,4 +1,4 @@
-// Fetch wrapper for the MVP's /api/* (mvp/app/main.py).
+// Fetch wrapper for the app's /api/* (routers in app/api/*, assembled by app/app.py).
 // - Same-origin cookie, JSON in and out; errors arrive as JSON `{error: '<화면에 보여도 되는 글>', ...}`.
 // - 401 with `need_login` (no session, expired, or the app was restarted) sends the user to
 //   /login. A wrong password is also 401 but without `need_login`; it stays with its form.
@@ -8,23 +8,13 @@
 //   password again (V2-33). The host returns a one-time token and the request is sent once more
 //   with it; if the user cancels, the 403 stands.
 
-export interface ApiErrorBody {
-  error: string;
-  need_login?: boolean;
-  tries_left?: number;
-  locked_for?: number;
-  kind?: string;
-  problems?: unknown[];
-  title?: string;
-  detail?: string;
-  need_confirm?: boolean;
-  action?: string;
-}
+import type { components } from './types.gen';
 
-export interface ConfirmAsk {
-  action: string;
-  title: string;
-}
+/** Error body (4xx · 5xx): generated from the server's response model (`ErrorBody` · types.gen.ts). */
+export type ApiErrorBody = components['schemas']['ErrorBody'];
+
+/** What the password dialog needs from a 403 `need_confirm` answer. */
+export type ConfirmAsk = { [K in 'action' | 'title']: NonNullable<ApiErrorBody[K]> };
 
 export const CONFIRM_HEADER = 'X-Confirm-Token';
 export const CSRF_HEADER = 'X-CSRF-Token';

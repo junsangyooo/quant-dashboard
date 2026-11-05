@@ -19,6 +19,8 @@ export default defineConfig(
       'public',
       // A Figma plugin job body (top-level return/await), not a module.
       'scripts/figma/dump.js',
+      // Generated from the server's OpenAPI (product/service/app/scripts/gen_api_types.py) · not edited by hand.
+      'src/api/types.gen.ts',
     ],
   },
   js.configs.recommended,

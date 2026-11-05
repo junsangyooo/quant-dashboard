@@ -14,3 +14,5 @@ dist-e2e-*
 build
 # 서버가 만든 대조 파일(app/tests/words_rules.py --write) — 글자 하나까지 서버 출력 그대로
 tests/forbiddenWords.json
+# 서버 OpenAPI에서 만든 API 타입(product/service/app/scripts/gen_api_types.py) — 만든 그대로
+src/api/types.gen.ts

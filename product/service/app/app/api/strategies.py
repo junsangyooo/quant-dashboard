@@ -137,7 +137,7 @@ class VersionView(ApiModel):
 
 
 class Running(ApiModel):
-    kind: Literal["paper"]
+    kind: Str  # 지금은 모의투자("paper")만
     version_no: Int
     run_id: Int
 

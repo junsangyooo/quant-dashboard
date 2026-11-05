@@ -2,16 +2,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
 import { keys } from './query';
+import type { components } from './types.gen';
 
-export interface AppState {
-  setup: boolean;
-  logged_in: boolean;
-  unlocked: boolean;
-  locked_for: number;
-  /** 서버가 다시 켜진 뒤 아직 한 번도 로그인하지 않았다('앱을 다시 켰어요' 안내). */
-  restarted: boolean;
-  version: string;
-}
+/** 서버 응답 모델 `AppState`(types.gen.ts) · `restarted`: 서버가 다시 켜진 뒤 아직 한 번도 로그인하지 않았다('앱을 다시 켰어요' 안내). */
+export type AppState = components['schemas']['AppState'];
 
 export const useAppState = () =>
   useQuery({ queryKey: keys.state, queryFn: () => api.get<AppState>('/api/state') });

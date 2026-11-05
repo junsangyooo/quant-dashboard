@@ -222,7 +222,8 @@ def boundary_violations() -> dict[str, Any]:
 
 
 def jscpd(include_block_editor: bool = True, env: dict[str, str] | None = None) -> dict[str, Any]:
-    ignore = ["**/src/styles/tokens.css", "**/src/styles/pretendard.css"]
+    # 만든 파일은 셈에서 빼요(ARCHITECTURE 7절 '시험 · 생성 파일 뺌' · 토큰 CSS · 글꼴 · P1-09의 OpenAPI 타입)
+    ignore = ["**/src/styles/tokens.css", "**/src/styles/pretendard.css", "**/src/api/types.gen.ts"]
     if not include_block_editor:
         ignore.append("**/src/screens/BlockEditor/**")
     with tempfile.TemporaryDirectory(prefix="quant-baseline-jscpd-") as d:

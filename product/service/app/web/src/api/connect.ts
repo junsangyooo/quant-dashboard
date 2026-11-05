@@ -2,48 +2,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
 import { keys } from './query';
+import type { components } from './types.gen';
 
-export type StepState = 'done' | 'failed' | 'waiting';
+type Schemas = components['schemas'];
 
-export interface CheckStep {
-  key: 'token' | 'account' | 'price';
-  name: string;
-  state: StepState;
-}
-
-export type CheckResult =
-  | {
-      ok: true;
-      steps: CheckStep[];
-      account_tail: string;
-      price: number;
-      line: string;
-      at: string;
-    }
-  | {
-      ok: false;
-      kind: 'auth' | 'ip' | 'unreachable' | 'account' | 'maintenance' | 'error';
-      step: string;
-      step_key: string;
-      steps: CheckStep[];
-      title: string;
-      cause: string;
-      next: string;
-      code: string;
-      line: string;
-      at: string;
-    };
-
-export interface ConnectView {
-  unlocked: boolean;
-  toss: {
-    saved: boolean;
-    client_id_tail: string | null;
-    secret_tail: string | null;
-    account_tail: string | null;
-    last_check: CheckResult | null;
-  };
-}
+// 서버 응답 모델(types.gen.ts)을 이름으로 가리켜요(손으로 쓴 API 타입 0 · P1-09)
+export type CheckStep = Schemas['CheckStep'];
+export type StepState = CheckStep['state'];
+export type CheckResult = Schemas['CheckOk'] | Schemas['CheckFailed'];
+export type ConnectView = Schemas['ConnectView'];
 
 export const useConnect = () =>
   useQuery({ queryKey: keys.connect, queryFn: () => api.get<ConnectView>('/api/connect') });

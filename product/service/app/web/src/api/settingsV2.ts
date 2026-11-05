@@ -1,51 +1,18 @@
 // 설정 v2 · 처음 실행 마법사가 쓰는 API(접속 · 텔레그램 · 데이터 · 업데이트).
 import { useQuery } from '@tanstack/react-query';
 import { api, request } from './client';
+import type { components } from './types.gen';
 
-export interface AccessView {
-  place: 'server' | 'pc' | null;
-  place_name: string | null;
-  tailscale: { ok: boolean; name: string | null; address: string | null };
-  local: string;
-}
+type Schemas = components['schemas'];
 
-export interface TelegramEvent {
-  key: string;
-  title: string;
-  locked: boolean;
-  on: boolean;
-}
-
-export interface TelegramView {
-  saved: boolean;
-  bot: string | null;
-  chat: boolean;
-  chat_name: string | null;
-  last_sent: string | null;
-  last_error: string | null;
-  events: TelegramEvent[];
-  commands: string[];
-}
-
-export interface DataView {
-  bars: { symbols: number; from: string | null; to: string | null; fetched_at: number | null };
-  dart: { financials: number; disclosures: number; shares: number };
-  strategies: number;
-  live_running: boolean;
-  restore_line: string;
-}
-
-export interface DartConnect {
-  saved: boolean;
-  tail: string | null;
-}
-
-export interface About {
-  version: string;
-  terms_at: string | null;
-  created_at: string | null;
-  address: string;
-}
+// 서버 응답 모델(types.gen.ts)을 이름으로 가리켜요(손으로 쓴 API 타입 0 · P1-09)
+export type AccessView = Schemas['AccessView'];
+export type TelegramEvent = Schemas['TelegramEvent'];
+export type TelegramView = Schemas['TelegramView'];
+export type DataView = Schemas['DataView'];
+export type DartConnect = Schemas['DartKey'];
+export type About = Schemas['About'];
+type RestoreOut = Schemas['RestoreOut'];
 
 export const useAbout = () =>
   useQuery({ queryKey: ['about'], queryFn: () => api.get<About>('/api/about') });
@@ -78,7 +45,8 @@ export const sendTelegramTest = () => api.post<TelegramView>('/api/telegram/test
 export const setTelegramEvent = (key: string, on: boolean) =>
   api.put<TelegramView>('/api/telegram/events', { key, on });
 
-export const saveDartKey = (key: string) => api.put<unknown>('/api/connect/dart', { key });
+export const saveDartKey = (key: string) =>
+  api.put<Schemas['ConnectView']>('/api/connect/dart', { key });
 
 /** 내려받기: 응답을 파일로 저장해요(백업 · CSV). */
 export async function download(path: string, fallbackName: string): Promise<void> {
@@ -96,8 +64,8 @@ export async function download(path: string, fallbackName: string): Promise<void
 }
 
 /** 복원: 파일 몸통을 그대로 보내요(비밀번호 창은 api/client가 띄워요). */
-export async function restoreBackup(file: File): Promise<{ ok: boolean; line: string }> {
-  return request<{ ok: boolean; line: string }>('POST', '/api/data/restore', {
+export async function restoreBackup(file: File): Promise<RestoreOut> {
+  return request<RestoreOut>('POST', '/api/data/restore', {
     raw: await file.arrayBuffer(),
   });
 }
