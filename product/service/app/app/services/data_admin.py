@@ -15,9 +15,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .store import data_admin as admin_store
-from .store import runs as run_store
-from .store.db import DB
+from ..store import data_admin as admin_store
+from ..store import runs as run_store
+from ..store.db import DB
 
 MAX_BACKUP = 512 * 1024 * 1024
 BACKUP_PREFIX = "quant-backup"
@@ -84,7 +84,10 @@ def delete_all(db: DB) -> None:
 def overview(db: DB) -> dict[str, Any]:
     bars = admin_store.bar_summary(db)
     last = admin_store.last_bar_fetch(db)
-    count = lambda t: admin_store.row_count(db, t)  # noqa: E731
+
+    def count(table: str) -> int:
+        return admin_store.row_count(db, table)
+
     return {
         "bars": {"symbols": int(bars["n"] or 0), "from": bars["a"], "to": bars["b"], "fetched_at": last["t"]},
         "dart": {"financials": count("dart_fin"), "disclosures": count("dart_disc"), "shares": count("dart_shares")},

@@ -39,8 +39,8 @@ from . import settings
 from .domain import copytext as ct
 from . import backtest_v2 as bt2
 from .api_v2 import ApiError, make_router
-from . import datamgmt as dm
-from . import updates
+from .services import data_admin as dm
+from .services import updates
 from .api import live as live_api
 from .run.live import Live, LiveError
 from .run.live import tick as live_tick

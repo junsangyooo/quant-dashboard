@@ -1,7 +1,7 @@
 """설치기 도움(T-56 · SPEC 5-10 · 10 설치기): 서비스 파일 만들기 · 업데이트 시간 검사 · 업데이트 단계 기록.
 
 설치 스크립트(`install/*.sh`)가 이 모듈을 불러 systemd 유닛 · launchd plist를 만들고, 업데이트 때 단계를
-데이터 폴더 `update.json`에 적어요(앱은 읽기만 · `updates.py`).
+데이터 폴더 `update.json`에 적어요(파일 꼴은 `services/updates.py` 한 곳 · 앱은 읽기만).
 
     python -m app.install systemd --app <앱 폴더> --data <데이터 폴더> --user quant [--port 8765] [--ts-name …]
     python -m app.install plist --app <앱 폴더> --data <데이터 폴더> [--port 8765]
@@ -11,18 +11,18 @@
 - 실제 전송(QUANT_LIVE_TRANSPORT)은 유닛에 넣지 않아요. 켜려면 설치 스크립트의 `--live`가 설정 파일과 함께 따로
   써요(DEVELOPING 3절 · 두 열쇠). 시험 · 기본 설치는 늘 가짜 전송이에요.
 - 앱은 127.0.0.1에만 묶어요(`app.serve`). 바깥은 Tailscale serve가 https로 받아 넘겨요.
+- 입구라 조립(`app.py`)과 설정만 가져와요(ARCHITECTURE 2절): 장 달력 · 업데이트 창 · 단계 쓰기는 조립의 설치기 몫 함수를
+  불러요(무거운 앱 모듈은 그 명령에서만 import).
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from xml.sax.saxutils import escape
-
-from .run.scheduler import KST, UPDATE_FROM, UPDATE_UNTIL, Calendar  # [P1-09] 입구 → 조립 경유로(허용 목록 layers)
 
 LABEL = "kr.quant.service"
 WINDOW_TEXT = "업데이트는 거래일 16:00~20:00(그날 20:10 확인 전)에만 해요"
@@ -90,27 +90,22 @@ def launchd_plist(app: Path, data: Path, port: int = 8765) -> str:
 """
 
 
-def update_window(now: datetime, cal: Calendar | None = None) -> tuple[bool, str]:
-    """SPEC 5-10: 거래일 16:00~20:00(그날 20:10 확인 전)에만. 아니면 거절 이유."""
-    local = now.astimezone(KST)
-    is_open = cal.is_open(local.date()) if cal is not None else local.weekday() < 5
-    if not is_open:
+def update_window(now: datetime, cal: Any = None) -> tuple[bool, str]:
+    """SPEC 5-10: 거래일 16:00~20:00(그날 20:10 확인 전)에만. 아니면 거절 이유(`cal`은 저장된 토스 장 달력 · 없으면 평일 규칙)."""
+    from .app import update_window_state
+
+    why = update_window_state(now, cal)
+    if why == "closed":
         return False, f"오늘은 거래일이 아니에요 · {WINDOW_TEXT}"
-    if not (UPDATE_FROM <= local.time() < UPDATE_UNTIL):
+    if why == "hours":
         return False, f"지금은 할 수 없어요 · {WINDOW_TEXT}"
     return True, ""
 
 
 def write_step(data: Path, step: str, state: str, version: str) -> None:
-    from .updates import FILE, STEPS
+    from .app import write_update_step
 
-    if step not in [k for k, _ in STEPS] or state not in ("running", "done", "failed"):
-        raise ValueError("step")
-    p = data / FILE
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"version": version, "step": step, "state": state,
-                               "at": datetime.now(KST).isoformat(timespec="seconds")}), encoding="utf-8")
-    tmp.replace(p)
+    write_update_step(data, step, state, version, datetime.now(timezone.utc))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -141,12 +136,10 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "plist":
         sys.stdout.write(launchd_plist(Path(a.app), Path(a.data), a.port))
     elif a.cmd == "can-update":
-        cal = None
-        if a.data and (Path(a.data) / "app.db").exists():
-            from .store.db import DB
+        from .app import stored_calendar
 
-            cal = Calendar(DB(Path(a.data) / "app.db"), None)  # 앱이 받아 둔 토스 장 달력(없으면 평일 규칙)
-        ok, why = update_window(datetime.now(KST), cal)
+        cal = stored_calendar(Path(a.data)) if a.data else None  # 앱이 받아 둔 토스 장 달력(없으면 평일 규칙)
+        ok, why = update_window(datetime.now(timezone.utc), cal)
         if not ok:
             print(why, file=sys.stderr)
             return 1

@@ -22,7 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from app import install, updates
+from app import install
+from app.services import updates
 from app.store.db import DB
 from app.domain.markets.kr import KST
 from app.run.data import Calendar

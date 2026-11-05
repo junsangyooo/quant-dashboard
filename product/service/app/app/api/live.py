@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..datamgmt import history_rows
+from ..services.data_admin import history_rows
 from ..domain.markets.kr import KST
 from ..domain.rules import buy_cap
 from ..run.live import Live

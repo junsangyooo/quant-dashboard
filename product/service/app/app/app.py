@@ -15,8 +15,14 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
-from .run.scheduler import LOOP_EVERY_S
+from .domain.markets.kr import KST
+from .run.data import Calendar
+from .run.scheduler import LOOP_EVERY_S, UPDATE_FROM, UPDATE_UNTIL
+from .services import updates
+from .store.db import DB
 
 log = logging.getLogger("quant-mvp")
 
@@ -48,3 +54,29 @@ async def auto_loop(steps: LoopSteps) -> None:
         except Exception as exc:  # 루프는 멈추지 않는다
             log.error("auto tick failed: %s", type(exc).__name__)
         await asyncio.sleep(LOOP_EVERY_S)
+
+
+# ── 설치기(입구 `install.py` · `python -m app.install`)가 조립을 거쳐 쓰는 것 ─────────────────────────────
+
+
+def stored_calendar(data: Path) -> Calendar | None:
+    """`can-update`: 앱이 데이터 폴더 DB에 받아 둔 토스 장 달력(DB가 없으면 None · 그때는 평일 규칙)."""
+    db_path = data / "app.db"
+    return Calendar(DB(db_path), None) if db_path.exists() else None
+
+
+def update_window_state(now: datetime, cal: Calendar | None = None) -> str | None:
+    """SPEC 5-10 업데이트 창(거래일 16:00 ~ 20:00 · `run/scheduler.py` 시각 표): 안이면 None · 거래일이 아니면 'closed' ·
+    시간 밖이면 'hours'(글은 설치기가 붙여요)."""
+    local = now.astimezone(KST)
+    is_open = cal.is_open(local.date()) if cal is not None else local.weekday() < 5
+    if not is_open:
+        return "closed"
+    if not (UPDATE_FROM <= local.time() < UPDATE_UNTIL):
+        return "hours"
+    return None
+
+
+def write_update_step(data: Path, step: str, state: str, version: str, now: datetime) -> None:
+    """설치기 `step`: `update.json`에 한 단계를 적어요(꼴은 `services/updates.py` · 시각은 한국 시간 초 단위)."""
+    updates.write_step(data, step, state, version, at=now.astimezone(KST).isoformat(timespec="seconds"))

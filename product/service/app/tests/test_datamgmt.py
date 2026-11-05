@@ -10,8 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app import datamgmt as dm
-from app import updates
+from app.services import data_admin as dm
+from app.services import updates
 from app.store.db import DB
 from app.main import create_app
 from app.domain.markets.kr import KST

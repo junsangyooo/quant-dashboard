@@ -1,5 +1,8 @@
 """업데이트 상태(T-53 · SPEC 5-10): 설치기(T-56)가 데이터 폴더의 `update.json`에 단계를 적고, 앱은 읽어서 보여줘요.
 
+`update.json`의 꼴(파일 이름 · 단계)은 여기 한 곳이에요: 읽기(`status` · `announce`)와 쓰기(`write_step` · 설치기
+`python -m app.install step`이 조립 `app.py`를 거쳐 불러요).
+
 단계: 스케줄러 멈춤 → 백업 → 데이터 구조 바꿈 → 다시 켬 → 대조. 앱 안 업데이트 단추는 없어요.
 끝나면(대조까지 done) 텔레그램 '업데이트 끝 · 버전 n'을 한 번 보내요.
 
@@ -13,7 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .store.db import DB
+from ..store.db import DB
 
 FILE = "update.json"
 STEPS: list[tuple[str, str]] = [
@@ -56,6 +59,16 @@ def status(data: Path) -> dict[str, Any]:
     updating = not finished and state != "failed"
     return {"updating": updating, "chip": CHIP if updating else None, "version": raw.get("version"),
             "state": "done" if finished else state, "steps": steps}
+
+
+def write_step(data: Path, step: str, state: str, version: str, *, at: str) -> None:
+    """설치기가 한 단계를 적어요(임시 파일에 쓰고 바꿔 끼움 · `at`은 한국 시간 ISO 초 단위)."""
+    if step not in [k for k, _ in STEPS] or state not in ("running", "done", "failed"):
+        raise ValueError("step")
+    p = data / FILE
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"version": version, "step": step, "state": state, "at": at}), encoding="utf-8")
+    tmp.replace(p)
 
 
 def done_message(version: str) -> str:
