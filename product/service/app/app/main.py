@@ -48,7 +48,11 @@ from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
 from .ports import Clock, MarketFeed
 from .connect import Connections
+from .store import dart as store_dart
+from .store import market as market_store
 from .store import strategies as strategy_store
+from .store import todos as todo_store
+from .store import vault as vault_store
 from .store.db import DB
 from .domain.engine import BacktestError as BacktestErrorV2
 from .domain.markets.kr import KST, weekday_open
@@ -157,24 +161,23 @@ def create_app(
 
     # 텔레그램(T-52): 전송은 기본 가짜. `/멈춤`은 새 매수 멈춤을 켜기만 해요(끄는 길은 앱 화면 · 비밀번호).
     def latest_dps(sym: str) -> float | None:
-        row = db.one("SELECT dps FROM dart_div WHERE stock_code=? ORDER BY rcept_dt DESC LIMIT 1", (sym,))
-        return float(row["dps"]) if row and row["dps"] else None
+        return store_dart.latest_dps(db, sym)
 
     def notify(event: str, text: str) -> bool:  # Notifier 포트(텔레그램 · 알림함) · telegram은 아래에서 만들어요
         return telegram.notify(event, text)
 
     # 실전 운용(T-60 ~ T-63): 증권사는 Broker 포트 · conns.client가 토스 어댑터를 줘요(기본 가짜 · 두 열쇠 · T-00)
     live = Live(db, market, conns.client, now=now, notify=notify,
-                info=lambda: {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")}, dps=latest_dps)
+                info=lambda: market_store.stock_info_map(db), dps=latest_dps)
 
     def pause_new_buys(source: str) -> bool:
         return live.pause_new_buys(source)
 
     def tg_status() -> dict[str, Any]:
-        todos = db.one("SELECT COUNT(*) AS n FROM todos WHERE status='open'")
+        todos = todo_store.count_open_todos(db)
         label = ("새 매수 멈춤" if db.get_meta("live.new_buys_paused") == "1"
                  else "운용 중" if live.run() is not None else "운용 전")
-        return {"label": label, "todos": int(todos["n"]) if todos else 0}
+        return {"label": label, "todos": todos}
 
     telegram = Telegram(
         db, vault, telegram_transport or transports.telegram, now=now, status=tg_status, pause=pause_new_buys,
@@ -351,7 +354,7 @@ def create_app(
 
     @app.get("/api/about")
     def about() -> dict[str, Any]:
-        row = db.one("SELECT terms_at, created_at FROM owner WHERE id=1")
+        row = vault_store.owner_dates(db)
         return {
             "version": APP_VERSION_TEXT,
             "terms_at": row["terms_at"] if row else None,
@@ -578,7 +581,7 @@ def create_app(
     async def todo_unknown(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "unknown_order_record")
         b = await _body(request)
-        t = db.one("SELECT data FROM todos WHERE id=? AND kind='unknown'", (tid,))
+        t = todo_store.todo_of_kind(db, tid, "unknown")
         if t is None:
             raise LiveError("그 할 일이 없어요", 404)
         live.resolve_unknown(_rid(), int(json.loads(t["data"])["order"]), filled_qty=int(b.get("filled_qty") or 0),
@@ -588,7 +591,7 @@ def create_app(
     @app.post("/api/todos/{tid}/corp")
     def todo_corp(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "todo_corp_action")
-        t = db.one("SELECT symbol FROM todos WHERE id=? AND kind='corp'", (tid,))
+        t = todo_store.todo_of_kind(db, tid, "corp")
         if t is None:
             raise LiveError("그 할 일이 없어요", 404)
         live.apply_corp(_rid(), t["symbol"])
@@ -597,7 +600,7 @@ def create_app(
     @app.post("/api/todos/{tid}/match")
     def todo_match(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "todo_match_account")
-        t = db.one("SELECT symbol FROM todos WHERE id=? AND kind='mismatch'", (tid,))
+        t = todo_store.todo_of_kind(db, tid, "mismatch")
         if t is None:
             raise LiveError("그 할 일이 없어요", 404)
         live.match_account(_rid(), t["symbol"])
@@ -713,7 +716,7 @@ def create_app(
 
     dart_store = DartStore(db)
     paper2 = PaperV2(db, market, now=now,
-                     info=lambda: {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")})
+                     info=lambda: market_store.stock_info_map(db))
     app.state.paper2 = paper2
 
     @app.exception_handler(PaperError)
@@ -750,7 +753,7 @@ def create_app(
         return {"advanced": await asyncio.to_thread(paper2.tick)}
 
     def _backtest_v2(body: dict[str, Any], start: date, end: date, cash: float) -> dict[str, Any]:
-        info = {r["symbol"]: dict(r) for r in db.all("SELECT * FROM stock_info")}
+        info = market_store.stock_info_map(db)
         return bt2.run(body, market=market, db=db, dart=dart_store,
                        has_dart=bool(conns.view()["dart"]["saved"]),
                        toss_ready=conns.client() is not None or bars_source is not None,

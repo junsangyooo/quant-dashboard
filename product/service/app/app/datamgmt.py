@@ -10,13 +10,14 @@ from __future__ import annotations
 import csv
 import io
 import json
-import sqlite3
 import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .store.db import SCHEMA_VERSION, DB
+from .store import data_admin as admin_store
+from .store import runs as run_store
+from .store.db import DB
 
 MAX_BACKUP = 512 * 1024 * 1024
 BACKUP_PREFIX = "quant-backup"
@@ -37,24 +38,12 @@ class DataError(Exception):
 
 
 def live_running(db: DB) -> bool:
-    return db.one("SELECT 1 FROM runs WHERE status != 'ended' LIMIT 1") is not None
+    return run_store.any_unended_run(db)
 
 
 def backup_bytes(db: DB) -> bytes:
     """백업 파일: 전략 · 기록 · 설정. API 키(비밀 값)와 키 파일 감싸기는 빼요(V2-53 'API 키는 들어 있지 않아요')."""
-    with tempfile.TemporaryDirectory(dir=db.path.parent) as d:
-        dst = Path(d) / "b.db"
-        db.backup_to(dst)
-        con = sqlite3.connect(dst)
-        try:
-            con.execute("DELETE FROM secrets")
-            con.execute("DELETE FROM owner_keyfile")
-            con.execute("DELETE FROM meta WHERE k LIKE 'tg.%' OR k LIKE 'sched.%'")
-            con.commit()
-            con.execute("VACUUM")
-        finally:
-            con.close()
-        return dst.read_bytes()
+    return admin_store.backup_without_keys(db)
 
 
 def backup_name(today: str) -> str:
@@ -63,24 +52,11 @@ def backup_name(today: str) -> str:
 
 def check_backup(path: Path) -> None:
     """이 앱이 만든 파일인지: sqlite · 무결성 · 계정 표 · 우리 구조 판(앱보다 새 판이면 거절)."""
-    try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    except sqlite3.Error:
-        raise DataError(NOT_BACKUP) from None
-    try:
-        if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-            raise DataError(NOT_BACKUP)
-        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if not {"owner", "meta", "strategies", "versions"} <= tables:
-            raise DataError(NOT_BACKUP)
-        if con.execute("SELECT COUNT(*) FROM owner").fetchone()[0] != 1:
-            raise DataError(NOT_BACKUP)
-        if int(con.execute("PRAGMA user_version").fetchone()[0]) > SCHEMA_VERSION:
-            raise DataError("앱보다 새 버전에서 만든 백업이에요 · 앱을 먼저 업데이트해요")
-    except sqlite3.DatabaseError:
-        raise DataError(NOT_BACKUP) from None
-    finally:
-        con.close()
+    verdict = admin_store.backup_verdict(path)
+    if verdict == admin_store.NEWER_BACKUP:
+        raise DataError("앱보다 새 버전에서 만든 백업이에요 · 앱을 먼저 업데이트해요")
+    if verdict != admin_store.BACKUP_OK:
+        raise DataError(NOT_BACKUP)
 
 
 def restore(db: DB, raw: bytes, *, now_iso: str) -> None:
@@ -95,7 +71,7 @@ def restore(db: DB, raw: bytes, *, now_iso: str) -> None:
     db.set_meta("live.new_buys_paused", "1")
     db.set_meta("live.new_buys_paused_by", "restore")
     db.set_meta("data.restored_at", now_iso)
-    for k in [r["k"] for r in db.all("SELECT k FROM meta WHERE k LIKE 'sched.%'")]:
+    for k in admin_store.sched_meta_keys(db):
         db.set_meta(k, None)  # 하루 한 번 표시는 이 컴퓨터 몫
 
 
@@ -106,9 +82,9 @@ def delete_all(db: DB) -> None:
 
 
 def overview(db: DB) -> dict[str, Any]:
-    bars = db.one("SELECT COUNT(DISTINCT symbol) AS n, MIN(d) AS a, MAX(d) AS b FROM bars")
-    last = db.one("SELECT MAX(fetched_at) AS t FROM bar_meta")
-    count = lambda t: int(db.one(f"SELECT COUNT(*) AS n FROM {t}")["n"])  # noqa: E731
+    bars = admin_store.bar_summary(db)
+    last = admin_store.last_bar_fetch(db)
+    count = lambda t: admin_store.row_count(db, t)  # noqa: E731
     return {
         "bars": {"symbols": int(bars["n"] or 0), "from": bars["a"], "to": bars["b"], "fetched_at": last["t"]},
         "dart": {"financials": count("dart_fin"), "disclosures": count("dart_disc"), "shares": count("dart_shares")},
@@ -120,11 +96,9 @@ def overview(db: DB) -> dict[str, Any]:
 
 def history_rows(db: DB, run_id: int | None = None) -> list[dict[str, Any]]:
     """기록 주문 내역(V2-12): 날짜 · 종목 · 구분 · 가격 · 수량 · 손익 · 상태 · 이유. 손익은 매도 체결만(평균 단가 기준)."""
-    where, args = ("WHERE o.run_id=?", (run_id,)) if run_id else ("", ())
-    orders = db.all(f"SELECT o.*, s.name AS sname FROM orders o LEFT JOIN stock_info s ON s.symbol=o.symbol {where} "
-                    "ORDER BY o.d, o.id", args)
+    orders = admin_store.history_orders(db, run_id)
     fills: dict[int, list[Any]] = defaultdict(list)
-    for f in db.all("SELECT * FROM fills ORDER BY filled_at, id"):
+    for f in admin_store.all_fills(db):
         fills[int(f["order_id"])].append(f)
     held: dict[tuple[int, str], tuple[int, float]] = {}  # (운용, 종목) → (수량, 평균 단가 · 비용 포함)
     out = []
@@ -165,7 +139,7 @@ def snapshot(db: DB) -> dict[str, Any]:
     """왕복 시험용: 전략 · 기록 · 운용을 한 덩어리로."""
     tables = ["strategies", "versions", "runs", "run_versions", "run_cash", "positions", "run_equity", "orders",
               "fills", "cond_orders", "todos", "paper_runs", "backtest_runs"]
-    return {t: [dict(r) for r in db.all(f"SELECT * FROM {t} ORDER BY rowid")] for t in tables} | {
-        "secrets": [r["name"] for r in db.all("SELECT name FROM secrets ORDER BY name")],
-        "meta_sample": json.dumps(sorted(r["k"] for r in db.all("SELECT k FROM meta"))),
+    return {t: admin_store.table_rows(db, t) for t in tables} | {
+        "secrets": admin_store.secret_names(db),
+        "meta_sample": json.dumps(sorted(admin_store.meta_keys(db))),
     }

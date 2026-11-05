@@ -26,6 +26,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
+from .store import vault as vault_store
 from .store.db import DB
 
 SCRYPT_N = 2**15
@@ -170,7 +171,7 @@ class Vault:
     # ── 상태 ───────────────────────────────────────────────────────────────
 
     def is_setup(self) -> bool:
-        return self.db.one("SELECT 1 FROM owner WHERE id=1") is not None
+        return vault_store.has_owner(self.db)
 
     @property
     def unlocked(self) -> bool:
@@ -179,7 +180,7 @@ class Vault:
             return self._key is not None
 
     def _locked_left(self) -> float:
-        row = self.db.one("SELECT locked_until FROM owner WHERE id=1")
+        row = vault_store.owner_lock(self.db)
         if row is None:
             return 0.0
         return max(0.0, float(row["locked_until"]) - self.clock())
@@ -205,11 +206,7 @@ class Vault:
             pw_salt, rc_salt = os.urandom(16), os.urandom(16)
             pw_wrap = seal(derive_key(pw, pw_salt, self.scrypt_n), data_key, AAD_PW)
             rc_wrap = seal(derive_key(code, rc_salt, self.scrypt_n), data_key, AAD_RC)
-            self.db.run(
-                "INSERT INTO owner(id,scrypt_n,pw_salt,pw_wrap,rc_salt,rc_wrap,fails,locked_until,"
-                "adult,terms_at,created_at) VALUES(1,?,?,?,?,?,0,0,1,?,?)",
-                (self.scrypt_n, pw_salt, pw_wrap, rc_salt, rc_wrap, _now_iso(), _now_iso()),
-            )
+            vault_store.add_owner(self.db, self.scrypt_n, pw_salt, pw_wrap, rc_salt, rc_wrap, _now_iso(), _now_iso())
             self._key = data_key
             self._attach_keyfile(data_key)
             return self._new_session(), format_recovery_code(code)
@@ -217,7 +214,7 @@ class Vault:
     # ── 입장 ────────────────────────────────────────────────────────────────
 
     def _owner(self):  # type: ignore[no-untyped-def]
-        row = self.db.one("SELECT * FROM owner WHERE id=1")
+        row = vault_store.owner(self.db)
         if row is None:
             raise VaultError("아직 계정이 없어요 · 비밀번호를 먼저 만들어 주세요", 409)
         return row
@@ -235,11 +232,9 @@ class Vault:
         row = self._owner()
         fails = int(row["fails"]) + 1
         if fails >= MAX_FAILS:
-            self.db.run(
-                "UPDATE owner SET fails=0, locked_until=? WHERE id=1", (self.clock() + LOCK_S,)
-            )
+            vault_store.lock_owner(self.db, self.clock() + LOCK_S)
             raise VaultError("5번 맞지 않아 잠금 · 5분 0초 남음", 429, locked_for=LOCK_S)
-        self.db.run("UPDATE owner SET fails=? WHERE id=1", (fails,))
+        vault_store.set_fails(self.db, fails)
         raise VaultError(
             f"비밀번호가 맞지 않아요 · 남은 횟수 {MAX_FAILS - fails}번",
             401,
@@ -257,7 +252,7 @@ class Vault:
             except (InvalidTag, ValueError):
                 self._fail()
                 raise  # _fail은 늘 예외를 던진다
-            self.db.run("UPDATE owner SET fails=0, locked_until=0 WHERE id=1")
+            vault_store.clear_fails(self.db)
             self._key = data_key
             self._attach_keyfile(data_key)
             return self._new_session()
@@ -286,15 +281,12 @@ class Vault:
                 raise
             new_code = new_recovery_code()
             pw_salt, rc_salt = os.urandom(16), os.urandom(16)
-            self.db.run(
-                "UPDATE owner SET pw_salt=?, pw_wrap=?, rc_salt=?, rc_wrap=?, fails=0, locked_until=0 "
-                "WHERE id=1",
-                (
-                    pw_salt,
-                    seal(derive_key(pw, pw_salt, self.scrypt_n), data_key, AAD_PW),
-                    rc_salt,
-                    seal(derive_key(new_code, rc_salt, self.scrypt_n), data_key, AAD_RC),
-                ),
+            vault_store.rewrap_both(
+                self.db,
+                pw_salt,
+                seal(derive_key(pw, pw_salt, self.scrypt_n), data_key, AAD_PW),
+                rc_salt,
+                seal(derive_key(new_code, rc_salt, self.scrypt_n), data_key, AAD_RC),
             )
             self._sessions.clear()  # 예전 비밀번호로 연 세션은 모두 닫는다
             self._key = data_key
@@ -325,10 +317,7 @@ class Vault:
                     raise
                 raise
             pw_salt = os.urandom(16)
-            self.db.run(
-                "UPDATE owner SET pw_salt=?, pw_wrap=?, fails=0, locked_until=0 WHERE id=1",
-                (pw_salt, seal(derive_key(pw_new, pw_salt, self.scrypt_n), data_key, AAD_PW)),
-            )
+            vault_store.rewrap_password(self.db, pw_salt, seal(derive_key(pw_new, pw_salt, self.scrypt_n), data_key, AAD_PW))
             self._key = data_key
             self._attach_keyfile(data_key)
 
@@ -365,7 +354,7 @@ class Vault:
             return
         if mk is None:
             return
-        row = self.db.one("SELECT wrap FROM owner_keyfile WHERE id=1")
+        row = vault_store.keyfile_wrap(self.db)
         if row is not None:
             try:
                 if unseal(mk, bytes(row["wrap"]), AAD_KF) == data_key:
@@ -373,11 +362,7 @@ class Vault:
                     return
             except (InvalidTag, ValueError):
                 pass
-        self.db.run(
-            "INSERT INTO owner_keyfile(id,wrap,at) VALUES(1,?,?) "
-            "ON CONFLICT(id) DO UPDATE SET wrap=excluded.wrap, at=excluded.at",
-            (seal(mk, data_key, AAD_KF), _now_iso()),
-        )
+        vault_store.put_keyfile_wrap(self.db, seal(mk, data_key, AAD_KF), _now_iso())
         self._runner_key = data_key
 
     def load_runner(self) -> bool:
@@ -385,7 +370,7 @@ class Vault:
         with self._lock:
             if not self.is_setup():
                 return False
-            row = self.db.one("SELECT wrap FROM owner_keyfile WHERE id=1")
+            row = vault_store.keyfile_wrap(self.db)
             try:
                 mk = self._machine_key(create=False)
             except OSError:
@@ -419,7 +404,7 @@ class Vault:
     def forget_keyfile(self) -> None:
         """앱 데이터 삭제 때: 감싼 키와 메모리의 실행기 키를 지운다(키 파일은 다른 앱 데이터에 쓰일 수 있어 둔다)."""
         with self._lock:
-            self.db.run("DELETE FROM owner_keyfile")
+            vault_store.delete_keyfile_wrap(self.db)
             self._runner_key = None
 
     # ── 비밀번호 다시 받기(돈이 움직이는 일) ────────────────────────────────
@@ -437,7 +422,7 @@ class Vault:
             except (InvalidTag, ValueError):
                 self._fail()
                 raise
-            self.db.run("UPDATE owner SET fails=0, locked_until=0 WHERE id=1")
+            vault_store.clear_fails(self.db)
             now = self.clock()
             for h, (_, until) in list(self._confirms.items()):
                 if until <= now:
@@ -515,15 +500,11 @@ class Vault:
         with self._lock:
             key = self._need_key()
             blob = seal(key, value.encode("utf-8"), b"secret:" + name.encode())
-            self.db.run(
-                "INSERT INTO secrets(name,blob,updated_at) VALUES(?,?,?) "
-                "ON CONFLICT(name) DO UPDATE SET blob=excluded.blob, updated_at=excluded.updated_at",
-                (name, blob, _now_iso()),
-            )
+            vault_store.put_secret_blob(self.db, name, blob, _now_iso())
 
     def get_secret(self, name: str) -> str | None:
         with self._lock:
-            row = self.db.one("SELECT blob FROM secrets WHERE name=?", (name,))
+            row = vault_store.secret_blob(self.db, name)
             if row is None:
                 return None
             key = self._need_key()
@@ -533,10 +514,10 @@ class Vault:
                 raise VaultError("저장한 API 키를 풀지 못했어요 · 삭제하고 다시 등록해 주세요", 500) from None
 
     def has_secret(self, name: str) -> bool:
-        return self.db.one("SELECT 1 FROM secrets WHERE name=?", (name,)) is not None
+        return vault_store.has_secret_blob(self.db, name)
 
     def delete_secret(self, name: str) -> None:
-        self.db.run("DELETE FROM secrets WHERE name=?", (name,))
+        vault_store.delete_secret_blob(self.db, name)
 
     def tail(self, name: str) -> str | None:
         """끝 4자리만. 잠겨 있으면 None."""

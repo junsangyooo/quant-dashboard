@@ -17,6 +17,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from .store import market as market_store
 from .store.db import DB
 from .ports import MarketFeed
 from .domain.markets.kr import KST, DayHours, weekday_hours
@@ -151,7 +152,7 @@ class Market:
 
     def _covered(self, symbol: str, start: date, end: date) -> bool:
         """요청한 범위를 이미 받았는가. 끝이 최근(7일 안)이면 30분이 지나면 다시 받는다."""
-        row = self.db.one("SELECT * FROM bar_meta WHERE symbol=?", (symbol,))
+        row = market_store.bar_meta(self.db, symbol)
         if row is None or not row["from_d"]:
             return False
         if row["from_d"] > start.isoformat() or row["to_d"] < end.isoformat():
@@ -173,13 +174,8 @@ class Market:
             bars = []
         if not bars:
             raise MarketDataError(f"시세를 받지 못했어요 · {symbol}", "network", [symbol])
-        self.db.many(
-            "INSERT INTO bars(symbol,d,o,h,l,c,v) VALUES(?,?,?,?,?,?,?) "
-            "ON CONFLICT(symbol,d) DO UPDATE SET o=excluded.o,h=excluded.h,l=excluded.l,"
-            "c=excluded.c,v=excluded.v",
-            [(symbol, b["d"], b["o"], b["h"], b["l"], b["c"], b["v"]) for b in bars],
-        )
-        old = self.db.one("SELECT from_d, to_d FROM bar_meta WHERE symbol=?", (symbol,))
+        market_store.put_bars(self.db, symbol, bars)
+        old = market_store.bar_range(self.db, symbol)
         from_d = start.isoformat()
         to_d = end.isoformat()
         if old and old["from_d"]:
@@ -187,21 +183,12 @@ class Market:
             if old["from_d"] <= to_d and old["to_d"] >= from_d:
                 from_d = min(from_d, old["from_d"])
                 to_d = max(to_d, old["to_d"])
-        self.db.run(
-            "INSERT INTO bar_meta(symbol,source,from_d,to_d,fetched_at) VALUES(?,?,?,?,?) "
-            "ON CONFLICT(symbol) DO UPDATE SET source=excluded.source, from_d=excluded.from_d,"
-            "to_d=excluded.to_d, fetched_at=excluded.fetched_at",
-            (symbol, "toss", from_d, to_d, self.clock()),
-        )
+        market_store.put_bar_meta(self.db, symbol, "toss", from_d, to_d, self.clock())
 
     def bars(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
         if not self._covered(symbol, start, end):
             self._fetch(symbol, start, end)
-        rows = self.db.all(
-            "SELECT d,o,h,l,c,v FROM bars WHERE symbol=? AND d>=? AND d<=? ORDER BY d",
-            (symbol, start.isoformat(), end.isoformat()),
-        )
-        return [dict(r) for r in rows]
+        return market_store.bars_between(self.db, symbol, start.isoformat(), end.isoformat())
 
     def many(self, symbols: list[str], start: date, end: date) -> dict[str, list[dict[str, Any]]]:
         out: dict[str, list[dict[str, Any]]] = {}

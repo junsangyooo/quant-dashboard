@@ -16,6 +16,7 @@ from typing import Any
 from .domain import blocks as bk
 from .domain import fundamentals as fu
 from .domain.catalog import CATALOG, start_date
+from .store import dart as dart_store
 from .store.db import DB
 from .domain.engine import FEE, SELL_TAX, BacktestError, MarketData, run_backtest, warmup_calendar_days
 from .domain.indicators import Series
@@ -70,10 +71,8 @@ def make_data(body: dict[str, Any], market: Market, db: DB, dart: Disclosures | 
         def fund(sym: str, d: str) -> dict[str, Any]:
             on = date.fromisoformat(d)
             rows = store.financial_rows(sym, on, cal.next_open)
-            sh = db.one("SELECT shares FROM dart_shares WHERE stock_code=? AND rcept_dt<? ORDER BY rcept_dt DESC LIMIT 1",
-                        (sym, d))
-            dv = db.one("SELECT dps FROM dart_div WHERE stock_code=? AND rcept_dt<? ORDER BY rcept_dt DESC LIMIT 1",
-                        (sym, d))
+            sh = dart_store.shares_before(db, sym, d)
+            dv = dart_store.dps_before(db, sym, d)
             s = series.get(sym)
             close = s.close_on_or_before(d) if s else None
             if close is None:

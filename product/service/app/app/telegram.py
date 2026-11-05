@@ -18,7 +18,7 @@ from typing import Any
 
 from .adapters.telegram import Bot, TelegramError
 from .adapters.transport import Transport
-from .store.db import DB
+from .store import db as store_db, todos as todo_store  # 저장 층(SQL은 store/)
 from .ports import Clock
 from .vault import Vault, VaultError
 
@@ -101,7 +101,7 @@ HELP_REPLY = "명령은 /상태 · /멈춤 둘이에요"
 
 
 class Telegram:
-    def __init__(self, db: DB, vault: Vault, transport: Transport, *, now: Clock,
+    def __init__(self, db: store_db.DB, vault: Vault, transport: Transport, *, now: Clock,
                  status: Callable[[], dict[str, Any]], pause: Callable[[str], bool],
                  link: Callable[[], str | None] = lambda: None) -> None:
         self.db = db
@@ -228,18 +228,14 @@ class Telegram:
             return False
         self._set("last_sent", self.now().isoformat(timespec="seconds"))
         self._set("last_error", None)
-        self.db.run("UPDATE todos SET status='resolved', resolved_at=? WHERE kind='telegram_fail' AND status='open'",
-                    (self.now().isoformat(timespec="seconds"),))
+        todo_store.resolve_open(self.db, self.now().isoformat(timespec="seconds"), "telegram_fail")
         return True
 
     def _fail_todo(self) -> None:
-        if self.db.one("SELECT 1 FROM todos WHERE kind='telegram_fail' AND status='open'"):
+        if todo_store.has_open_todo(self.db, "telegram_fail"):
             return
-        self.db.run(
-            "INSERT INTO todos(run_id, kind, severity, title, body, status, created_at) VALUES(NULL,?,?,?,?, 'open', ?)",
-            ("telegram_fail", "yellow", FAIL_TITLE, "봇 토큰 · 대화방을 확인해요 · 설정 › 알림",
-             self.now().isoformat(timespec="seconds")),
-        )
+        todo_store.add_todo(self.db, None, "telegram_fail", "yellow", None, FAIL_TITLE, "봇 토큰 · 대화방을 확인해요 · 설정 › 알림",
+                            None, self.now().isoformat(timespec="seconds"))
 
     def notify(self, event: str, text: str, *, live: bool = True, title: str | None = None) -> bool:
         """알림함에 남기고(실전 · 모의 칩) 켜진 사건이면 텔레그램으로 보내요."""
@@ -247,9 +243,8 @@ class Telegram:
         sent = False
         if self.events().get(event, False) and self.vault.has_secret(TOKEN):
             sent = self._send(text)
-        self.db.run("INSERT INTO alerts(at, live, kind, title, body, telegram) VALUES(?,?,?,?,?,?)",
-                    (self.now().isoformat(timespec="seconds"), 1 if live else 0, event, title or text, text,
-                     "sent" if sent else None))
+        todo_store.add_alert(self.db, self.now().isoformat(timespec="seconds"), 1 if live else 0, event, title or text,
+                             text, "sent" if sent else None)
         return sent
 
     # 명령(`/상태` · `/멈춤`)

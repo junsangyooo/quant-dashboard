@@ -1,7 +1,7 @@
 """DART OpenAPI: 재무 · 공시 · 주식 총수 · 배당을 받아 담아 둬요(TASKS T-12 · SPEC 11-1 순서 3 · DATA-CATALOG 2-2).
 
 - 요청 · 응답 꼴은 어댑터 `adapters/dart.py`(`DartClient` · 전송은 `transport.py`의 문 · 기본 가짜 · T-00)예요. 이 파일은 받은 것을
-  담아 두는 큐 · 하루 한도 · 읽기(`Disclosures` 포트 · `ports.py`)예요(저장은 P1-07에서 `store/`로).
+  담아 두는 큐 · 하루 한도 · 읽기(`Disclosures` 포트 · `ports.py`)예요. 표 읽고 쓰기(SQL)는 저장 층 `store/dart.py`예요(P1-07).
 - 받는 순서(큐): ① corpCode(종목 ↔ 회사 번호) → ② 재무 주요계정 `fnlttMultiAcnt`(100개 회사씩 · 2015년~ ·
   1분기 · 반기 · 3분기 · 사업) → ③ 공시 목록 `list.json`(회사마다) → ④ 주식 총수 `stockTotqySttus`(사업 · 반기) ·
   배당 `alotMatter`(사업). ①~③은 첫날 안에, ④는 회사 × 연도 × 보고서라 약 4일 걸려요(SPEC 3 · V2-09).
@@ -21,7 +21,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .adapters.dart import MULTI_MAX, DartClient, DartError
-from .store.db import DB
+from .store import db as store_db, dart as dart_store  # 저장 층(SQL은 store/)
 from .domain.markets.kr import KST
 
 DAILY_LIMIT = 20_000
@@ -82,7 +82,7 @@ def _amount(text: Any) -> float | None:
 
 # ── 저장 · 큐 ────────────────────────────────────────────────────────────────
 
-# 표는 db.py SCHEMA_V2(dart_corp · dart_jobs · dart_quota · dart_fin · dart_disc · dart_shares · dart_div)
+# 표는 store/db.py SCHEMA_V2(dart_corp · dart_jobs · dart_quota · dart_fin · dart_disc · dart_shares · dart_div) · SQL은 store/dart.py
 
 PHASE_CORP, PHASE_FIN, PHASE_LIST, PHASE_SLOW = 1, 2, 3, 4
 
@@ -101,7 +101,7 @@ class Progress:
 
 
 class DartStore:
-    def __init__(self, db: DB, *, today: Callable[[], date] | None = None, daily_limit: int = DAILY_LIMIT) -> None:
+    def __init__(self, db: store_db.DB, *, today: Callable[[], date] | None = None, daily_limit: int = DAILY_LIMIT) -> None:
         self.db = db
         self.today = today or (lambda: datetime.now(KST).date())
         self.daily_limit = daily_limit
@@ -109,28 +109,24 @@ class DartStore:
     # 하루 한도 ─────────────────────────────────────────────────────────
 
     def used_today(self) -> int:
-        row = self.db.one("SELECT used FROM dart_quota WHERE day=?", (self.today().isoformat(),))
-        return int(row["used"]) if row else 0
+        return dart_store.quota_used(self.db, self.today().isoformat())
 
     def _count(self) -> None:
         if self.used_today() >= self.daily_limit:
             raise DartError("하루 20,000건을 넘었어요 · 내일 이어서 받아요", "limit")
-        self.db.run("INSERT INTO dart_quota(day, used) VALUES(?, 1) ON CONFLICT(day) DO UPDATE SET used=used+1",
-                    (self.today().isoformat(),))
+        dart_store.count_request(self.db, self.today().isoformat())
 
     def _limit_reached(self) -> None:
-        self.db.run("INSERT INTO dart_quota(day, used) VALUES(?, ?) ON CONFLICT(day) DO UPDATE SET used=?",
-                    (self.today().isoformat(), self.daily_limit, self.daily_limit))
+        dart_store.fill_quota(self.db, self.today().isoformat(), self.daily_limit)
 
     # 큐 ────────────────────────────────────────────────────────────────
 
     def _add(self, phase: int, kind: str, arg: dict[str, Any]) -> None:
-        self.db.run("INSERT OR IGNORE INTO dart_jobs(phase, kind, arg) VALUES(?,?,?)",
-                    (phase, kind, json.dumps(arg, sort_keys=True)))
+        dart_store.add_job(self.db, phase, kind, json.dumps(arg, sort_keys=True))
 
     def _plan(self) -> None:
         """회사 목록을 받은 뒤 나머지 일을 큐에 넣어요(이미 있는 일은 그대로)."""
-        corps = [r["corp_code"] for r in self.db.all("SELECT corp_code FROM dart_corp ORDER BY stock_code")]
+        corps = dart_store.corp_codes(self.db)
         last_year = self.today().year
         rows: list[tuple[int, str, str]] = []
         for year in range(FIRST_YEAR, last_year + 1):
@@ -146,15 +142,13 @@ class DartStore:
                     rows.append((PHASE_SLOW, "shares", json.dumps({"corp": corp, "reprt": reprt, "year": year},
                                                                    sort_keys=True)))
                 rows.append((PHASE_SLOW, "div", json.dumps({"corp": corp, "year": year}, sort_keys=True)))
-        self.db.many("INSERT OR IGNORE INTO dart_jobs(phase, kind, arg) VALUES(?,?,?)", rows)
+        dart_store.add_jobs(self.db, rows)
 
     def start(self) -> None:
         self._add(PHASE_CORP, "corp", {})
 
     def progress(self) -> Progress:
-        total = int(self.db.one("SELECT COUNT(*) n FROM dart_jobs")["n"])
-        done = int(self.db.one("SELECT COUNT(*) n FROM dart_jobs WHERE done=1")["n"])
-        fast_left = int(self.db.one("SELECT COUNT(*) n FROM dart_jobs WHERE done=0 AND phase<?", (PHASE_SLOW,))["n"])
+        total, done, fast_left = dart_store.job_counts(self.db, PHASE_SLOW)
         state = self.db.get_meta("dart.state") or "idle"
         msg = self.db.get_meta("dart.message") or ""
         return Progress(state, done, total, total > 0 and fast_left == 0, msg)
@@ -169,11 +163,11 @@ class DartStore:
         sent = 0
         try:
             while budget is None or sent < budget:
-                job = self.db.one("SELECT * FROM dart_jobs WHERE done=0 ORDER BY phase, id LIMIT 1")
+                job = dart_store.next_job(self.db)
                 if job is None:
                     break
                 self._do(client, job["kind"], json.loads(job["arg"]))
-                self.db.run("UPDATE dart_jobs SET done=1 WHERE id=?", (job["id"],))
+                dart_store.job_done(self.db, job["id"])
                 sent += 1
         except DartError as exc:
             if exc.kind == "limit":
@@ -197,15 +191,12 @@ class DartStore:
     # 일 하나 ───────────────────────────────────────────────────────────
 
     def _stock_of(self, corp: str) -> str | None:
-        row = self.db.one("SELECT stock_code FROM dart_corp WHERE corp_code=?", (corp,))
-        return str(row["stock_code"]) if row else None
+        return dart_store.stock_of(self.db, corp)
 
     def _do(self, client: DartClient, kind: str, arg: dict[str, Any]) -> None:
         if kind == "corp":
             codes = client.corp_codes()
-            self.db.many("INSERT INTO dart_corp(stock_code, corp_code, name) VALUES(?,?,?) "
-                         "ON CONFLICT(stock_code) DO UPDATE SET corp_code=excluded.corp_code, name=excluded.name",
-                         [(s, c, n) for s, (c, n) in codes.items()])
+            dart_store.put_corps(self.db, [(s, c, n) for s, (c, n) in codes.items()])
             self._plan()
         elif kind == "fin":
             self._save_fin(client.financials(arg["corps"], arg["year"], arg["reprt"]), arg["year"], arg["reprt"])
@@ -216,8 +207,8 @@ class DartStore:
             rows = client.share_count(arg["corp"], arg["year"], arg["reprt"])
             for r in rows:
                 if stock and str(r.get("se", "")).startswith(("보통주", "합계")) and r.get("rcept_no"):
-                    self.db.run(
-                        "INSERT OR REPLACE INTO dart_shares VALUES(?,?,?,?,?,?,?)",
+                    dart_store.put_shares(
+                        self.db,
                         (stock, arg["year"], arg["reprt"], _amount(r.get("istc_totqy")), _amount(r.get("tesstk_co")),
                          r["rcept_no"], rcept_date(r["rcept_no"]).isoformat()),
                     )
@@ -228,9 +219,8 @@ class DartStore:
                 # 행 이름은 확인 전(OPEN-QUESTIONS Q-T5): '주당 현금배당금' + 보통주
                 if stock and "주당" in str(r.get("se", "")) and "현금" in str(r.get("se", "")) \
                         and str(r.get("stock_knd", "보통주")).startswith("보통") and r.get("rcept_no"):
-                    self.db.run("INSERT OR REPLACE INTO dart_div VALUES(?,?,?,?,?)",
-                                (stock, arg["year"], _amount(r.get("thstrm")), r["rcept_no"],
-                                 rcept_date(r["rcept_no"]).isoformat()))
+                    dart_store.put_div(self.db, (stock, arg["year"], _amount(r.get("thstrm")), r["rcept_no"],
+                                                 rcept_date(r["rcept_no"]).isoformat()))
                     break
 
     def _save_fin(self, rows: Iterable[dict[str, Any]], year: int, reprt: str) -> None:
@@ -245,7 +235,7 @@ class DartStore:
             out.append((stock, year, reprt, fs, account, _amount(r.get("thstrm_amount")),
                         _amount(r.get("thstrm_add_amount")), rno, rcept_date(rno).isoformat()))
         if out:
-            self.db.many("INSERT OR REPLACE INTO dart_fin VALUES(?,?,?,?,?,?,?,?,?)", out)
+            dart_store.put_fin(self.db, out)
 
     def _save_list(self, client: DartClient, corp: str) -> None:
         stock = self._stock_of(corp)
@@ -263,14 +253,14 @@ class DartStore:
                 rdt = str(r.get("rcept_dt") or rno[:8])
                 out.append((rno, stock, f"{rdt[:4]}-{rdt[4:6]}-{rdt[6:8]}", name, disclosure_kind(name)))
             if out:
-                self.db.many("INSERT OR REPLACE INTO dart_disc VALUES(?,?,?,?,?)", out)
+                dart_store.put_disc(self.db, out)
             page += 1
 
     # 읽기 (R-J9: 접수일 다음 거래일부터) ───────────────────────────────
 
     def financial_rows(self, stock: str, on: date, next_open: Callable[[date], date]) -> list[dict[str, Any]]:
         """on 날 확인에 쓸 수 있는 재무 행(연결 우선 · 접수일 다음 거래일부터)."""
-        rows = self.db.all("SELECT * FROM dart_fin WHERE stock_code=? ORDER BY year, reprt", (stock,))
+        rows = dart_store.fin_rows(self.db, stock)
         best: dict[tuple[int, str, str], dict[str, Any]] = {}
         for r in rows:
             if usable_from(date.fromisoformat(r["rcept_dt"]), next_open) > on:
@@ -281,7 +271,7 @@ class DartStore:
         return list(best.values())
 
     def disclosures_on(self, stock: str, on: date, next_open: Callable[[date], date]) -> list[dict[str, Any]]:
-        rows = self.db.all("SELECT * FROM dart_disc WHERE stock_code=? ORDER BY rcept_dt", (stock,))
+        rows = dart_store.disc_rows(self.db, stock)
         out = []
         for r in rows:
             frm = usable_from(date.fromisoformat(r["rcept_dt"]), next_open)
