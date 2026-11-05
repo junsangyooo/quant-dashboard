@@ -48,6 +48,7 @@ from .api import web as web_api
 from .api.errors import install_error_handlers, with_kind
 from .api.guard import install_guard
 from .api.http import confirmer
+from .copy import texts as T
 from .domain.markets.kr import KST, weekday_open
 from .domain.stock_names import stock_name
 from .market import now_kst
@@ -304,13 +305,26 @@ def stored_calendar(data: Path) -> Calendar | None:
 
 def update_window_state(now: datetime, cal: Calendar | None = None) -> str | None:
     """SPEC 5-10 업데이트 창(거래일 16:00 ~ 20:00 · `run/scheduler.py` 시각 표): 안이면 None · 거래일이 아니면 'closed' ·
-    시간 밖이면 'hours'(글은 설치기가 붙여요)."""
+    시간 밖이면 'hours'(글은 `update_refusal`이 글 목록에서 붙여요)."""
     local = now.astimezone(KST)
     is_open = cal.is_open(local.date()) if cal is not None else local.weekday() < 5
     if not is_open:
         return "closed"
     if not (UPDATE_FROM <= local.time() < UPDATE_UNTIL):
         return "hours"
+    return None
+
+
+UPDATE_WINDOW_TEXT = T.update_window  # 설치기 `install.WINDOW_TEXT`(입구는 글 목록을 직접 가져오지 않아요)
+
+
+def update_refusal(now: datetime, cal: Calendar | None = None) -> str | None:
+    """설치기 `can-update`의 거절 이유 글(창 안이면 None · 글은 글 목록 `update_*`)."""
+    why = update_window_state(now, cal)
+    if why == "closed":
+        return T.update_closed_day.format(window=T.update_window)
+    if why == "hours":
+        return T.update_off_hours.format(window=T.update_window)
     return None
 
 

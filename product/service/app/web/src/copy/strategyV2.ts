@@ -1,7 +1,9 @@
 // 전략 목록 · 새 전략 · 붙여 넣기 · 상세(그림 V2-20 ~ V2-22 · V2-25 · SPEC 8-1).
+import { texts } from './texts.gen';
+
 export const strategyV2 = {
   title: '전략',
-  count: (n: number) => `${String(n)}개`,
+  count: (n: number) => texts.count({ n }),
   import: '가져오기',
   newButton: '새 전략',
   emptyTitle: '전략이 없어요',
@@ -10,7 +12,7 @@ export const strategyV2 = {
   chipPaper: '모의투자 중',
   chipProblems: (n: number) => `문제 ${String(n)}`,
   cardLine: (no: number, tested: boolean, day: string) =>
-    `버전 ${String(no)} · ${tested ? '백테스트 함' : '백테스트 안 함'} · ${day} 저장`,
+    `버전 ${String(no)} · ${tested ? '백테스트 함' : texts.untested} · ${day} 저장`,
   sheetTitle: '새 전략',
   close: '닫기',
   blank: {
@@ -18,23 +20,23 @@ export const strategyV2 = {
     line: '① 종목 직접 지정 → ④ → ⑤ ← ⑦이 이어진 채로 시작해요 · 숫자는 비어 있어요',
   },
   paste: {
-    title: '복사한 전략 붙여 넣기',
+    title: texts.paste_strategy,
     line: '실험실에서 복사한 전략 글을 가져와요 · 숫자는 비워서 와요',
   },
   file: { title: '전략 파일 가져오기', line: '내보낸 전략 파일(.json)을 숫자까지 그대로 가져와요' },
   labNote: '실험실 결과는 이 앱의 백테스트와 다를 수 있어요 · 숫자는 직접 정해요',
-  pasteTitle: '복사한 전략 붙여 넣기',
+  pasteTitle: texts.paste_strategy,
   pasteBack: '새 전략',
   pastePlaceholder: 'quant-strategy/3 app>=1.0 으로 시작하는 복사한 전략 글',
   confirmTitle: '가져오기 확인',
   name: '이름',
   stages: '단계',
   stagesValue: (n: number, entry: number, sell: number) =>
-    `${String(n)}개 · 진입 경로 ${String(entry)} · 매도 경로 ${String(sell)}`,
+    `${texts.count({ n })} · ${texts.path_count({ entry, sell })}`,
   rows: '조건 줄',
   rowsValue: (n: number) => `${String(n)}줄`,
   blanks: '빈칸',
-  blanksValue: (n: number, kinds: string[]) => [`${String(n)}개`, ...kinds].join(' · '),
+  blanksValue: (n: number, kinds: string[]) => [texts.count({ n }), ...kinds].join(' · '),
   blanksLine: '숫자 · 종목 · 섹터는 비워서 와요 · 편집에서 직접 입력해요',
   cooldownNote: '⑤ 판 뒤 다시 사지 않는 기간만 1거래일로 채워 와요 · 안전 규칙이에요',
   others: (n: number, names: string) => `그 밖의 단계 ${String(n)}개 · ${names}`,
@@ -48,21 +50,20 @@ export const strategyV2 = {
   backtest: '백테스트',
   edit: '편집',
   sentence: '문장으로 보기',
-  versionLabel: (n: number) => `버전 ${String(n)}`,
+  versionLabel: (n: number) => texts.version({ n }),
   blocksTitle: '단계',
-  pathCount: (entry: number, sell: number) =>
-    `진입 경로 ${String(entry)} · 매도 경로 ${String(sell)}`,
+  pathCount: (entry: number, sell: number) => texts.path_count({ entry, sell }),
   liveTitle: '실전 운용',
   liveLine: '실전 운용은 이 앱에서 백테스트한 버전으로 시작해요',
   liveButton: (n: number, ro: string) => `버전 ${String(n)}${ro} 실전 운용 준비 ›`,
   paperTitle: '모의투자',
-  paperLine: '평일 20:10에 확인하고 다음 거래일 시가로 모의 체결해요 · 실제 돈은 움직이지 않아요',
+  paperLine: texts.paper_start_line,
   paperButton: (n: number, ro: string) => `버전 ${String(n)}${ro} 모의투자 시작`,
   versionsTitle: '버전',
   versionRow: (day: string, hm: string, tested: string) =>
     tested ? `${day} ${hm} 저장 · ${tested} 백테스트` : `${day} 저장`,
   tested: '백테스트 함',
-  untested: '백테스트 안 함',
+  untested: texts.untested,
   delete: '전략 삭제',
   deleteConfirm: '이 전략을 삭제할까요? 버전도 모두 삭제돼요',
 } as const;

@@ -16,6 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from ..copy import texts as T
 from ..domain import copytext as ct
 from ..domain.engine import BacktestError as BacktestErrorV2
 from ..run.data import MarketDataError
@@ -80,7 +81,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def on_validation(_: Request, __: RequestValidationError) -> JSONResponse:
-        return err("요청 형식이 맞지 않아요", 400)  # 받은 값을 되돌려 보내지 않는다
+        return err(T.bad_request, 400)  # 받은 값을 되돌려 보내지 않는다
 
     @app.exception_handler(StarletteHTTPException)
     async def on_http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -91,4 +92,4 @@ def install_error_handlers(app: FastAPI) -> None:
         # 예외 글에는 무엇이 들었는지 모르니 종류와 위치만 남긴다
         where = traceback.extract_tb(exc.__traceback__)[-1:] if exc.__traceback__ else []
         log.error("unhandled %s at %s", type(exc).__name__, [f"{f.filename}:{f.lineno}" for f in where])
-        return err("앱 안에서 문제가 생겼어요 · 다시 해 주세요", 500)
+        return err(T.unknown_error, 500)

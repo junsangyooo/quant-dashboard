@@ -25,7 +25,16 @@ from typing import Any
 from xml.sax.saxutils import escape
 
 LABEL = "kr.quant.service"
-WINDOW_TEXT = "업데이트는 거래일 16:00~20:00(그날 20:10 확인 전)에만 해요"
+
+
+def __getattr__(name: str) -> str:
+    """`WINDOW_TEXT`(업데이트 창 글 · 글 목록 `update_window`): 입구는 글 목록을 직접 가져오지 않아요(ARCHITECTURE 2절) ·
+    조립의 설치기 몫에서 받아요(무거운 앱 모듈은 쓸 때만 import · 이름 그대로 `install.WINDOW_TEXT`)."""
+    if name == "WINDOW_TEXT":
+        from .app import UPDATE_WINDOW_TEXT
+
+        return UPDATE_WINDOW_TEXT
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def systemd_unit(app: Path, data: Path, user: str, port: int = 8765, ts_name: str | None = None,
@@ -92,14 +101,10 @@ def launchd_plist(app: Path, data: Path, port: int = 8765) -> str:
 
 def update_window(now: datetime, cal: Any = None) -> tuple[bool, str]:
     """SPEC 5-10: 거래일 16:00~20:00(그날 20:10 확인 전)에만. 아니면 거절 이유(`cal`은 저장된 토스 장 달력 · 없으면 평일 규칙)."""
-    from .app import update_window_state
+    from .app import update_refusal
 
-    why = update_window_state(now, cal)
-    if why == "closed":
-        return False, f"오늘은 거래일이 아니에요 · {WINDOW_TEXT}"
-    if why == "hours":
-        return False, f"지금은 할 수 없어요 · {WINDOW_TEXT}"
-    return True, ""
+    why = update_refusal(now, cal)
+    return (False, why) if why is not None else (True, "")
 
 
 def write_step(data: Path, step: str, state: str, version: str) -> None:

@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from ..copy import texts as T
 from ..domain.markets.kr import DayHours, weekday_hours
 from ..market import now_kst
 from ..ports import BrokerError, FeedNotConnected, MarketFeed, SymbolNotFound
@@ -140,7 +141,7 @@ class Market:
             bars = self.source.daily(symbol, start, end)
         except SymbolNotFound:
             raise MarketDataError(
-                f"일봉이 없는 종목 코드가 있어요 · {symbol} · 종목 코드를 확인해 주세요", "symbol", [symbol]
+                T.symbol_no_bars.format(codes=symbol), "symbol", [symbol]
             ) from None
         except FeedNotConnected:
             raise MarketDataError(TOSS_NEEDED, "toss") from None
@@ -149,7 +150,7 @@ class Market:
         except Exception:  # 전송 오류는 여러 모양으로 와요(응답 없음 · 응답 이상 · 한도)
             bars = []
         if not bars:
-            raise MarketDataError(f"시세를 받지 못했어요 · {symbol}", "network", [symbol])
+            raise MarketDataError(T.market_fetch_failed_for.format(codes=symbol), "network", [symbol])
         market_store.put_bars(self.db, symbol, bars)
         old = market_store.bar_range(self.db, symbol)
         from_d = start.isoformat()
@@ -180,9 +181,9 @@ class Market:
         if unknown:
             codes = ", ".join(unknown)
             return_err = MarketDataError(
-                f"일봉이 없는 종목 코드가 있어요 · {codes} · 종목 코드를 확인해 주세요", "symbol", unknown
+                T.symbol_no_bars.format(codes=codes), "symbol", unknown
             )
             raise return_err
         if failed:
-            raise MarketDataError(f"시세를 받지 못했어요 · {', '.join(failed)}", "network", failed)
+            raise MarketDataError(T.market_fetch_failed_for.format(codes=', '.join(failed)), "network", failed)
         return out

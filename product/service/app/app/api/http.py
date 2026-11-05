@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 
+from ..copy import texts as T
 from ..security.vault import SESSION_S, Vault, VaultError
 from .models import ApiModel, Bool, Int, Str, opt
 
@@ -58,9 +59,9 @@ async def json_body(request: Request) -> dict[str, Any]:
     try:
         data = await request.json()
     except ValueError:
-        raise VaultError("요청 형식이 맞지 않아요") from None
+        raise VaultError(T.bad_request) from None
     if not isinstance(data, dict):
-        raise VaultError("요청 형식이 맞지 않아요")
+        raise VaultError(T.bad_request)
     return data
 
 

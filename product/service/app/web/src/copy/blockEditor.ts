@@ -1,11 +1,13 @@
 // 편집기 v2 글(그림 V2-23 · V2-24 · SPEC 4-4 그대로).
+import { texts } from './texts.gen';
+
 export const blockEditor = {
   editTitle: (name: string) => `${name} 편집`,
   newName: '새 전략',
   back: '전략',
   newChip: (n: number) => `새 전략 · 저장하면 버전 ${String(n)}`,
   versionChip: (n: number, changed: boolean) =>
-    changed ? `버전 ${String(n)} · 바뀐 곳 있음` : `버전 ${String(n)}`,
+    changed ? `버전 ${String(n)} · 바뀐 곳 있음` : texts.version({ n }),
   runningNote: (n: number) =>
     `실전 운용은 버전 ${String(n)}으로 계속돼요 · 새 버전은 백테스트 뒤 전략 변경으로 적용해요`,
   backtest: '백테스트',
@@ -31,7 +33,7 @@ export const blockEditor = {
   onlyOne: '하나만 놓아요',
   placed: (n: number) => `${String(n)}개 놓음`,
   addRow: '조건 추가',
-  match: { all: '모두 맞으면', any: '하나라도 맞으면' },
+  match: { all: '모두 맞으면', any: texts.match_any },
   searchPlaceholder: '조건 검색',
   menuLead: (circle: string, stage: string) => `${circle} ${stage}에 들어갈 조건`,
   menuLocked: 'DART를 연결하면 쓸 수 있어요 · 연결 ›',
@@ -74,7 +76,7 @@ export const blockEditor = {
   entryLead: (circle: string, by: string, n: string) =>
     `통과하면 매수 후보가 되고, ${circle} ${by} 순으로 ${n}종목까지 골라요`,
   sellTitle: (n: number) => `매도 경로 ${String(n)}개`,
-  sellRight: '하나라도 맞으면',
+  sellRight: texts.match_any,
   sellLead: '맞으면 그 조건의 실행 방식대로 팔아요',
   weightTitle: '비중',
   weightRight: '함께 적용',
@@ -118,8 +120,7 @@ export const blockEditor = {
     line: '편집은 폭 1024 이상에서 할 수 있어요 · 여기서는 보기만 해요',
   },
   narrowOrder: '단계 · 경로 순서',
-  narrowCounts: (entry: number, sell: number) =>
-    `진입 경로 ${String(entry)} · 매도 경로 ${String(sell)}`,
+  narrowCounts: (entry: number, sell: number) => texts.path_count({ entry, sell }),
   narrowSellLink: '⑥ 매도 · 맞으면 팔아요',
   narrowWeightLink: '⑦ 비중은 ⑤ 매수에 함께 적용해요',
   sortStrength: '신호 강도',

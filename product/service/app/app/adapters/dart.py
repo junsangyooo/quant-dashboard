@@ -29,6 +29,9 @@ LIST_PAGE = 100
 KEY_ERRORS = {"010", "011", "012", "901"}  # 등록 안 된 키 · 사용할 수 없는 키 · 접근할 수 없는 IP · 키 만료
 LIMIT_ERROR = "020"
 NO_DATA = "013"
+# 오류 글(한 곳에 · 어댑터 층은 글 목록 `app/copy/`를 가져오지 않아요 · ARCHITECTURE 2절 · TASKS P1-11)
+NO_ANSWER = "DART가 응답하지 않아요"
+BAD_SHAPE = "DART 응답 형식이 맞지 않아요"
 
 
 class DartError(DisclosureSourceError):
@@ -57,9 +60,9 @@ class DartClient:
         try:
             resp = self.transport(HttpRequest("GET", f"{self.base}/{name}?{query}", {"accept": "*/*"}, None))
         except TransportError:
-            raise DartError("DART가 응답하지 않아요", "network") from None
+            raise DartError(NO_ANSWER, "network") from None
         if resp.status != 200:
-            raise DartError("DART가 응답하지 않아요", "network")
+            raise DartError(NO_ANSWER, "network")
         return resp.body
 
     def _json(self, name: str, params: dict[str, Any]) -> list[dict[str, Any]]:
@@ -67,7 +70,7 @@ class DartClient:
         try:
             data = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
-            raise DartError("DART 응답 형식이 맞지 않아요", "bad") from None
+            raise DartError(BAD_SHAPE, "bad") from None
         return _rows(data, name)
 
     def corp_codes(self) -> dict[str, tuple[str, str]]:
@@ -78,13 +81,13 @@ class DartClient:
                 _rows(json.loads(raw.decode("utf-8")), "corpCode.xml")
             except (UnicodeDecodeError, ValueError):
                 _xml_status(raw)
-            raise DartError("DART 응답 형식이 맞지 않아요", "bad")
+            raise DartError(BAD_SHAPE, "bad")
         try:
             with zipfile.ZipFile(io.BytesIO(raw)) as zf:
                 xml = zf.read(zf.namelist()[0])
             root = ET.fromstring(xml)
         except (zipfile.BadZipFile, IndexError, ET.ParseError, KeyError):
-            raise DartError("DART 응답 형식이 맞지 않아요", "bad") from None
+            raise DartError(BAD_SHAPE, "bad") from None
         out: dict[str, tuple[str, str]] = {}
         for item in root.iter("list"):
             stock = (item.findtext("stock_code") or "").strip()
@@ -103,7 +106,7 @@ class DartClient:
         try:
             data = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
-            raise DartError("DART 응답 형식이 맞지 않아요", "bad") from None
+            raise DartError(BAD_SHAPE, "bad") from None
         rows = _rows(data, "list.json")
         try:
             pages = int(data.get("total_page") or 1) if rows else 0
@@ -120,12 +123,12 @@ class DartClient:
 
 def _rows(data: Any, name: str) -> list[dict[str, Any]]:
     if not isinstance(data, dict) or "status" not in data:
-        raise DartError("DART 응답 형식이 맞지 않아요", "bad")
+        raise DartError(BAD_SHAPE, "bad")
     status = str(data["status"])
     if status == "000":
         rows = data.get("list")
         if not isinstance(rows, list):
-            raise DartError("DART 응답 형식이 맞지 않아요", "bad")
+            raise DartError(BAD_SHAPE, "bad")
         return [r for r in rows if isinstance(r, dict)]
     if status == NO_DATA:
         return []
@@ -140,5 +143,5 @@ def _xml_status(raw: bytes) -> None:
     try:
         root = ET.fromstring(raw)
     except ET.ParseError:
-        raise DartError("DART 응답 형식이 맞지 않아요", "bad") from None
+        raise DartError(BAD_SHAPE, "bad") from None
     _rows({"status": root.findtext("status"), "list": []}, "corpCode.xml")

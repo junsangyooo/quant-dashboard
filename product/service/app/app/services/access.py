@@ -9,10 +9,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ..copy import texts as T
 from ..security.vault import VaultError
 from ..store.db import DB
 
-PLACES = {"server": "서버(클라우드 · 고정 IP)", "pc": "늘 켜 둔 PC"}
+PLACES = {"server": T.place_server, "pc": T.place_pc}
 PLACE_META = "access.place"
 
 

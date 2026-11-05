@@ -11,6 +11,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Request
 from pydantic import Field
 
+from ..copy import texts as T
 from ..run.paper import PaperV2
 from ..security.vault import VaultError
 from .http import ERRORS, json_body
@@ -107,7 +108,7 @@ def paper_router(*, paper2: PaperV2) -> APIRouter:
         try:
             vid = int(b.get("version_id"))  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            raise VaultError("전략 버전을 골라 주세요") from None
+            raise VaultError(T.pick_version) from None
         return await asyncio.to_thread(paper2.start, vid, b.get("cash"))
 
     @r.get("/api/v2/paper/preview", response_model=PaperPreview, response_model_exclude_unset=True)

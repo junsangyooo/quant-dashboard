@@ -1,5 +1,7 @@
 // 설정 · 연결 · 비밀번호 변경 (Figma MVP-05·06).
 
+import { texts } from './texts.gen';
+
 export const settingsCopy = {
   title: '설정',
   back: '설정',
@@ -9,8 +11,8 @@ export const settingsCopy = {
     current: '지금 비밀번호',
     next: '새 비밀번호',
     nextHint: '8자 이상',
-    next2: '새 비밀번호 다시 입력',
-    mismatch: '두 비밀번호가 달라요 · 다시 입력해 주세요',
+    next2: texts.new_password_again,
+    mismatch: texts.password_mismatch,
     submit: '비밀번호 변경',
     done: '비밀번호를 변경했어요 · 다음 로그인부터 새 비밀번호를 써요',
   },
@@ -44,10 +46,10 @@ export const settingsCopy = {
     checkNote:
       '연결 확인은 조회만 해요 · 액세스 토큰 받기 → 계좌 → 삼성전자 현재가 · 같은 키를 쓰는 다른 프로그램은 이때 연결이 끊겨요',
     afterChange: '저장한 뒤 연결 확인을 다시 눌러요',
-    price: '삼성전자 현재가',
+    price: texts.step_price,
     readOnly: '연결 확인은 조회만 해요',
     steps: { done: '됨', failed: '안 됨', waiting: '대기', running: '확인 중' },
-    stepNames: { token: '액세스 토큰 받기', account: '계좌 찾기', price: '삼성전자 현재가' },
+    stepNames: { token: texts.step_token, account: '계좌 찾기', price: texts.step_price },
     cause: '원인',
     next: '다음',
     howTitle: 'API 키 받는 법',
@@ -65,6 +67,6 @@ export const settingsCopy = {
     deleteBody:
       '이 앱에 저장한 Client ID · Client Secret · 계좌번호를 삭제해요 · 보유 평가는 마지막 종가로 바뀌어요',
     deleteNote: '토스 쪽 키는 토스증권 WTS에서 따로 삭제해요',
-    locked: '잠금 · 비밀번호를 입력하면 다시 실행돼요',
+    locked: texts.locked_retry,
   },
 } as const;

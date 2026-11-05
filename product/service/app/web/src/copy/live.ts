@@ -1,8 +1,10 @@
 // 실전 화면(V2-10 자산 · V2-11 계획 · V2-12 기록 · V2-13 할 일 · 알림 · V2-14 할 일 상세 · V2-30 실전 운용 시작 ·
 // V2-32 멈추기). 모의 숫자는 여기 없어요(R-V5).
+import { texts } from './texts.gen';
+
 export const liveCopy = {
   won: '원',
-  version: (n: number) => `버전 ${String(n)}`,
+  version: (n: number) => texts.version({ n }),
   stocks: (n: number) => `${String(n)}종목`,
   shares: '주',
   running: '운용 중',
@@ -62,7 +64,7 @@ export const liveCopy = {
     pauseTitle: '새 매수 멈춤',
     pauseLine: '다시 켤 때까지 새 매수를 보내지 않아요 · 매도는 그대로 나가요 · 로그인만으로 돼요',
     pauseButton: '새 매수 멈춤 ›',
-    resumeButton: '새 매수 다시 켜기',
+    resumeButton: texts.resume_buys,
     scheduleTitle: (d: string) => `일정 · ${d}`,
     schedule: [
       '08:30 · 장 시작 전 점검',
@@ -88,7 +90,7 @@ export const liveCopy = {
     foot: '손익은 수수료 · 세금을 뺀 값이에요',
   },
   todos: {
-    title: '할 일 · 알림',
+    title: texts.todos_alerts,
     tabTodo: '할 일',
     tabAlert: '알림',
     red: '급한 할 일',
@@ -100,9 +102,9 @@ export const liveCopy = {
     paper: '모의',
     actions: {
       mismatch: '계좌에 맞추기',
-      corp: '권리 변동 맞추기',
-      huge: '큰 주문 보내기',
-      too_big: '큰 주문 보내기',
+      corp: texts.corp_action_match,
+      huge: texts.big_order_send,
+      too_big: texts.big_order_send,
       unknownNone: '주문이 없어요',
       unknownFilled: '체결됐어요',
     },
@@ -111,7 +113,7 @@ export const liveCopy = {
     tossStop: '급하면 토스에서 멈추기 · 토스증권 앱 › 주식 › 주문내역에서 미체결 주문을 취소해요',
   },
   start: {
-    title: '실전 운용 시작',
+    title: texts.live_start,
     checksTitle: '① 확인할 것',
     checks: {
       toss: '토스 연결',
@@ -132,13 +134,13 @@ export const liveCopy = {
     riskTitle: '⑥ 위험 확인',
     risks: [
       '실제 돈으로 주문이 나가요',
-      '앱 오류 · 연결 · 컴퓨터 꺼짐으로 주문이 늦거나 안 나갈 수 있어요',
+      texts.order_risk,
       '과거 결과는 앞으로의 수익을 뜻하지 않아요',
       '급할 때 토스에서 멈추는 법을 알아요',
     ],
     noStop: '손절 조건이 없어요 · 이 전략은 손실을 스스로 멈추지 않아요',
     noStopCheck: '손절 없이 운용하는 것을 알아요',
-    submit: '실전 운용 시작',
+    submit: texts.live_start,
     started: '실전 운용을 시작했어요',
   },
   stop: {
@@ -147,7 +149,7 @@ export const liveCopy = {
     pauseLine: '다시 켤 때까지 새 매수를 보내지 않아요 · 매도는 그대로 나가요',
     end: '운용 끝내기 · 보유 그대로',
     endLine: '손절 · 익절도 멈추고 조건주문을 취소해요 · 보유는 직접 관리 종목이 돼요',
-    sellAll: '전부 팔고 끝내기',
+    sellAll: texts.sell_all_end,
     sellAllLine: '장중이면 바로, 장 밖이면 다음 거래일 08:35 시가로 가격 하한 없이 팔아요',
     go: '멈추기',
     cancel: '취소',

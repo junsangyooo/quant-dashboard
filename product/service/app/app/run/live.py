@@ -21,6 +21,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from ..copy import texts as T
 from ..domain import blocks as bk
 from ..domain.catalog import CATALOG
 from ..domain.copytext import read_body
@@ -65,7 +66,7 @@ TODO = {
     "precheck": ("red", "장 시작 전 점검 실패 · {why}"),
     "toss_down": ("red", "토스 연결이 끊겼어요"),
     "other_user": ("red", "다른 곳에서 같은 키를 쓰고 있어요"),
-    "check_fail": ("red", "오늘 확인 실패"),
+    "check_fail": ("red", T.check_failed_today),
     "unknown": ("red", "결과 모르는 주문 · [{name}]"),
     "mismatch": ("red", "계좌 불일치 · [{name}]"),
     "corp": ("red", "권리 변동 · [{name}]"),
@@ -75,17 +76,17 @@ TODO = {
     # 노랑
     "missed_open": ("yellow", "시가 주문을 놓쳤어요 · 앱이 꺼져 있었어요"),
     "loss_limit": ("yellow", "하루 손실 한도 · 내일 새 매수 멈춤"),
-    "huge": ("yellow", "큰 주문 확인 · [{name}] [{amount}]"),
-    "too_big": ("yellow", "큰 주문 확인 · [{name}] [{amount}]"),
+    "huge": ("yellow", T.big_order_check),
+    "too_big": ("yellow", T.big_order_check),
     "cond_fail": ("yellow", "조건주문 다시 걸기 실패 · [{name}]"),
     "dart_error": ("yellow", "DART 연결 오류"),
     "cash_cut": ("yellow", "운용 현금이 줄었어요(출금)"),
 }
 # SPEC 5-6 '막히는 범위'
 SCOPE = {
-    "precheck": "그날 주문 0", "toss_down": "실전 주문 전부 0 · 장중 감시도 멈춤", "other_user": "실전 주문 전부 0",
+    "precheck": "그날 주문 0", "toss_down": T.scope_all_orders_and_watch, "other_user": "실전 주문 전부 0",
     "check_fail": "다음 거래일 새 매수 0", "unknown": "그 종목 새 주문 0", "mismatch": "그 종목 0",
-    "corp": "그 종목 0", "shape": "실전 주문 전부 0 · 장중 감시도 멈춤", "missed_open": "그날 매수 0",
+    "corp": "그 종목 0", "shape": T.scope_all_orders_and_watch, "missed_open": "그날 매수 0",
     "loss_limit": "다음 거래일 매수 0", "huge": "그 주문", "too_big": "그 주문",
     "dart_error": "재무 조건이 든 전략의 새 매수 0",
 }
@@ -190,7 +191,7 @@ class Live:
     def _body(self, version_id: int) -> dict[str, Any]:
         v = strategy_store.version_body(self.db, version_id)
         if v is None:
-            raise LiveError("그 버전이 없어요", 404)
+            raise LiveError(T.version_missing, 404)
         return read_body(json.loads(v["body"]))
 
     def engine(self, r: Any, upto: date, *, extra_bar: dict[str, dict[str, float]] | None = None) -> Engine:
@@ -223,9 +224,9 @@ class Live:
             raise LiveError("이미 실전 운용 중이에요 · 하나만 운용해요", 409)
         v = strategy_store.version(self.db, version_id)
         if v is None:
-            raise LiveError("그 버전이 없어요", 404)
+            raise LiveError(T.version_missing, 404)
         if not strategy_store.was_backtested(self.db, version_id):
-            raise LiveError("이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요")
+            raise LiveError(T.version_not_backtested)
         body = self._body(version_id)
         if bk.analyze(body["graph"])["problems"]:
             raise LiveError("문제가 있는 버전은 운용할 수 없어요")
@@ -253,7 +254,7 @@ class Live:
     def _need(self) -> Broker:
         c = self.client()
         if c is None:
-            raise LiveError("토스 연결이 필요해요 · 시세와 계좌를 토스에서 받아요 · 연결 ›")
+            raise LiveError(T.toss_needed_link)
         return c
 
     # ── 20:10 확인(R-O1 · R-L1 · R-L4) ────────────────────────────────────
@@ -308,7 +309,7 @@ class Live:
         self.set_meta(rid, "last_check", upto.isoformat())
         self.set_meta(rid, "check_failed", None)
         run_store.put_equity(self.db, rid, upto.isoformat(), eng.equity(upto.isoformat()), float(st["cash"]))
-        self.notify("check_done", f"확인 끝 · 내일 주문 {len(plans)}건")
+        self.notify("check_done", T.notify_check_done.format(n=len(plans)))
         return {"plans": plans, "for_d": for_d}
 
     # ── 08:30 점검(R-L3) ───────────────────────────────────────────────────
@@ -350,8 +351,7 @@ class Live:
             todo_store.resolve_open(self.db, _iso(self.now()), "precheck", "toss_down")
         self.set_meta(rid, "precheck", json.dumps({"at": _iso(self.now()), "ok": ok}))
         n = len(nxt.get("plans", []))
-        self.notify("precheck", f"장 시작 전 점검 · {'통과' if ok else '실패'} · "
-                    + (f"08:35 주문 {n}건" if ok else "오늘 주문 멈춤 · 앱에서 보기"))
+        self.notify("precheck", T.precheck_passed.format(n=n) if ok else T.precheck_failed)
         if not ok:
             self.todo(rid, "precheck", body=why)
         return ok
@@ -389,7 +389,7 @@ class Live:
         check_failed = bool(self.meta(rid, "check_failed"))
         for p in buys:
             if check_failed:  # 오늘 확인 실패: 다음 거래일 새 매수 0(R-L4)
-                out.append({"sym": p["sym"], "skip": "오늘 확인 실패"})
+                out.append({"sym": p["sym"], "skip": T.check_failed_today})
                 continue
             if self.paused:
                 out.append({"sym": p["sym"], "skip": "새 매수 멈춤"})
@@ -596,9 +596,9 @@ class Live:
                 done["partial"] += 1
         self.save(rid, st)
         if done["filled"] or done["partial"]:
-            self.notify("fills", f"실전 · 체결 {done['filled'] + done['partial']}건 · 앱에서 보기")
+            self.notify("fills", T.notify_fills.format(mode="실전", n=done['filled'] + done['partial']))
         if done["failed"]:
-            self.notify("order_failed", f"실전 · 주문 실패 {done['failed']}건 · 앱에서 보기")
+            self.notify("order_failed", T.notify_order_failed.format(n=done['failed']))
         return done
 
     def _sell_failed(self, rid: int, st: dict[str, Any], o: Any) -> None:
@@ -970,10 +970,10 @@ class Live:
                 q = c.prices([sym]).get(sym)
                 price = float(q.price) if q else float(p["avg"])
                 out.append(self._send(rid, now.date().isoformat(), sym, "SELL", int(p["qty"]), tf.intraday_sell_price(price),
-                                      "stop_all", ["전부 팔고 끝내기"]))
+                                      "stop_all", [T.sell_all_end]))
             else:
                 sells.append({"sym": sym, "side": "sell", "qty": int(p["qty"]), "kind": "protect",
-                              "close": self._prev_close(rid, sym) or p["avg"], "reason": ["전부 팔고 끝내기"]})
+                              "close": self._prev_close(rid, sym) or p["avg"], "reason": [T.sell_all_end]})
         if not in_session:
             for_d = (now.date() if day.open and now < day.at(*ORDER_AT) else self.market.calendar.next_open(now.date()))
             st["next"] = {"judged": now.date().isoformat(), "for_d": for_d.isoformat(), "plans": sells}
@@ -993,7 +993,7 @@ class Live:
     def change_strategy(self, rid: int, version_id: int) -> str:
         """다음 20:10 확인부터 · 보유는 이어받고 · 조건주문은 새 규칙으로 다시 · 이 앱에서 백테스트한 버전만."""
         if not strategy_store.was_backtested(self.db, version_id):
-            raise LiveError("이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요")
+            raise LiveError(T.version_not_backtested)
         cal = self.market.calendar
         now = self.now().astimezone(KST)
         from_d = now.date() if cal.is_open(now.date()) and now.time() < DAILY_CHECK_TIME else cal.next_open(now.date())

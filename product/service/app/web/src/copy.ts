@@ -2,6 +2,8 @@
 // copy/*.ts. Sources: the MVP Figma frames and product/service/GLOSSARY.md.
 // Labels are short nouns; sentences use 해요체.
 
+import { texts } from './copy/texts.gen';
+
 export const copy = {
   wordmark: 'quant',
 
@@ -34,9 +36,9 @@ export const copy = {
   },
 
   pages: {
-    setup: '비밀번호 만들기',
+    setup: texts.password_create,
     login: '로그인',
-    recover: '비밀번호 다시 만들기',
+    recover: texts.password_recover,
     home: '자산',
     plan: '계획',
     history: '기록',
@@ -44,10 +46,10 @@ export const copy = {
     strategy: '전략 상세',
     editor: '전략 편집',
     backtest: '백테스트',
-    import: '복사한 전략 붙여 넣기',
+    import: texts.paste_strategy,
     paper: '모의투자',
-    todos: '할 일 · 알림',
-    liveStart: '실전 운용 시작',
+    todos: texts.todos_alerts,
+    liveStart: texts.live_start,
     paperRun: '모의투자 상세',
     paperStart: '모의투자 시작',
     settings: '설정',
@@ -69,11 +71,11 @@ export const copy = {
     retry: '다시 불러오기',
     loadFailed: '불러오지 못했어요',
     noConnection: '앱에 연결할 수 없어요 · 앱이 켜져 있는지 확인해 주세요',
-    unknownError: '앱 안에서 문제가 생겼어요 · 다시 해 주세요',
+    unknownError: texts.unknown_error,
     buy: '매수',
     sell: '매도',
     dash: '—',
-    version: (n: number) => `버전 ${String(n)}`,
+    version: (n: number) => texts.version({ n }),
     paperRunning: '모의투자 중',
     backtestReady: '백테스트 가능',
     problems: (n: number) => `문제 ${String(n)}개`,
