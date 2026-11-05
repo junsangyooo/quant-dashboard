@@ -65,12 +65,33 @@ ALLOWED: dict[str, set[str]] = {
     "settings": set(),
     "shared": set(),
 }
+# ARCHITECTURE 2절 표의 새 자리(P1-05 ~ P1-09가 만듦 · 하위 폴더 포함). 옮긴 모듈은 `LAYER_OF` 줄 대신 이 표로 층이 정해져요
+# (P1-04 · `tests/test_layers.py`). 어느 표에도 없는 `app/` 모듈은 'unknown'이고, 그 모듈의 import와 그 모듈로의 import는
+# 모두 어긋남으로 세요(새 모듈은 층을 정해야 들어와요).
+LAYER_FILES: dict[str, str] = {"app/app.py": "assembly", "app/ports.py": "ports", "app/settings.py": "settings"}
+LAYER_DIRS: tuple[tuple[str, str], ...] = (
+    ("app/api/", "api"), ("app/services/", "services"), ("app/run/", "run"), ("app/orders/", "orders"),
+    ("app/store/", "store"), ("app/security/", "security"), ("app/adapters/", "adapters"), ("app/domain/", "domain"),
+    ("app/copy/", "copy"),
+)
 FORBIDDEN_EXTERNAL: dict[str, set[str]] = {
     "domain": {"fastapi", "sqlite3", "starlette"},
     "run": {"fastapi", "starlette"},
     "services": {"fastapi", "starlette"},
     "store": {"fastapi", "starlette"},
 }
+
+
+def layer_of(module_rel: str) -> str:
+    """`app/…py` → 층(`LAYER_OF` · `LAYER_FILES` · `LAYER_DIRS` 차례 · 없으면 'unknown')."""
+    if module_rel in LAYER_OF:
+        return LAYER_OF[module_rel]
+    if module_rel in LAYER_FILES:
+        return LAYER_FILES[module_rel]
+    for prefix, layer in LAYER_DIRS:
+        if module_rel.startswith(prefix):
+            return layer
+    return "unknown"
 
 
 def rel(p: Path) -> str:
@@ -146,6 +167,10 @@ def _imports(tree: ast.AST, module_rel: str) -> list[tuple[str, int, bool]]:
                         continue
                 else:
                     mod = child.module or ""
+                    if mod == "app":  # from app import live → app.live(모듈이 아닌 이름이면 아래에서 'shared')
+                        for a in child.names:
+                            out.append((f"app.{a.name}", child.lineno, inside))
+                        continue
                 out.append((mod, child.lineno, inside))
             walk(child, inside or isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef))
 
@@ -162,10 +187,10 @@ def _layer_of_import(name: str) -> str | None:
         return "shared"
     candidates = ["app/" + "/".join(parts[1:]) + ".py", "app/" + "/".join(parts[1:]) + "/__init__.py"]
     for c in candidates:
-        if c in LAYER_OF:
-            return LAYER_OF[c]
         if c in DELETED_MODULES:
             return "deleted"
+        if layer_of(c) != "unknown":
+            return layer_of(c)
     parent = "app/" + "/".join(parts[1:-1] + ["__init__.py"]) if len(parts) > 2 else "app/__init__.py"
     if parent in LAYER_OF:  # `from . import APP_VERSION_TEXT`처럼 패키지 안의 이름
         return LAYER_OF[parent]
@@ -180,7 +205,7 @@ def layer_violations() -> dict[str, Any]:
         if not is_kept(p):
             continue
         r = rel(p)
-        layer = LAYER_OF.get(r, "unknown")
+        layer = layer_of(r)
         for name, line, inside in _imports(_parse(p), r):
             target = _layer_of_import(name)
             top = name.split(".")[0]

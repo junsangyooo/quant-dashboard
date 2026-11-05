@@ -215,14 +215,14 @@ def boundary_violations() -> dict[str, Any]:
 # ── 웹 중복(jscpd) ──────────────────────────────────────────────────────────
 
 
-def jscpd(include_block_editor: bool = True) -> dict[str, Any]:
+def jscpd(include_block_editor: bool = True, env: dict[str, str] | None = None) -> dict[str, Any]:
     ignore = ["**/src/styles/tokens.css", "**/src/styles/pretendard.css"]
     if not include_block_editor:
         ignore.append("**/src/screens/BlockEditor/**")
     with tempfile.TemporaryDirectory(prefix="quant-baseline-jscpd-") as d:
         cmd = ["npx", "--yes", f"jscpd@{JSCPD_VERSION}", "src", "--min-tokens", "50", "--reporters", "json", "--output", d,
                "--ignore", ",".join(ignore), "--format", "typescript,tsx,css", "--silent"]
-        p = subprocess.run(cmd, cwd=WEB, capture_output=True, text=True)
+        p = subprocess.run(cmd, cwd=WEB, capture_output=True, text=True, env=env)  # env: P1-04 장치가 npm 캐시를 넘김
         report = Path(d) / "jscpd-report.json"
         if p.returncode != 0 or not report.exists():
             raise SystemExit(f"jscpd 실패(exit {p.returncode}):\n{(p.stdout + p.stderr)[-2000:]}")

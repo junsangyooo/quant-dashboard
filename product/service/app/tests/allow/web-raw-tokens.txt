@@ -1,0 +1,9 @@
+# 원시 토큰 직접 사용(var(--원시) · screens · components · charts의 CSS · TSX) 허용 목록. 한 줄 = `파일 수  # [꼬리표] 까닭`(web/ 기준).
+# 시작 숫자 447(BlockEditor 빼면 264) · 줄어들기만. `BlockEditor/*`는 ARCHITECTURE 6절 '1단계 예외' · 나머지는 P1-12.
+src/components/Header.module.css 4  # [P1-12] 같은 값의 의미 토큰으로
+src/screens/BacktestV2/BacktestV2.module.css 51  # [P1-12] 같은 값의 의미 토큰으로
+src/screens/BlockEditor/BlockEditor.module.css 183  # [1단계 예외] BlockEditor/*(ARCHITECTURE 6절)
+src/screens/Live/Live.module.css 29  # [P1-12] 같은 값의 의미 토큰으로
+src/screens/PaperV2/PaperV2.module.css 64  # [P1-12] 같은 값의 의미 토큰으로
+src/screens/Setup/Wizard.module.css 39  # [P1-12] 같은 값의 의미 토큰으로
+src/screens/StrategiesV2/StrategiesV2.module.css 77  # [P1-12] 같은 값의 의미 토큰으로

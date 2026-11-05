@@ -4,8 +4,9 @@
 #   product/service/app/scripts/check.sh            # 어느 폴더에서 불러도 같아요(이 파일 위치 기준 product/service/app에서 돌아요)
 #
 # 단계(첫 실패에서 멈추지 않고 끝까지 돌아 모아 보고 · 모두 통과일 때만 종료 0):
-#   secrets(비밀 검사 S11) → commit(커밋 위생) → ruff → mypy → pytest(전체 · 소스 검사 포함) → web-typecheck · web-lint · web-test ·
-#   web-build → e2e-vault(금고 흐름 화면 시험) → pip-audit · npm-audit(허용 목록) → compare(기준선 대조 · 화면 포함 · 포트 8797).
+#   secrets(비밀 검사 S11) → commit(커밋 위생) → ruff → mypy → pytest(전체 · 소스 검사 · 구조 장치 P1-04 포함) → web-typecheck ·
+#   web-lint(화면 경계 포함) · web-test · web-build → structure-dist(빌드 결과의 같은 글 · P1-04) → e2e-vault(금고 흐름 화면 시험) →
+#   pip-audit · npm-audit(허용 목록) → compare(기준선 대조 · 화면 포함 · 포트 8797).
 # 조건: Node 24(아니면 까닭을 적고 종료 2) · `PW_CHROMIUM`(비어 있으면 /opt/pw-browsers/chromium · 브라우저는 내려받지 않음) ·
 #   `.venv`(requirements-dev.lock으로 설치 · `QUANT_PYTHON`으로 바꿀 수 있음) · `web/node_modules`(npm ci) · 포트 8797 · 8798 비어 있음.
 # 출력: 단계 전체 출력은 저장소 밖 `/tmp/check/<날짜시각>/NN-단계.log`(`CHECK_OUT`으로 바꿀 수 있음) · 화면에는 단계마다 한 줄과 끝에 요약 표.
@@ -68,6 +69,7 @@ run_step web-typecheck  in_web npm run typecheck
 run_step web-lint       in_web npm run lint
 run_step web-test       in_web npm run test
 run_step web-build      in_web npm run build
+run_step structure-dist env QUANT_STRUCTURE_DIST=1 "$PY" -m pytest tests/test_structure_web.py::test_web_dist_same_text_only_decreases
 run_step e2e-vault      npx --prefix web playwright test -c web/e2e/playwright.config.ts
 run_step pip-audit      "$PY" scripts/audit_allow.py pip
 run_step npm-audit      "$PY" scripts/audit_allow.py npm

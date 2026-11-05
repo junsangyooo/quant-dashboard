@@ -1,0 +1,7 @@
+# 위치 · 모서리 px 리터럴 허용 목록. 한 줄 = `파일 속성 수  # [꼬리표] 까닭`(web/ 기준). 시작 숫자 9(BlockEditor 빼면 1).
+src/components/Controls.module.css border-radius 1  # [P1-12] 토큰으로
+src/screens/BlockEditor/BlockEditor.module.css left 1  # [1단계 예외] BlockEditor/*(ARCHITECTURE 6절)
+src/screens/BlockEditor/BlockEditor.module.css right 1  # [1단계 예외] BlockEditor/*(ARCHITECTURE 6절)
+src/screens/BlockEditor/BlockEditor.module.css top 2  # [1단계 예외] BlockEditor/*(ARCHITECTURE 6절)
+src/screens/BlockEditor/BlockEditorScreen.tsx left 2  # [1단계 예외] BlockEditor/*(ARCHITECTURE 6절)
+src/screens/BlockEditor/BlockEditorScreen.tsx top 2  # [1단계 예외] BlockEditor/*(ARCHITECTURE 6절)

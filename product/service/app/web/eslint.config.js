@@ -4,6 +4,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import globals from 'globals';
+import { boundaryConfigs } from './eslint.boundaries.js';
 
 export default defineConfig(
   {
@@ -49,4 +50,6 @@ export default defineConfig(
     files: ['**/*.{js,mjs}'],
     ...tseslint.configs.disableTypeChecked,
   },
+  // 화면 경계(ARCHITECTURE 3절 · 지금 폴더로 셈 · 허용 목록 ../tests/allow/web-boundaries.txt · TASKS P1-04)
+  ...boundaryConfigs(),
 );
