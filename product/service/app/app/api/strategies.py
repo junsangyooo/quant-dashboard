@@ -14,9 +14,10 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
+from pydantic import Field
 
 from ..domain import blocks as bk
 from ..domain import catalog as cat
@@ -26,6 +27,333 @@ from ..services import strategies as strategy_jobs
 from ..store import strategies as strategy_store
 from ..store.db import DB
 from .errors import ApiError
+from .http import ERRORS, OkOut
+from .models import ApiModel, Bool, Int, Num, Str, opt
+
+# ── 응답 모델(지금 모양 그대로 · 블록 본문은 편집기가 보내는 꼴과 같음) ──────────────────────────────
+
+StageId = Literal["universe", "signal", "filter", "select", "buy", "sell", "weight"]
+ExecId = Literal["intraday", "broker", "close"]
+
+
+class Row(ApiModel):
+    item: Str
+    op: Str
+    params: dict[Str, Num | Str | None]
+    value: Num | Str | list[Str] | None
+    value2: Num | None
+    exec: ExecId | None
+
+
+class Block(ApiModel):
+    id: Str
+    stage: StageId
+    match: Literal["all", "any"]
+    rows: list[Row]
+    x: Num
+    y: Num
+
+
+class Edge(ApiModel):
+    from_: Str = Field(alias="from")
+    to: Str
+
+
+class Graph(ApiModel):
+    blocks: list[Block]
+    edges: list[Edge]
+
+
+class Body(ApiModel):
+    name: Str
+    graph: Graph
+    converted: Str = opt()  # 옛 v1 본문을 바꿔 읽었으면 "v1"
+    source: dict[Str, Str] = opt()  # 붙여 넣은 복사 글의 출처(가져오기 확인에서만)
+
+
+class StrategyPath(ApiModel):
+    blocks: list[Str]
+    complete: Bool = opt()
+
+
+class Problem(ApiModel):
+    kind: Str
+    title: Str
+    detail: Str
+    block: Str
+    row: Int | None
+    stage: StageId | Literal[""]
+
+
+class SummaryLine(ApiModel):
+    title: Str
+    line: Str
+
+
+class Analysis(ApiModel):
+    mode: Literal["event", "target", "rank"] | None
+    mode_name: Str
+    entry: list[StrategyPath]
+    sell: list[StrategyPath]
+    weight: Str | None
+    problems: list[Problem]
+    warnings: list[Problem]
+    summary: SummaryLine
+    has_stop: Bool
+
+
+class ExecChip(ApiModel):
+    exec: ExecId
+    name: Str
+    reason: Str
+
+
+class StartDate(ApiModel):
+    date: Str
+    reason: Str
+
+
+class Analyzed(ApiModel):
+    """편집 중인 본문의 셈(`body` 먼저 · 그 뒤 `view` 키 차례 그대로)."""
+
+    body: Body
+    analysis: Analysis
+    sentence: Str
+    chips: dict[Str, list[ExecChip | None]]
+    row_texts: dict[Str, list[Str]]
+    block_lines: dict[Str, list[Str]]
+    start: StartDate | None
+
+
+class VersionView(ApiModel):
+    id: Int
+    no: Int
+    problems: Int
+    created_at: Str
+    saved_day: Str
+    saved_hm: Str
+    backtested: Bool
+    backtested_hm: Str
+
+
+class Running(ApiModel):
+    kind: Literal["paper"]
+    version_no: Int
+    run_id: Int
+
+
+class StrategyCard(ApiModel):
+    id: Int
+    name: Str
+    mode_name: Str
+    problems: Int
+    version: VersionView
+    running: Running | None
+
+
+class StrategyList(ApiModel):
+    strategies: list[StrategyCard]
+
+
+class StrategyDetail(ApiModel):
+    id: Int
+    name: Str
+    version: VersionView
+    versions: list[VersionView]
+    body: Body
+    running: Running | None
+    deletable: Bool
+    analysis: Analysis
+    sentence: Str
+    chips: dict[Str, list[ExecChip | None]]
+    row_texts: dict[Str, list[Str]]
+    block_lines: dict[Str, list[Str]]
+    start: StartDate | None
+
+
+class SavedVersion(ApiModel):
+    version_id: Int
+    no: Int
+    problems: Int
+
+
+class Created(ApiModel):
+    id: Int
+    name: Str
+    version_id: Int
+    no: Int
+    problems: Int
+
+
+class ImportCard(ApiModel):
+    id: Str
+    stage: StageId
+    match: Literal["all", "any"]
+    lines: list[Str]
+
+
+class ImportPreview(ApiModel):
+    body: Body
+    notes: list[Str]
+    name: Str
+    stages: Int
+    entry: Int
+    sell: Int
+    rows: Int
+    blanks: Int
+    blank_kinds: list[Str]
+    cards: list[ImportCard]
+    others: list[StageId]
+
+
+class ExportFile(ApiModel):
+    name: Str
+    text: Str
+
+
+class CopyText(ApiModel):
+    text: Str
+
+
+class CatalogParam(ApiModel):
+    key: Str
+    label: Str
+    choices: list[Str]
+    min: Num | None
+    max: Num | None
+    integer: Bool | None
+    when_op: list[Str]
+
+
+class ValueRange(ApiModel):
+    min: Num
+    max: Num
+    unit: Str
+    integer: Bool
+
+
+class RankRange(ApiModel):
+    min: Num
+    max: Num
+
+
+class CatalogItem(ApiModel):
+    id: Str
+    name: Str
+    category: Str
+    ops: list[Str]
+    op_names: list[Str]
+    stages: list[StageId]
+    sortable: Bool
+    lock: Str | None
+    backtest: Literal["yes", "partial", "no"]
+    chips: list[Str]
+    execs: list[ExecId]
+    unit: Str
+    source: Str
+    start: Str | None
+    start_reason: Str | None
+    params: list[CatalogParam]
+    value: ValueRange | None
+    rank: RankRange | None
+    choices: list[Str]
+    help: Str
+    source_display: Str
+    backtest_display: Str
+    short: Str
+
+
+class CatalogStage(ApiModel):
+    id: StageId
+    circle: Str
+    name: Str
+    once: Bool
+    toggle: Bool
+
+
+class Catalog(ApiModel):
+    items: list[CatalogItem]
+    stages: list[CatalogStage]
+    ops: dict[Str, Str]
+    execs: dict[ExecId, Str]
+    categories: list[Str]
+    dart: Bool
+
+
+class BacktestRange(ApiModel):
+    start: Str
+    end: Str
+    first: Str
+    reason: Str
+
+
+class BacktestInput(ApiModel):
+    version: VersionView
+    strategy_id: Int
+    name: Str
+    range: BacktestRange
+    chips: list[Str]
+    judge_line: Str
+
+
+class BacktestTrade(ApiModel):
+    d: Str
+    sym: Str
+    side: Literal["buy", "sell"]
+    qty: Int
+    price: Num
+    amount: Num
+    cost: Num
+    pnl: Num | None
+    reason: list[Str]
+    judged: Str
+    kind: Str = opt()
+    name: Str
+
+
+class OpenPosition(ApiModel):
+    sym: Str
+    qty: Int
+    avg: Num
+
+
+class LiveCounts(ApiModel):
+    no_buy: Int
+    no_sell: Int
+
+
+class BacktestResult(ApiModel):
+    start: Str
+    end: Str
+    final: Num
+    total: Num | None
+    cagr: Num | None
+    mdd: Num | None
+    trades: list[BacktestTrade]
+    buys: Int
+    sells: Int
+    win_rate: Num | None
+    costs: Num
+    curve: list[tuple[Str, Num]]
+    bench_curve: list[tuple[Str, Num]]
+    bench_total: Num | None
+    bench_cagr: Num | None
+    bench_mdd: Num | None
+    open: list[OpenPosition]
+    skipped: list[dict[str, Any]]  # 체결 못 한 계획(계획 값 + 날짜 · 까닭)
+    notes: dict[Str, list[Str]]  # 종목 → 값 없음 기록(R-J1)
+    live_note: Str
+    live_counts: LiveCounts
+    survivor_line: Str
+    wide_universe: Bool
+    recent: list[BacktestTrade]
+    trade_count: Int
+    chips: list[Str]
+    judge_line: Str
+    wide_title: Str
+    ran_at: Str
+    ran_day: Str
+    ran_hm: Str
 
 
 def catalog_view() -> dict[str, Any]:
@@ -123,7 +451,7 @@ def stored_body(row: Any) -> dict[str, Any]:
 def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str], today: Callable[[], date],
                 running: Callable[[int], dict[str, Any] | None], used: Callable[[int], bool] | None = None,
                 backtester: Any = None) -> APIRouter:
-    r = APIRouter(prefix="/api/v2")
+    r = APIRouter(prefix="/api/v2", responses=ERRORS)
 
     async def body_of(request: Request) -> dict[str, Any]:
         try:
@@ -149,7 +477,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
                 "saved_day": md_day(v["created_at"]), "saved_hm": hm(v["created_at"]),
                 "backtested": ran is not None, "backtested_hm": hm(ran) if ran else ""}
 
-    @r.get("/strategies")
+    @r.get("/strategies", response_model=StrategyList, response_model_exclude_unset=True)
     def strategies() -> dict[str, Any]:
         out = []
         for s_ in strategy_store.list_strategies(db):
@@ -165,26 +493,26 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
                         "problems": len(a["problems"]), "version": version_view(v), "running": running(s_["id"])})
         return {"strategies": out}
 
-    @r.post("/import/preview")
+    @r.post("/import/preview", response_model=ImportPreview, response_model_exclude_unset=True)
     async def import_preview(request: Request) -> dict[str, Any]:
         data = await body_of(request)
         body, notes = ct.parse_copy_text(str(data.get("text") or ""))
         return {"body": body, "notes": notes, **import_summary(body, dart=dart())}
 
-    @r.post("/import/accept")
+    @r.post("/import/accept", response_model=Created, response_model_exclude_unset=True)
     async def import_accept(request: Request) -> dict[str, Any]:
         data = await body_of(request)
         body, _ = ct.parse_copy_text(str(data.get("text") or ""))
         return strategy_jobs.create(db, body, source=body.pop("source", None), dart=dart(), now=now)
 
-    @r.post("/import/file")
+    @r.post("/import/file", response_model=Created, response_model_exclude_unset=True)
     async def import_file(request: Request) -> dict[str, Any]:
         data = await body_of(request)
         body = ct.read_file(str(data.get("text") or ""))
         body.pop("converted", None)
         return strategy_jobs.create(db, body, source=None, dart=dart(), now=now)
 
-    @r.get("/strategies/{sid}/file")
+    @r.get("/strategies/{sid}/file", response_model=ExportFile, response_model_exclude_unset=True)
     def export_file(sid: int) -> dict[str, Any]:
         v = strategy_store.latest_version(db, sid)
         if v is None:
@@ -193,7 +521,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         body.pop("converted", None)
         return {"name": f"{body['name']}.json", "text": ct.to_file(body)}
 
-    @r.delete("/strategies/{sid}")
+    @r.delete("/strategies/{sid}", response_model=OkOut, response_model_exclude_unset=True)
     def delete(sid: int) -> dict[str, Any]:
         if not strategy_store.has_strategy(db, sid):
             raise ApiError("그 전략이 없어요", 404)
@@ -202,7 +530,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         strategy_jobs.delete(db, sid)
         return {"ok": True}
 
-    @r.get("/versions/{vid}/backtest")
+    @r.get("/versions/{vid}/backtest", response_model=BacktestInput, response_model_exclude_unset=True)
     def backtest_input(vid: int) -> dict[str, Any]:
         v = strategy_store.version(db, vid)
         if v is None:
@@ -214,7 +542,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         return {"version": version_view(v), "strategy_id": v["strategy_id"], "name": s_["name"] if s_ else "",
                 "range": default_range(body, today()), "chips": CHIPS, "judge_line": JUDGE_LINE}
 
-    @r.post("/backtest")
+    @r.post("/backtest", response_model=BacktestResult, response_model_exclude_unset=True)
     async def backtest(request: Request) -> dict[str, Any]:
         import asyncio
 
@@ -241,17 +569,17 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         res["ran_hm"] = hm(res["ran_at"])
         return res
 
-    @r.get("/catalog")
+    @r.get("/catalog", response_model=Catalog, response_model_exclude_unset=True)
     def catalog() -> dict[str, Any]:
         return {**catalog_view(), "dart": dart()}
 
-    @r.post("/analyze")
+    @r.post("/analyze", response_model=Analyzed, response_model_exclude_unset=True)
     async def analyze(request: Request) -> dict[str, Any]:
         data = await body_of(request)
         body = normalize(data.get("body"))
         return {"body": body, **view(body, dart=dart())}
 
-    @r.get("/strategies/{sid}")
+    @r.get("/strategies/{sid}", response_model=StrategyDetail, response_model_exclude_unset=True)
     def strategy(sid: int) -> dict[str, Any]:
         s = strategy_store.strategy(db, sid)
         if s is None:
@@ -267,14 +595,14 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
                 "body": body, "running": running(sid), "deletable": not (used is not None and used(sid)),
                 **view(body, dart=dart())}
 
-    @r.post("/strategies")
+    @r.post("/strategies", response_model=Created, response_model_exclude_unset=True)
     async def create(request: Request) -> dict[str, Any]:
         data = await body_of(request)
         body = normalize(data.get("body"))
         body.pop("source", None)
         return strategy_jobs.create(db, body, source=None, dart=dart(), now=now)
 
-    @r.post("/strategies/{sid}/versions")
+    @r.post("/strategies/{sid}/versions", response_model=SavedVersion, response_model_exclude_unset=True)
     async def new_version(sid: int, request: Request) -> dict[str, Any]:
         if not strategy_store.has_strategy(db, sid):
             raise ApiError("그 전략이 없어요", 404)
@@ -282,7 +610,7 @@ def strategies_router(db: DB, *, dart: Callable[[], bool], now: Callable[[], str
         body = normalize(data.get("body"))
         return strategy_jobs.save_version(db, sid, body, dart=dart(), now=now)
 
-    @r.get("/strategies/{sid}/copytext")
+    @r.get("/strategies/{sid}/copytext", response_model=CopyText, response_model_exclude_unset=True)
     def copytext(sid: int) -> dict[str, Any]:
         v = strategy_store.latest_version(db, sid)
         if v is None:

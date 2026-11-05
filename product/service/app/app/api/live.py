@@ -13,25 +13,231 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
+from pydantic import Field, create_model
 
 from ..domain import blocks as bkm
 from ..domain.copytext import read_body
-from ..run.live import LiveError
+from ..domain.markets.kr import KST
+from ..domain.rules import buy_cap
+from ..run.live import Live, LiveError
 from ..services import access
 from ..services.connect import Connections
 from ..services.data_admin import history_rows
 from ..services.telegram import Telegram
-from ..store.db import DB
-from .http import NeedConfirm, json_body
-from ..domain.markets.kr import KST
-from ..domain.rules import buy_cap
-from ..run.live import Live
 from ..store import runs as run_store
 from ..store import strategies as strategy_store
 from ..store import todos as todo_store
+from ..store.db import DB
+from .http import ERRORS, NeedConfirm, json_body
+from .models import ApiModel, Bool, Int, MoneyRoute, Num, Str, opt
+
+# ── 응답 모델(지금 모양 그대로 · 운용 중에만 나오는 키는 선택 필드 · 키 차례도 그대로) ─────────────────────
+
+
+class LiveTodo(ApiModel):
+    id: Int
+    kind: Str
+    severity: Literal["red", "yellow", "info"]
+    symbol: Str | None
+    title: Str
+    body: Str | None
+    created_at: Str
+
+
+class LiveNext(ApiModel):
+    """다음 거래일 시가 계획(실전 상태 그대로 · 계획 줄은 엔진 · 흐름의 값)."""
+
+    judged: Str
+    for_d: Str
+    plans: list[dict[str, Any]]
+    sent: Bool = opt()  # 그날 시가 주문을 보냈거나 놓침(다시 보내지 않음)
+
+
+class LiveSummary(ApiModel):
+    """운용 요약(`summary`): 운용 전에는 running · paused · halted · todos만."""
+
+    running: Bool
+    id: Int = opt()
+    version_id: Int = opt()
+    amount: Num = opt()
+    account_tail: Str | None = opt()
+    started_at: Str = opt()
+    cash: Num | None = opt()
+    positions: dict[Str, dict[str, Any]] = opt()  # 종목 → 실전 상태의 보유(수량 · 평균 단가 · …)
+    manual: list[Str] = opt()
+    blocked: dict[Str, Str] = opt()
+    next: LiveNext | None = opt()
+    paused: Bool
+    halted: Str | None
+    settings: dict[str, Any] = opt()
+    todos: list[LiveTodo]
+    last_check: Str | None = opt()
+
+
+class AccountHolding(ApiModel):
+    sym: Str
+    name: Str
+    qty: Int
+    avg: Num
+    price: Num
+
+
+class LiveAccount(ApiModel):
+    """토스 계좌(총액 · 현금 · 보유) · 토스가 안 되면 응답에서 null."""
+
+    total: Num
+    cash: Num
+    holdings: list[AccountHolding]
+
+
+class LiveAlert(ApiModel):
+    id: Int
+    at: Str
+    live: Int
+    kind: Str
+    title: Str
+    read: Int
+
+
+class LastRun(ApiModel):
+    """운용 전 화면: 마지막 운용 행(저장 그대로)."""
+
+    id: Int
+    strategy_id: Int
+    version_id: Int
+    status: Str
+    amount: Num
+    settings: Str
+    account_tail: Str | None
+    started_at: Str
+    ended_at: Str | None
+    end_kind: Str | None
+
+
+class StrategyName(ApiModel):
+    name: Str
+    version_no: Int
+
+
+class LiveHolding(ApiModel):
+    sym: Str
+    name: Str
+    qty: Int
+    avg: Num
+    price: Num
+    value: Num
+    pnl: Num
+    entry_d: Str | None
+
+
+class PlanRow(ApiModel):
+    sym: Str
+    name: Str
+    side: Literal["buy", "sell"]
+    reason: list[Str]
+    close: Num | None
+    kind: Str | None
+    cap: Num = opt()
+    qty: Int
+    max: Num = opt()
+    est: Num = opt()
+
+
+class HistoryRow(ApiModel):
+    d: Str
+    symbol: Str
+    name: Str
+    side: Str
+    price: Num | None
+    qty: Int
+    pnl: Num | None
+    status: Str
+    reason: Str
+
+
+class RecentFill(ApiModel):
+    d: Str
+    sym: Str
+    name: Str
+    side: Str
+    qty: Int
+    price: Num
+
+
+class WatchLevel(ApiModel):
+    item: Str
+    exec: Str
+    trigger: Num
+    side: Literal["down", "up"]
+
+
+class WatchRow(ApiModel):
+    sym: Str
+    name: Str
+    levels: list[WatchLevel]
+    price: Num | None
+
+
+class LiveScreen(LiveSummary):
+    """자산 · 계획 · 기록 · 할 일 화면(`screen`): 요약 + 계좌 · 이름 · 알림 · (운용 전) 마지막 운용 · (운용 중) 나머지."""
+
+    account: LiveAccount | None
+    names: dict[Str, Str]
+    alerts: list[LiveAlert]
+    last_run: LastRun | None = opt()
+    strategy: StrategyName = opt()
+    holdings: list[LiveHolding] = opt()
+    eval: Num = opt()
+    equity: Num = opt()
+    curve: list[tuple[Str, Num]] = opt()
+    plan_rows: list[PlanRow] = opt()
+    history: list[HistoryRow] = opt()
+    recent: list[RecentFill] = opt()
+    realized: Num = opt()
+    trades: Int = opt()
+    orders_n: Int = opt()
+    watch: list[WatchRow] = opt()
+
+
+class PreviewCheck(ApiModel):
+    key: Str
+    ok: Bool
+    tail: Str | None = opt()
+    place: Str | None = opt()
+
+
+class LivePreview(ApiModel):
+    name: Str
+    version_no: Int
+    checks: list[PreviewCheck]
+    has_stop: Bool
+    ok: Bool
+
+
+class LiveOrder(ApiModel):
+    """주문 하나의 결과(보냄 · 결과 모름 · 실패 · 건너뜀 · 다음 거래일 계획)."""
+
+    sym: Str
+    skip: Str = opt()
+    status: Str = opt()
+    order: Int = opt()
+    qty: Int = opt()
+    price: Num | None = opt()
+    planned: Str = opt()
+
+
+def _first(name: str, **first: Any) -> type[ApiModel]:
+    """요약 앞에 키 하나를 더한 모델(응답 dict의 키 차례 그대로: 더한 키 먼저 · 요약 키 뒤)."""
+    fields: dict[str, Any] = {k: (f.annotation, f) for k, f in LiveSummary.model_fields.items()}
+    return create_model(name, __base__=ApiModel, **first, **fields)
+
+
+SellAllOut = _first("SellAllOut", orders=(list[LiveOrder], ...))
+StrategyChangeOut = _first("StrategyChangeOut", from_=(Str, Field(alias="from")))
+BigOrderOut = _first("BigOrderOut", order=(LiveOrder, ...))
 
 
 def summary(live: Live) -> dict[str, Any]:
@@ -110,7 +316,9 @@ def screen(live: Live) -> dict[str, Any]:
 
 
 def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, need_confirm: NeedConfirm) -> APIRouter:
-    r = APIRouter()
+    r = APIRouter(responses=ERRORS)
+    money = APIRouter(route_class=MoneyRoute, responses=ERRORS)  # 주문 · 매도 · 멈추기(응답 검사 실패를 500으로 바꾸지 않음)
+    out: dict[str, Any] = {"response_model": LiveSummary, "response_model_exclude_unset": True}
 
     def _rid() -> int:
         run = live.run()
@@ -118,15 +326,15 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
             raise LiveError("실전 운용 중이 아니에요", 409)
         return int(run["id"])
 
-    @r.get("/api/live")
+    @r.get("/api/live", **out)
     def live_view() -> dict[str, Any]:
         return summary(live)
 
-    @r.get("/api/live/screen")
+    @r.get("/api/live/screen", response_model=LiveScreen, response_model_exclude_unset=True)
     async def live_screen() -> dict[str, Any]:
         return await asyncio.to_thread(screen, live)
 
-    @r.get("/api/live/preview")
+    @r.get("/api/live/preview", response_model=LivePreview, response_model_exclude_unset=True)
     def live_preview(version_id: int) -> dict[str, Any]:
         """V2-30 ① 확인할 것: 토스 연결 · 백테스트 함 · 다른 운용 없음 · 텔레그램 · 설치 위치 · 손절 없음(R-X10)."""
         v = strategy_store.version_with_name(db, version_id)
@@ -149,7 +357,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         return {"name": v["name"], "version_no": v["no"], "checks": checks, "has_stop": stop,
                 "ok": all(c["ok"] for c in checks)}
 
-    @r.post("/api/live/start")
+    @money.post("/api/live/start", **out)
     async def live_start(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_start")
         b = await json_body(request)
@@ -160,50 +368,50 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         await asyncio.to_thread(live.start, vid, amount)
         return summary(live)
 
-    @r.post("/api/live/pause")
+    @money.post("/api/live/pause", **out)
     def live_pause() -> dict[str, Any]:
         live.pause_new_buys("app")  # 로그인만(SPEC 7-4)
         return summary(live)
 
-    @r.post("/api/live/resume")
+    @money.post("/api/live/resume", **out)
     def live_resume(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_resume_buys")
         live.resume_new_buys()
         return summary(live)
 
-    @r.post("/api/live/end")
+    @money.post("/api/live/end", **out)
     def live_end(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_end")
         live.end(_rid())
         return summary(live)
 
-    @r.post("/api/live/sell-all")
+    @money.post("/api/live/sell-all", response_model=SellAllOut, response_model_exclude_unset=True)
     def live_sell_all(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_sell_all_end")
         return {"orders": live.sell_all_and_end(_rid()), **summary(live)}
 
-    @r.put("/api/live/amount")
+    @money.put("/api/live/amount", **out)
     async def live_amount(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_amount")
         b = await json_body(request)
         live.set_amount(_rid(), float(b.get("amount") or 0))
         return summary(live)
 
-    @r.put("/api/live/limits")
+    @money.put("/api/live/limits", **out)
     async def live_limits(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_limits")
         b = await json_body(request)
         live.set_limits(_rid(), b)
         return summary(live)
 
-    @r.put("/api/live/strategy")
+    @money.put("/api/live/strategy", response_model=StrategyChangeOut, response_model_exclude_unset=True)
     async def live_strategy(request: Request) -> dict[str, Any]:
         need_confirm(request, "live_strategy")
         b = await json_body(request)
         from_d = live.change_strategy(_rid(), int(b.get("version_id") or 0))
         return {"from": from_d, **summary(live)}
 
-    @r.post("/api/todos/{tid}/unknown")
+    @money.post("/api/todos/{tid}/unknown", **out)
     async def todo_unknown(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "unknown_order_record")
         b = await json_body(request)
@@ -214,7 +422,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
                              price=float(b.get("price") or 0))
         return summary(live)
 
-    @r.post("/api/todos/{tid}/corp")
+    @money.post("/api/todos/{tid}/corp", **out)
     def todo_corp(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "todo_corp_action")
         t = todo_store.todo_of_kind(db, tid, "corp")
@@ -223,7 +431,7 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         live.apply_corp(_rid(), t["symbol"])
         return summary(live)
 
-    @r.post("/api/todos/{tid}/match")
+    @money.post("/api/todos/{tid}/match", **out)
     def todo_match(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "todo_match_account")
         t = todo_store.todo_of_kind(db, tid, "mismatch")
@@ -232,9 +440,10 @@ def live_router(*, db: DB, live: Live, conns: Connections, telegram: Telegram, n
         live.match_account(_rid(), t["symbol"])
         return summary(live)
 
-    @r.post("/api/todos/{tid}/big-order")
+    @money.post("/api/todos/{tid}/big-order", response_model=BigOrderOut, response_model_exclude_unset=True)
     def todo_big(tid: int, request: Request) -> dict[str, Any]:
         need_confirm(request, "todo_big_order")
         return {"order": live.send_big(_rid(), tid), **summary(live)}
 
+    r.include_router(money)
     return r

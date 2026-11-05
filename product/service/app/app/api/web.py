@@ -7,15 +7,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import FileResponse, Response
 
-from .http import err
+from .http import ERRORS, err
+
+# 화면 파일(HTML · JS · CSS · 그림)은 JSON이 아니라 응답 모델 대신 몸통 꼴만 적어요
+WEB_BODY: dict[int | str, dict[str, Any]] = {200: {"content": {"text/html": {}}, "description": "web file"}}
 
 
 def web_router(*, dist: Path) -> APIRouter:
-    r = APIRouter()
+    r = APIRouter(responses=ERRORS)
 
     def _index() -> Response:
         index = dist / "index.html"
@@ -23,7 +27,7 @@ def web_router(*, dist: Path) -> APIRouter:
             return err("화면 파일이 없어요 · start.sh로 다시 켜 주세요", 503)
         return FileResponse(index, headers={"cache-control": "no-store"})
 
-    @r.get("/{path:path}")
+    @r.get("/{path:path}", response_class=Response, responses=WEB_BODY)
     def web(path: str) -> Response:
         if path.startswith("api/") or path == "api":
             return err("없는 주소예요", 404)

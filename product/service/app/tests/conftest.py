@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import atexit
 import json
+import logging
 import os
 import shutil
 import socket
 import tempfile
 import urllib.parse
+from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -42,7 +44,11 @@ if UNDER_PYTEST:
     os.environ["HOME"] = str(TEST_HOME)
     atexit.register(shutil.rmtree, TEST_HOME, ignore_errors=True)  # sessionfinish가 못 돌아도 지워요
 
-from app.app import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요)
+if UNDER_PYTEST:  # 응답 모델은 시험에서만 모르는 키를 거절해요(실행 · 가짜 서버는 남김 · `app/api/models.py`)
+    from app.api.models import forbid_unknown_keys  # noqa: E402
+
+    forbid_unknown_keys()
+from app.app import create_app  # noqa: E402  (HOME을 바꾼 뒤에 import해요 · 응답 모델은 위 설정 뒤에)
 from app.domain.markets.kr import KST  # noqa: E402
 from app.adapters.transport import HttpRequest, HttpResponse, TransportError  # noqa: E402
 
@@ -75,6 +81,32 @@ def keyfile_path(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-de
         path = Path(d) / "keyfile"
         monkeypatch.setattr("app.security.vault.KEYFILE_PATH", path)
         yield path
+
+
+# ── 돈 라우트의 응답 모양 검사 실패 기록은 0건(P1-09 · `app/api/models.py` `MoneyRoute`) ─────────────────────
+# 돈이 움직이는 라우트는 응답 모델과 맞지 않아도 500 대신 기록하고 원래 응답을 보내요. 시험에서는 그 기록이 나오면 그 시험을
+# 실패로 끝내요(모델이 지금 모양과 어긋난 것을 놓치지 않게 · 일부러 내는 시험은 이 픽스처를 받아 비워요).
+
+
+@pytest.fixture(autouse=True)
+def shape_mismatches() -> Iterator[list[logging.LogRecord]]:
+    from app.api.models import SHAPE_MISMATCH
+
+    records: list[logging.LogRecord] = []
+
+    class Catch(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            if SHAPE_MISMATCH in record.getMessage():
+                records.append(record)
+
+    handler = Catch()
+    logger = logging.getLogger("quant-mvp")
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
+    assert [r.getMessage() for r in records] == []
 
 
 # ── 바깥 소켓 0개 (T-00 ③) ─────────────────────────────────────────────────

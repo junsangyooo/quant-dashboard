@@ -11,8 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi import APIRouter, Request, Response
 
 from .. import APP_VERSION_TEXT
 from ..security import vault as vault_mod
@@ -22,18 +21,56 @@ from ..services import updates
 from ..services.connect import Connections
 from ..store import vault as vault_store
 from ..store.db import DB
-from .http import COOKIE, clear_session_cookies, json_body, set_session_cookies
+from .http import COOKIE, ERRORS, OkOut, clear_session_cookies, json_body, set_session_cookies
+from .models import ApiModel, Bool, Int, Str
+
+
+class Health(ApiModel):
+    app: Str  # 늘 "quant-mvp"(바깥 약속)
+    version: Str
+
+
+class AppState(ApiModel):
+    setup: Bool
+    logged_in: Bool
+    unlocked: Bool
+    locked_for: Int
+    restarted: Bool  # 서버가 다시 켜진 뒤 아직 한 번도 로그인하지 않음('앱을 다시 켰어요' 안내)
+    update_chip: Str | None
+    auto: Bool
+    version: Str
+
+
+class RecoveryOut(ApiModel):
+    ok: Bool
+    recovery_code: Str  # 이때 한 번만 바깥에 나가요
+
+
+class About(ApiModel):
+    version: Str
+    terms_at: Str | None
+    created_at: Str | None
+    address: Str
+
+
+class PublicIp(ApiModel):
+    ip: Str
+
+
+class ConfirmToken(ApiModel):
+    token: Str
+    expires_in: Int
 
 
 def account_router(*, db: DB, vault: Vault, conns: Connections, csrf: Csrf, data: Path, port: int,
                 lookup_ip: Callable[[], str]) -> APIRouter:
-    r = APIRouter()
+    r = APIRouter(responses=ERRORS)
 
-    @r.get("/api/health")
+    @r.get("/api/health", response_model=Health, response_model_exclude_unset=True)
     def health() -> dict[str, Any]:
         return {"app": "quant-mvp", "version": APP_VERSION_TEXT}
 
-    @r.get("/api/state")
+    @r.get("/api/state", response_model=AppState, response_model_exclude_unset=True)
     def state(request: Request) -> dict[str, Any]:
         return {
             "setup": vault.is_setup(),
@@ -46,8 +83,10 @@ def account_router(*, db: DB, vault: Vault, conns: Connections, csrf: Csrf, data
             "version": APP_VERSION_TEXT,
         }
 
-    @r.post("/api/setup")
-    async def setup(request: Request) -> Response:
+    # 쿠키는 주입받은 `response`에 붙여요(FastAPI가 응답에 옮겨 줘요 · 몸통은 응답 모델로 검사)
+
+    @r.post("/api/setup", response_model=RecoveryOut, response_model_exclude_unset=True)
+    async def setup(request: Request, response: Response) -> dict[str, Any]:
         b = await json_body(request)
         token, code = vault.setup(
             str(b.get("password") or ""),
@@ -55,20 +94,18 @@ def account_router(*, db: DB, vault: Vault, conns: Connections, csrf: Csrf, data
             adult=b.get("adult") is True,
             terms=b.get("terms") is True,
         )
-        resp = JSONResponse({"ok": True, "recovery_code": code})
-        set_session_cookies(resp, token, csrf.value_for)
-        return resp
+        set_session_cookies(response, token, csrf.value_for)
+        return {"ok": True, "recovery_code": code}
 
-    @r.post("/api/login")
-    async def login(request: Request) -> Response:
+    @r.post("/api/login", response_model=OkOut, response_model_exclude_unset=True)
+    async def login(request: Request, response: Response) -> dict[str, Any]:
         b = await json_body(request)
         token = await asyncio.to_thread(vault.login, str(b.get("password") or ""))
-        resp = JSONResponse({"ok": True})
-        set_session_cookies(resp, token, csrf.value_for)
-        return resp
+        set_session_cookies(response, token, csrf.value_for)
+        return {"ok": True}
 
-    @r.post("/api/recover")
-    async def recover(request: Request) -> Response:
+    @r.post("/api/recover", response_model=RecoveryOut, response_model_exclude_unset=True)
+    async def recover(request: Request, response: Response) -> dict[str, Any]:
         b = await json_body(request)
         token, code = await asyncio.to_thread(
             vault.recover,
@@ -76,11 +113,10 @@ def account_router(*, db: DB, vault: Vault, conns: Connections, csrf: Csrf, data
             str(b.get("password") or ""),
             str(b.get("password2") or ""),
         )
-        resp = JSONResponse({"ok": True, "recovery_code": code})
-        set_session_cookies(resp, token, csrf.value_for)
-        return resp
+        set_session_cookies(response, token, csrf.value_for)
+        return {"ok": True, "recovery_code": code}
 
-    @r.get("/api/about")
+    @r.get("/api/about", response_model=About, response_model_exclude_unset=True)
     def about() -> dict[str, Any]:
         row = vault_store.owner_dates(db)
         return {
@@ -90,7 +126,7 @@ def account_router(*, db: DB, vault: Vault, conns: Connections, csrf: Csrf, data
             "address": f"127.0.0.1:{port}",
         }
 
-    @r.post("/api/password")
+    @r.post("/api/password", response_model=OkOut, response_model_exclude_unset=True)
     async def password_change(request: Request) -> dict[str, Any]:
         b = await json_body(request)
         await asyncio.to_thread(
@@ -101,25 +137,24 @@ def account_router(*, db: DB, vault: Vault, conns: Connections, csrf: Csrf, data
         )
         return {"ok": True}
 
-    @r.post("/api/public-ip")
+    @r.post("/api/public-ip", response_model=PublicIp, response_model_exclude_unset=True)
     async def public_ip_view() -> dict[str, Any]:
         # 누를 때만 부른다. 저장하지 않는다.
         ip = await asyncio.to_thread(lookup_ip)
         return {"ip": ip}
 
-    @r.post("/api/logout")
-    def logout(request: Request) -> Response:
+    @r.post("/api/logout", response_model=OkOut, response_model_exclude_unset=True)
+    def logout(response: Response) -> dict[str, Any]:
         # 잠그기 = 앱 전체 잠금: 모든 세션을 끝내고 데이터 키를 메모리에서 지운다.
         # 자동 확인은 데이터 키가 풀려 있을 때 토스에서 일봉을 받는다.
         vault.lock_now()
         conns.drop()
-        resp = JSONResponse({"ok": True})
-        clear_session_cookies(resp)
-        return resp
+        clear_session_cookies(response)
+        return {"ok": True}
 
     # ── 비밀번호 다시 받기(SPEC 7-4 · V2-33) ─────────────────────────────
 
-    @r.post("/api/confirm")
+    @r.post("/api/confirm", response_model=ConfirmToken, response_model_exclude_unset=True)
     async def confirm(request: Request) -> dict[str, Any]:
         b = await json_body(request)
         action = str(b.get("action") or "")
