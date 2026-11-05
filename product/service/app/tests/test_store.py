@@ -42,9 +42,12 @@ def clock_hits(paths: list[Path]) -> list[str]:
     hits = []
     for path in paths:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and \
-                    isinstance(node.func.value, ast.Name) and (node.func.value.id, node.func.attr) in CLOCK_CALLS:
-                hits.append(f"{path.name}:{node.lineno}: {node.func.value.id}.{node.func.attr}()")
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            base = node.func.value  # `datetime.now()` · `datetime.datetime.now()` · `dt.date.today()`
+            owner = base.id if isinstance(base, ast.Name) else base.attr if isinstance(base, ast.Attribute) else ""
+            if (owner, node.func.attr) in CLOCK_CALLS:
+                hits.append(f"{path.name}:{node.lineno}: {owner}.{node.func.attr}()")
     return hits
 
 
@@ -62,6 +65,15 @@ def test_connection_scan_catches_planted_access(tmp_path: Path) -> None:
                        encoding="utf-8")
     assert sorted(h.split(": ", 1)[1] for h in connection_hits([planted])) == sorted(
         ["import sqlite3", "from sqlite3", ".conn", ".execute()", ".executemany()", ".executescript()"])
+
+
+def test_clock_scan_catches_planted_reads(tmp_path: Path) -> None:
+    planted = tmp_path / "planted.py"
+    planted.write_text("import datetime as dt\nimport time\nfrom datetime import date, datetime\n\ndef f():\n"
+                       "    return (datetime.now(), dt.datetime.now(), date.today(), dt.date.today(), time.time(),\n"
+                       "            time.monotonic(), datetime.fromisoformat('2025-06-02'))\n", encoding="utf-8")
+    assert sorted(h.split(": ", 1)[1] for h in clock_hits([planted])) == sorted(
+        ["datetime.now()", "datetime.now()", "date.today()", "date.today()", "time.time()", "time.monotonic()"])
 
 
 def test_store_never_reads_the_clock() -> None:
