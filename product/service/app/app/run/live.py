@@ -1,4 +1,4 @@
-"""실전 운용 하루 흐름(T-60 ~ T-63 · ENGINE-RULES 5 · 6 · 7절 · SPEC 5절). **가짜 토스로만 시험해요.**
+"""실전 운용 하루 흐름 · 실전 상태의 주인(T-60 ~ T-63 · ENGINE-RULES 5 · 6 · 7절 · SPEC 5절 · TASKS P1-08). **가짜 토스로만 시험해요.**
 
 - 20:10 확인(R-O1): 놓친 거래일은 하루씩 다시 돌려 매도 신호만 남기고(R-L1), 마지막 거래일 계획이 다음 거래일 시가 주문.
   시작 직후 첫 확인(R-L11)도 여기로.
@@ -8,6 +8,8 @@
   전략 변경 · 계좌번호 잠금(R-L10).
 - 엔진 상태(현금 · 보유 · 계획)는 `live_state`에 두고, 진짜 체결이 올 때만 바꿔요. 주문 · 체결 · 조건주문 · 할 일은 표에.
 - 증권사는 `client()`가 주는 `Broker` 포트(`ports.py` · 조립이 토스 어댑터를 넣어 줌)만 써요(기본 가짜 · T-00). 이 파일은 소켓을 쓰지 않아요.
+- 주문 값 바꾸기(수량 · 지정가 · 넓히기 · 조건주문 다리 · 미체결 처리)는 순수 함수 `orders/transform.py`, 일 시각은 `run/scheduler.py`의
+  시각 표 하나예요(장 시작이 늦은 날은 `DayHours.at`으로 그만큼 늦춰요).
 """
 
 from __future__ import annotations
@@ -101,6 +103,15 @@ def _iso(dt: datetime) -> str:
 
 
 class Live:
+    """실전 상태의 주인(ARCHITECTURE 6절 '동시성'): 실전 상태(`live_state` · 주문 · 할 일 · `meta live.*`)는 이 객체만 바꿔요.
+
+    사용자 실전 조작 12개는 공개 메서드예요(API · 텔레그램은 이것만 불러요): 시작 `start` · 끝내기 `end` · 전부 팔고 끝내기
+    `sell_all_and_end` · 운용 금액 `set_amount` · 한도 `set_limits` · 전략 바꾸기 `change_strategy` · 새 매수 멈춤 `pause_new_buys` ·
+    다시 켜기 `resume_new_buys` · 할 일: 결과 모르는 주문 기록 `resolve_unknown` · 권리 변동 맞추기 `apply_corp` · 계좌에 맞추기
+    `match_account` · 큰 주문 보내기 `send_big`. 하루 흐름(20:10 `check` · 08:30 `precheck` · 08:35 `open_orders` · 장중)은
+    앱 루프의 `tick`(아래)이 시각 표(`run/scheduler.py`)대로 불러요. 화면 모양은 `api/live.py`예요.
+    """
+
     def __init__(self, db: DB, market: Market, client: Callable[[], Broker | None], *,
                  now: Clock, notify: Notifier | None = None,
                  info: Callable[[], dict[str, dict[str, Any]]] | None = None,
@@ -1083,7 +1094,11 @@ def _prev(d: str, cal: list[str]) -> str:
 
 
 def tick(live: Live) -> list[str]:
-    """앱 루프가 30초마다 불러요(R-O1 · 그날 장 시간에 맞춰 옮김). 한 일의 이름을 돌려줘요."""
+    """앱 루프가 30초마다 불러요(R-O1 · 그날 장 시간에 맞춰 옮김). 한 일의 이름을 돌려줘요.
+
+    창 방식(시각 표 `run/scheduler.py`): 08:20 대조(그날 한 번) → 08:30 ~ 08:50(양 끝 포함) 점검 창 · 점검이 실패하면(False)
+    5분마다 다시 · 통과하면 08:35부터 시가 주문 → 08:50이 지나면 그날 시가 주문은 놓침(할 일) → 09:01 ~ 15:20 체결 대조 ·
+    미체결 취소(그날 한 번) · 장중 감시 1분마다."""
     r = live.run()
     if r is None:
         return []
