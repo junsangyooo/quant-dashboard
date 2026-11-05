@@ -43,7 +43,7 @@ from . import datamgmt as dm
 from . import updates
 from .live import Live, LiveError
 from .live import tick as live_tick
-from .schedule import Scheduler
+from .run.scheduler import AUTO_CHECK, DAILY_CHECK, LOOP_EVERY_S, Scheduler
 from .dart import DartStore
 from .paper_v2 import PaperError, PaperV2
 from .ports import Clock, MarketFeed
@@ -56,11 +56,13 @@ from .store import vault as vault_store
 from .store.db import DB
 from .domain.engine import BacktestError as BacktestErrorV2
 from .domain.markets.kr import KST, weekday_open
-from .market import Market, MarketDataError, TossSource, now_kst
+from .market import now_kst
+from .run.data import Market, MarketDataError
 from .adapters.publicip import IpFetch, PublicIpError, public_ip
 from .domain.stock_names import stock_name
 from .adapters.telegram import TelegramError
 from .telegram import Telegram
+from .adapters.toss import TossSource
 from .adapters.transport import Transport, Transports, build_transports
 from . import vault as vault_mod
 from .vault import SCRYPT_N, SESSION_S, Vault, VaultError
@@ -84,7 +86,6 @@ def ts_names_from(text: str | None) -> list[str]:
             out.append(name)
     return out
 CONFIRM_HEADER = "x-confirm-token"  # 비밀번호 다시 받기로 받은 1회용 토큰
-AUTO_AT = (16, 30)
 log = logging.getLogger("quant-mvp")
 
 PUBLIC_API = {"/api/health", "/api/state", "/api/setup", "/api/login", "/api/recover"}
@@ -789,14 +790,14 @@ def create_app(
 
     # 스케줄러(T-51): 거래일 · 장 시작은 토스 market-calendar로. 실전 일(08:30 점검 · 08:35 주문)은 T-6x에서 더해요.
     sched = Scheduler(db, market.calendar, now)
-    sched.add("paper_check", 20, 10, paper2.tick)  # 모의투자 v2: 거래일 20:10 확인(T-40)
+    sched.add("paper_check", *DAILY_CHECK, paper2.tick)  # 모의투자 v2: 거래일 20:10 확인(T-40)
 
     def live_check() -> None:
         r = live.run()
         if r is not None:
             live.check(int(r["id"]))  # 실패하면 스케줄러가 10분 뒤 다시(R-L4)
 
-    sched.add("live_check", 20, 10, live_check)
+    sched.add("live_check", *DAILY_CHECK, live_check)
     app.state.scheduler = sched
 
     async def _auto_loop() -> None:
@@ -815,11 +816,11 @@ def create_app(
                 await asyncio.to_thread(telegram.poll)  # `/상태` · `/멈춤`(등록 대화방만)
             except Exception as exc:  # 루프는 멈추지 않는다
                 log.error("auto tick failed: %s", type(exc).__name__)
-            await asyncio.sleep(30)
+            await asyncio.sleep(LOOP_EVERY_S)
 
     def auto_tick() -> str | None:
         local = now().astimezone(KST)
-        if not weekday_open(local.date()) or (local.hour, local.minute) < AUTO_AT:
+        if not weekday_open(local.date()) or (local.hour, local.minute) < AUTO_CHECK:
             return None
         today = local.date().isoformat()
         if db.get_meta("auto.last") == today:

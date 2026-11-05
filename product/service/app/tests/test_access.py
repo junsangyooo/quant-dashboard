@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 from app.store.db import DB
 from app.main import create_app, ts_names_from
 from app.domain.markets.kr import KST
-from app.market import Calendar
-from app.schedule import Scheduler
+from app.run.data import Calendar
+from app.run.scheduler import Scheduler
 from app.serve import AlreadyRunning, acquire_lock
 from tests.conftest import PASSWORD, CsrfClient, FakeBars, FakeIp, FakeToss, setup_owner
 

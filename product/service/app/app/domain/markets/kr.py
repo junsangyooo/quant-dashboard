@@ -2,7 +2,7 @@
 
 한국 시간 · 정규장 시작 · 그날 일봉을 확정으로 보는 시각 · 달력을 모를 때의 휴장 규칙(평일 = 거래일) · 호가 단위 ·
 가격 제한폭(상하한가)을 여기에만 둬요. 순수 함수만 있어요(지금 시각 · 저장 · 전송을 모름 · 시각은 받아서 셈).
-토스 장 달력을 받아 담아 두는 일(`market.Calendar`)과 일 시각 표(08:30 점검 · 20:10 확인 등 · P1-08 `run/scheduler.py`)는
+토스 장 달력을 받아 담아 두는 일(`run/data.py` `Calendar`)과 일 시각 표(08:30 점검 · 20:10 확인 등 · `run/scheduler.py`)는
 여기가 아니에요.
 """
 
@@ -21,7 +21,7 @@ PRICE_LIMIT = Decimal("0.30")  # 가격 제한폭 ±30%(전일 종가 기준 상
 
 
 class TradingDays(Protocol):
-    """거래일인지 알려 주는 것(`market.Calendar` · 시험의 가짜 달력)."""
+    """거래일인지 알려 주는 것(`run.data.Calendar` · 시험의 가짜 달력)."""
 
     def is_open(self, d: date) -> bool: ...
 

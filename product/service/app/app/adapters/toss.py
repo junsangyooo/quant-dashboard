@@ -9,6 +9,7 @@
   (그 종목 주문 0 근거).
 - 토큰은 파일에 쓰지 않고 이 객체의 메모리에만 둬요. 토스가 보낸 오류 글은 담지 않아요(코드만).
 - 주문 · 정정 · 취소 · 조건주문 함수가 있어요. 시험은 가짜 전송으로만 불러요(`tests/test_no_orders.py`).
+- `TossSource`: `MarketFeed` 포트의 토스 구현(일봉 · 장 달력 · P1-08에서 `market.py`에서 옮김 · 받아 담아 두는 일은 `run/data.py`).
 
 출처: 이 레포의 autotrade/broker/toss_api.py(2026-10-29)에서 오류 읽기 · 토큰 · 계좌 찾기를 옮겨 고쳤어요.
 가져오기(import)는 하지 않아요.
@@ -26,7 +27,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ..domain.markets.kr import KST, PRICE_LIMIT, day_end
-from ..ports import BrokerBadAnswer, BrokerError, BrokerRejected, BrokerUnreachable
+from ..ports import BrokerBadAnswer, BrokerError, BrokerRejected, BrokerUnreachable, FeedNotConnected, SymbolNotFound
 from .fake import FakeTransport
 from .transport import HttpRequest, HttpResponse, Transport, TransportError
 
@@ -1053,3 +1054,33 @@ def _json(resp: HttpResponse) -> Any:
         return json.loads(resp.body.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         return {"error": {"code": f"http-{resp.status}", "message": "not JSON"}}
+
+
+# ── 일봉 원천(`MarketFeed` 포트) ─────────────────────────────────────────────
+
+INDEXES = ("KOSPI", "KOSDAQ")
+
+
+class TossSource:
+    """토스 일봉. 종목은 6자리 코드, 지수는 'KOSPI' · 'KOSDAQ'."""
+
+    def __init__(self, client: Callable[[], TossClient | None]) -> None:
+        self.client = client
+
+    def _need(self) -> TossClient:
+        c = self.client()
+        if c is None:
+            raise FeedNotConnected("toss")
+        return c
+
+    def daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
+        client = self._need()
+        try:
+            return client.daily_bars(symbol, start, end, index=symbol in INDEXES)
+        except TossApiError as exc:
+            if exc.status == 404 or exc.code in ("stock-not-found", "unsupported-symbol"):
+                raise SymbolNotFound(symbol) from None
+            raise
+
+    def calendar(self, on: date) -> MarketCalendar:
+        return self._need().market_calendar(on)

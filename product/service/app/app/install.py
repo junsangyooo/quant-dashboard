@@ -18,15 +18,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, time
+from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from .market import KST, Calendar
+from .run.scheduler import KST, UPDATE_FROM, UPDATE_UNTIL, Calendar  # [P1-09] 입구 → 조립 경유로(허용 목록 layers)
 
 LABEL = "kr.quant.service"
-UPDATE_FROM = time(16, 0)
-UPDATE_UNTIL = time(20, 0)
 WINDOW_TEXT = "업데이트는 거래일 16:00~20:00(그날 20:10 확인 전)에만 해요"
 
 

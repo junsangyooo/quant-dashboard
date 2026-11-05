@@ -236,7 +236,7 @@ class FakeBars:
         if self.down:
             raise OSError("no network")
         if symbol not in self.data:  # 토스는 없는 코드에 404를 줘요(TossSource → SymbolNotFound)
-            from app.market import SymbolNotFound
+            from app.ports import SymbolNotFound
 
             raise SymbolNotFound(symbol)
         rows = self.data[symbol]

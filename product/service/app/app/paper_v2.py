@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from .domain import blocks as bk
@@ -27,12 +27,12 @@ from .store.db import DB
 from .domain.engine import Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
 from .domain.markets.kr import KST, complete_until
-from .market import Market
+from .run.data import Market
+from .run.scheduler import DAILY_CHECK_TIME
 from .ports import Clock
 from .domain.rules import RuleLayer
 
 MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
-CHECK_AT = time(20, 10)
 RUNNING, ENDED = "v2-running", "v2-ended"
 ALREADY = "이 전략은 이미 모의투자 중이에요"
 DIFF_LINE = ("실전과 다른 점 · 체결은 일봉 시가로 계산해요(실제로는 호가에 따라 달라요) · 앱이 꺼진 날도 이어서 "
@@ -103,7 +103,7 @@ class PaperV2:
         today = now.astimezone(KST).date()
         state = {"cash": amount, "pos": {}, "plans": [], "day_no": 0, "sold": {}}
         rid = paper_store.add_paper_run(self.db, version_id, amount, json.dumps(state), RUNNING, _now_iso(now), None)
-        if cal.is_open(today) and now.astimezone(KST).time() < CHECK_AT:
+        if cal.is_open(today) and now.astimezone(KST).time() < DAILY_CHECK_TIME:
             # 거래일 20:10 전에 시작: 그날 20:10이 첫 확인(R-L11과 같은 꼴)
             first = cal.prev_open(today)
             paper_store.set_paper_last_date(self.db, rid, first.isoformat())

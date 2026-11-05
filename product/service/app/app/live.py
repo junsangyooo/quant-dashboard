@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -28,9 +28,19 @@ from .store import todos as todo_store
 from .store.db import DB
 from .domain.engine import FEE, PROTECT_ITEMS, SELL_TAX, Engine, MarketData, universe_of, warmup_calendar_days
 from .domain.indicators import Series
-from .domain.markets.kr import KST, complete_until, lower_limit, tick_round, ticks_below
+from .domain.markets.kr import BASE_OPEN, KST, complete_until, lower_limit, tick_round, ticks_below
 from .domain.rules import ORDER_HUGE, RuleLayer, buy_cap, sell_floor
-from .market import Market
+from .run.data import Market
+from .run.scheduler import (
+    DAILY_CHECK_TIME,
+    INTRADAY_FROM,
+    INTRADAY_UNTIL,
+    LATE_OPEN,
+    ORDER_AT,
+    PRECHECK_AT,
+    PRECHECK_EVERY,
+    RECONCILE_AT,
+)
 from .ports import (
     Broker,
     BrokerBadAnswer,
@@ -45,10 +55,6 @@ from .ports import (
 DART_ITEMS = {i for i, it in CATALOG.items() if it.lock == "dart"}
 RUNNING = "running"
 ENDED = "ended"
-CHECK_AT = time(20, 10)
-PRECHECK_AT = (8, 30)
-ORDER_AT = (8, 35)
-LATE_OPEN = (8, 50)  # R-L2 · R-L3: 이 뒤로는 그날 시가 주문을 건너뛰어요
 STEP_WAIT = timedelta(minutes=3)  # R-O6
 TRIGGER_WAIT = timedelta(minutes=15)  # R-X9
 COND_RENEW_DAYS = 30  # R-X8
@@ -233,7 +239,7 @@ class Live:
         # R-L11: 거래일 20:10 뒤 · 휴장일이면 바로 마지막 완성 일봉으로 확인
         local = now.astimezone(KST)
         cal = self.market.calendar
-        if not cal.is_open(local.date()) or local.time() >= CHECK_AT:
+        if not cal.is_open(local.date()) or local.time() >= DAILY_CHECK_TIME:
             self.check(rid)
         return rid
 
@@ -953,7 +959,7 @@ class Live:
         now = self.now().astimezone(KST)
         day = self.market.calendar.day(now.date())
         holdings = {h.symbol: h for h in c.holdings()}
-        in_session = day.open and day.start is not None and day.at(9, 0) <= now <= day.at(15, 20)
+        in_session = day.open and day.start is not None and day.at(*BASE_OPEN) <= now <= day.at(*INTRADAY_UNTIL)
         out = []
         self.db.set_meta(f"live.{rid}.ending", "sell_all")
         sells = []
@@ -974,7 +980,7 @@ class Live:
                 sells.append({"sym": sym, "side": "sell", "qty": int(p["qty"]), "kind": "protect",
                               "close": self._prev_close(rid, sym) or p["avg"], "reason": ["전부 팔고 끝내기"]})
         if not in_session:
-            for_d = (now.date() if day.open and now < day.at(8, 35) else self.market.calendar.next_open(now.date()))
+            for_d = (now.date() if day.open and now < day.at(*ORDER_AT) else self.market.calendar.next_open(now.date()))
             st["next"] = {"judged": now.date().isoformat(), "for_d": for_d.isoformat(), "plans": sells}
             out += [{"sym": s["sym"], "planned": for_d.isoformat()} for s in sells]
         self.save(rid, st)
@@ -995,7 +1001,7 @@ class Live:
             raise LiveError("이 버전으로 백테스트를 안 했어요 · 이 앱에서 백테스트한 버전만 운용해요")
         cal = self.market.calendar
         now = self.now().astimezone(KST)
-        from_d = now.date() if cal.is_open(now.date()) and now.time() < CHECK_AT else cal.next_open(now.date())
+        from_d = now.date() if cal.is_open(now.date()) and now.time() < DAILY_CHECK_TIME else cal.next_open(now.date())
         run_store.put_run_version(self.db, rid, version_id, from_d.isoformat())
         run_store.set_run_version(self.db, rid, version_id)
         self.place_conds(rid)
@@ -1174,7 +1180,7 @@ def tick(live: Live) -> list[str]:
         return []
     done: list[str] = []
     today = now.date().isoformat()
-    if live.meta(rid, "reconciled") != today and now >= day.at(8, 20):
+    if live.meta(rid, "reconciled") != today and now >= day.at(*RECONCILE_AT):
         live.reconcile(rid)  # 켤 때 · 매일 대조를 끝낸 뒤 주문(R-L6)
         live.set_meta(rid, "reconciled", today)
         done.append("reconcile")
@@ -1184,14 +1190,14 @@ def tick(live: Live) -> list[str]:
         pre = json.loads(live.meta(rid, "precheck") or "{}")
         last = datetime.fromisoformat(pre["at"]) if pre.get("at") else None
         if not pre.get("ok") or pre.get("at", "")[:10] != today:
-            if last is None or last.date() != now.date() or now - last >= timedelta(minutes=5):
+            if last is None or last.date() != now.date() or now - last >= PRECHECK_EVERY:
                 live.precheck(rid)
                 done.append("precheck")
         if now >= day.at(*ORDER_AT) and live.open_orders(rid):
             done.append("open")
     elif now > day.at(*LATE_OPEN) and (live.state(rid).get("next") or {}).get("for_d") == today:
         live.open_orders(rid)  # 놓친 시가 주문 → 할 일(R-L2)
-    if day.at(9, 1) <= now <= day.at(15, 20):
+    if day.at(*INTRADAY_FROM) <= now <= day.at(*INTRADAY_UNTIL):
         if live.meta(rid, "after_open") != today:
             live.after_open(rid)
             live.set_meta(rid, "after_open", today)

@@ -1,10 +1,10 @@
 """포트: 바깥과의 약속(ARCHITECTURE 2절 포트 층 · 4절 확장 지점 · 6절 '바꿔 끼우기' · QUALITY E1 · E7).
 
-실행 흐름(`live` · `paper_v2` · `backtest_v2` · `schedule` · `market`)은 어댑터 클래스(`adapters/`) 대신 이 약속을 받아요.
+실행 흐름(`run/` · `backtest_v2`)은 어댑터 클래스(`adapters/`) 대신 이 약속을 받아요.
 어댑터를 고르고 넣어 주는 것은 조립(`main.create_app`)이에요(기본은 가짜 · 응답 없음 · `adapters/fake.py`).
 
 - `Broker`: 계좌 · 주문(토스 어댑터 `adapters.toss.TossClient`가 맞춰요 · 증권사는 토스만 · 기능표는 두 번째 증권사 때).
-- `MarketFeed`: 일봉 받기(`market.TossSource` · 시험의 가짜 일봉).
+- `MarketFeed`: 일봉 받기(`adapters.toss.TossSource` · 시험의 가짜 일봉).
 - `Disclosures`: 재무 · 공시 읽기(DART 저장 `dart.DartStore` · 접수일 다음 거래일부터 · R-J9).
 - `Notifier`: 알림 하나 보내기(`telegram.Telegram.notify` · 사건 이름 + 글).
 - `Clock`: 지금 시각(한국 시간이 붙은 datetime · 기본 `market.now_kst` · 시험은 고정 시각).
@@ -44,7 +44,9 @@ class Notifier(Protocol):
 
 
 class MarketFeed(Protocol):
-    """일봉 받기: start ~ end(오래된 순 · 수정주가) `{"d", "o", "h", "l", "c", "v"}` 목록."""
+    """일봉 받기: start ~ end(오래된 순 · 수정주가) `{"d", "o", "h", "l", "c", "v"}` 목록.
+
+    그 코드로는 일봉이 없으면 `SymbolNotFound`, 받을 연결이 없으면(토스 연결 전) `FeedNotConnected`를 내요."""
 
     def daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]: ...
 
@@ -291,3 +293,11 @@ class BrokerRejected(BrokerError):
 
     status: int
     code: str
+
+
+class SymbolNotFound(Exception):
+    """일봉 받기(`MarketFeed`): 그 코드로는 일봉이 없음(토스 404 · 없는 종목)."""
+
+
+class FeedNotConnected(Exception):
+    """일봉 받기(`MarketFeed`): 받을 연결이 없음(토스 연결 전 · `adapters.toss.TossSource`)."""

@@ -25,7 +25,7 @@ import pytest
 from app import install, updates
 from app.store.db import DB
 from app.domain.markets.kr import KST
-from app.market import Calendar
+from app.run.data import Calendar
 
 APP = Path(__file__).resolve().parents[1]
 SCRIPTS = APP / "install"

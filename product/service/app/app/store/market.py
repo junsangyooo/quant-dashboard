@@ -1,6 +1,6 @@
-"""일봉 캐시 · 종목 정보(bars · bar_meta · stock_info). 일봉 캐시는 `market.Market`이, 종목 정보는 조립이 써요.
+"""일봉 캐시 · 종목 정보(bars · bar_meta · stock_info). 일봉 캐시는 `run.data.Market`이, 종목 정보는 조립이 써요.
 
-장 달력은 `meta` 표(`cal.날짜`)에 있어요(`DB.get_meta` · `market.Calendar`).
+장 달력은 `meta` 표(`cal.날짜`)에 있어요(`DB.get_meta` · `run.data.Calendar`).
 """
 
 from __future__ import annotations

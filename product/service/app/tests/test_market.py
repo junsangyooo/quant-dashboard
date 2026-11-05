@@ -16,8 +16,8 @@ import pytest
 
 from app.store.db import DB
 from app.domain.markets.kr import KST, complete_until
-from app.market import INDEX, Calendar, Market, MarketDataError, TossSource
-from app.adapters.toss import RateLimiter, TossClient, TossCredentials
+from app.run.data import INDEX, Calendar, Market, MarketDataError
+from app.adapters.toss import RateLimiter, TossClient, TossCredentials, TossSource
 from tests.conftest import make_bars
 from tests.fake_toss import ACCOUNT_NO, CLIENT_ID, CLIENT_SECRET, FakeTossServer, holiday, regular_day
 

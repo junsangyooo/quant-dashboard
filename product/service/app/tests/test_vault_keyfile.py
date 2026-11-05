@@ -17,7 +17,7 @@ from app import vault as vault_mod
 from app.store.db import DB
 from app.main import create_app
 from app.domain.markets.kr import KST
-from app.market import MarketDataError
+from app.run.data import MarketDataError
 from app.vault import MONEY_ACTIONS, Vault, VaultError
 from tests.conftest import CsrfClient, PASSWORD, confirm, make_bars, setup_owner
 from tests.test_paper_v2 import body, save

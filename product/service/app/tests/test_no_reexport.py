@@ -38,6 +38,9 @@ MOVED: list[tuple[str, str]] = [
     ("app.publicip", "app.adapters.publicip"),
     # P1-07: 저장 층(ARCHITECTURE 2-1 · 흩어진 SQL은 `app/store/`의 표 묶음 모듈로)
     ("app.db", "app.store.db"),
+    # P1-08: 실행 흐름 층(ARCHITECTURE 2-1 · `market`은 읽어 오며 저장하기를 `run/data.py`로 떼고 서버 시계 `now_kst`만 남아요 ·
+    # 기준선 시계 고정 자리 · Q-N24)
+    ("app.schedule", "app.run.scheduler"),
 ]
 
 

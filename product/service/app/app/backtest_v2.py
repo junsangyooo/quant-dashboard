@@ -1,6 +1,6 @@
 """백테스트 v2(TASKS T-32 · SPEC 4-7 · 7-3 V2-26 · ENGINE-RULES 9절).
 
-- 시세는 토스(TossSource · Market), 비교 기준은 코스피(토스 지수 일봉).
+- 시세는 토스(`adapters.toss.TossSource` · `run.data.Market`), 비교 기준은 코스피(토스 지수 일봉).
 - 가치 · 재무 · 공시는 `Disclosures` 포트(조립이 DART 저장 `DartStore`를 넣어 줌 · 접수일 다음 거래일)에서,
   시가총액은 수정 종가 × 주식 수(수정 계수는 수정 전 일봉을 따로 받기 전에는 1 · '주식 수 근사' 칩).
 - 막는 것: 문제 있음 · 잠긴 조건(DART 없음) · 시작 가능 날짜보다 앞 · 토스 연결 없음 · DART 받는 중(R-P12).
@@ -20,7 +20,7 @@ from .store import dart as dart_store
 from .store.db import DB
 from .domain.engine import FEE, SELL_TAX, BacktestError, MarketData, run_backtest, warmup_calendar_days
 from .domain.indicators import Series
-from .market import INDEX, Market, MarketDataError
+from .run.data import INDEX, Market, MarketDataError
 from .ports import Disclosures
 
 MIN_CASH, MAX_CASH = 100_000, 10_000_000_000
