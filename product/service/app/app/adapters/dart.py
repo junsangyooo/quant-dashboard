@@ -2,7 +2,7 @@
 
 - 꼴의 근거: `vendor/dart-samples/`(공개 개발 가이드의 필드 이름 · 값은 지어냄). 앱은 실행 중에 읽지 않아요.
 - 전송: `transport.py`의 문을 지나요(기본 가짜 · 응답 없음 · T-00). 키는 요청 주소에만 넣고 기록하지 않아요.
-- 받은 것을 담아 두는 큐 · 하루 한도 · 읽기는 `app/dart.py`(`DartStore` · 저장은 P1-07에서 `store/`로)예요.
+- 받은 것을 담아 두는 큐 · 하루 한도 · 읽기는 `app/dart.py`(`DartStore` · 표 읽고 쓰기는 `store/dart.py`)예요.
 """
 
 from __future__ import annotations
